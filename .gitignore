@@ -1,0 +1,15 @@
+node_modules/
+.pnpm-store/
+dist/
+.cache/
+tmp/
+test-results/
+playwright-report/
+.omo/
+.ouroboros/
+artifacts/
+output/
+benchmarks/latest.json
+benchmarks/latest.md
+*.tsbuildinfo
+.agents/

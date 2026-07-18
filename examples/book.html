@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Imposia Field Notes</title>
+    <style>
+      @page {
+        size: A4;
+        margin: 22mm 20mm 24mm;
+      }
+
+      :root {
+        color: #17201e;
+        font-family: Arial, sans-serif;
+      }
+
+      body {
+        margin: 0;
+        font-size: 11pt;
+        line-height: 1.55;
+      }
+
+      section + section {
+        break-before: page;
+      }
+
+      .eyebrow {
+        color: #0b6a59;
+        font-size: 9pt;
+        font-weight: 700;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+      }
+
+      h1 {
+        max-width: 130mm;
+        margin: 26mm 0 8mm;
+        font-family: Georgia, serif;
+        font-size: 36pt;
+        font-weight: 400;
+        line-height: 1.05;
+      }
+
+      h2 {
+        margin: 16mm 0 5mm;
+        font-family: Georgia, serif;
+        font-size: 23pt;
+        font-weight: 400;
+      }
+
+      .lede {
+        max-width: 125mm;
+        color: #46514e;
+        font-size: 15pt;
+      }
+
+      .rule {
+        width: 28mm;
+        margin: 12mm 0;
+        border-top: 2px solid #d56b34;
+      }
+
+      .notes {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8mm;
+        margin-top: 14mm;
+      }
+
+      .note {
+        padding: 7mm;
+        border: 1px solid #cbd3cf;
+        break-inside: avoid;
+      }
+    </style>
+  </head>
+  <body>
+    <template data-page-header><span style="font-size:8px;letter-spacing:.18em">IMPOSIA / FIELD NOTES</span></template>
+    <template data-page-footer><span style="font-size:8px">{{pageNumber}} / {{totalPages}}</span></template>
+
+    <section>
+      <div class="eyebrow">Clean-room publishing engine</div>
+      <h1>HTML in. Deliberate pages out.</h1>
+      <div class="rule"></div>
+      <p class="lede">A compact specimen for page breaks, print typography, decorations, metadata, and deterministic PDF output.</p>
+    </section>
+
+    <section>
+      <div class="eyebrow">01 / Composition</div>
+      <h2>Design for the page</h2>
+      <p>Imposia delegates standards-based layout to Chromium while keeping input boundaries, compatibility normalization, lifecycle events, and result metadata explicit.</p>
+      <div class="notes">
+        <article class="note"><strong>Break control</strong><p>Modern CSS break properties take precedence over their legacy aliases.</p></article>
+        <article class="note"><strong>Decorations</strong><p>Headers and footers support exact page-number and total-page tokens.</p></article>
+      </div>
+    </section>
+
+    <section>
+      <div class="eyebrow">02 / Verification</div>
+      <h2>Trust observable output</h2>
+      <p>The same artifact is parsed for semantic assertions, rasterized for visual review, and opened inside the browser Viewer. A green build is useful; a green build backed by an inspected page is better.</p>
+      <div class="rule"></div>
+      <p class="lede">This page intentionally closes the three-page regression specimen.</p>
+    </section>
+  </body>
+</html>

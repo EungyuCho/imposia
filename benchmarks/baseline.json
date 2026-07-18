@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 2,
+  "coldRuns": 3,
+  "warmRuns": 7,
+  "workload": "representative-local-v1",
+  "environment": {
+    "capturedAt": "2026-07-17T06:26:35.987Z",
+    "platform": "darwin",
+    "release": "25.2.0",
+    "architecture": "arm64",
+    "cpuModel": "Apple M1 Max",
+    "logicalCpuCount": 10,
+    "totalMemoryBytes": 34359738368,
+    "nodeVersion": "v22.23.1",
+    "playwrightVersion": "1.57.0",
+    "chromiumVersion": "143.0.7499.4"
+  },
+  "cases": {
+    "10": {
+      "pageCount": 10,
+      "coldSamplesMs": [953.77, 254.9, 270.52],
+      "warmSamplesMs": [113.62, 103.1, 105.5, 145.92, 107.02, 104.74, 103.47],
+      "coldMedianMs": 270.52,
+      "warmMedianMs": 105.5,
+      "phases": {
+        "resourceWaitMs": 22.76,
+        "printPreparationMs": 3.75,
+        "pdfGenerationMs": 15.2
+      }
+    },
+    "50": {
+      "pageCount": 50,
+      "coldSamplesMs": [331.56, 316.54, 334.45],
+      "warmSamplesMs": [151.85, 148.88, 145.64, 139.55, 147.6, 144.8, 145.88],
+      "coldMedianMs": 331.56,
+      "warmMedianMs": 145.88,
+      "phases": {
+        "resourceWaitMs": 30.49,
+        "printPreparationMs": 5.94,
+        "pdfGenerationMs": 43.34
+      }
+    },
+    "200": {
+      "pageCount": 200,
+      "coldSamplesMs": [472.09, 504.46, 467.02],
+      "warmSamplesMs": [321.2, 322.88, 319.24, 334.3, 373.33, 331.77, 334.31],
+      "coldMedianMs": 472.09,
+      "warmMedianMs": 331.77,
+      "phases": {
+        "resourceWaitMs": 62.16,
+        "printPreparationMs": 14.8,
+        "pdfGenerationMs": 159.21
+      }
+    }
+  }
+}

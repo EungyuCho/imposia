@@ -1,0 +1,47 @@
+{
+  "name": "imposia-workspace",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.10.0",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "setup:browsers": "playwright install chromium firefox webkit",
+    "preflight": "node --import tsx scripts/preflight.ts",
+    "typecheck": "tsc -b --pretty false",
+    "lint": "biome check .",
+    "test": "vitest run",
+    "test:unit": "vitest run tests/core",
+    "test:integration": "vitest run tests/integration",
+    "test:e2e": "playwright test",
+    "test:pdf": "node --import tsx scripts/test-pdf-regression.ts",
+    "test:pdf:update": "node --import tsx scripts/test-pdf-regression.ts --update",
+    "test:visual": "node --import tsx scripts/test-visual-regression.ts",
+    "test:visual:update": "node --import tsx scripts/test-visual-regression.ts --update",
+    "benchmark": "node --import tsx scripts/benchmark.ts",
+    "benchmark:update": "node --import tsx scripts/benchmark.ts --update",
+    "licenses": "node --import tsx scripts/licenses.ts",
+    "audit:requirements": "node --import tsx scripts/audit-requirements.ts",
+    "verify": "node --import tsx scripts/capture-check.ts",
+    "example:pdf": "pnpm cli -- render examples/book.html --output output/pdf/imposia-example.pdf --json",
+    "cli": "node --import tsx packages/cli/src/index.ts",
+    "check": "pnpm preflight && pnpm typecheck && pnpm lint && pnpm test && pnpm build && pnpm example:pdf && pnpm test:pdf && pnpm test:visual && pnpm test:e2e && pnpm run licenses && pnpm audit:requirements"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.2.7",
+    "@playwright/test": "1.57.0",
+    "@types/node": "24.10.1",
+    "@types/pixelmatch": "5.2.6",
+    "@types/pngjs": "6.0.5",
+    "pixelmatch": "7.1.0",
+    "pdfjs-dist": "5.4.530",
+    "playwright": "1.57.0",
+    "pngjs": "7.0.0",
+    "tsx": "4.20.6",
+    "typescript": "5.9.3",
+    "vitest": "4.0.16"
+  }
+}

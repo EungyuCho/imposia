@@ -1,0 +1,24 @@
+{
+  "title": "Imposia Field Notes",
+  "pageCount": 3,
+  "pages": [
+    {
+      "number": 1,
+      "widthPoints": 594.96,
+      "heightPoints": 841.92,
+      "text": "C L E A N - R O O M P U B L I S H I N G E N G I N E HTML in. Deliberate pages out. A compact specimen for page breaks, print typography, decorations, metadata, and deterministic PDF output. I M P O S I A / F I E L D N O T E S 1 / 3"
+    },
+    {
+      "number": 2,
+      "widthPoints": 594.96,
+      "heightPoints": 841.92,
+      "text": "0 1 / C O M P O S I T I O N Design for the page Imposia delegates standards-based layout to Chromium while keeping input boundaries, compatibility normalization, lifecycle events, and result metadata explicit. Break control Modern CSS break properties take precedence over their legacy aliases. Decorations Headers and footers support exact page-number and total-page tokens. I M P O S I A / F I E L D N O T E S 2 / 3"
+    },
+    {
+      "number": 3,
+      "widthPoints": 594.96,
+      "heightPoints": 841.92,
+      "text": "0 2 / V E R I F I C AT I O N Trust observable output The same artifact is parsed for semantic assertions, rasterized for visual review, and opened inside the browser Viewer. A green build is useful; a green build backed by an inspected page is better. This page intentionally closes the three-page regression specimen. I M P O S I A / F I E L D N O T E S 3 / 3"
+    }
+  ]
+}
