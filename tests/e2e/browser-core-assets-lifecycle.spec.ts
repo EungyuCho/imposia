@@ -6,9 +6,7 @@ import { assertNoBrowserErrors, openAssetPage } from "./browser-core-assets-supp
 const PNG =
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
 type Scenario = "initial" | "preserve" | "timeout" | "replace";
-type FatalMode = "reject" | "malformed";
-type ProbeInput = { scenario: Scenario; pngBase64: string };
-type Failure = { status: "rejected"; error: { name: string; code: string; message: string } };
+type FatalMode = "reject" | "malformed"; type ProbeInput = { scenario: Scenario; pngBase64: string }; type Failure = { status: "rejected"; error: { name: string; code: string; message: string } };
 type Probe = { sandbox: string | null; created: string[]; revoked: string[]; data: unknown[] };
 type Source = { html: string; baseUrl?: string };
 type Doc = { iframe: HTMLIFrameElement; generation: number; warnings: { code: string }[] };
@@ -26,10 +24,10 @@ function assertUrlLedger(observation: Probe): void {
   expect(c.length).toBe(r.length);
 }
 
-function expectFatal(value: Failure, code: string): void {
+function expectFatal(value: Failure, c: string): void {
   const message =
-    code === "RESOURCE_TIMEOUT" ? "Resource loading timed out." : "Asset resolution failed.";
-  expect(value).toEqual({ status: "rejected", error: { name: "ImposiaError", code, message } });
+    c === "RESOURCE_TIMEOUT" ? "Resource loading timed out." : "Asset resolution failed.";
+  expect(value).toEqual({ status: "rejected", error: { name: "ImposiaError", code: c, message } });
 }
 
 async function assetLifecycleProbe(input: ProbeInput): Promise<Probe> {
@@ -40,13 +38,13 @@ async function assetLifecycleProbe(input: ProbeInput): Promise<Probe> {
   const host = document.body.appendChild(document.createElement("div"));
   const created: string[] = [],
     revoked: string[] = [];
-  const originalCreate = URL.createObjectURL,
-    originalRevoke = URL.revokeObjectURL;
+  const create0 = URL.createObjectURL,
+    revoke0 = URL.revokeObjectURL;
   let controller: Controller | undefined;
   const good = { status: "resolved" as const, bytes: png, mimeType: "image/png" };
   const shapeError = (error: unknown): Failure["error"] => {
-    const value = error instanceof Error ? error : new Error("unknown");
-    const code = "code" in value && typeof value.code === "string" ? value.code : "";
+    const value = error instanceof Error ? error : new Error("unknown"),
+      code = "code" in value && typeof value.code === "string" ? value.code : "";
     return { name: value.name, code, message: value.message };
   };
   const failure = (work: Promise<unknown>): Promise<Failure> =>
@@ -79,15 +77,15 @@ async function assetLifecycleProbe(input: ProbeInput): Promise<Probe> {
       );
     };
   };
-  const record = (list: string[], forward?: (url: string) => void) => (url: string) => {
-    list.push(url);
-    forward?.(url);
+  URL.createObjectURL = (blob) => {
+    const url = create0(blob);
+    created.push(url);
     return url;
   };
-  const trackCreate = record(created),
-    trackRevoke = record(revoked, originalRevoke);
-  URL.createObjectURL = (blob) => trackCreate(originalCreate(blob));
-  URL.revokeObjectURL = trackRevoke;
+  URL.revokeObjectURL = (url) => {
+    revoked.push(url);
+    revoke0(url);
+  };
   const finish = (sandbox: string | null, data: unknown[]): Probe =>
     Object.assign({ sandbox, data }, { created: [...created], revoked: [...revoked] });
   const mount = (html: string, r: AssetResolver, l?: Options["limits"]) => {
@@ -128,23 +126,23 @@ async function assetLifecycleProbe(input: ProbeInput): Promise<Probe> {
       const resolver = fatalResolver("fatal.png", "malformed");
       const c = mount('<p>old</p><img src="old.png">', resolver),
         initial = await c.ready,
-        initialFrameHtml = frame(initial),
-        initialBlobUrl = created[0] ?? "";
+        oldHtml = frame(initial),
+        oldBlob = created[0] ?? "";
       const update = await failure(
         c.update({ html: "<p>new</p><img src=candidate.png><img src=fatal.png>", baseUrl }),
       );
       const current = c.current,
-        revokedBeforeDestroy = [...revoked],
-        sameFrame = initialFrameHtml === frame(current);
+        before = [...revoked],
+        sameFrame = oldHtml === frame(current);
       await destroy();
       const u = update,
         i = current?.iframe === initial.iframe,
         s = sameFrame,
         g = current?.generation ?? 0,
         n = !(current?.warnings.some((warning) => warning.code === "RESOURCE_BLOCKED") ?? false),
-        h = initialFrameHtml,
-        b = initialBlobUrl,
-        r = revokedBeforeDestroy,
+        h = oldHtml,
+        b = oldBlob,
+        r = before,
         v = [...revoked];
       return finish(initial.iframe.getAttribute("sandbox"), [u, i, s, g, n, h, b, r, v]);
     }
@@ -170,15 +168,15 @@ async function assetLifecycleProbe(input: ProbeInput): Promise<Probe> {
         iframe = host.querySelector<HTMLIFrameElement>("iframe");
       lateResolve?.(good);
       await Promise.resolve();
-      const createdAfterLate = [...created];
-      const destroyFirst = c.destroy(),
-        destroySecond = c.destroy();
-      await Promise.all([destroyFirst, destroySecond]);
+      const after = [...created];
+      const d1 = c.destroy(),
+        d2 = c.destroy();
+      await Promise.all([d1, d2]);
       controller = undefined;
       const t = timeout,
         l = { aborted: late.aborted, settled: late.settled },
-        a = createdAfterLate,
-        d = destroyFirst === destroySecond;
+        a = after,
+        d = d1 === d2;
       return finish(iframe?.getAttribute("sandbox") ?? null, [t, l, a, d]);
     }
     const snapshots: { url: string; generation: number; frameText: string }[] = [];
@@ -190,27 +188,27 @@ async function assetLifecycleProbe(input: ProbeInput): Promise<Probe> {
     URL.revokeObjectURL = (url) => {
       snapshots.push(snap(url, controller?.current));
       revoked.push(url);
-      originalRevoke(url);
+      revoke0(url);
     };
     const resolver: AssetResolver = async () => good;
     const c = mount('<p>old</p><img src="old.png">', resolver),
       initial = await c.ready,
       oldRevokedBeforeUpdate = [...revoked];
     const replacement = await c.update({ html: '<p>new</p><img src="new.png">', baseUrl });
-    const destroyFirst = c.destroy(),
-      destroySecond = c.destroy();
-    await Promise.all([destroyFirst, destroySecond]);
+    const d1 = c.destroy(),
+      d2 = c.destroy();
+    await Promise.all([d1, d2]);
     controller = undefined;
     const g1 = initial.generation,
       g2 = replacement.generation,
       r = oldRevokedBeforeUpdate,
       s = snapshots,
-      d = destroyFirst === destroySecond;
+      d = d1 === d2;
     return finish(initial.iframe.getAttribute("sandbox"), [g1, g2, r, s, d]);
   } finally {
     await destroy();
-    URL.createObjectURL = originalCreate;
-    URL.revokeObjectURL = originalRevoke;
+    URL.createObjectURL = create0;
+    URL.revokeObjectURL = revoke0;
     host.remove();
   }
 }
@@ -262,12 +260,9 @@ lifecycleTest("late resolver times out, aborts, and settles idempotently", "time
 });
 
 lifecycleTest("replacement commits before revoke and destroy is idempotent", "replace", (o) => {
-  expect(o.data.slice(0, 2)).toEqual([1, 2]);
-  expect(o.data[2]).toEqual([]);
+  expect(o.data.slice(0, 3)).toEqual([1, 2, []]);
   const oldUrl = o.created[0];
   const newUrl = o.created[1];
-  if (oldUrl === undefined || newUrl === undefined)
-    throw new Error("Missing replacement blob URLs.");
   expect(o.data[3]).toEqual([
     { url: oldUrl, generation: 2, frameText: expect.stringContaining("new") },
     { url: newUrl, generation: 2, frameText: expect.stringContaining("new") },
