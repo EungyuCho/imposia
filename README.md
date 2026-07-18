@@ -6,9 +6,8 @@ Imposia is a clean-room, browser-first HTML/CSS publishing toolkit. The client r
 
 - `@imposia/core`: browser-only `mountPageDocument()` API, isolated canonical page-DOM pagination, and resolver-mediated asset loading. The current implementation is Chromium-reference pagination, not the complete target fragmentation engine.
 - `@imposia/client`: browser-only convenience entrypoint re-exporting Core and Viewer APIs; it has no Node, filesystem, or CLI dependency.
-- `@imposia/node`: legacy Node/Playwright PDF renderer, Chromium lifecycle, PDF metadata, and timing data.
+- `@imposia/react`: React-first adapter for mounting the Core page document and Viewer.
 - `@imposia/viewer`: accessible continuous/single-page PDF canvas viewer for Chromium, Firefox, and WebKit, plus `mountPageViewer()` for presenting the existing canonical Core iframe in Chromium.
-- `@imposia/cli`: `render` and `pdf` commands with JSON output and stable exit codes, backed by `@imposia/node`.
 
 ## Quick start
 
@@ -17,12 +16,10 @@ corepack pnpm install --frozen-lockfile
 pnpm setup:browsers
 pnpm preflight
 pnpm build
-pnpm cli -- render examples/book.html --output output/pdf/imposia-example.pdf --json
+pnpm build
 ```
 
-The successful command exits `0` and reports the page count, A4 point dimensions, warnings, and phase timings. Usage, input, output, and unexpected internal failures exit `2`, `3`, `4`, and `5` respectively.
-
-The stable CLI default uses the legacy Chromium renderer. `--engine core` is an explicit Chromium-reference preview that paginates with the browser-Core canonical page DOM before printing; it remains opt-in while its output-equivalence gate is incomplete.
+PDF export and Node/CLI adapters are intentionally outside this browser-only package set.
 
 ## Browser Core API (current canonical pagination)
 
@@ -47,26 +44,16 @@ import { mountPageDocument, mountPageViewer } from "@imposia/client";
 import "@imposia/client/styles.css";
 ```
 
-## Node PDF API (current stable PDF path)
+React applications can use the primary adapter:
 
-```ts
-import { createRenderer } from "@imposia/node";
+```tsx
+import { ImposiaPageViewer } from "@imposia/react";
+import "@imposia/react/styles.css";
 
-const renderer = createRenderer();
-try {
-  const result = await renderer.render(
-    { file: "examples/book.html" },
-    { allowFileRoot: process.cwd() },
-  );
-  console.log(result.pageCount, result.warnings, result.timings);
-} finally {
-  await renderer.close();
+export function BookPreview() {
+  return <ImposiaPageViewer source={{ html: "<article><h1>Hello</h1></article>" }} />;
 }
 ```
-
-Remote resources are blocked unless `allowRemoteResources` is enabled. Scripts, inline event handlers, unsafe URLs, file-root escapes, oversized input, and readiness deadlines are handled at explicit trust boundaries on this legacy PDF path.
-
-`engine` defaults to `"legacy"`. Set it to `"core"` to use the Chromium-reference canonical page document, and optionally provide `core: { css, page, limits }` for Core-only pagination settings. Those settings are rejected on the legacy engine rather than ignored. Inline `baseUrl` must be absolute, while remote document input must use HTTP(S). The CLI remains deliberately local-file-only; use the Node API for URL input.
 
 ## Viewer APIs
 
@@ -95,10 +82,10 @@ await pageViewer.print();
 
 `mountPageViewer()` retains the exact Core iframe and refreshes only to a newer generation from that controller. It is currently a Chromium-reference surface; the PDF.js `mountViewer()` API remains the cross-browser PDF viewer.
 
-See [`examples/viewer/index.html`](examples/viewer/index.html) for the no-framework integration and [`docs/routing.md`](docs/routing.md) for contracts, compatibility, architecture, limitations, benchmarks, and verification evidence.
+See [`examples/viewer/index.html`](examples/viewer/index.html) for the no-framework integration and [`docs/routing.md`](docs/routing.md) for contracts, compatibility, architecture, and verification evidence.
 
 ## Verification
 
-`pnpm check` begins with a deterministic prerequisite preflight, then runs type checking, Biome, unit/integration tests, build, fresh example PDF generation, semantic PDF regression, Playwright/PDF.js visual regression, three-browser Viewer E2E, the release/dependency license audit, and the requirement/artifact ledger. `pnpm verify` runs that complete gate while preserving raw stdout/stderr, timestamps, exit status, and artifact hashes. `pnpm setup:browsers` is the declared browser-provisioning step; no host Poppler installation is required. Performance is intentionally separate: `pnpm benchmark` performs 30 measured representative real-browser renders against [`benchmarks/baseline.json`](benchmarks/baseline.json).
+`pnpm check` runs type checking, lint, unit tests, build, browser E2E, and the release/dependency license audit. `pnpm setup:browsers` provisions the declared browser engines.
 
 Imposia is Apache-2.0 licensed. See [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) and the contributor checklist in [`docs/clean-room.md`](docs/clean-room.md). The clean-room policy reduces provenance risk but is not legal advice.

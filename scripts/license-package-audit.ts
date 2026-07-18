@@ -130,15 +130,11 @@ function requireRootBundledEntry(rootNoticeText: string, bundled: BundledPackage
 
 const upstreamNotices: Record<string, readonly [string, string][]> = {
   "@imposia/core": [],
-  "@imposia/node": [
-    ["pdfjs-dist", "node_modules/.pnpm/pdfjs-dist@5.4.530/node_modules/pdfjs-dist/LICENSE"],
-    ["Playwright", "node_modules/.pnpm/playwright@1.57.0/node_modules/playwright/LICENSE"],
-    ["Playwright NOTICE", "node_modules/.pnpm/playwright@1.57.0/node_modules/playwright/NOTICE"],
-  ],
+  "@imposia/client": [],
+  "@imposia/react": [],
   "@imposia/viewer": [
     ["pdfjs-dist", "node_modules/.pnpm/pdfjs-dist@5.4.530/node_modules/pdfjs-dist/LICENSE"],
   ],
-  "@imposia/cli": [],
 };
 
 export async function auditPackageArtifact(

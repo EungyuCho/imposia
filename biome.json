@@ -14,7 +14,6 @@
       "!!packages/*/dist",
       "!!packages/core/dist",
       "!!packages/viewer/dist",
-      "!!packages/cli/dist",
       "!!artifacts",
       "!!output",
       "!!benchmarks/latest.*"
