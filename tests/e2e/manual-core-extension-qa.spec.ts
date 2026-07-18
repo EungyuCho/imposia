@@ -1,6 +1,30 @@
 import { expect, test } from "@playwright/test";
 import { captureBrowserErrors } from "./browser-core-support.js";
 
+type TransformInput = { html: string; css: readonly string[] };
+type AssetRequest = { url: string };
+type ExtensionContext = { warn(warning: { code: string; message: string }): void };
+type DecorationPage = { blank: boolean };
+type CoreWarning = { code: string; message: string; extension?: string; sourceIdentity?: string };
+type CoreDocument = {
+  iframe: HTMLIFrameElement;
+  warnings: readonly CoreWarning[];
+  pages: readonly { bodyText: readonly string[] }[];
+};
+type CoreController = {
+  ready: Promise<CoreDocument>;
+  current: CoreDocument | undefined;
+  update(source: { html: string; baseUrl?: string }): Promise<CoreDocument>;
+  destroy(): Promise<void>;
+};
+type CoreModule = {
+  mountPageDocument(
+    container: HTMLElement,
+    source: { html: string; baseUrl?: string },
+    options: Record<string, unknown>,
+  ): CoreController;
+};
+
 test.describe("manual Core extension contract QA (Chromium)", () => {
   test.beforeEach(({ browserName }) =>
     test.skip(browserName !== "chromium", "Chromium-reference Core."),
@@ -10,14 +34,14 @@ test.describe("manual Core extension contract QA (Chromium)", () => {
     const { errors, pageErrors } = captureBrowserErrors(page, "chromium");
     await page.goto("/examples/book.html");
     const observation = await page.evaluate(async () => {
-      const core = (await import("/packages/core/dist/index.js")) as any;
+      const core = (await import("/packages/core/dist/index.js")) as unknown as CoreModule;
       const host = document.createElement("div");
       document.body.replaceChildren(host);
       const calls: string[] = [];
       const extensions = [
         {
           name: "qa/first",
-          transform(input: any) {
+          transform(input: TransformInput) {
             calls.push(`first:${input.html.includes("ONE")}`);
             return {
               html: `${input.html}<script>bad</script><p>ONE</p>`,
@@ -27,7 +51,7 @@ test.describe("manual Core extension contract QA (Chromium)", () => {
         },
         {
           name: "qa/second",
-          transform(input: any) {
+          transform(input: TransformInput) {
             calls.push(`second:${input.html.includes("ONE")}`);
             return { html: `${input.html}<p>TWO</p>` };
           },
@@ -59,7 +83,7 @@ test.describe("manual Core extension contract QA (Chromium)", () => {
     const { errors, pageErrors } = captureBrowserErrors(page, "chromium");
     await page.goto("/examples/book.html");
     const observation = await page.evaluate(async () => {
-      const core = (await import("/packages/core/dist/index.js")) as any;
+      const core = (await import("/packages/core/dist/index.js")) as unknown as CoreModule;
       const host = document.createElement("div");
       document.body.replaceChildren(host);
       const resolverCalls: string[] = [];
@@ -71,14 +95,14 @@ test.describe("manual Core extension contract QA (Chromium)", () => {
           baseUrl: "https://assets.example.test/book/",
         },
         {
-          assetResolver: async (request: any) => {
+          assetResolver: async (request: AssetRequest) => {
             resolverCalls.push(request.url);
             return { status: "blocked" };
           },
           extensions: [
             {
               name: "qa/blocker",
-              allowAsset(request: any) {
+              allowAsset(request: AssetRequest) {
                 policyCalls.push(request.url);
                 return false;
               },
@@ -100,7 +124,7 @@ test.describe("manual Core extension contract QA (Chromium)", () => {
     });
     expect(observation.policyCalls).toEqual(["https://assets.example.test/secret.png"]);
     expect(observation.resolverCalls).toEqual([]);
-    expect(observation.warnings.map((warning: any) => warning.code)).toContain("RESOURCE_BLOCKED");
+    expect(observation.warnings.map((warning) => warning.code)).toContain("RESOURCE_BLOCKED");
     expect(observation.html).not.toMatch(/assets\.example\.test|secret\.png/);
     expect(errors).toEqual([]);
     expect(pageErrors).toEqual([]);
@@ -110,7 +134,7 @@ test.describe("manual Core extension contract QA (Chromium)", () => {
     const { errors, pageErrors } = captureBrowserErrors(page, "chromium");
     await page.goto("/examples/book.html");
     const observation = await page.evaluate(async () => {
-      const core = (await import("/packages/core/dist/index.js")) as any;
+      const core = (await import("/packages/core/dist/index.js")) as unknown as CoreModule;
       const run = async (decorateBlankPages: boolean) => {
         const host = document.createElement("div");
         document.body.replaceChildren(host);
@@ -122,7 +146,7 @@ test.describe("manual Core extension contract QA (Chromium)", () => {
             extensions: [
               {
                 name: "qa/decorator",
-                decoratePage(page: any) {
+                decoratePage(page: DecorationPage) {
                   return {
                     headerHtml: `EXT {{pageNumber}}/{{totalPages}}/${page.blank ? "BLANK" : "FULL"}`,
                     footerHtml: "FOOTER {{pageNumber}}/{{totalPages}}",
@@ -135,7 +159,9 @@ test.describe("manual Core extension contract QA (Chromium)", () => {
         try {
           const ready = await controller.ready;
           return [
-            ...ready.iframe.contentDocument!.querySelectorAll<HTMLElement>("[data-imposia-page]"),
+            ...(ready.iframe.contentDocument?.querySelectorAll<HTMLElement>(
+              "[data-imposia-page]",
+            ) ?? []),
           ].map((element) => ({
             blank: element.dataset.imposiaBlank,
             header: element.querySelector("[data-imposia-page-header]")?.textContent ?? "",
@@ -161,12 +187,12 @@ test.describe("manual Core extension contract QA (Chromium)", () => {
     const { errors, pageErrors } = captureBrowserErrors(page, "chromium");
     await page.goto("/examples/book.html");
     const observation = await page.evaluate(async () => {
-      const core = (await import("/packages/core/dist/index.js")) as any;
+      const core = (await import("/packages/core/dist/index.js")) as unknown as CoreModule;
       const host = document.createElement("div");
       document.body.replaceChildren(host);
       const extension = {
         name: "qa/warnings",
-        transform(_input: any, context: any) {
+        transform(_input: TransformInput, context: ExtensionContext) {
           context.warn({ code: "EXTENSION_REPEAT", message: "first" });
           context.warn({ code: "EXTENSION_REPEAT", message: "second" });
           context.warn({ code: "EXTENSION_OTHER", message: "other" });
@@ -191,14 +217,14 @@ test.describe("manual Core extension contract QA (Chromium)", () => {
           after: JSON.stringify(ready.warnings),
           repeatWarnings: JSON.stringify(repeat.warnings),
           frozen: Object.isFrozen(ready.warnings),
-          itemsFrozen: ready.warnings.every((warning: any) => Object.isFrozen(warning)),
+          itemsFrozen: ready.warnings.every((warning) => Object.isFrozen(warning)),
           mutation,
         };
       } finally {
         await controller.destroy();
       }
     });
-    expect(observation.warnings.map((warning: any) => warning.code)).toEqual([
+    expect(observation.warnings.map((warning) => warning.code)).toEqual([
       "UNSUPPORTED_DECORATION_TOKEN",
       "EXTENSION_REPEAT",
       "EXTENSION_OTHER",
@@ -221,7 +247,7 @@ test.describe("manual Core extension contract QA (Chromium)", () => {
     const { errors, pageErrors } = captureBrowserErrors(page, "chromium");
     await page.goto("/examples/book.html");
     const observation = await page.evaluate(async () => {
-      const core = (await import("/packages/core/dist/index.js")) as any;
+      const core = (await import("/packages/core/dist/index.js")) as unknown as CoreModule;
       const host = document.createElement("div");
       document.body.replaceChildren(host);
       const bytes = Uint8Array.from(
@@ -248,7 +274,7 @@ test.describe("manual Core extension contract QA (Chromium)", () => {
       const extensions = [
         {
           name: "qa/thrower",
-          transform(input: any) {
+          transform(input: TransformInput) {
             shouldThrow = input.html.includes("NEW");
           },
           decoratePage() {
@@ -271,7 +297,7 @@ test.describe("manual Core extension contract QA (Chromium)", () => {
           })
           .then(
             () => "fulfilled",
-            (error: any) => error.message,
+            (error: unknown) => (error instanceof Error ? error.message : "unknown"),
           );
         const revokedAfterFailure = [...revoked];
         await controller.destroy();
