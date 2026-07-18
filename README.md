@@ -1,12 +1,13 @@
 # Imposia
 
-Imposia is a clean-room HTML/CSS publishing toolkit that produces a real paginated PDF with a pinned Chromium engine and opens that exact artifact in a framework-free PDF.js Viewer.
+Imposia is a clean-room HTML/CSS publishing toolkit. The current implementation has a browser-Core page-DOM vertical slice and a separate Node/Chromium PDF renderer; the full browser-first product remains in progress.
 
 ## Packages
 
-- `@imposia/core`: input validation, sanitization, break compatibility, decorations, warnings, lifecycle hooks, reusable Chromium, PDF metadata, and timing data.
+- `@imposia/core`: browser-only `mountPageDocument()` API and the isolated canonical page DOM. The current implementation is a one-page vertical slice, not the full fragmentation engine.
+- `@imposia/node`: legacy Node/Playwright PDF renderer, Chromium lifecycle, PDF metadata, and timing data.
 - `@imposia/viewer`: accessible continuous/single-page PDF canvas viewer for Chromium, Firefox, and WebKit.
-- `@imposia/cli`: `render` and `pdf` commands with JSON output and stable exit codes.
+- `@imposia/cli`: `render` and `pdf` commands with JSON output and stable exit codes, backed by `@imposia/node`.
 
 ## Quick start
 
@@ -20,10 +21,26 @@ pnpm cli -- render examples/book.html --output output/pdf/imposia-example.pdf --
 
 The successful command exits `0` and reports the page count, A4 point dimensions, warnings, and phase timings. Usage, input, output, and unexpected internal failures exit `2`, `3`, `4`, and `5` respectively.
 
-## Core API
+## Browser Core API (current one-page vertical slice)
 
 ```ts
-import { createRenderer } from "@imposia/core";
+import { mountPageDocument } from "@imposia/core";
+
+const controller = mountPageDocument(
+  document.querySelector("#preview")!,
+  { html: "<article><h1>Hello</h1><p>Browser page DOM</p></article>" },
+  {},
+);
+const pageDocument = await controller.ready;
+console.log(pageDocument.pageCount, pageDocument.pages, pageDocument.warnings);
+```
+
+This browser surface currently creates one canonical page in an isolated iframe. Full multi-page fragmentation, Viewer adoption of that iframe, and Node PDF generation through the same paginator are pending.
+
+## Node PDF API (current stable PDF path)
+
+```ts
+import { createRenderer } from "@imposia/node";
 
 const renderer = createRenderer();
 try {
@@ -37,7 +54,7 @@ try {
 }
 ```
 
-Remote resources are blocked unless `allowRemoteResources` is enabled. Scripts, inline event handlers, unsafe URLs, file-root escapes, oversized input, and readiness deadlines are handled at explicit trust boundaries.
+Remote resources are blocked unless `allowRemoteResources` is enabled. Scripts, inline event handlers, unsafe URLs, file-root escapes, oversized input, and readiness deadlines are handled at explicit trust boundaries on this legacy PDF path.
 
 ## Viewer API
 

@@ -1,5 +1,7 @@
 # Verification ledger
 
+## Legacy PDF-first ledger
+
 Executed on 2026-07-17 in `/Users/eungyucho/Documents/viewer`.
 
 | Requirement | Command / observable evidence | Result |
@@ -17,3 +19,17 @@ Executed on 2026-07-17 in `/Users/eungyucho/Documents/viewer`.
 | Dependency/release licenses | `pnpm run licenses` | Full Apache-2.0 sections/appendix, third-party notices, clean-room checklist, shipped direct dependencies, and 155-package permissive SPDX inventory verified. |
 
 Intentional RED artifacts are retained in `artifacts/evidence/*-red.log`; matching GREEN and refresh evidence live beside them. The final `pnpm check` receipt is recorded only after the full surface passes in one command.
+
+## Browser-Core and package-split ledger
+
+Executed on 2026-07-18. This evidence covers the current one-page `@imposia/core` vertical slice and the ownership move of the legacy PDF renderer to `@imposia/node`; it does not claim completion of full fragmentation, resolver behavior, Viewer iframe adoption, or a shared Node paginator.
+
+| Requirement | Command / observable evidence | Result |
+| --- | --- | --- |
+| Clean browser-Core builds and package boundary | Two clean builds plus the Core artifact audit | Both clean builds passed; 48 publishable Core artifacts were boundary-clean. |
+| Static checks | TypeScript typecheck and Biome lint | Both passed; Biome checked 77 files. |
+| Automated tests | Vitest | 66/66 tests passed. |
+| Browser-Core matrix | Browser-Core matrix across Chromium, Firefox, and WebKit | 28 tests passed; 2 Firefox/WebKit print cases were expected skips. |
+| CSS-driven browser print | Chromium print CSS probe on the canonical page document | Passed; canonical page-document CSS with `preferCSSPageSize` produced one A4 sheet with an approximately 594.96 × 841.92 pt viewport. Separate lifecycle tests prove `print()` targets the exact canonical iframe; this row does not claim a live-frame physical capture. |
+| Node PDF path | Real `@imposia/node` CLI render | Passed; emitted a three-page PDF. |
+| Release/license boundary | License audit and four dry-run package tarballs | 64 permissive packages audited; all four tarballs contained `LICENSE` and notices. |

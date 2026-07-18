@@ -1,6 +1,6 @@
 # ADR 0004: browser-first authoritative page DOM
 
-Status: accepted as the target architecture; not implemented at this commit. Supersedes [ADR 0001](0001-hybrid-renderer.md) for new work.
+Status: accepted target architecture with an initial one-page Core vertical slice in the current implementation; full target not implemented. Supersedes [ADR 0001](0001-hybrid-renderer.md) for new work.
 
 ## Decision
 
@@ -8,7 +8,11 @@ The library owns one paginated, browser-native page DOM. That DOM, inside one is
 
 Target `@imposia/core` is browser-only: it accepts sanitized source and optional ordered CSS, paginates into the iframe, and exposes the resulting page DOM. Target `@imposia/viewer` only mounts, frames, scrolls, zooms, and prints that same iframe. It must not clone the pages, parse the source again, or run pagination itself. `print()` calls `contentWindow.print()` on that canonical frame.
 
-An optional target `@imposia/node` package may run Chromium solely as a browser host and request PDF output from the same exported browser paginator. It must not contain another paginator or a PDF-first normalization path. After the canonical frame is ready, it asks Chromium to print that frame and returns PDF bytes.
+Target `@imposia/node` will run Chromium solely as a browser host and request PDF output from the same exported browser paginator. It must not contain another paginator or a PDF-first normalization path. After the canonical frame is ready, it asks Chromium to print that frame and returns PDF bytes.
+
+## Current implementation boundary
+
+`@imposia/core` now exports `mountPageDocument()` and produces one sanitized, isolated canonical page iframe. This is a tested vertical slice of the DOM ownership and lifecycle surface, not a multi-page paginator. The current `@imposia/node` package owns the legacy Node/Playwright PDF renderer, but it does not yet invoke Core's browser paginator. `@imposia/viewer` still renders PDF.js canvases and does not yet adopt the Core iframe. Full fragmentation, Viewer reuse of the single canonical DOM, and Node PDF output from that same paginator remain pending.
 
 ## Target public contract
 
@@ -160,4 +164,4 @@ Before `ready` settles, all resolved resources must either become ready or hit t
 
 Browser preview and Node PDF export are equivalent when their canonical page DOM has the same page count, CSS-pixel page dimensions, ordered body text, decorations, and blank-page positions. PDF bytes, raster pixels, accessibility-tree serialization, font subset ordering, and metadata are explicitly not equality criteria.
 
-The migration is complete only when the browser path produces that canonical DOM, Viewer displays that instance, and `@imposia/node` prints that frame. Until then, the legacy PDF-first path remains the stable release path. The rollback gate is any failure of the structural equality contract, isolation contract, or required resource cleanup in Chromium-reference tests; release traffic stays on the legacy path until the failing target change is corrected or withdrawn.
+The migration is complete only when the browser path produces that canonical DOM across full fragmentation, Viewer displays that instance, and `@imposia/node` prints that frame through the shared exported paginator. Until then, the legacy PDF-first `@imposia/node` path remains the stable release path. The rollback gate is any failure of the structural equality contract, isolation contract, or required resource cleanup in Chromium-reference tests; release traffic stays on the legacy path until the failing target change is corrected or withdrawn.
