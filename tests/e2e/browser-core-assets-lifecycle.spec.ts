@@ -42,7 +42,7 @@ async function assetLifecycleProbe(input: ProbeInput): Promise<Probe> {
     revoked: string[] = [];
   const create0 = URL.createObjectURL,
     revoke0 = URL.revokeObjectURL;
-  let controller: Controller | undefined;
+  let controller: Controller | undefined, onCreate: (() => void) | undefined;
   const good = { status: "resolved" as const, bytes: png, mimeType: "image/png" };
   const shapeError = (error: unknown): Failure["error"] => {
     const value = error instanceof Error ? error : new Error("unknown"),
@@ -69,7 +69,7 @@ async function assetLifecycleProbe(input: ProbeInput): Promise<Probe> {
     return async ({ url, signal }) => {
       signal.addEventListener("abort", () => log.push(url));
       if (url === "candidate.png") {
-        release();
+        onCreate = release;
         return good;
       }
       if (url === "old.png") return good;
@@ -82,6 +82,7 @@ async function assetLifecycleProbe(input: ProbeInput): Promise<Probe> {
   URL.createObjectURL = (blob) => {
     const url = create0(blob);
     created.push(url);
+    onCreate?.();
     return url;
   };
   URL.revokeObjectURL = (url) => {
