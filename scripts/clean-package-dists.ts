@@ -1,6 +1,6 @@
 import { rm } from "node:fs/promises";
 
-const packages = ["core", "node", "viewer", "cli"];
+const packages = ["client", "core", "react", "viewer"];
 
 await Promise.all(
   packages.flatMap((packageName) => [

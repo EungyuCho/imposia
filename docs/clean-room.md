@@ -10,8 +10,6 @@ Primary references consulted on 2026-07-18:
 - [MDN: Content Security Policy](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/CSP) for restrictive frame policy.
 - [MDN: `Node.cloneNode()`](https://developer.mozilla.org/en-US/docs/Web/API/Node/cloneNode) for the source-cloning boundary.
 - [MDN: `Window.print()`](https://developer.mozilla.org/en-US/docs/Web/API/Window/print) for printing the canonical browser frame.
-- [Playwright `page.pdf`](https://playwright.dev/docs/api/class-page#page-pdf) for Chromium PDF options, CSS page size preference, backgrounds, and tagging.
-- [Playwright `BrowserServer`](https://playwright.dev/docs/api/class-browserserver) for public browser process ownership and deterministic termination.
 
 No third-party paged-layout source, tests, distribution bundles, or internal documentation were used. Imposia's module boundaries and APIs were derived from the requirements in this repository and the public platform contracts above.
 
@@ -22,7 +20,7 @@ This policy and automated audit reduce provenance and redistribution risk, but t
 ## Independently derived decisions
 
 - HTML parsing, CSS declaration normalization, and warnings were designed from the repository requirements and W3C syntax/behavior contracts.
-- The legacy implementation delegates PDF generation through Playwright to pinned Chromium. The target page-DOM contract is derived from public DOM, iframe, print, CSS Fragmentation, and CSS Paged Media behavior.
+- The page-DOM contract is derived from public DOM, iframe, print, CSS Fragmentation, and CSS Paged Media behavior.
 - Viewer behavior and the target page DOM are independently designed from the repository requirements and the listed public contracts.
 - Page decorations are independently defined ordinary page-DOM header and footer content after structural sanitization.
 

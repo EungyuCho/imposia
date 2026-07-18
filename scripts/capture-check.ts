@@ -1,17 +1,8 @@
 import { spawn } from "node:child_process";
-import { createHash } from "node:crypto";
-import { readFile, writeFile } from "node:fs/promises";
+import { writeFile } from "node:fs/promises";
 import path from "node:path";
 
 const evidencePath = path.resolve("artifacts/evidence/final-check-raw.log");
-const hashedFiles = [
-  "output/pdf/imposia-example.pdf",
-  "benchmarks/baseline.json",
-  "tests/fixtures/pdf/imposia-example.semantic.json",
-  "tests/fixtures/pdf/visual/page-1.png",
-  "tests/fixtures/pdf/visual/page-2.png",
-  "tests/fixtures/pdf/visual/page-3.png",
-] as const;
 
 function run(): Promise<{ code: number; output: string }> {
   return new Promise((resolve, reject) => {
@@ -32,15 +23,6 @@ function run(): Promise<{ code: number; output: string }> {
 async function main(): Promise<void> {
   const startedAt = new Date().toISOString();
   const result = await run();
-  const hashes: string[] = [];
-  if (result.code === 0) {
-    for (const file of hashedFiles) {
-      const digest = createHash("sha256")
-        .update(await readFile(path.resolve(file)))
-        .digest("hex");
-      hashes.push(`${digest}  ${file}`);
-    }
-  }
   const receipt = [
     `command: pnpm check`,
     `startedAt: ${startedAt}`,
@@ -51,7 +33,6 @@ async function main(): Promise<void> {
     "--- receipt ---",
     `exitCode: ${result.code}`,
     `completedAt: ${new Date().toISOString()}`,
-    ...hashes,
     "",
   ].join("\n");
   await writeFile(evidencePath, receipt);

@@ -20,7 +20,7 @@ interface PackageLicense {
   license: string;
 }
 
-function record(value: unknown): value is Record<string, unknown> {
+function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
@@ -77,7 +77,7 @@ async function main(): Promise<void> {
     try {
       const manifest = JSON.parse(await readFile(path.join(directory, "package.json"), "utf8"));
       if (
-        !record(manifest) ||
+        !isRecord(manifest) ||
         typeof manifest.name !== "string" ||
         typeof manifest.version !== "string" ||
         typeof manifest.license !== "string"
@@ -117,7 +117,7 @@ async function main(): Promise<void> {
       const directory = path.resolve(file);
       const manifestPath = path.join(directory, "package.json");
       const value = JSON.parse(await readFile(manifestPath, "utf8"));
-      if (typeof value !== "object" || value === null || !("dependencies" in value)) {
+      if (!isRecord(value) || !("dependencies" in value)) {
         throw new Error(`Invalid package manifest: ${manifestPath}.`);
       }
       if (!("name" in value) || typeof value.name !== "string") {
@@ -131,11 +131,20 @@ async function main(): Promise<void> {
       if (!stringArray(files)) {
         throw new Error(`Invalid package files: ${manifestPath}.`);
       }
+      const exports = Reflect.get(value, "exports");
+      if (!isRecord(exports)) {
+        throw new Error(`Invalid package exports: ${manifestPath}.`);
+      }
+      const publishConfig = Reflect.get(value, "publishConfig");
+      if (!isRecord(publishConfig) || publishConfig.access !== "public") {
+        throw new Error(`Package must publish publicly: ${manifestPath}.`);
+      }
       return {
         name: value.name,
         directory,
         dependencies: Object.keys(dependencies),
         files,
+        exports,
       };
     }),
   );
@@ -168,7 +177,7 @@ async function main(): Promise<void> {
     `${JSON.stringify({ packageCount: sorted.length, counts, shippedDependencies: shippedDependencies.join(", "), releaseArtifacts: releaseArtifacts.join(", "), packageArtifacts: packageManifests.map((manifest) => manifest.name), bundledPackages, packages: sorted }, null, 2)}\n`,
   );
   process.stdout.write(
-    `License audit passed: ${sorted.length} installed packages, all on the reviewed permissive allowlist; package dry-runs include LICENSE and THIRD_PARTY_NOTICES.md.\n`,
+    `License audit passed: ${sorted.length} installed packages, all on the reviewed permissive allowlist; package dry-runs include READMEs, legal files, and declared export targets.\n`,
   );
 }
 
