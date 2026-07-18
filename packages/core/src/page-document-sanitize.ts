@@ -233,13 +233,16 @@ export function appendDecoration(
   frameDocument: Document,
   target: HTMLElement,
   markup: string | undefined,
+  append = false,
 ): boolean {
   if (markup === undefined) return false;
   const prepared = copyPreparedBody(frameDocument, markup);
   const holder = frameDocument.createElement("div");
   holder.append(prepared.fragment);
   const resourceBlocked = prepared.resourceBlocked || sanitizeFrameContent(holder);
-  target.replaceChildren(...[...holder.childNodes]);
+  const nodes = [...holder.childNodes];
+  if (append) target.append(...nodes);
+  else target.replaceChildren(...nodes);
   return resourceBlocked;
 }
 

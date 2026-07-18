@@ -29,6 +29,11 @@ export interface PreparedDocument {
   warnings: DocumentWarning[];
 }
 
+export interface PreparedDecoration {
+  html: string;
+  warnings: DocumentWarning[];
+}
+
 function textContent(element: Element): string {
   return element.childNodes
     .filter((node): node is DefaultTreeAdapterTypes.TextNode => node.nodeName === "#text")
@@ -83,6 +88,15 @@ function renderDecoration(
   if (source === undefined) return undefined;
   const sanitized = sanitizeMarkup(source.markup, options, warnings, source.order);
   return decorationMarkup(sanitized, sourceIndex, source.order, warnings);
+}
+
+export function prepareDecoration(markup: string): PreparedDecoration {
+  const warnings = createWarningCollector();
+  const sanitized = sanitizeMarkup(markup, {}, warnings, 0);
+  return {
+    html: decorationMarkup(sanitized, 0, 0, warnings),
+    warnings: warnings.finish(),
+  };
 }
 
 function extractDecorations(
