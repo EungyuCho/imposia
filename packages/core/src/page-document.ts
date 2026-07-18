@@ -76,12 +76,12 @@ export function mountPageDocument(
           }
           commitGeneration(frameDocument, generation.body, generation.css);
           const pages = Object.freeze(
-            generation.pages.map(({ page, flow }, index) => {
+            generation.pages.map(({ page, flow, blank }, index) => {
               const bounds = page.getBoundingClientRect();
               return Object.freeze({
                 number: index + 1,
                 side: index % 2 === 0 ? ("right" as const) : ("left" as const),
-                blank: false,
+                blank,
                 widthCssPx: bounds.width,
                 heightCssPx: bounds.height,
                 bodyText: bodyText(flow),
