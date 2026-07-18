@@ -55,6 +55,7 @@ test("React publishing lab downloads a ready EPUB", async ({ page, browserName }
     const downloadButton = page.getByRole("button", { name: "Download EPUB", exact: true });
     const preview = page.getByTestId("demo-preview-surface");
     await expect(preview.locator("[data-imposia-react-status='ready']")).toBeVisible();
+    await expect(page.getByTestId("demo-export-status")).toHaveText("EPUB ready");
 
     await page.evaluate(() => {
       const button = document.querySelector<HTMLButtonElement>(".demo-export-button");
@@ -89,6 +90,7 @@ test("React publishing lab downloads a ready EPUB", async ({ page, browserName }
     const downloadPromise = page.waitForEvent("download");
     await downloadButton.click();
     const download = await downloadPromise;
+    await expect(page.getByTestId("demo-export-status")).toHaveText("EPUB downloaded");
     expect(download.suggestedFilename()).toMatch(/\.epub$/i);
 
     const stream = await download.createReadStream();
@@ -107,6 +109,57 @@ test("React publishing lab downloads a ready EPUB", async ({ page, browserName }
     expect(bytes.subarray(dataOffset, dataOffset + dataLength).toString("utf8")).toBe(
       "application/epub+zip",
     );
+  } finally {
+    expect(errors).toEqual([]);
+    expect(pageErrors).toEqual([]);
+  }
+});
+
+test("React publishing lab prints the canonical frame for browser PDF saving", async ({
+  page,
+  browserName,
+}) => {
+  test.skip(browserName !== "chromium", "Canonical browser print is Chromium-reference only.");
+  const { errors, pageErrors } = captureBrowserErrors(page, browserName);
+
+  await page.goto("/examples/demo/");
+
+  try {
+    const preview = page.getByTestId("demo-preview-surface");
+    const printButton = page.getByRole("button", { name: "Print / Save PDF", exact: true });
+    await expect(preview.locator("[data-imposia-react-status='ready']")).toBeVisible();
+    await expect(printButton).toBeEnabled();
+
+    await page.evaluate(() => {
+      const frame = document.querySelector<HTMLIFrameElement>(
+        "[data-testid='demo-preview-surface'] iframe",
+      );
+      const frameWindow = frame?.contentWindow;
+      if (frame === null || frameWindow === null || frameWindow === undefined) {
+        throw new Error("Canonical demo frame is missing.");
+      }
+      const observation = { frame: 0, parent: 0 };
+      Object.defineProperty(frameWindow, "print", {
+        configurable: true,
+        writable: true,
+        value: () => {
+          observation.frame += 1;
+        },
+      });
+      Object.defineProperty(window, "print", {
+        configurable: true,
+        writable: true,
+        value: () => {
+          observation.parent += 1;
+        },
+      });
+      Reflect.set(globalThis, "__imposiaDemoPrintObservation", observation);
+    });
+
+    await printButton.click();
+    expect(
+      await page.evaluate(() => Reflect.get(globalThis, "__imposiaDemoPrintObservation")),
+    ).toEqual({ frame: 1, parent: 0 });
   } finally {
     expect(errors).toEqual([]);
     expect(pageErrors).toEqual([]);

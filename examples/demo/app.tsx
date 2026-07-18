@@ -1,11 +1,12 @@
 import {
   type ImposiaDocumentState,
   ImposiaPageViewer,
+  type ImposiaPageViewerHandle,
   type PageDocument,
   type PageDocumentOptions,
   type PageExtension,
 } from "@imposia/react";
-import { useId, useMemo, useState } from "react";
+import { useId, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 
 type SampleId = "editorial" | "brief" | "hangul" | "publishing";
@@ -354,19 +355,27 @@ const runningHeadExtension: PageExtension = {
 };
 
 const snippets: Record<CodeMode, string> = {
-  react: `import { ImposiaPageViewer } from "@imposia/react";
+  react: `import { ImposiaPageViewer, type ImposiaPageViewerHandle } from "@imposia/react";
 import "@imposia/react/styles.css";
+import { useRef } from "react";
+
+const viewer = useRef<ImposiaPageViewerHandle>(null);
 
 <ImposiaPageViewer
+  ref={viewer}
   source={{ html }}
   documentOptions={{ extensions }}
   onReady={({ pageCount }) => setPages(pageCount)}
-/>`,
+/>
+
+await viewer.current?.print();`,
   core: `import { mountPageDocument, mountPageViewer } from "@imposia/client";
 
 const controller = mountPageDocument(host, { html }, { extensions });
 const pageDocument = await controller.ready;
-const viewer = mountPageViewer(host, pageDocument);`,
+const viewer = mountPageViewer(host, pageDocument);
+
+await controller.print();`,
 };
 
 function statusLabel(state: ImposiaDocumentState["status"]): string {
@@ -376,14 +385,19 @@ function statusLabel(state: ImposiaDocumentState["status"]): string {
   return "Idle";
 }
 
-function exportStatusLabel(status: ExportStatus, message: string | undefined): string {
+function exportStatusLabel(
+  status: ExportStatus,
+  message: string | undefined,
+  ready: boolean,
+): string {
   if (status === "exporting") return "Exporting…";
   if (status === "success") return "EPUB downloaded";
   if (status === "error") return message ?? "Export failed";
-  return "Awaiting document";
+  return ready ? "EPUB ready" : "Awaiting document";
 }
 
 function App() {
+  const viewerRef = useRef<ImposiaPageViewerHandle>(null);
   const sampleHeadingId = useId();
   const runtimeHeadingId = useId();
   const codeHeadingId = useId();
@@ -477,6 +491,18 @@ function App() {
     }
   };
 
+  const handlePrint = async () => {
+    const viewer = viewerRef.current;
+    if (viewer === null || state.status !== "ready") return;
+
+    try {
+      await viewer.print();
+      setError(undefined);
+    } catch (nextError: unknown) {
+      handleError(nextError);
+    }
+  };
+
   return (
     <div className="demo-shell">
       <aside className="demo-panel" aria-label="Imposia demo controls">
@@ -550,33 +576,53 @@ function App() {
         >
           <div className="demo-section-heading">
             <h2 id={exportHeadingId}>Portable output</h2>
-            <span>EPUB 3</span>
+            <span>PDF / EPUB</span>
           </div>
-          <div className="demo-export-action">
-            <div className="demo-export-copy">
-              <strong>Download the current document</strong>
-              <small>Deterministic metadata / browser-only</small>
+          <div className="demo-output-actions">
+            <div className="demo-export-action">
+              <div className="demo-export-copy">
+                <strong>Print or save the current pages</strong>
+                <small>Native browser dialog / canonical iframe</small>
+              </div>
+              <button
+                type="button"
+                className="demo-output-button demo-print-button"
+                onClick={() => void handlePrint()}
+                disabled={state.status !== "ready"}
+              >
+                Print / Save PDF
+              </button>
             </div>
-            <button
-              type="button"
-              className="demo-export-button"
-              onClick={() => void handleExport()}
-              disabled={
-                state.status !== "ready" ||
-                pageDocument === undefined ||
-                exportStatus === "exporting"
-              }
-            >
-              Download EPUB
-            </button>
+            <div className="demo-export-action">
+              <div className="demo-export-copy">
+                <strong>Download the semantic document</strong>
+                <small>Deterministic EPUB 3 / browser-only</small>
+              </div>
+              <button
+                type="button"
+                className="demo-output-button demo-export-button"
+                onClick={() => void handleExport()}
+                disabled={
+                  state.status !== "ready" ||
+                  pageDocument === undefined ||
+                  exportStatus === "exporting"
+                }
+              >
+                Download EPUB
+              </button>
+              <output
+                className={`demo-export-status demo-export-status-${exportStatus}`}
+                data-testid="demo-export-status"
+                aria-live="polite"
+              >
+                {exportStatusLabel(
+                  exportStatus,
+                  exportMessage,
+                  state.status === "ready" && pageDocument !== undefined,
+                )}
+              </output>
+            </div>
           </div>
-          <output
-            className={`demo-export-status demo-export-status-${exportStatus}`}
-            data-testid="demo-export-status"
-            aria-live="polite"
-          >
-            {exportStatusLabel(exportStatus, exportMessage)}
-          </output>
         </section>
 
         <section className="demo-code" aria-labelledby={codeHeadingId}>
@@ -649,6 +695,7 @@ function App() {
           </div>
           <div className="demo-preview-surface" data-testid="demo-preview-surface">
             <ImposiaPageViewer
+              ref={viewerRef}
               key={viewerKey}
               source={{ html: sample.html }}
               documentOptions={documentOptions}
