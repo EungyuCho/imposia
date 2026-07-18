@@ -1,12 +1,12 @@
 # Imposia
 
-Imposia is a clean-room HTML/CSS publishing toolkit. The current implementation has a browser-Core page-DOM vertical slice and a separate Node/Chromium PDF renderer; the full browser-first product remains in progress.
+Imposia is a clean-room HTML/CSS publishing toolkit. The current implementation has a browser-Core one-page page-DOM vertical slice with resolver-mediated assets, a canonical-iframe Viewer surface, and a separate Node/Chromium PDF renderer; the full browser-first product remains in progress.
 
 ## Packages
 
-- `@imposia/core`: browser-only `mountPageDocument()` API and the isolated canonical page DOM. The current implementation is a one-page vertical slice, not the full fragmentation engine.
+- `@imposia/core`: browser-only `mountPageDocument()` API, the isolated canonical page DOM, and resolver-mediated asset loading. The current implementation is a one-page vertical slice, not the full fragmentation engine.
 - `@imposia/node`: legacy Node/Playwright PDF renderer, Chromium lifecycle, PDF metadata, and timing data.
-- `@imposia/viewer`: accessible continuous/single-page PDF canvas viewer for Chromium, Firefox, and WebKit.
+- `@imposia/viewer`: accessible continuous/single-page PDF canvas viewer for Chromium, Firefox, and WebKit, plus `mountPageViewer()` for presenting the existing canonical Core iframe in Chromium.
 - `@imposia/cli`: `render` and `pdf` commands with JSON output and stable exit codes, backed by `@imposia/node`.
 
 ## Quick start
@@ -35,7 +35,7 @@ const pageDocument = await controller.ready;
 console.log(pageDocument.pageCount, pageDocument.pages, pageDocument.warnings);
 ```
 
-This browser surface currently creates one canonical page in an isolated iframe. Full multi-page fragmentation, Viewer adoption of that iframe, and Node PDF generation through the same paginator are pending.
+This browser surface currently creates one canonical page in an isolated iframe. It accepts an optional `assetResolver`; discovered HTML and CSS assets are resolved only through that boundary and inserted as Core-owned blob URLs. `mountPageViewer()` can present that same iframe without cloning it or rerunning layout. Full multi-page fragmentation and Node PDF generation through the same paginator are pending.
 
 ## Node PDF API (current stable PDF path)
 
@@ -56,7 +56,7 @@ try {
 
 Remote resources are blocked unless `allowRemoteResources` is enabled. Scripts, inline event handlers, unsafe URLs, file-root escapes, oversized input, and readiness deadlines are handled at explicit trust boundaries on this legacy PDF path.
 
-## Viewer API
+## Viewer APIs
 
 ```ts
 import { mountViewer } from "@imposia/viewer";
@@ -70,6 +70,18 @@ viewer.nextPage();
 viewer.setZoom(1.2);
 viewer.setMode("single");
 ```
+
+For the browser-Core page document, mount the canonical iframe in the same container where it was created:
+
+```ts
+import { mountPageViewer } from "@imposia/viewer";
+
+const pageViewer = mountPageViewer(document.querySelector("#preview")!, pageDocument);
+pageViewer.setMode("single");
+await pageViewer.print();
+```
+
+`mountPageViewer()` retains the exact Core iframe and refreshes only to a newer generation from that controller. It is currently a Chromium-reference surface; the PDF.js `mountViewer()` API remains the cross-browser PDF viewer.
 
 See [`examples/viewer/index.html`](examples/viewer/index.html) for the no-framework integration and [`docs/routing.md`](docs/routing.md) for contracts, compatibility, architecture, limitations, benchmarks, and verification evidence.
 

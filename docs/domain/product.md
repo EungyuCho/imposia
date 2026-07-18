@@ -2,7 +2,7 @@
 
 ## Status in the current implementation
 
-The stable PDF renderer has moved to `@imposia/node`: it exports the Node/Playwright `createRenderer()` and its PDF render types, and `@imposia/cli` invokes that package to write a PDF. `@imposia/viewer` still exports the PDF.js `mountViewer()` surface. `@imposia/core` now exports browser-only `mountPageDocument()` and has a one-page canonical-iframe vertical slice in the current implementation. It is not yet the full browser-first product.
+The stable PDF renderer has moved to `@imposia/node`: it exports the Node/Playwright `createRenderer()` and its PDF render types, and `@imposia/cli` invokes that package to write a PDF. `@imposia/viewer` exports both the PDF.js `mountViewer()` surface and `mountPageViewer()` for presenting a Core-owned canonical iframe. `@imposia/core` exports browser-only `mountPageDocument()` and has a one-page canonical-iframe vertical slice with resolver-mediated asset loading. It is not yet the full browser-first product.
 
 The `createRenderer()` move from `@imposia/core` to `@imposia/node` is an intentional pre-1.0 breaking workspace API change. Consumers of earlier snapshots must update their imports to `@imposia/node`.
 
@@ -14,7 +14,7 @@ The target source API and lifecycle are defined by ADR 0004: string HTML or a de
 
 Every ready target generation is observable without inspecting PDF output: `PageDocument` provides its generation number, page count, immutable per-page metadata (physical number, side, blank state, CSS-pixel dimensions, and ordered body text), deterministic warnings with stable code/message/source identity, and total/resource/pagination timings. Browser-Core page dimensions are CSS pixels, not PDF points. `current` is undefined before the first ready page document and after destruction. Required warning codes include `PAGE_OVERFLOW`, `RESOURCE_BLOCKED`, `RESOURCE_TIMEOUT`, and `UNSUPPORTED_LAYOUT`; warning order is deterministic.
 
-Target Core has no direct browser network or file-loading ability. It accepts only inline source and resources admitted or explicitly blocked by an asset resolver that receives URL, kind, optional base URL, and abort signal; it enforces total-byte, resolver-depth, and deadline bounds. It sanitizes structure, gives its frame restrictive CSP with inline style text plus only Core-created blob/data image/font/media assets and `sandbox="allow-same-origin"`, and revokes every resource it creates. The target defaults to A4 pages with 20 mm margins, supports a single simple unnamed `@page` fallback only after API page settings, and documents atomic-layout, source/node/page/deadline/progress bounds in ADR 0004. The current Core vertical slice is intentionally narrower: it produces one page and does not yet provide full fragmentation, Viewer iframe adoption, or a shared Node paginator.
+Target Core has no direct browser network or file-loading ability. It accepts only inline source and resources admitted or explicitly blocked by an asset resolver that receives URL, kind, optional base URL, and abort signal; it enforces total-byte, resolver-depth, and deadline bounds. It sanitizes structure, gives its frame restrictive CSP with inline style text plus only Core-created blob/data image/font/media assets and `sandbox="allow-same-origin"`, and revokes every resource it creates. The target defaults to A4 pages with 20 mm margins, supports a single simple unnamed `@page` fallback only after API page settings, and documents atomic-layout, source/node/page/deadline/progress bounds in ADR 0004. The current Core vertical slice is intentionally narrower: it produces one page and does not yet provide full fragmentation or a shared Node paginator. It does resolve discovered HTML and CSS assets only through an optional host `assetResolver`, uses Core-created blob URLs inside its restricted frame, applies input/node/asset/depth/reference/deadline limits, and revokes owned URLs on replacement, failure, and destruction. The current `mountPageViewer()` presents the exact iframe in its original container, without cloning pages or taking over the Core controller lifecycle; it remains a Chromium-reference surface.
 
 ## Stable PDF-first contract (`@imposia/node`)
 
@@ -49,15 +49,17 @@ The result contains PDF bytes, page count, per-page point dimensions, first-page
 
 ## Viewer
 
-The Viewer loads the exported PDF through PDF.js and supports continuous/single modes, bounded page navigation, 50%–250% zoom, buttons, arrow/PageUp/PageDown and `+`/`-` keyboard controls, focus visibility, loading/error announcements, and narrow-screen containment. It does not rerun HTML layout.
+`mountViewer()` loads the exported PDF through PDF.js and supports continuous/single modes, bounded page navigation, 50%–250% zoom, buttons, arrow/PageUp/PageDown and `+`/`-` keyboard controls, focus visibility, loading/error announcements, and narrow-screen containment. It does not rerun HTML layout.
+
+`mountPageViewer()` presents a ready Core `PageDocument` by retaining its canonical iframe node. It supports the same page, zoom, and mode controls, accepts refreshes only for newer generations from that same iframe, prints the frame window, and restores the container when destroyed. It does not clone the page DOM or own the Core controller lifecycle. This canonical-iframe surface is currently verified against Chromium only.
 
 ## Known limitations
 
 - CSS support is Chromium 143 print support, not the complete CSS Paged Media specification. Margin boxes, named strings, footnotes, cross-references, and custom line breaking are not implemented by Imposia.
 - Decorations use Chromium's restricted header/footer context; page styles and web fonts are not inherited automatically.
-- The Viewer is canvas-first. Search, selectable text layers, annotations, forms, and editing are outside v1.
+- The PDF.js Viewer is canvas-first. Search, selectable text layers, annotations, forms, and editing are outside v1. The canonical-iframe Viewer retains ordinary page DOM but is currently limited to the one-page Core slice and Chromium-reference support.
 - Output may differ from other browser engines. The exported PDF is authoritative; Viewer browsers display that shared artifact.
 
 ## Migration and rollback
 
-The current Core/Viewer/CLI entrypoints are not aliases for the target API. `@imposia/node` currently contains the legacy PDF renderer and has not yet been changed to invoke the browser paginator; Core currently has only the one-page vertical slice; and Viewer still renders PDFs rather than the canonical iframe. Migration can ship only behind a Chromium-reference gate that proves canonical structural equality and confirms sandbox, CSP, resolver, and resource-revocation behavior. If that gate fails, the stable `@imposia/node` PDF renderer and PDF.js Viewer remain the release path; the target is not silently substituted.
+The current Core/Viewer/CLI entrypoints are not aliases for the target API. `@imposia/node` currently contains the legacy PDF renderer and has not yet been changed to invoke the browser paginator; Core currently has only the one-page vertical slice; and `mountPageViewer()` presents that slice while `mountViewer()` remains the PDF.js surface. Migration can ship only behind a Chromium-reference gate that proves canonical structural equality and confirms sandbox, CSP, resolver, and resource-revocation behavior. If that gate fails, the stable `@imposia/node` PDF renderer and PDF.js Viewer remain the release path; the target is not silently substituted.
