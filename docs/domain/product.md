@@ -1,6 +1,20 @@
 # Imposia product contracts
 
-Imposia turns one HTML/CSS document into a deterministic PDF and renders that exact PDF in an accessible browser Viewer. Core owns trusted loading, compatibility normalization, warnings, resource readiness, browser reuse, and PDF metadata. Viewer owns interaction only. CLI owns process I/O and exit codes.
+## Status at this commit
+
+The stable, implemented product is PDF-first. `@imposia/core` exports the Node/Playwright `createRenderer()` and its PDF render types; `@imposia/viewer` exports PDF.js `mountViewer()`; and `@imposia/cli` invokes the Core renderer to write a PDF. This is the only currently shipped contract. The browser-first page-DOM contract in [ADR 0004](../architecture/0004-browser-first-page-dom.md) is accepted target architecture, not a claim about the current code.
+
+## Target browser-first product
+
+The target product turns supplied HTML or cloned light DOM plus optional explicit ordered CSS text (empty by default) into one library-owned paginated page DOM. Browser-only Core owns that DOM in an isolated iframe. Viewer wraps and displays the same iframe without cloning its pages or rerunning layout, and browser print invokes that frame. Optional `@imposia/node` hosts the exported browser paginator in Chromium and prints that already-paginated frame to PDF. Target preview/export equality is page count, dimensions, ordered text, ordinary header/content/footer decorations, and blank-page positions - never byte or pixel identity.
+
+The target source API and lifecycle are defined by ADR 0004: string HTML or a deep clone of light DOM; optional ordered CSS text; optional base URL and abort signals; immutable caller source; `ready`, `update(source, { signal? })`, `print()`, and async idempotent `destroy()`. The newest update wins and superseded work rejects `AbortError`. Source event listeners, shadow trees, and custom-element runtime state are not copied. Embedded page header/footer templates remain supported; matching API templates override them, page-number tokens resolve into ordinary page DOM, and blank pages decorate by default.
+
+Target Core has no direct browser network or file-loading ability. It accepts only inline source and resources admitted or explicitly blocked by an asset resolver that receives URL, kind, optional base URL, and abort signal; it enforces total-byte, resolver-depth, and deadline bounds. It sanitizes structure, gives its frame restrictive CSP with inline style text plus only Core-created blob/data image/font/media assets and `sandbox="allow-same-origin"`, and revokes every resource it creates. The target defaults to A4 pages with 20 mm margins, supports a single simple unnamed `@page` fallback only after API page settings, and documents atomic-layout, source/node/page/deadline/progress bounds in ADR 0004.
+
+## Stable PDF-first contract
+
+The following sections describe the current implementation, retained during migration.
 
 ## Input and security
 
@@ -39,3 +53,7 @@ The Viewer loads the exported PDF through PDF.js and supports continuous/single 
 - Decorations use Chromium's restricted header/footer context; page styles and web fonts are not inherited automatically.
 - The Viewer is canvas-first. Search, selectable text layers, annotations, forms, and editing are outside v1.
 - Output may differ from other browser engines. The exported PDF is authoritative; Viewer browsers display that shared artifact.
+
+## Migration and rollback
+
+The current Core/Viewer/CLI entrypoints are not aliases for the target API. No `@imposia/node` package or browser-only page-DOM Core entrypoint is published at this commit. Migration can ship only behind a Chromium-reference gate that proves canonical structural equality and confirms sandbox, CSP, resolver, and resource-revocation behavior. If that gate fails, the stable PDF-first renderer and PDF.js Viewer remain the release path; the target is not silently substituted.
