@@ -6,7 +6,9 @@ import { assertNoBrowserErrors, openAssetPage } from "./browser-core-assets-supp
 const PNG =
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
 type Scenario = "initial" | "preserve" | "timeout" | "replace";
-type FatalMode = "reject" | "malformed"; type ProbeInput = { scenario: Scenario; pngBase64: string }; type Failure = { status: "rejected"; error: { name: string; code: string; message: string } };
+type FatalMode = "reject" | "malformed";
+type ProbeInput = { scenario: Scenario; pngBase64: string };
+type Failure = { status: "rejected"; error: { name: string; code: string; message: string } };
 type Probe = { sandbox: string | null; created: string[]; revoked: string[]; data: unknown[] };
 type Source = { html: string; baseUrl?: string };
 type Doc = { iframe: HTMLIFrameElement; generation: number; warnings: { code: string }[] };
