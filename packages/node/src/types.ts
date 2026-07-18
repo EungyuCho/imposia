@@ -1,4 +1,4 @@
-import type { DocumentWarning, DocumentWarningCode } from "@imposia/core";
+import type { DocumentWarning, DocumentWarningCode, PageLimits } from "@imposia/core";
 
 export type RenderInput = { html: string; baseUrl?: string } | { file: string } | { url: string };
 
@@ -39,6 +39,12 @@ export interface RenderHooks {
   onWarning?: (warning: RenderWarning) => void | Promise<void>;
 }
 
+export interface CoreRenderOptions {
+  css?: readonly string[];
+  page?: { size?: "A4"; margin?: "20mm" };
+  limits?: PageLimits;
+}
+
 export interface RenderOptions extends RenderHooks {
   engine?: RenderEngine;
   headerTemplate?: string;
@@ -47,6 +53,7 @@ export interface RenderOptions extends RenderHooks {
   maxInputBytes?: number;
   allowRemoteResources?: boolean;
   allowFileRoot?: string;
+  core?: CoreRenderOptions;
 }
 
 export interface Renderer {

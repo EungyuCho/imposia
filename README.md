@@ -58,6 +58,8 @@ try {
 
 Remote resources are blocked unless `allowRemoteResources` is enabled. Scripts, inline event handlers, unsafe URLs, file-root escapes, oversized input, and readiness deadlines are handled at explicit trust boundaries on this legacy PDF path.
 
+`engine` defaults to `"legacy"`. Set it to `"core"` to use the Chromium-reference canonical page document, and optionally provide `core: { css, page, limits }` for Core-only pagination settings. Those settings are rejected on the legacy engine rather than ignored. Inline `baseUrl` must be absolute, while remote document input must use HTTP(S). The CLI remains deliberately local-file-only; use the Node API for URL input.
+
 ## Viewer APIs
 
 ```ts
