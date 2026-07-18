@@ -175,10 +175,10 @@ export function mountPageDocument(
       if (destroyPromise !== undefined) return destroyPromise;
       destroyed = true;
       active?.controller.abort();
-      iframe.remove();
       for (const url of activeBlobUrls) URL.revokeObjectURL(url);
       activeBlobUrls = [];
       current = undefined;
+      iframe.remove();
       destroyPromise = Promise.allSettled([...operations]).then(() => undefined);
       return destroyPromise;
     },
