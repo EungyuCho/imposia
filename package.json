@@ -20,6 +20,7 @@
     "test:e2e": "playwright test",
     "test:pdf": "node --import tsx scripts/test-pdf-regression.ts",
     "test:pdf:update": "node --import tsx scripts/test-pdf-regression.ts --update",
+    "test:parity": "node --import tsx scripts/compare-renderer-parity.ts",
     "test:visual": "node --import tsx scripts/test-visual-regression.ts",
     "test:visual:update": "node --import tsx scripts/test-visual-regression.ts --update",
     "benchmark": "node --import tsx scripts/benchmark.ts",

@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <style>
+      @page { size: A4; margin: 20mm; }
+      body { font: 16px/1.5 Arial, sans-serif; }
+      section + section { break-before: page; }
+    </style>
+  </head>
+  <body>
+    <template data-page-header><span>PARITY-HEADER</span></template>
+    <template data-page-footer><span>PARITY-FOOTER {{pageNumber}} / {{totalPages}}</span></template>
+    <section><h1>PARITY-DECORATION-ONE</h1><p>First decorated sheet.</p></section>
+    <section><h1>PARITY-DECORATION-TWO</h1><p>Second decorated sheet.</p></section>
+  </body>
+</html>
