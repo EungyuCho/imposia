@@ -129,3 +129,63 @@ test("materializes authored page breaks as canonical pages", async ({ page, brow
     expect(pageErrors).toEqual([]);
   }
 });
+
+test("can leave inserted blank-page decorations empty", async ({ page, browserName }) => {
+  test.skip(browserName !== "chromium", "Browser fragmentation is Chromium-reference only.");
+  const { errors, pageErrors } = captureBrowserErrors(page, browserName);
+
+  await page.goto("/examples/book.html");
+  try {
+    const observation = await page.evaluate(async () => {
+      type PageDocument = { iframe: HTMLIFrameElement };
+      type CoreController = { ready: Promise<PageDocument>; destroy(): Promise<void> };
+      const core = (await import("/packages/core/dist/index.js")) as {
+        mountPageDocument(
+          container: HTMLElement,
+          source: { html: string },
+          options: {
+            decorateBlankPages: boolean;
+            headerTemplate: string;
+            footerTemplate: string;
+          },
+        ): CoreController;
+      };
+      const host = document.createElement("div");
+      document.body.replaceChildren(host);
+      const controller = core.mountPageDocument(
+        host,
+        {
+          html: '<section>FIRST</section><section style="break-before:right">SECOND</section>',
+        },
+        {
+          decorateBlankPages: false,
+          headerTemplate: "HEADER {{pageNumber}} / {{totalPages}}",
+          footerTemplate: "FOOTER {{pageNumber}} / {{totalPages}}",
+        },
+      );
+      try {
+        const ready = await controller.ready;
+        const frameDocument = ready.iframe.contentDocument;
+        if (frameDocument === null) throw new Error("Missing canonical frame document.");
+        return [...frameDocument.querySelectorAll<HTMLElement>("[data-imposia-page]")].map(
+          (pageElement) => ({
+            blank: pageElement.getAttribute("data-imposia-blank"),
+            header: pageElement.querySelector("[data-imposia-page-header]")?.textContent ?? "",
+            footer: pageElement.querySelector("[data-imposia-page-footer]")?.textContent ?? "",
+          }),
+        );
+      } finally {
+        await controller.destroy();
+      }
+    });
+
+    expect(observation).toEqual([
+      { blank: "false", header: "HEADER 1 / 3", footer: "FOOTER 1 / 3" },
+      { blank: "true", header: "", footer: "" },
+      { blank: "false", header: "HEADER 3 / 3", footer: "FOOTER 3 / 3" },
+    ]);
+  } finally {
+    expect(errors).toEqual([]);
+    expect(pageErrors).toEqual([]);
+  }
+});

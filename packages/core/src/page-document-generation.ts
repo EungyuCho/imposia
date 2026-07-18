@@ -29,6 +29,7 @@ export interface PageGenerationSettings {
   assetResolver?: AssetResolver;
   headerTemplate?: string;
   footerTemplate?: string;
+  decorateBlankPages: boolean;
   page?: { size?: "A4"; margin?: "20mm" };
   limits: EffectivePageLimits;
   onProgress?: (progress: { completedPages: number }) => void;
@@ -114,14 +115,12 @@ export function normalizePageLimits(limits: PageLimits | undefined): EffectivePa
 }
 
 export function snapshotSettings(options: PageDocumentOptions): PageGenerationSettings {
-  if (options.decorateBlankPages !== undefined) {
-    throw new Error("decorateBlankPages is not implemented in the browser vertical slice.");
-  }
   return {
     css: Object.freeze([...(options.css ?? [])]),
     ...(options.assetResolver === undefined ? {} : { assetResolver: options.assetResolver }),
     ...(options.headerTemplate === undefined ? {} : { headerTemplate: options.headerTemplate }),
     ...(options.footerTemplate === undefined ? {} : { footerTemplate: options.footerTemplate }),
+    decorateBlankPages: options.decorateBlankPages ?? true,
     ...(options.page === undefined
       ? {}
       : {
@@ -171,9 +170,13 @@ function createPage(
   };
 }
 
-function setPageBlank(page: PageParts, blank: boolean): void {
+function setPageBlank(page: PageParts, blank: boolean, decorateBlankPages: boolean): void {
   page.blank = blank;
   page.page.setAttribute("data-imposia-blank", String(blank));
+  if (blank && !decorateBlankPages) {
+    page.page.querySelector("[data-imposia-page-header]")?.replaceChildren();
+    page.page.querySelector("[data-imposia-page-footer]")?.replaceChildren();
+  }
 }
 
 function isNonFlowNode(node: Node): boolean {
@@ -255,12 +258,13 @@ function startPageForBreak(
   currentPage: PageParts,
   breakValue: PageBreak,
   nextPage: () => PageParts,
+  decorateBlankPages: boolean,
 ): PageParts {
   if (breakValue === "auto") return currentPage;
   let page = currentPage;
   if (flowHasContent(page.flow)) page = nextPage();
   if ((breakValue === "left" || breakValue === "right") && pageSide(page) !== breakValue) {
-    setPageBlank(page, true);
+    setPageBlank(page, true, decorateBlankPages);
     page = nextPage();
   }
   return page;
@@ -538,8 +542,9 @@ export async function buildGeneration(
             currentPage,
             constraint.before === "auto" ? pendingBreakAfter : constraint.before,
             nextPage,
+            settings.decorateBlankPages,
           );
-          setPageBlank(currentPage, false);
+          setPageBlank(currentPage, false, settings.decorateBlankPages);
         }
         const currentHadContent = flowHasContent(currentPage.flow);
         currentPage.flow.append(node);
