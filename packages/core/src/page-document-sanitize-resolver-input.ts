@@ -68,6 +68,26 @@ function isStylesheetLink(element: Element): boolean {
   );
 }
 
+export function safeSemanticHyperlink(value: string): boolean {
+  const trimmed = value.trim();
+  if (sameDocumentFragment(trimmed)) return true;
+  if (
+    trimmed === "" ||
+    [...trimmed].some((character) => {
+      const code = character.charCodeAt(0);
+      return code < 0x20 || code === 0x7f;
+    })
+  ) {
+    return false;
+  }
+  try {
+    const protocol = new URL(trimmed).protocol.toLowerCase();
+    return protocol === "http:" || protocol === "https:" || protocol === "mailto:";
+  } catch {
+    return false;
+  }
+}
+
 function keepsResourceAttribute(element: Element, name: string): boolean {
   const localName = normalizedElementName(element);
   if (name === "src") {
@@ -79,6 +99,9 @@ function keepsResourceAttribute(element: Element, name: string): boolean {
   if (name === "srcset") return localName === "img" || localName === "source";
   if (name === "poster") return localName === "video";
   if (name === "href" || name === "xlink:href") {
+    if (name === "href" && (localName === "a" || localName === "area")) {
+      return safeSemanticHyperlink(element.getAttribute(name) ?? "");
+    }
     if (isStylesheetLink(element)) return true;
     if (isSvgElement(element)) {
       return (

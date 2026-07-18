@@ -1,5 +1,6 @@
 import type {
   ExtensionPageWarning,
+  PageDocument,
   PageExtension,
   PageExtensionContext,
 } from "../../packages/client/src/index.js";
@@ -25,3 +26,21 @@ const warning: ExtensionPageWarning = {
 };
 
 void warning;
+
+type RuntimeEpubExport = (options: {
+  metadata: { title: string; language: string; identifier: string; modified?: string };
+}) => Promise<Blob>;
+
+declare const committedPageDocument: PageDocument;
+const exportCandidate = Reflect.get(committedPageDocument, "exportEpub");
+if (typeof exportCandidate === "function") {
+  const exportEpub = exportCandidate as RuntimeEpubExport;
+  void exportEpub.call(committedPageDocument, {
+    metadata: {
+      title: "Typecheck fixture",
+      language: "en",
+      identifier: "urn:imposia:typecheck",
+      modified: "2026-07-18T00:00:00Z",
+    },
+  });
+}

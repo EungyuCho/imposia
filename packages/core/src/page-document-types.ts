@@ -125,9 +125,15 @@ export interface EpubMetadata {
   readonly modified?: string;
 }
 
+export interface EpubExportLimits {
+  readonly maxEntries?: number;
+  readonly maxBytes?: number;
+}
+
 export interface EpubExportOptions {
   readonly metadata: EpubMetadata;
   readonly signal?: AbortSignal;
+  readonly limits?: EpubExportLimits;
 }
 
 export interface PageLimits {
@@ -236,6 +242,7 @@ export interface PageDocument {
   readonly pages: readonly PageMetadata[];
   readonly warnings: readonly PageWarning[];
   readonly timings: PageTimings;
+  exportEpub(options: EpubExportOptions): Promise<Blob>;
 }
 
 export interface PageDocumentController {

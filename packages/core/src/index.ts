@@ -7,6 +7,7 @@ export type {
   AssetResolver,
   CorePageWarning,
   CorePageWarningCode,
+  EpubExportLimits,
   EpubExportOptions,
   EpubMetadata,
   ExperimentalPageFeatures,
