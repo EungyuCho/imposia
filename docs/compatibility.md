@@ -1,6 +1,8 @@
 # Compatibility
 
-Verified on 2026-07-17.
+Verified current stable path on 2026-07-17. The Chromium-reference browser-first rows below are target acceptance criteria, not completed compatibility claims.
+
+## Current stable PDF-first path
 
 | Surface | Engine/version | Status | Notes |
 | --- | --- | --- | --- |
@@ -12,3 +14,15 @@ Verified on 2026-07-17.
 | PDF raster inspection | Playwright 1.57 Chromium + PDF.js 5.4.530 | Passing | No undeclared host binary; three A4 canvases at 96 DPI are screenshot and compared. |
 
 The PDF adapter is Chromium-only by design. Cross-browser claims apply to viewing the generated PDF, not producing engine-identical HTML layout in Firefox or WebKit.
+
+## Target browser-first Chromium-reference path
+
+| Surface | Reference | Status | Acceptance meaning |
+| --- | --- | --- | --- |
+| Browser Core | Chromium reference | Not implemented | One isolated iframe contains the library-owned page DOM; no browser-core network/file fetches occur. |
+| Viewer | Chromium reference | Not implemented | Viewer wraps/displays the canonical iframe and never clones pages or runs another paginator. |
+| Browser print | Chromium reference | Not implemented | Print is initiated on the canonical frame after its resources are ready. |
+| `@imposia/node` PDF adapter | Chromium reference | Not published | It invokes the same exported browser paginator, then Chromium PDF, with no independent Node pagination. |
+| Preview/export comparison | DOM structural comparator | Not implemented | Equality means page count, page dimensions, ordered text, decorations, and blank-page positions; not PDF bytes or pixels. |
+
+Firefox and WebKit are not target pagination references. They may host the Viewer shell where supported, but do not establish engine-identical page layout. The target remains behind the ADR 0004 rollback gate until its structural equality, isolation, and cleanup tests pass.
