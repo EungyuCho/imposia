@@ -2,12 +2,13 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { createRenderer, ImposiaError, type RenderResult } from "@imposia/node";
+import { createRenderer, ImposiaError, type RenderEngine, type RenderResult } from "@imposia/node";
 
-const USAGE = "Usage: imposia <render|pdf> <input.html> --output <output.pdf> [--json]";
+const USAGE =
+  "Usage: imposia <render|pdf> <input.html> --output <output.pdf> [--engine legacy|core] [--json]";
 
 export interface CliDependencies {
-  render(input: string): Promise<RenderResult>;
+  render(input: string, engine: RenderEngine): Promise<RenderResult>;
   close(): Promise<void>;
   writeFile(output: string, pdf: Uint8Array): Promise<void>;
   stdout(message: string): void;
@@ -17,6 +18,7 @@ export interface CliDependencies {
 interface ParsedArguments {
   input: string;
   output: string;
+  engine: RenderEngine;
   json: boolean;
 }
 
@@ -27,6 +29,7 @@ function parseArguments(args: string[]): ParsedArguments | undefined {
     return undefined;
   }
   let output: string | undefined;
+  let engine: RenderEngine = "legacy";
   let json = false;
   for (let index = 0; index < rest.length; index += 1) {
     const argument = rest[index];
@@ -41,9 +44,16 @@ function parseArguments(args: string[]): ParsedArguments | undefined {
       index += 1;
       continue;
     }
+    if (argument === "--engine") {
+      const value = rest[index + 1];
+      if (value !== "legacy" && value !== "core") return undefined;
+      engine = value;
+      index += 1;
+      continue;
+    }
     return undefined;
   }
-  return output === undefined ? undefined : { input, output, json };
+  return output === undefined ? undefined : { input, output, engine, json };
 }
 
 function errorCode(error: unknown): string | undefined {
@@ -78,8 +88,8 @@ function message(error: unknown): string {
 function defaultDependencies(): CliDependencies {
   const renderer = createRenderer();
   return {
-    render(input) {
-      return renderer.render({ file: input }, { allowFileRoot: process.cwd() });
+    render(input, engine) {
+      return renderer.render({ file: input }, { allowFileRoot: process.cwd(), engine });
     },
     close() {
       return renderer.close();
@@ -107,7 +117,7 @@ export async function runCli(args: string[], dependencies?: CliDependencies): Pr
   const deps = dependencies ?? defaultDependencies();
   let rendered: RenderResult;
   try {
-    rendered = await deps.render(parsed.input);
+    rendered = await deps.render(parsed.input, parsed.engine);
   } catch (error) {
     const code = errorCode(error) ?? "INTERNAL_ERROR";
     deps.stderr(`${code}: ${message(error)}`);

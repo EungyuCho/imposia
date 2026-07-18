@@ -27,7 +27,7 @@ function result(): RenderResult {
 function dependencies(overrides: Partial<CliDependencies> = {}) {
   const stdout: string[] = [];
   const stderr: string[] = [];
-  const render = vi.fn(async () => result());
+  const render = vi.fn(async (_input: string, _engine: "legacy" | "core") => result());
   const writeFile = vi.fn(async () => undefined);
   const close = vi.fn(async () => undefined);
   const deps: CliDependencies = {
@@ -51,7 +51,7 @@ describe("CLI contracts", () => {
     );
 
     expect(exitCode).toBe(0);
-    expect(harness.render).toHaveBeenCalledWith("examples/book.html");
+    expect(harness.render).toHaveBeenCalledWith("examples/book.html", "legacy");
   });
 
   it.each(["render", "pdf"])(
@@ -65,7 +65,7 @@ describe("CLI contracts", () => {
       );
 
       expect(exitCode).toBe(0);
-      expect(harness.render).toHaveBeenCalledWith("examples/book.html");
+      expect(harness.render).toHaveBeenCalledWith("examples/book.html", "legacy");
       expect(harness.writeFile).toHaveBeenCalledWith("output/pdf/book.pdf", expect.any(Uint8Array));
       expect(JSON.parse(harness.stdout.join(""))).toMatchObject({
         ok: true,
@@ -78,6 +78,18 @@ describe("CLI contracts", () => {
       expect(harness.close).toHaveBeenCalledOnce();
     },
   );
+
+  it("forwards the explicit Core export engine", async () => {
+    const harness = dependencies();
+
+    const exitCode = await runCli(
+      ["render", "examples/book.html", "--output", "output/pdf/book.pdf", "--engine", "core"],
+      harness.deps,
+    );
+
+    expect(exitCode).toBe(0);
+    expect(harness.render).toHaveBeenCalledWith("examples/book.html", "core");
+  });
 
   it("returns usage exit 2 for malformed arguments", async () => {
     const harness = dependencies();

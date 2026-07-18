@@ -3,6 +3,7 @@ import { performance } from "node:perf_hooks";
 import { ImposiaError, prepareDocument } from "@imposia/core";
 import type { Browser, Page } from "playwright";
 import { type BrowserSession, launchBrowserSession } from "./browser-session.js";
+import { buildCoreDocument, discardCoreDocument } from "./core-export.js";
 import { withTimeout } from "./input-boundary.js";
 import { renderPdfWithPageSides } from "./page-sides.js";
 import { inspectPdf, pdfOptions } from "./pdf-output.js";
@@ -13,7 +14,14 @@ import {
   loadDocument,
 } from "./render-source.js";
 import { trackPageResources } from "./resource-readiness.js";
-import type { Renderer, RenderInput, RenderOptions, RenderResult, RenderTimings } from "./types.js";
+import type {
+  Renderer,
+  RenderInput,
+  RenderOptions,
+  RenderResult,
+  RenderTimings,
+  RenderWarning,
+} from "./types.js";
 
 const MAX_IDLE_PAGES = 1;
 
@@ -89,7 +97,8 @@ export function createRenderer(): Renderer {
           ? {}
           : { allowRemoteResources: options.allowRemoteResources }),
       });
-      for (const warning of prepared.warnings) await options.onWarning?.(warning);
+      const warnings: RenderWarning[] = [...prepared.warnings];
+      for (const warning of warnings) await options.onWarning?.(warning);
       assertActive();
 
       const launched = await browser();
@@ -100,66 +109,110 @@ export function createRenderer(): Renderer {
       try {
         await configureResourceBoundary(page, options);
         await page.emulateMedia({ media: "print" });
-        const resourceStartedAt = performance.now();
-        const resourceTracker = trackPageResources(page);
+        let resourceWaitMs: number;
+        let coreDocument: Awaited<ReturnType<typeof buildCoreDocument>> | undefined;
         try {
-          await page.setContent(injectBaseUrl(prepared.html, loaded.baseUrl), {
-            waitUntil: "load",
-            timeout: options.timeoutMs ?? DEFAULT_TIMEOUT_MS,
-          });
-          await withTimeout(
-            resourceTracker.waitForReady(),
-            options.timeoutMs ?? DEFAULT_TIMEOUT_MS,
-            "resources",
-          );
+          if (options.engine === "core") {
+            coreDocument = await buildCoreDocument(
+              page,
+              {
+                html: prepared.html,
+                ...(loaded.baseUrl === undefined ? {} : { baseUrl: loaded.baseUrl }),
+              },
+              {
+                ...(prepared.headerTemplate === undefined
+                  ? {}
+                  : { headerTemplate: prepared.headerTemplate }),
+                ...(prepared.footerTemplate === undefined
+                  ? {}
+                  : { footerTemplate: prepared.footerTemplate }),
+              },
+              options,
+            );
+            resourceWaitMs = coreDocument.resourceMs;
+            for (const warning of coreDocument.warnings) {
+              const code: RenderWarning["code"] | undefined =
+                warning.code === "UNSUPPORTED_LAYOUT"
+                  ? "UNSUPPORTED_CSS_FEATURE"
+                  : warning.code === "PAGE_OVERFLOW" ||
+                      warning.code === "RESOURCE_BLOCKED" ||
+                      warning.code === "UNSUPPORTED_DECORATION_TOKEN"
+                    ? warning.code
+                    : undefined;
+              if (code === undefined || warnings.some((existing) => existing.code === code))
+                continue;
+              const mapped: RenderWarning = { code, severity: "warning", message: warning.message };
+              warnings.push(mapped);
+              await options.onWarning?.(mapped);
+            }
+          } else {
+            const resourceStartedAt = performance.now();
+            const resourceTracker = trackPageResources(page);
+            try {
+              await page.setContent(injectBaseUrl(prepared.html, loaded.baseUrl), {
+                waitUntil: "load",
+                timeout: options.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+              });
+              await withTimeout(
+                resourceTracker.waitForReady(),
+                options.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+                "resources",
+              );
+            } finally {
+              resourceTracker.dispose();
+            }
+            resourceWaitMs = performance.now() - resourceStartedAt;
+          }
+          await options.onResourcesReady?.();
+
+          const printPreparationStartedAt = performance.now();
+          await page.evaluate(() => document.documentElement.getBoundingClientRect().height);
+          const printPreparationMs = performance.now() - printPreparationStartedAt;
+
+          const pdfGenerationStartedAt = performance.now();
+          const pdf =
+            options.engine === "core"
+              ? new Uint8Array(await page.pdf(pdfOptions()))
+              : await renderPdfWithPageSides(
+                  page,
+                  pdfOptions(prepared.headerTemplate, prepared.footerTemplate),
+                );
+          const pdfGenerationMs = performance.now() - pdfGenerationStartedAt;
+          const inspected = await inspectPdf(pdf);
+          if (inspected.pages.length === 0 || inspected.pages[0] === undefined) {
+            throw new ImposiaError("EMPTY_PDF", "Chromium produced a PDF with no pages.");
+          }
+
+          const timings: RenderTimings = {
+            totalMs: performance.now() - startedAt,
+            browserStartupMs: launched.startupMs,
+            resourceWaitMs,
+            printPreparationMs,
+            pdfGenerationMs,
+          };
+          finalTimings = timings;
+          const firstPage = inspected.pages[0];
+          const withoutPdf = {
+            pages: inspected.pages,
+            pageCount: inspected.pages.length,
+            pageSize: {
+              widthPoints: firstPage.widthPoints,
+              heightPoints: firstPage.heightPoints,
+            },
+            warnings,
+            timings,
+          };
+          await options.onPaginated?.(withoutPdf);
+          assertActive();
+          await options.onPdfReady?.(pdf);
+          assertActive();
+          timings.totalMs = performance.now() - startedAt;
+          const result: RenderResult = { ...withoutPdf, timings, pdf };
+          reusable = options.allowRemoteResources !== true;
+          return result;
         } finally {
-          resourceTracker.dispose();
+          if (coreDocument !== undefined) await discardCoreDocument(page, coreDocument);
         }
-        const resourceWaitMs = performance.now() - resourceStartedAt;
-        await options.onResourcesReady?.();
-
-        const printPreparationStartedAt = performance.now();
-        await page.evaluate(() => document.documentElement.getBoundingClientRect().height);
-        const printPreparationMs = performance.now() - printPreparationStartedAt;
-
-        const pdfGenerationStartedAt = performance.now();
-        const pdf = await renderPdfWithPageSides(
-          page,
-          pdfOptions(prepared.headerTemplate, prepared.footerTemplate),
-        );
-        const pdfGenerationMs = performance.now() - pdfGenerationStartedAt;
-        const inspected = await inspectPdf(pdf);
-        if (inspected.pages.length === 0 || inspected.pages[0] === undefined) {
-          throw new ImposiaError("EMPTY_PDF", "Chromium produced a PDF with no pages.");
-        }
-
-        const timings: RenderTimings = {
-          totalMs: performance.now() - startedAt,
-          browserStartupMs: launched.startupMs,
-          resourceWaitMs,
-          printPreparationMs,
-          pdfGenerationMs,
-        };
-        finalTimings = timings;
-        const firstPage = inspected.pages[0];
-        const withoutPdf = {
-          pages: inspected.pages,
-          pageCount: inspected.pages.length,
-          pageSize: {
-            widthPoints: firstPage.widthPoints,
-            heightPoints: firstPage.heightPoints,
-          },
-          warnings: prepared.warnings,
-          timings,
-        };
-        await options.onPaginated?.(withoutPdf);
-        assertActive();
-        await options.onPdfReady?.(pdf);
-        assertActive();
-        timings.totalMs = performance.now() - startedAt;
-        const result: RenderResult = { ...withoutPdf, timings, pdf };
-        reusable = options.allowRemoteResources !== true;
-        return result;
       } finally {
         await releasePage(page, reusable);
         if (finalTimings !== undefined) finalTimings.totalMs = performance.now() - startedAt;

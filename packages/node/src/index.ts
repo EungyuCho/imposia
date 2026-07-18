@@ -1,6 +1,7 @@
 export { ImposiaError } from "@imposia/core";
 export { createRenderer } from "./renderer.js";
 export type {
+  RenderEngine,
   Renderer,
   RenderHooks,
   RenderInput,

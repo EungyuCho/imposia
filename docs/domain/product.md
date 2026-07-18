@@ -18,6 +18,8 @@ Target Core has no direct browser network or file-loading ability. It accepts on
 
 ## Stable PDF-first contract (`@imposia/node`)
 
+`createRenderer()` and the CLI default to `engine: "legacy"`, the established Chromium PDF path. `engine: "core"` and `imposia render ... --engine core` are explicit opt-ins: Node mounts Core's canonical iframe, resolves file assets only within `allowFileRoot` and HTTP(S) assets only when `allowRemoteResources` is true, then prints the same canonical page DOM while retaining its Core-owned blob resources until PDF generation finishes. The Core engine returns its resource, layout, and overflow warnings through the Node result. The legacy default remains intentional until the structural preview/export equality gate, including page-side parity, is complete.
+
 The following sections describe the current implementation, retained during migration.
 
 ## Input and security

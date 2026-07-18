@@ -6,6 +6,8 @@ export type WarningCode = DocumentWarningCode;
 
 export type RenderWarning = DocumentWarning;
 
+export type RenderEngine = "legacy" | "core";
+
 export interface RenderTimings {
   totalMs: number;
   browserStartupMs: number;
@@ -38,6 +40,7 @@ export interface RenderHooks {
 }
 
 export interface RenderOptions extends RenderHooks {
+  engine?: RenderEngine;
   headerTemplate?: string;
   footerTemplate?: string;
   timeoutMs?: number;
