@@ -105,6 +105,17 @@ await pageViewer.print();
 
 See [`examples/viewer/index.html`](examples/viewer/index.html) for the no-framework integration and [`docs/routing.md`](docs/routing.md) for contracts, compatibility, architecture, and verification evidence.
 
+## Interactive demo
+
+The React-first publishing lab at [`examples/demo`](examples/demo) demonstrates live source updates, page metrics, the ordered running-head extension, Viewer controls, and equivalent React/Core setup code.
+
+```bash
+pnpm build
+node scripts/serve-viewer.mjs
+```
+
+Open `http://127.0.0.1:4178/examples/demo/`.
+
 ## Verification
 
 `pnpm check` runs type checking, lint, unit tests, build, browser E2E, and the release/dependency license audit. `pnpm setup:browsers` provisions the declared browser engines.
