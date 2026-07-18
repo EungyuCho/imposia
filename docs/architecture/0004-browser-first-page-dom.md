@@ -12,7 +12,7 @@ Target `@imposia/node` will run Chromium solely as a browser host and request PD
 
 ## Current implementation boundary
 
-`@imposia/core` now exports `mountPageDocument()` and produces one sanitized, isolated canonical page iframe. This is a tested vertical slice of the DOM ownership and lifecycle surface, not a multi-page paginator. The current `@imposia/node` package owns the legacy Node/Playwright PDF renderer, but it does not yet invoke Core's browser paginator. `@imposia/viewer` still renders PDF.js canvases and does not yet adopt the Core iframe. Full fragmentation, Viewer reuse of the single canonical DOM, and Node PDF output from that same paginator remain pending.
+`@imposia/core` now exports `mountPageDocument()` and produces one sanitized, isolated canonical page iframe. Its current slice resolves discovered HTML and CSS assets only through an optional host resolver, places only Core-created blob URLs in the frame, and revokes those URLs across replacement, failure, and destruction. This is a tested vertical slice of the DOM ownership, asset boundary, and lifecycle surface, not a multi-page paginator. The current `@imposia/node` package owns the legacy Node/Playwright PDF renderer, but it does not yet invoke Core's browser paginator. `@imposia/viewer` exports the existing PDF.js canvas viewer and `mountPageViewer()`, which presents the exact Core iframe without cloning it or owning its lifecycle. Full fragmentation and Node PDF output from that same paginator remain pending.
 
 ## Target public contract
 
