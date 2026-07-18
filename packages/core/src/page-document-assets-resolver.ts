@@ -58,10 +58,12 @@ function supportedMime(kind: AssetRequest["kind"], value: string): boolean {
   return MEDIA_MIME_TYPES.has(mime);
 }
 
+function resourceBlob(bytes: Uint8Array, mime: string): Blob {
+  return new Blob([bytes.buffer as ArrayBuffer], { type: mimeType(mime) });
+}
+
 function createBlob(scope: BlobScope, bytes: Uint8Array, mime: string): string {
-  const url = URL.createObjectURL(
-    new Blob([bytes.buffer as ArrayBuffer], { type: mimeType(mime) }),
-  );
+  const url = URL.createObjectURL(resourceBlob(bytes, mime));
   if (scope.revoked) {
     URL.revokeObjectURL(url);
     throw abortError();
@@ -75,13 +77,11 @@ function revokeBlob(scope: BlobScope, url: string): void {
   URL.revokeObjectURL(url);
 }
 
-async function decodeImage(blobUrl: string): Promise<boolean> {
-  const image = document.createElement("img");
-  image.src = blobUrl;
+async function decodeImage(bytes: Uint8Array, mime: string): Promise<boolean> {
   try {
-    await image.decode();
-    const decoded = image.naturalWidth > 0 && image.naturalHeight > 0;
-    image.removeAttribute("src");
+    const bitmap = await createImageBitmap(resourceBlob(bytes, mime));
+    const decoded = bitmap.width > 0 && bitmap.height > 0;
+    bitmap.close();
     return decoded;
   } catch (_error: unknown) {
     return false;
@@ -184,17 +184,23 @@ async function resolveOneWork(
       return { status: "blocked" };
     }
   }
-  const blobUrl = createBlob(scope, copied, resolution.mimeType);
-  const ready =
-    request.kind === "image"
-      ? await decodeImage(blobUrl)
-      : request.kind === "font"
+  let blobUrl: string | undefined;
+  let ready: boolean;
+  if (request.kind === "image") {
+    ready = await decodeImage(copied, resolution.mimeType);
+  } else {
+    blobUrl = createBlob(scope, copied, resolution.mimeType);
+    ready =
+      request.kind === "font"
         ? await loadFont(blobUrl)
         : await loadMedia(blobUrl, request.kind);
+  }
   if (!ready) {
-    revokeBlob(scope, blobUrl);
+    if (blobUrl !== undefined) revokeBlob(scope, blobUrl);
     return { status: "blocked" };
   }
+  blobUrl ??= createBlob(scope, copied, resolution.mimeType);
+  if (blobUrl === undefined) throw resolutionFailure();
   if (signal.aborted) {
     if (scope.urls.delete(blobUrl)) URL.revokeObjectURL(blobUrl);
     throw abortError();

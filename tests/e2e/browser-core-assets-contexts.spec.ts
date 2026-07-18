@@ -100,20 +100,24 @@ test.describe("Chromium Core asset contexts", () => {
         });
         const calls = { image: 0, font: 0, media: 0 };
         const completed = { image: 0, font: 0, media: 0 };
-        const originalImageDecode = HTMLImageElement.prototype.decode;
+        const originalCreateImageBitmap = window.createImageBitmap;
         const originalFontLoad = FontFace.prototype.load;
         const originalMediaLoad = HTMLMediaElement.prototype.load;
         const host = document.body.appendChild(document.createElement("div"));
         let controller: Controller | undefined;
         let readySettled = false;
         try {
-          HTMLImageElement.prototype.decode = function (): Promise<void> {
+          window.createImageBitmap = function (
+            source: ImageBitmapSource,
+            options?: ImageBitmapOptions,
+          ): Promise<ImageBitmap> {
             calls.image += 1;
             imageStartedResolve?.();
             return imageGate
-              .then(() => originalImageDecode.call(this))
-              .then(() => {
+              .then(() => originalCreateImageBitmap(source, options))
+              .then((bitmap) => {
                 completed.image += 1;
+                return bitmap;
               });
           };
           FontFace.prototype.load = async function (): Promise<FontFace> {
@@ -203,7 +207,7 @@ test.describe("Chromium Core asset contexts", () => {
           };
         } finally {
           await controller?.destroy();
-          HTMLImageElement.prototype.decode = originalImageDecode;
+          window.createImageBitmap = originalCreateImageBitmap;
           FontFace.prototype.load = originalFontLoad;
           HTMLMediaElement.prototype.load = originalMediaLoad;
           host.replaceChildren();
