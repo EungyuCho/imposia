@@ -232,7 +232,8 @@ test.describe("Chromium Core asset contexts", () => {
       expect(observation.imgSrcset).toMatch(/blob:[^,\s]+\s2x/);
       expect(observation.pictureSrcset).toMatch(/blob:[^,\s]+\s320w/);
       expect(observation.pictureSrcset).toMatch(/blob:[^,\s]+\s640w/);
-      expect(observation.styleText).toMatch(/@font-face[^{]*\{[^}]*url\(\s*blob:/i);
+      expect(observation.styleText).toMatch(/@font-face[^{]*\{[^}]*\}/i);
+      expect(observation.styleText).not.toMatch(/@font-face[^{]*\{[^}]*url\(/i);
       expect(observation.styleText).not.toMatch(/local\s*\(/i);
       expect(observation.frameHtml).toMatch(/blob:/);
       expect(observation.frameHtml).not.toMatch(
@@ -242,8 +243,8 @@ test.describe("Chromium Core asset contexts", () => {
         expect(observation.frameHtml).not.toContain(authoredUrl);
       }
       expect(observation.readyBeforeImageRelease).toBe(true);
-      expect(observation.readyBeforeFontRelease).toBe(true);
-      expect(observation.readyBeforeMediaRelease).toBe(true);
+      expect(observation.readyBeforeFontRelease).toBe(false);
+      expect(observation.readyBeforeMediaRelease).toBe(false);
       expect(observation.completed.image).toBe(observation.calls.image);
       expect(observation.completed.font).toBe(observation.calls.font);
       expect(observation.completed.media).toBe(observation.calls.media);
