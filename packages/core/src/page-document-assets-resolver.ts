@@ -58,6 +58,28 @@ function supportedMime(kind: AssetRequest["kind"], value: string): boolean {
   return MEDIA_MIME_TYPES.has(mime);
 }
 
+function hasContainerSignature(kind: AssetRequest["kind"], bytes: Uint8Array): boolean {
+  if (kind === "font") {
+    const text = new TextDecoder("ascii").decode(bytes.subarray(0, 4));
+    return (
+      text === "wOFF" ||
+      text === "wOF2" ||
+      text === "OTTO" ||
+      (bytes.length >= 4 && bytes[0] === 0 && bytes[1] === 1 && bytes[2] === 0 && bytes[3] === 0)
+    );
+  }
+  if (kind !== "media") return true;
+  const text = new TextDecoder("ascii").decode(bytes.subarray(0, 12));
+  return (
+    text.startsWith("OggS") ||
+    (text.startsWith("RIFF") && text.slice(8, 12) === "WAVE") ||
+    text.slice(4, 8) === "ftyp" ||
+    (bytes[0] === 0x1a && bytes[1] === 0x45 && bytes[2] === 0xdf && bytes[3] === 0xa3) ||
+    text.startsWith("ID3") ||
+    (bytes.length >= 2 && bytes[0] === 0xff && ((bytes.at(1) ?? 0) & 0xe0) === 0xe0)
+  );
+}
+
 function resourceBlob(bytes: Uint8Array, mime: string): Blob {
   return new Blob([bytes.buffer as ArrayBuffer], { type: mimeType(mime) });
 }
@@ -170,6 +192,7 @@ async function resolveOneWork(
   if (!supportedMime(request.kind, resolution.mimeType)) {
     return { status: "blocked" };
   }
+  if (!hasContainerSignature(request.kind, copied)) return { status: "blocked" };
   if (request.kind === "stylesheet") {
     try {
       const root = postcss.parse(new TextDecoder("utf-8", { fatal: true }).decode(copied));
