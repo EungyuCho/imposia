@@ -8,6 +8,10 @@ import {
   linkSignal,
 } from "./page-document-frame.js";
 import { bodyText, buildGeneration, snapshotSettings } from "./page-document-generation.js";
+import {
+  releasePageSemanticSnapshot,
+  retainPageSemanticSnapshot,
+} from "./page-document-semantic.js";
 import type {
   PageDocument,
   PageDocumentController,
@@ -76,14 +80,18 @@ export function mountPageDocument(
           }
           commitGeneration(frameDocument, generation.body, generation.css);
           const pages = Object.freeze(
-            generation.pages.map(({ page, flow, blank }, index) => {
-              const bounds = page.getBoundingClientRect();
+            generation.pages.map(({ flow, blank, name, geometry }, index) => {
+              const side = index % 2 === 0 ? ("right" as const) : ("left" as const);
+              const context = Object.freeze({ side, name, blank });
               return Object.freeze({
                 number: index + 1,
-                side: index % 2 === 0 ? ("right" as const) : ("left" as const),
+                side,
+                name,
                 blank,
-                widthCssPx: bounds.width,
-                heightCssPx: bounds.height,
+                context,
+                geometry,
+                widthCssPx: geometry.sheetWidthCssPx,
+                heightCssPx: geometry.sheetHeightCssPx,
                 bodyText: bodyText(flow),
               });
             }),
@@ -101,8 +109,11 @@ export function mountPageDocument(
             }),
           });
           const oldBlobUrls = activeBlobUrls;
+          const previous = current;
           activeBlobUrls = generation.blobUrls;
           current = document;
+          retainPageSemanticSnapshot(document, generation.semanticSnapshot);
+          if (previous !== undefined) releasePageSemanticSnapshot(previous);
           committed = true;
           for (const url of oldBlobUrls) URL.revokeObjectURL(url);
           return document;
@@ -177,6 +188,7 @@ export function mountPageDocument(
       active?.controller.abort();
       for (const url of activeBlobUrls) URL.revokeObjectURL(url);
       activeBlobUrls = [];
+      if (current !== undefined) releasePageSemanticSnapshot(current);
       current = undefined;
       iframe.remove();
       destroyPromise = Promise.allSettled([...operations]).then(() => undefined);

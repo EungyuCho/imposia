@@ -1,3 +1,4 @@
+import { normalizeCss } from "./css-contracts.js";
 import { prepareDecoration, prepareDocument } from "./document.js";
 import { ImposiaError } from "./errors.js";
 import { type ResolvedPageAssets, resolvePageAssets } from "./page-document-assets.js";
@@ -12,7 +13,7 @@ import {
   type ValidatedPageExtension,
   validateExtensions,
 } from "./page-document-extensions.js";
-import { abortError, FRAME_STYLE } from "./page-document-frame.js";
+import { abortError, FRAME_STYLE, frameStyle } from "./page-document-frame.js";
 import {
   appendDecoration,
   bodyText,
@@ -25,16 +26,33 @@ import {
   sanitizeFrameContent,
   sourceHtml,
 } from "./page-document-sanitize.js";
+import { createPageSemanticSnapshot, type PageSemanticSnapshot } from "./page-document-semantic.js";
 import type {
   AssetResolver,
   EffectivePageLimits,
+  ExperimentalPageFeatures,
+  PageContext,
   PageDocumentOptions,
+  PageGeometry,
   PageLimits,
   PageSource,
   PageWarning,
 } from "./page-document-types.js";
 import { DEFAULT_PAGE_LIMITS } from "./page-document-types.js";
-import type { DocumentWarning } from "./warnings.js";
+import {
+  type AuthoredPageRule,
+  authoredPageName,
+  cssPx,
+  extractPageMediaCss,
+  type HostPageOverrides,
+  marginBoxText,
+  normalizeHostPageOptions,
+  PAGE_MARGIN_BOX_NAMES,
+  type PageMarginBoxName,
+  type PageMarginContentPart,
+  resolvePageMedia,
+} from "./page-media.js";
+import { createWarningCollector, type DocumentWarning, type WarningCollector } from "./warnings.js";
 
 export interface PageGenerationSettings {
   css: readonly string[];
@@ -42,8 +60,9 @@ export interface PageGenerationSettings {
   headerTemplate?: string;
   footerTemplate?: string;
   decorateBlankPages: boolean;
+  experimental: Readonly<ExperimentalPageFeatures>;
   extensions: PageExtensionSnapshots;
-  page?: { size?: "A4"; margin?: "20mm" };
+  page: HostPageOverrides;
   limits: EffectivePageLimits;
   onProgress?: (progress: { completedPages: number }) => void;
 }
@@ -55,6 +74,7 @@ export interface BuiltGeneration {
   warnings: readonly PageWarning[];
   timings: Readonly<{ resourceMs: number; paginationMs: number }>;
   blobUrls: readonly string[];
+  semanticSnapshot: PageSemanticSnapshot;
   revoke(): void;
 }
 
@@ -62,11 +82,20 @@ export interface BuiltPage {
   page: HTMLElement;
   flow: HTMLElement;
   blank: boolean;
+  name: string | undefined;
+  geometry: PageGeometry;
 }
 
 interface PageParts extends BuiltPage {
   content: HTMLElement;
   decorated: boolean;
+  marginBoxes: ReadonlyMap<PageMarginBoxName, readonly PageMarginContentPart[]>;
+}
+
+interface PaginationPageMedia {
+  readonly rules: readonly AuthoredPageRule[];
+  readonly host: HostPageOverrides;
+  readonly warnings: WarningCollector;
 }
 
 type PageBreak = "auto" | "page" | "left" | "right";
@@ -125,6 +154,29 @@ export function normalizePageLimits(limits: PageLimits | undefined): EffectivePa
     maxAssetReferences: normalizeLimit("maxAssetReferences", limits?.maxAssetReferences),
     resourceDeadlineMs: normalizeLimit("resourceDeadlineMs", limits?.resourceDeadlineMs),
     maxPages: normalizeLimit("maxPages", limits?.maxPages),
+    maxLayoutPasses: normalizeLimit("maxLayoutPasses", limits?.maxLayoutPasses),
+    maxGeneratedFragments: normalizeLimit("maxGeneratedFragments", limits?.maxGeneratedFragments),
+    maxGeneratedRecords: normalizeLimit("maxGeneratedRecords", limits?.maxGeneratedRecords),
+  });
+}
+
+function snapshotExperimental(
+  value: ExperimentalPageFeatures | undefined,
+): Readonly<ExperimentalPageFeatures> {
+  if (value === undefined) return Object.freeze({});
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    throw new TypeError("Experimental page features must be an object.");
+  }
+  const record = value as Readonly<Record<string, unknown>>;
+  if (record.footnotes !== undefined && typeof record.footnotes !== "boolean") {
+    throw new TypeError("experimental.footnotes must be a boolean.");
+  }
+  if (record.pageFloats !== undefined && typeof record.pageFloats !== "boolean") {
+    throw new TypeError("experimental.pageFloats must be a boolean.");
+  }
+  return Object.freeze({
+    ...(record.footnotes === undefined ? {} : { footnotes: record.footnotes }),
+    ...(record.pageFloats === undefined ? {} : { pageFloats: record.pageFloats }),
   });
 }
 
@@ -135,33 +187,58 @@ export function snapshotSettings(options: PageDocumentOptions): PageGenerationSe
     ...(options.headerTemplate === undefined ? {} : { headerTemplate: options.headerTemplate }),
     ...(options.footerTemplate === undefined ? {} : { footerTemplate: options.footerTemplate }),
     decorateBlankPages: options.decorateBlankPages ?? true,
+    experimental: snapshotExperimental(options.experimental),
     extensions: snapshotExtensions(options.extensions),
-    ...(options.page === undefined
-      ? {}
-      : {
-          page: {
-            ...(options.page.size === undefined ? {} : { size: options.page.size }),
-            ...(options.page.margin === undefined ? {} : { margin: options.page.margin }),
-          },
-        }),
+    page: normalizeHostPageOptions(options.page),
     limits: normalizePageLimits(options.limits),
     ...(options.onProgress === undefined ? {} : { onProgress: options.onProgress }),
   };
 }
 
+function contextForPage(pageNumber: number, name: string | undefined, blank: boolean): PageContext {
+  return Object.freeze({
+    side: pageNumber % 2 === 1 ? "right" : "left",
+    name,
+    blank,
+  });
+}
+
+function applyPageGeometry(page: HTMLElement, geometry: PageGeometry): void {
+  page.style.setProperty("width", cssPx(geometry.sheetWidthCssPx), "important");
+  page.style.setProperty("height", cssPx(geometry.sheetHeightCssPx), "important");
+  page.style.setProperty("padding-top", cssPx(geometry.margins.topCssPx), "important");
+  page.style.setProperty("padding-right", cssPx(geometry.margins.rightCssPx), "important");
+  page.style.setProperty("padding-bottom", cssPx(geometry.margins.bottomCssPx), "important");
+  page.style.setProperty("padding-left", cssPx(geometry.margins.leftCssPx), "important");
+  page.style.setProperty("--imposia-margin-top", cssPx(geometry.margins.topCssPx));
+  page.style.setProperty("--imposia-margin-right", cssPx(geometry.margins.rightCssPx));
+  page.style.setProperty("--imposia-margin-bottom", cssPx(geometry.margins.bottomCssPx));
+  page.style.setProperty("--imposia-margin-left", cssPx(geometry.margins.leftCssPx));
+  page.style.setProperty("--imposia-content-width", cssPx(geometry.contentWidthCssPx));
+  page.style.setProperty("--imposia-content-height", cssPx(geometry.contentHeightCssPx));
+}
+
 function createPage(
   frameDocument: Document,
-  settings: PageGenerationSettings,
+  pageMedia: PaginationPageMedia,
   pageNumber: number,
+  name: string | undefined,
 ): PageParts {
+  const context = contextForPage(pageNumber, name, false);
+  const resolved = resolvePageMedia(
+    pageMedia.rules,
+    pageMedia.host,
+    context,
+    pageNumber,
+    pageMedia.warnings,
+  );
   const page = frameDocument.createElement("section");
   page.setAttribute("data-imposia-page", "");
   page.setAttribute("data-imposia-page-number", String(pageNumber));
-  page.setAttribute("data-imposia-page-side", pageNumber % 2 === 1 ? "right" : "left");
+  page.setAttribute("data-imposia-page-side", context.side);
+  page.setAttribute("data-imposia-page-name", name ?? "");
   page.setAttribute("data-imposia-blank", "false");
-  if (settings.page?.margin !== undefined) {
-    page.style.setProperty("--imposia-page-margin", settings.page.margin);
-  }
+  applyPageGeometry(page, resolved.geometry);
 
   const header = frameDocument.createElement("header");
   header.setAttribute("data-imposia-page-header", "");
@@ -175,14 +252,58 @@ function createPage(
   footer.setAttribute("data-imposia-page-footer", "");
   footer.style.gridRow = "3";
 
+  const marginBoxes = PAGE_MARGIN_BOX_NAMES.map((boxName) => {
+    const box = frameDocument.createElement("div");
+    box.setAttribute("data-imposia-margin-box", boxName);
+    return box;
+  });
+
   content.append(flow);
-  page.append(content, header, footer);
-  return { page, flow, content, blank: false, decorated: false };
+  page.append(content, header, footer, ...marginBoxes);
+  return {
+    page,
+    flow,
+    content,
+    blank: false,
+    name,
+    geometry: resolved.geometry,
+    marginBoxes: resolved.marginBoxes,
+    decorated: false,
+  };
 }
 
-function setPageBlank(page: PageParts, blank: boolean, decorateBlankPages: boolean): void {
+function updatePageMedia(
+  page: PageParts,
+  pageMedia: PaginationPageMedia,
+  name: string | undefined,
+  blank: boolean,
+): void {
+  const pageNumber = Number(page.page.getAttribute("data-imposia-page-number"));
+  const context = contextForPage(pageNumber, name, blank);
+  const resolved = resolvePageMedia(
+    pageMedia.rules,
+    pageMedia.host,
+    context,
+    pageNumber,
+    pageMedia.warnings,
+  );
+  page.name = name;
   page.blank = blank;
+  page.geometry = resolved.geometry;
+  page.marginBoxes = resolved.marginBoxes;
+  page.page.setAttribute("data-imposia-page-side", context.side);
+  page.page.setAttribute("data-imposia-page-name", name ?? "");
   page.page.setAttribute("data-imposia-blank", String(blank));
+  applyPageGeometry(page.page, resolved.geometry);
+}
+
+function setPageBlank(
+  page: PageParts,
+  blank: boolean,
+  decorateBlankPages: boolean,
+  pageMedia: PaginationPageMedia,
+): void {
+  updatePageMedia(page, pageMedia, page.name, blank);
   if (blank && !decorateBlankPages && page.decorated) {
     page.page.querySelector("[data-imposia-page-header]")?.replaceChildren();
     page.page.querySelector("[data-imposia-page-footer]")?.replaceChildren();
@@ -232,6 +353,14 @@ function decoratePage(
     }
   }
   return resourceBlocked;
+}
+
+function resolveMarginBoxes(page: PageParts, pageNumber: number, totalPages: number): void {
+  for (const boxName of PAGE_MARGIN_BOX_NAMES) {
+    const box = page.page.querySelector<HTMLElement>(`[data-imposia-margin-box="${boxName}"]`);
+    if (box === null) throw new Error(`Page margin box ${boxName} is unavailable.`);
+    box.textContent = marginBoxText(page.marginBoxes.get(boxName), pageNumber, totalPages);
+  }
 }
 
 function isNonFlowNode(node: Node): boolean {
@@ -314,13 +443,14 @@ function startPageForBreak(
   breakValue: PageBreak,
   nextPage: () => PageParts,
   decorateBlankPages: boolean,
+  pageMedia: PaginationPageMedia,
   decorateBlankPage: (page: PageParts) => void,
 ): PageParts {
   if (breakValue === "auto") return currentPage;
   let page = currentPage;
   if (flowHasContent(page.flow)) page = nextPage();
   if ((breakValue === "left" || breakValue === "right") && pageSide(page) !== breakValue) {
-    setPageBlank(page, true, decorateBlankPages);
+    setPageBlank(page, true, decorateBlankPages, pageMedia);
     decorateBlankPage(page);
     page = nextPage();
   }
@@ -428,6 +558,50 @@ function ensureTransformedInputLimit(
   limits: PageLimits,
 ): void {
   ensureInputLimit(`${html}\u0000${css.join("\u0000")}`, limits);
+}
+
+function compilePageMediaCss(
+  sourceFlow: HTMLElement,
+  css: readonly string[],
+  warnings: WarningCollector,
+): Readonly<{ css: readonly string[]; rules: readonly AuthoredPageRule[] }> {
+  const rules: AuthoredPageRule[] = [];
+  const outputCss: string[] = [];
+  let order = 0;
+  for (const value of css) {
+    const normalized = normalizeCss(value, warnings, order);
+    const extracted = extractPageMediaCss(normalized, order);
+    outputCss.push(extracted.css);
+    rules.push(...extracted.rules);
+    order = Math.max(extracted.nextOrder, order + value.length + 1);
+  }
+  for (const style of sourceFlow.querySelectorAll<HTMLStyleElement>("style")) {
+    const value = style.textContent ?? "";
+    const normalized = normalizeCss(value, warnings, order);
+    const extracted = extractPageMediaCss(normalized, order);
+    style.textContent = extracted.css;
+    rules.push(...extracted.rules);
+    order = Math.max(extracted.nextOrder, order + value.length + 1);
+  }
+  return Object.freeze({ css: Object.freeze(outputCss), rules: Object.freeze(rules) });
+}
+
+function mappedDocumentWarnings(warnings: readonly DocumentWarning[]): readonly PageWarning[] {
+  const mapped = [...pageWarnings(warnings)];
+  for (const warning of warnings) {
+    if (warning.code !== "PAGE_RULE_UNSUPPORTED") continue;
+    mapped.push(
+      Object.freeze({
+        code: "PAGE_RULE_UNSUPPORTED" as const,
+        message: warning.message,
+        sourceIdentity: undefined,
+        ...(warning.property === undefined ? {} : { property: warning.property }),
+        ...(warning.value === undefined ? {} : { value: warning.value }),
+        ...(warning.recovery === undefined ? {} : { recovery: warning.recovery }),
+      }),
+    );
+  }
+  return Object.freeze(mapped);
 }
 
 function fragmentText(
@@ -580,7 +754,24 @@ export async function buildGeneration(
       ),
     );
     resourceBlocked ||= sanitizedCss.some((item) => item.resourceBlocked);
-    const css = Object.freeze([FRAME_STYLE, ...sanitizedCss.map((item) => item.css)]);
+    const pageMediaWarnings = createWarningCollector();
+    const compiledPageMedia = compilePageMediaCss(
+      sourceFlow,
+      sanitizedCss.map((item) => item.css),
+      pageMediaWarnings,
+    );
+    const pageMedia: PaginationPageMedia = Object.freeze({
+      rules: compiledPageMedia.rules,
+      host: settings.page,
+      warnings: pageMediaWarnings,
+    });
+    const semanticSnapshot = createPageSemanticSnapshot({
+      html: sourceFlow.innerHTML,
+      css: compiledPageMedia.css,
+      baseUrl: source.baseUrl,
+      assets: assets?.semanticAssets ?? Object.freeze([]),
+    });
+    const probeCss = Object.freeze([FRAME_STYLE, ...compiledPageMedia.css]);
     const body = frameDocument.createDocumentFragment();
     const pages: PageParts[] = [];
     const decorationWarnings: DocumentWarning[] = [];
@@ -592,7 +783,7 @@ export async function buildGeneration(
         sourceIdentity: undefined,
       });
     };
-    const probeStyles = appendProbeStyles(frameDocument, css);
+    const probeStyles = appendProbeStyles(frameDocument, probeCss);
     const probe = createProbe(frameDocument);
     try {
       probe.append(sourceFlow);
@@ -609,37 +800,48 @@ export async function buildGeneration(
             decorationWarnings,
           ) || resourceBlocked;
       };
-      const allocatePage = (): PageParts => {
+      const allocatePage = (name: string | undefined): PageParts => {
         throwIfAborted(signal);
         if (pages.length >= settings.limits.maxPages) {
           throw new ImposiaError("PAGE_LIMIT", "Page limit exceeded.");
         }
-        const created = createPage(frameDocument, pageSettings, pages.length + 1);
+        const created = createPage(frameDocument, pageMedia, pages.length + 1, name);
         pages.push(created);
         probe.append(created.page);
         return created;
       };
-      const nextContentPage = (): PageParts => {
-        const page = allocatePage();
+      const nextContentPage = (name: string | undefined): PageParts => {
+        const page = allocatePage(name);
         decorateCurrentPage(page);
         return page;
       };
 
-      let currentPage = allocatePage();
+      let currentPage = allocatePage(undefined);
       let pendingBreakAfter: PageBreak = "auto";
       for (const node of [...sourceFlow.childNodes]) {
         throwIfAborted(signal);
         const contributesToFlow = nodeContributesToFlow(node, breakConstraints);
         const constraint = breakConstraintFor(node, breakConstraints);
         if (contributesToFlow) {
+          const requestedName =
+            node.nodeType === Node.ELEMENT_NODE ? authoredPageName(node as Element) : undefined;
+          let requestedBreak = constraint.before === "auto" ? pendingBreakAfter : constraint.before;
+          if (
+            requestedBreak === "auto" &&
+            flowHasContent(currentPage.flow) &&
+            currentPage.name !== requestedName
+          ) {
+            requestedBreak = "page";
+          }
           currentPage = startPageForBreak(
             currentPage,
-            constraint.before === "auto" ? pendingBreakAfter : constraint.before,
-            allocatePage,
+            requestedBreak,
+            () => allocatePage(requestedName),
             settings.decorateBlankPages,
+            pageMedia,
             decorateCurrentPage,
           );
-          setPageBlank(currentPage, false, settings.decorateBlankPages);
+          updatePageMedia(currentPage, pageMedia, requestedName, false);
           decorateCurrentPage(currentPage);
         }
         const currentHadContent = flowHasContent(currentPage.flow);
@@ -647,23 +849,25 @@ export async function buildGeneration(
         if (pageOverflows(currentPage)) {
           if (currentHadContent) {
             node.remove();
-            currentPage = nextContentPage();
+            currentPage = nextContentPage(currentPage.name);
             currentPage.flow.append(node);
           }
 
           if (pageOverflows(currentPage)) {
             if (node.nodeType === Node.TEXT_NODE) {
+              const continuationName = currentPage.name;
               currentPage = fragmentText(
                 node as Text,
                 currentPage,
-                nextContentPage,
+                () => nextContentPage(continuationName),
                 reportOverflow,
               );
             } else if (node.nodeType === Node.ELEMENT_NODE && !isAtomicElement(node as Element)) {
+              const continuationName = currentPage.name;
               currentPage = fragmentElement(
                 node as Element,
                 currentPage,
-                nextContentPage,
+                () => nextContentPage(continuationName),
                 reportOverflow,
               );
             } else {
@@ -678,6 +882,7 @@ export async function buildGeneration(
       for (const page of pages) decorateCurrentPage(page);
       for (const [index, page] of pages.entries()) {
         resolveDecorationTokens(page.page, index + 1, pages.length);
+        resolveMarginBoxes(page, index + 1, pages.length);
       }
       body.append(...pages.map((page) => page.page));
     } finally {
@@ -685,7 +890,18 @@ export async function buildGeneration(
       for (const style of probeStyles) style.remove();
     }
 
-    const warnings = [...pageWarnings([...prepared.warnings, ...decorationWarnings])];
+    const css = Object.freeze([
+      frameStyle(pages.map((page) => page.geometry)),
+      ...compiledPageMedia.css,
+    ]);
+
+    const warnings = [
+      ...mappedDocumentWarnings([
+        ...prepared.warnings,
+        ...decorationWarnings,
+        ...pageMediaWarnings.finish(),
+      ]),
+    ];
     if (overflowWarning !== undefined) warnings.push(overflowWarning);
     if (resourceBlocked && !warnings.some((warning) => warning.code === "RESOURCE_BLOCKED")) {
       warnings.push(
@@ -701,7 +917,15 @@ export async function buildGeneration(
     return {
       body,
       css,
-      pages: Object.freeze(pages.map(({ page, flow, blank }) => ({ page, flow, blank }))),
+      pages: Object.freeze(
+        pages.map(({ page, flow, blank, name, geometry }) => ({
+          page,
+          flow,
+          blank,
+          name,
+          geometry,
+        })),
+      ),
       warnings: Object.freeze(warnings),
       timings: Object.freeze({
         resourceMs: resourceFinishedAt - resourceStartedAt,
@@ -709,6 +933,7 @@ export async function buildGeneration(
           resourceStartedAt - paginationStartedAt + (performance.now() - resourceFinishedAt),
       }),
       blobUrls: assets?.blobUrls ?? Object.freeze([]),
+      semanticSnapshot,
       revoke: assets?.revoke ?? (() => undefined),
     };
   } catch (error: unknown) {

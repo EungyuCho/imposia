@@ -10,6 +10,7 @@ export type DocumentWarningCode =
   | "FONT_TIMEOUT"
   | "SCRIPT_REMOVED"
   | "PAGE_OVERFLOW"
+  | "PAGE_RULE_UNSUPPORTED"
   | "BROWSER_DIFFERENCE";
 
 export interface DocumentWarning {
@@ -19,6 +20,7 @@ export interface DocumentWarning {
   feature?: string;
   property?: string;
   value?: string;
+  recovery?: string;
   sourceIndex?: number;
 }
 

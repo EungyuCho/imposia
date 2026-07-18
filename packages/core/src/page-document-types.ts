@@ -73,6 +73,63 @@ export interface PageExtension {
   ): PageExtensionDecoration | undefined;
 }
 
+export type PageSize = "A4" | "Letter" | { readonly width: string; readonly height: string };
+
+export type PageOrientation = "portrait" | "landscape";
+
+export interface PageMarginEdges {
+  readonly top: string;
+  readonly right: string;
+  readonly bottom: string;
+  readonly left: string;
+}
+
+export type PageMargin = string | PageMarginEdges;
+
+export interface PageOptions {
+  readonly size?: PageSize;
+  readonly orientation?: PageOrientation;
+  readonly margin?: PageMargin;
+}
+
+export interface PageMargins {
+  readonly topCssPx: number;
+  readonly rightCssPx: number;
+  readonly bottomCssPx: number;
+  readonly leftCssPx: number;
+}
+
+export interface PageGeometry {
+  readonly sheetWidthCssPx: number;
+  readonly sheetHeightCssPx: number;
+  readonly margins: PageMargins;
+  readonly contentWidthCssPx: number;
+  readonly contentHeightCssPx: number;
+}
+
+export interface PageContext {
+  readonly side: "left" | "right";
+  readonly name: string | undefined;
+  readonly blank: boolean;
+}
+
+export interface ExperimentalPageFeatures {
+  readonly footnotes?: boolean;
+  readonly pageFloats?: boolean;
+}
+
+export interface EpubMetadata {
+  readonly title: string;
+  readonly language: string;
+  readonly identifier: string;
+  readonly modified?: string;
+}
+
+export interface EpubExportOptions {
+  readonly metadata: EpubMetadata;
+  readonly signal?: AbortSignal;
+}
+
 export interface PageLimits {
   maxInputBytes?: number;
   maxNodes?: number;
@@ -81,6 +138,9 @@ export interface PageLimits {
   maxAssetReferences?: number;
   resourceDeadlineMs?: number;
   maxPages?: number;
+  maxLayoutPasses?: number;
+  maxGeneratedFragments?: number;
+  maxGeneratedRecords?: number;
 }
 
 export const DEFAULT_PAGE_LIMITS = Object.freeze({
@@ -91,6 +151,9 @@ export const DEFAULT_PAGE_LIMITS = Object.freeze({
   maxAssetReferences: 512,
   resourceDeadlineMs: 30_000,
   maxPages: 10_000,
+  maxLayoutPasses: 8,
+  maxGeneratedFragments: 400_000,
+  maxGeneratedRecords: 10_000,
 });
 
 export type EffectivePageLimits = Readonly<{
@@ -100,11 +163,12 @@ export type EffectivePageLimits = Readonly<{
 export interface PageDocumentOptions {
   css?: readonly string[];
   assetResolver?: AssetResolver;
-  page?: { size?: "A4"; margin?: "20mm" };
+  page?: PageOptions;
   limits?: PageLimits;
   headerTemplate?: string;
   footerTemplate?: string;
   decorateBlankPages?: boolean;
+  experimental?: ExperimentalPageFeatures;
   extensions?: readonly PageExtension[];
   signal?: AbortSignal;
   onProgress?: (progress: { completedPages: number }) => void;
@@ -115,6 +179,16 @@ export type CorePageWarningCode =
   | "RESOURCE_BLOCKED"
   | "UNSUPPORTED_LAYOUT"
   | "UNSUPPORTED_DECORATION_TOKEN"
+  | "PAGE_RULE_UNSUPPORTED"
+  | "BREAK_CONSTRAINT_RELAXED"
+  | "WIDOW_ORPHAN_RELAXED"
+  | "UNSUPPORTED_FRAGMENTATION_CONTEXT"
+  | "REFERENCE_MISSING"
+  | "REFERENCE_DUPLICATE"
+  | "LAYOUT_NON_CONVERGENT"
+  | "FOOTNOTE_DEFERRED"
+  | "PAGE_FLOAT_FALLBACK"
+  | "EPUB_RESOURCE_OMITTED"
   | "AVOID_RELAXED";
 
 export type PageWarningCode = CorePageWarningCode | PageExtensionWarningCode;
@@ -122,7 +196,10 @@ export type PageWarningCode = CorePageWarningCode | PageExtensionWarningCode;
 export interface PageMetadata {
   readonly number: number;
   readonly side: "left" | "right";
+  readonly name: string | undefined;
   readonly blank: boolean;
+  readonly context: PageContext;
+  readonly geometry: PageGeometry;
   readonly widthCssPx: number;
   readonly heightCssPx: number;
   readonly bodyText: readonly string[];
@@ -132,6 +209,9 @@ export interface CorePageWarning {
   readonly code: CorePageWarningCode;
   readonly message: string;
   readonly sourceIdentity: string | undefined;
+  readonly property?: string;
+  readonly value?: string;
+  readonly recovery?: string;
 }
 
 export interface ExtensionPageWarning {

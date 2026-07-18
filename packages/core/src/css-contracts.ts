@@ -1,4 +1,5 @@
 import postcss, { type Declaration, type Rule } from "postcss";
+import { normalizePageMediaCss, normalizePageNameDeclaration } from "./page-media.js";
 import type { WarningCollector } from "./warnings.js";
 
 const BEFORE_AFTER_VALUES = new Set(["auto", "avoid", "page", "left", "right"]);
@@ -29,6 +30,14 @@ function normalizeRule(
   for (const declaration of declarations) {
     const declarationIndex = declarationIndexes.get(declaration) ?? 0;
     const originalProperty = declaration.prop.toLowerCase();
+    if (originalProperty === "page") {
+      normalizePageNameDeclaration(
+        declaration,
+        warnings,
+        declarationOrder(declaration, baseOrder, declarationIndex),
+      );
+      continue;
+    }
     const modernProperty = LEGACY_TO_MODERN.get(originalProperty);
     if (modernProperty && modernProperties.has(modernProperty)) {
       warnings.add(
@@ -74,6 +83,7 @@ function normalizeRule(
 
 export function normalizeCss(css: string, warnings: WarningCollector, baseOrder = 0): string {
   const root = postcss.parse(css);
+  normalizePageMediaCss(root, warnings, baseOrder);
   const declarationIndexes = new Map<Declaration, number>();
   let declarationIndex = 0;
   root.walkDecls((declaration) => {
