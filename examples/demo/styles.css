@@ -278,10 +278,20 @@ button {
   outline-offset: 3px;
 }
 
+.demo-output-actions {
+  display: grid;
+  gap: 18px;
+  padding-top: 2px;
+}
+
 .demo-export-action {
   display: grid;
-  gap: 16px;
-  padding-top: 2px;
+  gap: 12px;
+}
+
+.demo-export-action + .demo-export-action {
+  padding-top: 18px;
+  border-top: 1px solid var(--demo-line);
 }
 
 .demo-export-copy {
@@ -299,7 +309,7 @@ button {
   font: 8px / 1.4 var(--demo-mono);
 }
 
-.demo-export-button {
+.demo-output-button {
   justify-self: start;
   padding: 10px 12px;
   border: 1px solid var(--demo-ink);
@@ -315,26 +325,26 @@ button {
     opacity 180ms ease;
 }
 
-.demo-export-button:hover:not(:disabled),
-.demo-export-button:focus-visible:not(:disabled) {
+.demo-output-button:hover:not(:disabled),
+.demo-output-button:focus-visible:not(:disabled) {
   color: var(--demo-ink);
   background: transparent;
   outline: none;
 }
 
-.demo-export-button:focus-visible {
+.demo-output-button:focus-visible {
   outline: 2px solid var(--demo-accent);
   outline-offset: 3px;
 }
 
-.demo-export-button:disabled {
+.demo-output-button:disabled {
   cursor: not-allowed;
   opacity: 0.42;
 }
 
 .demo-export-status {
   min-height: 1.4em;
-  margin: 12px 0 0;
+  margin: 0;
 }
 
 .demo-export-status-exporting {
