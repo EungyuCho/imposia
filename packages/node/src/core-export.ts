@@ -2,9 +2,10 @@ import { Buffer } from "node:buffer";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { ImposiaError } from "@imposia/core";
 import type { JSHandle, Page } from "playwright";
 import { assertFileWithinRoot } from "./input-boundary.js";
-import type { RenderOptions } from "./types.js";
+import type { CoreRenderOptions, RenderOptions } from "./types.js";
 
 interface CoreDocumentSnapshot {
   pageCount: number;
@@ -24,6 +25,11 @@ interface CoreController {
       }
     | undefined;
   destroy(): Promise<void>;
+}
+
+interface CoreBuildOutcome {
+  controller: CoreController;
+  failure?: { code?: string; message: string };
 }
 
 interface CoreAssetRequest {
@@ -138,7 +144,13 @@ async function coreModuleUrl(): Promise<string> {
 export async function buildCoreDocument(
   page: Page,
   source: { html: string; baseUrl?: string },
-  options: { headerTemplate?: string; footerTemplate?: string },
+  options: {
+    headerTemplate?: string;
+    footerTemplate?: string;
+    core?: CoreRenderOptions;
+    timeoutMs?: number;
+    maxInputBytes?: number;
+  },
   renderOptions: RenderOptions,
 ): Promise<CoreDocumentSnapshot> {
   await page.setContent("<!doctype html><html><body></body></html>");
@@ -146,7 +158,7 @@ export async function buildCoreDocument(
   const resolvers = await installAssetBridge(page);
   const token = crypto.randomUUID();
   resolvers.set(token, (request) => resolveAsset(request, renderOptions));
-  const controller: JSHandle<CoreController> = await page.evaluateHandle(
+  const outcome: JSHandle<CoreBuildOutcome> = await page.evaluateHandle(
     async ({ moduleUrl: url, source: pageSource, options: pageOptions, token: resolverToken }) => {
       type BrowserAssetResponse =
         | { status: "blocked" }
@@ -161,6 +173,12 @@ export async function buildCoreDocument(
           options: {
             headerTemplate?: string;
             footerTemplate?: string;
+            css?: readonly string[];
+            page?: { size?: "A4"; margin?: "20mm" };
+            limits?: {
+              maxInputBytes?: number;
+              resourceDeadlineMs?: number;
+            };
             assetResolver: (
               request: CoreAssetRequest,
             ) => Promise<
@@ -199,11 +217,55 @@ export async function buildCoreDocument(
           return { ...response, bytes: new Uint8Array(response.bytes) };
         },
       });
-      await controller.ready;
-      return controller;
+      try {
+        await controller.ready;
+        return { controller };
+      } catch (error: unknown) {
+        const code =
+          typeof error === "object" &&
+          error !== null &&
+          "code" in error &&
+          typeof error.code === "string"
+            ? error.code
+            : undefined;
+        return {
+          controller,
+          failure: {
+            ...(code === undefined ? {} : { code }),
+            message: error instanceof Error ? error.message : String(error),
+          },
+        };
+      }
     },
-    { moduleUrl, source, options, token },
+    {
+      moduleUrl,
+      source,
+      options: {
+        ...(options.headerTemplate === undefined ? {} : { headerTemplate: options.headerTemplate }),
+        ...(options.footerTemplate === undefined ? {} : { footerTemplate: options.footerTemplate }),
+        ...(options.core?.css === undefined ? {} : { css: options.core.css }),
+        ...(options.core?.page === undefined ? {} : { page: options.core.page }),
+        limits: {
+          ...(options.core?.limits ?? {}),
+          ...(options.maxInputBytes === undefined ? {} : { maxInputBytes: options.maxInputBytes }),
+          ...(options.timeoutMs === undefined ? {} : { resourceDeadlineMs: options.timeoutMs }),
+        },
+      },
+      token,
+    },
   );
+  const failure = await outcome.evaluate((result) => result.failure);
+  if (failure !== undefined) {
+    try {
+      await outcome.evaluate(async (result) => result.controller.destroy());
+    } finally {
+      await outcome.dispose();
+      assetResolvers.get(page)?.delete(token);
+    }
+    throw new ImposiaError(failure.code ?? "CORE_RENDER_FAILED", failure.message);
+  }
+  const controller = (await outcome.getProperty("controller")) as JSHandle<CoreController>;
+  await outcome.dispose();
   const snapshot = await controller.evaluate((coreController) => {
     const ready = coreController.current;
     const frameDocument = ready?.iframe.contentDocument;

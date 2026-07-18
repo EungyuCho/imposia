@@ -2,7 +2,7 @@ import { Buffer } from "node:buffer";
 import { realpath } from "node:fs/promises";
 import path from "node:path";
 import { ImposiaError } from "@imposia/core";
-import type { RenderInput } from "./types.js";
+import type { RenderEngine, RenderInput, RenderOptions } from "./types.js";
 
 function valueAt(input: object, key: string): unknown {
   return Reflect.get(input, key);
@@ -15,7 +15,7 @@ export function validateRenderInput(input: unknown, maxInputBytes = 5 * 1024 * 1
       "Render input must contain exactly one of html, file, or url.",
     );
   }
-  const keys = ["html", "file", "url"].filter((key) => typeof valueAt(input, key) === "string");
+  const keys = ["html", "file", "url"].filter((key) => valueAt(input, key) !== undefined);
   if (keys.length !== 1) {
     throw new ImposiaError(
       "INVALID_INPUT",
@@ -40,9 +40,106 @@ export function validateRenderInput(input: unknown, maxInputBytes = 5 * 1024 * 1
     if (baseUrl !== undefined && typeof baseUrl !== "string") {
       throw new ImposiaError("INVALID_INPUT", "HTML baseUrl must be a string URL.");
     }
+    if (typeof baseUrl === "string") {
+      try {
+        new URL(baseUrl);
+      } catch {
+        throw new ImposiaError("INVALID_INPUT", "HTML baseUrl must be an absolute URL.");
+      }
+    }
     return { html: value, ...(typeof baseUrl === "string" ? { baseUrl } : {}) };
   }
-  return key === "file" ? { file: value } : { url: value };
+  if (key === "file") return { file: value };
+  try {
+    const url = new URL(value);
+    if (!/^https?:$/.test(url.protocol)) {
+      throw new ImposiaError("INVALID_INPUT", "URL input must use the HTTP or HTTPS protocol.");
+    }
+  } catch (error) {
+    if (error instanceof ImposiaError) throw error;
+    throw new ImposiaError("INVALID_INPUT", "URL input must be an absolute HTTP(S) URL.");
+  }
+  return { url: value };
+}
+
+function invalidOptions(message: string): never {
+  throw new ImposiaError("INVALID_OPTIONS", message);
+}
+
+function validatePositiveInteger(value: unknown, name: string): void {
+  if (
+    typeof value !== "number" ||
+    !Number.isFinite(value) ||
+    !Number.isInteger(value) ||
+    value <= 0
+  ) {
+    invalidOptions(`${name} must be a finite positive integer.`);
+  }
+}
+
+export function validateRenderOptions(options: unknown): RenderOptions & { engine: RenderEngine } {
+  if (typeof options !== "object" || options === null || Array.isArray(options)) {
+    return invalidOptions("Render options must be an object.");
+  }
+  const candidate = options as Record<string, unknown>;
+  const engine = candidate.engine ?? "legacy";
+  if (engine !== "legacy" && engine !== "core") {
+    throw new ImposiaError("INVALID_ENGINE", 'engine must be either "legacy" or "core".');
+  }
+  for (const name of ["headerTemplate", "footerTemplate", "allowFileRoot"] as const) {
+    if (candidate[name] !== undefined && typeof candidate[name] !== "string") {
+      invalidOptions(`${name} must be a string.`);
+    }
+  }
+  for (const name of ["allowRemoteResources"] as const) {
+    if (candidate[name] !== undefined && typeof candidate[name] !== "boolean") {
+      invalidOptions(`${name} must be a boolean.`);
+    }
+  }
+  for (const name of ["timeoutMs", "maxInputBytes"] as const) {
+    if (candidate[name] !== undefined) validatePositiveInteger(candidate[name], name);
+  }
+  for (const name of [
+    "onStart",
+    "onResourcesReady",
+    "onPaginated",
+    "onPdfReady",
+    "onWarning",
+  ] as const) {
+    if (candidate[name] !== undefined && typeof candidate[name] !== "function") {
+      invalidOptions(`${name} must be a function.`);
+    }
+  }
+  if (
+    candidate.core !== undefined &&
+    (typeof candidate.core !== "object" || candidate.core === null || Array.isArray(candidate.core))
+  )
+    invalidOptions("core must be an object.");
+  if (engine === "legacy" && candidate.core !== undefined) {
+    throw new ImposiaError("ENGINE_OPTION_UNSUPPORTED", 'The core option requires engine: "core".');
+  }
+  if (engine === "core" && candidate.core !== undefined) {
+    const core = candidate.core as Record<string, unknown>;
+    if (
+      core.css !== undefined &&
+      (!Array.isArray(core.css) || core.css.some((stylesheet) => typeof stylesheet !== "string"))
+    ) {
+      invalidOptions("core.css must be an array of strings.");
+    }
+    if (
+      core.page !== undefined &&
+      (typeof core.page !== "object" || core.page === null || Array.isArray(core.page))
+    ) {
+      invalidOptions("core.page must be an object.");
+    }
+    if (
+      core.limits !== undefined &&
+      (typeof core.limits !== "object" || core.limits === null || Array.isArray(core.limits))
+    ) {
+      invalidOptions("core.limits must be an object.");
+    }
+  }
+  return { ...(candidate as RenderOptions), engine };
 }
 
 function assertLexicalContainment(file: string, root: string): void {

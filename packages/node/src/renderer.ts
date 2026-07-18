@@ -4,7 +4,7 @@ import { ImposiaError, prepareDocument } from "@imposia/core";
 import type { Browser, Page } from "playwright";
 import { type BrowserSession, launchBrowserSession } from "./browser-session.js";
 import { buildCoreDocument, discardCoreDocument } from "./core-export.js";
-import { withTimeout } from "./input-boundary.js";
+import { validateRenderOptions, withTimeout } from "./input-boundary.js";
 import { renderPdfWithPageSides } from "./page-sides.js";
 import { inspectPdf, pdfOptions } from "./pdf-output.js";
 import {
@@ -82,9 +82,13 @@ export function createRenderer(): Renderer {
     else await page.close();
   }
 
-  async function performRender(input: RenderInput, options: RenderOptions): Promise<RenderResult> {
+  async function performRender(
+    input: RenderInput,
+    rawOptions: RenderOptions,
+  ): Promise<RenderResult> {
     try {
       assertActive();
+      const options = validateRenderOptions(rawOptions);
       const startedAt = performance.now();
       await options.onStart?.();
       assertActive();
@@ -126,6 +130,11 @@ export function createRenderer(): Renderer {
                 ...(prepared.footerTemplate === undefined
                   ? {}
                   : { footerTemplate: prepared.footerTemplate }),
+                ...(options.core === undefined ? {} : { core: options.core }),
+                ...(options.timeoutMs === undefined ? {} : { timeoutMs: options.timeoutMs }),
+                ...(options.maxInputBytes === undefined
+                  ? {}
+                  : { maxInputBytes: options.maxInputBytes }),
               },
               options,
             );

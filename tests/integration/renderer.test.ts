@@ -113,6 +113,20 @@ describe("Chromium PDF renderer", () => {
     }
   });
 
+  it("forwards Core-only resource and pagination limits", async () => {
+    const body = Array.from(
+      { length: 120 },
+      (_value, index) => `<p>core limit line ${index}</p>`,
+    ).join("");
+
+    await expect(
+      renderer.render(
+        { html: `<article>${body}</article>` },
+        { engine: "core", core: { limits: { maxPages: 1 } } },
+      ),
+    ).rejects.toMatchObject({ code: "PAGE_LIMIT" });
+  });
+
   it("reuses the browser process across renders", async () => {
     const first = await renderer.render({ html: "<h1>Warm one</h1>" });
     const second = await renderer.render({ html: "<h1>Warm two</h1>" });

@@ -99,6 +99,20 @@ describe("CLI contracts", () => {
     expect(harness.render).not.toHaveBeenCalled();
   });
 
+  it("rejects URL-like input with a stable local-file-only error", async () => {
+    const harness = dependencies();
+
+    expect(
+      await runCli(
+        ["render", "https://example.test/book.html", "--output", "book.pdf"],
+        harness.deps,
+      ),
+    ).toBe(3);
+    expect(harness.stderr.join("\n")).toContain("UNSUPPORTED_CLI_INPUT");
+    expect(harness.render).not.toHaveBeenCalled();
+    expect(harness.close).not.toHaveBeenCalled();
+  });
+
   it("returns input exit 3 for trusted input errors", async () => {
     const harness = dependencies({
       render: vi.fn(async () => {

@@ -85,6 +85,16 @@ function message(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+function unsupportedCliInput(input: string): ImposiaError | undefined {
+  if (/^file:/i.test(input) || /^[a-z][a-z\d+.-]*:\/\//i.test(input)) {
+    return new ImposiaError(
+      "UNSUPPORTED_CLI_INPUT",
+      "CLI input must be a local HTML file path; use @imposia/node for URL input.",
+    );
+  }
+  return undefined;
+}
+
 function defaultDependencies(): CliDependencies {
   const renderer = createRenderer();
   return {
@@ -112,6 +122,14 @@ export async function runCli(args: string[], dependencies?: CliDependencies): Pr
   if (parsed === undefined) {
     (dependencies?.stderr ?? ((output: string) => process.stderr.write(`${output}\n`)))(USAGE);
     return 2;
+  }
+
+  const inputError = unsupportedCliInput(parsed.input);
+  if (inputError !== undefined) {
+    (dependencies?.stderr ?? ((output: string) => process.stderr.write(`${output}\n`)))(
+      `${inputError.code}: ${inputError.message}`,
+    );
+    return 3;
   }
 
   const deps = dependencies ?? defaultDependencies();

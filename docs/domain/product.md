@@ -20,6 +20,10 @@ Target Core has no direct browser network or file-loading ability. It accepts on
 
 `createRenderer()` and the CLI default to `engine: "legacy"`, the established Chromium PDF path. `engine: "core"` and `imposia render ... --engine core` are explicit opt-ins: Node mounts Core's canonical iframe, resolves file assets only within `allowFileRoot` and HTTP(S) assets only when `allowRemoteResources` is true, then prints the same canonical page DOM while retaining its Core-owned blob resources until PDF generation finishes. The Core engine returns its resource, layout, and overflow warnings through the Node result. The legacy default remains intentional until the structural preview/export equality gate, including page-side parity, is complete.
 
+The Node API accepts exactly one `html`, `file`, or absolute HTTP(S) `url` source. `baseUrl` on inline HTML must likewise be absolute. Every engine supports the same hooks, sanitized API/embedded header and footer templates, and ordered warning callbacks. `RenderOptions.core` exposes Core-only ordered CSS, A4 margin, and page/resource limits; providing it while using `engine: "legacy"` fails with `ENGINE_OPTION_UNSUPPORTED` instead of being silently ignored. For Core, top-level `timeoutMs` and `maxInputBytes` are forwarded to Core's resource and source bounds, taking precedence over matching Core limits.
+
+The CLI intentionally accepts only local HTML file paths rooted at its current working directory. It rejects URL and `file:` arguments with `UNSUPPORTED_CLI_INPUT` (exit 3); callers that need remote URL inputs should use `@imposia/node` with `allowRemoteResources: true`.
+
 The following sections describe the current implementation, retained during migration.
 
 ## Input and security
