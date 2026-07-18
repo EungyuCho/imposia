@@ -3,7 +3,12 @@ export type PageSource =
   | { lightDom: Element | DocumentFragment; baseUrl?: string };
 
 export type AssetResolution =
-  | { status: "resolved"; bytes: Uint8Array; mimeType: string }
+  | {
+      status: "resolved";
+      bytes: Uint8Array;
+      mimeType: string;
+      resolvedUrl?: string;
+    }
   | { status: "blocked"; reason?: string };
 
 export type AssetResolver = (request: {
@@ -18,9 +23,24 @@ export interface PageLimits {
   maxNodes?: number;
   maxAssetBytes?: number;
   maxAssetDepth?: number;
+  maxAssetReferences?: number;
   resourceDeadlineMs?: number;
   maxPages?: number;
 }
+
+export const DEFAULT_PAGE_LIMITS = Object.freeze({
+  maxInputBytes: 5 * 1024 * 1024,
+  maxNodes: 100_000,
+  maxAssetBytes: 25 * 1024 * 1024,
+  maxAssetDepth: 8,
+  maxAssetReferences: 512,
+  resourceDeadlineMs: 30_000,
+  maxPages: 10_000,
+});
+
+export type EffectivePageLimits = Readonly<{
+  [Key in keyof typeof DEFAULT_PAGE_LIMITS]: number;
+}>;
 
 export interface PageDocumentOptions {
   css?: readonly string[];
@@ -37,7 +57,6 @@ export interface PageDocumentOptions {
 export type PageWarningCode =
   | "PAGE_OVERFLOW"
   | "RESOURCE_BLOCKED"
-  | "RESOURCE_TIMEOUT"
   | "UNSUPPORTED_LAYOUT"
   | "UNSUPPORTED_DECORATION_TOKEN"
   | "AVOID_RELAXED";

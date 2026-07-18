@@ -2,7 +2,9 @@ export const A4_WIDTH_CSS_PX = (210 * 96) / 25.4;
 export const A4_HEIGHT_CSS_PX = (297 * 96) / 25.4;
 export const FRAME_CSP =
   "default-src 'none'; script-src 'none'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'; style-src 'unsafe-inline'; img-src 'none'; font-src 'none'; media-src 'none'";
-export const FRAME_DOCUMENT = `<!DOCTYPE html><html data-imposia-document="v1"><head><meta http-equiv="Content-Security-Policy" content="${FRAME_CSP}"></head><body data-imposia-pages></body></html>`;
+export const FRAME_BLOB_CSP =
+  "default-src 'none'; script-src 'none'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'; style-src 'unsafe-inline'; img-src blob:; font-src blob:; media-src blob:";
+export const FRAME_DOCUMENT = `<!DOCTYPE html><html data-imposia-document="v1"><head><meta http-equiv="Content-Security-Policy" content="${FRAME_BLOB_CSP}"></head><body data-imposia-pages></body></html>`;
 export const FRAME_STYLE = [
   "@page{size:A4;margin:0}",
   ":root{color-scheme:light}",
@@ -36,7 +38,7 @@ export function commitGeneration(
   frameDocument.documentElement.setAttribute("data-imposia-document", "v1");
   const meta = frameDocument.createElement("meta");
   meta.httpEquiv = "Content-Security-Policy";
-  meta.content = FRAME_CSP;
+  meta.content = FRAME_BLOB_CSP;
   frameDocument.head.replaceChildren(meta, ...styles);
   frameDocument.body.setAttribute("data-imposia-pages", "");
   frameDocument.body.replaceChildren(body);

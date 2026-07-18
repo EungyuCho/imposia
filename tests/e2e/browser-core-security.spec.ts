@@ -188,7 +188,7 @@ test("blocks caller CSS resources until the asset resolver boundary is implement
     expect(pageErrors).toEqual([]);
   }
 });
-test("rejects unsupported resolver and limit options instead of silently ignoring them", async ({
+test("rejects unsupported limit and decoration options instead of silently ignoring them", async ({
   page,
   browserName,
 }) => {
@@ -207,15 +207,6 @@ test("rejects unsupported resolver and limit options instead of silently ignorin
       const host = document.body.appendChild(document.createElement("div"));
       const messages: string[] = [];
       try {
-        core.mountPageDocument(
-          host,
-          { html: "<p>resolver</p>" },
-          { assetResolver: async () => ({ status: "blocked", reason: "test" }) },
-        );
-      } catch (error: unknown) {
-        messages.push(error instanceof Error ? error.message : "unknown");
-      }
-      try {
         core.mountPageDocument(host, { html: "<p>limits</p>" }, { limits: { maxNodes: 1 } });
       } catch (error: unknown) {
         messages.push(error instanceof Error ? error.message : "unknown");
@@ -225,19 +216,6 @@ test("rejects unsupported resolver and limit options instead of silently ignorin
       } catch (error: unknown) {
         messages.push(error instanceof Error ? error.message : "unknown");
       }
-      let baseController: { ready: Promise<unknown>; destroy(): Promise<void> } | undefined;
-      try {
-        baseController = core.mountPageDocument(
-          host,
-          { html: "<p>base</p>", baseUrl: "https://example.invalid/" },
-          {},
-        ) as { ready: Promise<unknown>; destroy(): Promise<void> };
-        await baseController.ready;
-      } catch (error: unknown) {
-        messages.push(error instanceof Error ? error.message : "unknown");
-      } finally {
-        await baseController?.destroy();
-      }
       try {
         core.mountPageDocument(host, { html: "<p>blank</p>" }, { decorateBlankPages: false });
       } catch (error: unknown) {
@@ -246,10 +224,8 @@ test("rejects unsupported resolver and limit options instead of silently ignorin
       return messages;
     });
     expect(failures).toEqual([
-      expect.stringContaining("Asset resolver support is not implemented"),
       expect.stringContaining("maxNodes is not implemented"),
       expect.stringContaining("maxInputBytes must be a finite positive number"),
-      expect.stringContaining("baseUrl is not implemented"),
       expect.stringContaining("decorateBlankPages is not implemented"),
     ]);
   } finally {
