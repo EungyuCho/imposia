@@ -103,7 +103,7 @@ test("serializes light DOM inertly without copying custom-element runtime state"
   }
 });
 
-test("blocks caller CSS resources until the asset resolver boundary is implemented", async ({
+test("blocks caller CSS resources that bypass the asset resolver boundary", async ({
   page,
   browserName,
 }) => {
@@ -175,9 +175,10 @@ test("blocks caller CSS resources until the asset resolver boundary is implement
     expect(observation.imageSrc).toBeNull();
     expect(observation.styleText).not.toMatch(/url\s*\(/i);
     expect(observation.styleText).not.toMatch(/blob:|data:/i);
-    expect(observation.csp).toContain("img-src 'none'");
-    expect(observation.csp).toContain("font-src 'none'");
-    expect(observation.csp).toContain("media-src 'none'");
+    expect(observation.csp).toContain("img-src blob:");
+    expect(observation.csp).toContain("font-src blob:");
+    expect(observation.csp).toContain("media-src blob:");
+    expect(observation.csp).not.toMatch(/(?:img|font|media)-src[^;]*data:/);
     expect(observation.warningCodes).toContain("RESOURCE_BLOCKED");
     expect(observation.warningsFrozen).toBe(true);
     expect(observation.warningElementsFrozen).toBe(true);
@@ -188,46 +189,80 @@ test("blocks caller CSS resources until the asset resolver boundary is implement
     expect(pageErrors).toEqual([]);
   }
 });
-test("rejects unsupported limit and decoration options instead of silently ignoring them", async ({
-  page,
-  browserName,
-}) => {
+test("enforces input, node, and resolver deadline limits", async ({ page, browserName }) => {
   const { errors, pageErrors } = captureBrowserErrors(page, browserName);
 
   await page.goto("/examples/book.html");
   try {
     const failures = await page.evaluate(async () => {
+      type Failure = { name: string; code: string | null; message: string };
+      type Controller = { ready: Promise<unknown>; destroy(): Promise<void> };
       const core = (await import("/packages/core/dist/index.js")) as {
+        ImposiaError: new (code: string, message: string) => Error & { code: string };
         mountPageDocument(
           container: HTMLElement,
           source: { html: string },
           options: Record<string, unknown>,
-        ): unknown;
+        ): Controller;
       };
-      const host = document.body.appendChild(document.createElement("div"));
-      const messages: string[] = [];
-      try {
-        core.mountPageDocument(host, { html: "<p>limits</p>" }, { limits: { maxNodes: 1 } });
-      } catch (error: unknown) {
-        messages.push(error instanceof Error ? error.message : "unknown");
-      }
-      try {
-        core.mountPageDocument(host, { html: "<p>bytes</p>" }, { limits: { maxInputBytes: NaN } });
-      } catch (error: unknown) {
-        messages.push(error instanceof Error ? error.message : "unknown");
-      }
-      try {
-        core.mountPageDocument(host, { html: "<p>blank</p>" }, { decorateBlankPages: false });
-      } catch (error: unknown) {
-        messages.push(error instanceof Error ? error.message : "unknown");
-      }
-      return messages;
+      const failure = async (html: string, options: Record<string, unknown>): Promise<Failure> => {
+        const host = document.body.appendChild(document.createElement("div"));
+        let controller: Controller | undefined;
+        try {
+          controller = core.mountPageDocument(host, { html }, options);
+          await controller.ready;
+          throw new Error("Expected the page document operation to reject.");
+        } catch (error: unknown) {
+          const value = error instanceof Error ? error : new Error("unknown");
+          return {
+            name: value.name,
+            code: value instanceof core.ImposiaError ? value.code : null,
+            message: value.message,
+          };
+        } finally {
+          await controller?.destroy();
+          host.remove();
+        }
+      };
+      let resolverAborted = false;
+      return {
+        input: await failure("<p>bytes</p>", { limits: { maxInputBytes: 10 } }),
+        nodes: await failure("<div><span>one</span><span>two</span></div>", {
+          limits: { maxNodes: 2 },
+        }),
+        deadline: await failure('<img src="late.png">', {
+          limits: { resourceDeadlineMs: 50 },
+          assetResolver: ({ signal }: { signal: AbortSignal }) =>
+            new Promise<{ status: "blocked" }>((resolve) => {
+              signal.addEventListener(
+                "abort",
+                () => {
+                  resolverAborted = true;
+                  resolve({ status: "blocked" });
+                },
+                { once: true },
+              );
+            }),
+        }),
+        resolverAborted,
+      };
     });
-    expect(failures).toEqual([
-      expect.stringContaining("maxNodes is not implemented"),
-      expect.stringContaining("maxInputBytes must be a finite positive number"),
-      expect.stringContaining("decorateBlankPages is not implemented"),
-    ]);
+    expect(failures.input).toEqual({
+      name: "Error",
+      code: null,
+      message: "Page source exceeds the 10-byte input limit.",
+    });
+    expect(failures.nodes).toEqual({
+      name: "ImposiaError",
+      code: "NODE_LIMIT",
+      message: "Page node limit exceeded.",
+    });
+    expect(failures.deadline).toEqual({
+      name: "ImposiaError",
+      code: "RESOURCE_TIMEOUT",
+      message: "Resource loading timed out.",
+    });
+    expect(failures.resolverAborted).toBe(true);
   } finally {
     expect(errors).toEqual([]);
     expect(pageErrors).toEqual([]);
