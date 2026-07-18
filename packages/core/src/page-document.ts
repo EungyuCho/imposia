@@ -1,3 +1,4 @@
+import { exportPageDocumentEpub } from "./epub-export.js";
 import { ImposiaError } from "./errors.js";
 import {
   abortError,
@@ -13,6 +14,7 @@ import {
   retainPageSemanticSnapshot,
 } from "./page-document-semantic.js";
 import type {
+  EpubExportOptions,
   PageDocument,
   PageDocumentController,
   PageDocumentOptions,
@@ -96,7 +98,8 @@ export function mountPageDocument(
               });
             }),
           );
-          const document: PageDocument = Object.freeze({
+          let committedDocument: PageDocument | undefined;
+          const document = Object.freeze({
             iframe,
             generation: (current?.generation ?? 0) + 1,
             pageCount: pages.length,
@@ -107,7 +110,14 @@ export function mountPageDocument(
               resourceMs: generation.timings.resourceMs,
               paginationMs: generation.timings.paginationMs + performance.now() - commitStartedAt,
             }),
-          });
+            exportEpub(exportOptions: EpubExportOptions) {
+              if (committedDocument === undefined) {
+                return Promise.reject(new Error("Page document is not ready."));
+              }
+              return exportPageDocumentEpub(committedDocument, exportOptions);
+            },
+          }) satisfies PageDocument;
+          committedDocument = document;
           const oldBlobUrls = activeBlobUrls;
           const previous = current;
           activeBlobUrls = generation.blobUrls;

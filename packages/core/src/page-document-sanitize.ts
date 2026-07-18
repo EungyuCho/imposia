@@ -1,5 +1,6 @@
 import { sameDocumentFragment, srcsetCandidates } from "./page-document-assets-html.js";
 import { hasCssResource, sanitizeCss } from "./page-document-sanitize-css.js";
+import { safeSemanticHyperlink } from "./page-document-sanitize-resolver-input.js";
 
 export { sanitizeCss } from "./page-document-sanitize-css.js";
 export { sanitizeAssetResolverInput } from "./page-document-sanitize-resolver-input.js";
@@ -72,17 +73,20 @@ export function copyPreparedBody(
   html: string,
   preserveResolvedResources = false,
   resolvedUrls?: ReadonlySet<string>,
+  preserveSafeHyperlinks = false,
 ): PreparedFragment {
   const parsed = new DOMParser().parseFromString(html, "text/html");
   const headResourceBlocked = sanitizeFrameContent(
     parsed.head,
     preserveResolvedResources,
     resolvedUrls,
+    preserveSafeHyperlinks,
   );
   const bodyResourceBlocked = sanitizeFrameContent(
     parsed.body,
     preserveResolvedResources,
     resolvedUrls,
+    preserveSafeHyperlinks,
   );
   const fragment = frameDocument.createDocumentFragment();
   for (const style of [...parsed.head.querySelectorAll("style")]) {
@@ -114,6 +118,7 @@ export function sanitizeFrameContent(
   root: ParentNode,
   preserveResolvedResources = false,
   resolvedUrls?: ReadonlySet<string>,
+  preserveSafeHyperlinks = false,
 ): boolean {
   let resourceBlocked = false;
   for (const element of root.querySelectorAll(
@@ -129,6 +134,7 @@ export function sanitizeFrameContent(
         element.content,
         preserveResolvedResources,
         resolvedUrls,
+        preserveSafeHyperlinks,
       );
       resourceBlocked ||= templateBlocked;
     }
@@ -147,6 +153,12 @@ export function sanitizeFrameContent(
       const safeFragment =
         (name === "href" || name === "xlink:href") && sameDocumentFragment(attribute.value);
       if (safeFragment) element.setAttribute(attribute.name, attribute.value.trim());
+      const safeHyperlink =
+        preserveSafeHyperlinks &&
+        name === "href" &&
+        (localName === "a" || localName === "area") &&
+        safeSemanticHyperlink(attribute.value);
+      if (safeHyperlink) element.setAttribute(attribute.name, attribute.value.trim());
       const resolved =
         preserveResolvedResources &&
         resolvedAttribute(element, name, attribute.value, resolvedUrls);
@@ -157,7 +169,7 @@ export function sanitizeFrameContent(
       }
       if (
         name.startsWith("on") ||
-        (RESOURCE_ATTRIBUTES.has(name) && !resolved && !safeFragment) ||
+        (RESOURCE_ATTRIBUTES.has(name) && !resolved && !safeFragment && !safeHyperlink) ||
         name === "target"
       ) {
         if (RESOURCE_ATTRIBUTES.has(name)) {

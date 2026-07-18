@@ -1482,7 +1482,7 @@ export async function buildGeneration(
   const prepared = prepareDocument(transformed.html, {
     ...(settings.headerTemplate === undefined ? {} : { headerTemplate: settings.headerTemplate }),
     ...(settings.footerTemplate === undefined ? {} : { footerTemplate: settings.footerTemplate }),
-    ...(settings.assetResolver === undefined ? {} : { allowRemoteResources: true }),
+    allowRemoteResources: true,
   });
   const pageSettings: PageGenerationSettings = {
     ...settings,
@@ -1507,25 +1507,25 @@ export async function buildGeneration(
   const resourceFinishedAt = performance.now();
   try {
     throwIfAborted(signal);
-    const preparedSource = copyPreparedBody(
+    const resolvedBlobUrls = assets === undefined ? undefined : new Set(assets.blobUrls);
+    const preparedSemanticSource = copyPreparedBody(
       frameDocument,
       assets?.html ?? prepared.html,
       assets !== undefined,
-      assets === undefined ? undefined : new Set(assets.blobUrls),
+      resolvedBlobUrls,
+      true,
     );
-    const sourceFlow = frameDocument.createElement("div");
-    sourceFlow.append(preparedSource.fragment);
-    const nodeCount = sourceFlow.querySelectorAll("*").length;
+    const semanticSourceFlow = frameDocument.createElement("div");
+    semanticSourceFlow.append(preparedSemanticSource.fragment);
+    const nodeCount = semanticSourceFlow.querySelectorAll("*").length;
     if (nodeCount > settings.limits.maxNodes) {
       throw new ImposiaError("NODE_LIMIT", "Page node limit exceeded.");
     }
     let resourceBlocked =
-      preparedSource.resourceBlocked ||
-      sanitizeFrameContent(
-        sourceFlow,
-        assets !== undefined,
-        assets === undefined ? undefined : new Set(assets.blobUrls),
-      );
+      preparedSemanticSource.resourceBlocked ||
+      sanitizeFrameContent(semanticSourceFlow, assets !== undefined, resolvedBlobUrls, true);
+    const sourceFlow = semanticSourceFlow.cloneNode(true) as HTMLElement;
+    resourceBlocked ||= sanitizeFrameContent(sourceFlow, assets !== undefined, resolvedBlobUrls);
     resourceBlocked ||= assets?.resourceBlocked ?? false;
 
     const sanitizedCss = (assets?.css ?? transformed.css).map((css) =>
@@ -1542,13 +1542,18 @@ export async function buildGeneration(
       sanitizedCss.map((item) => item.css),
       pageMediaWarnings,
     );
+    const semanticStyles = semanticSourceFlow.querySelectorAll<HTMLStyleElement>("style");
+    const frameStyles = sourceFlow.querySelectorAll<HTMLStyleElement>("style");
+    for (const [index, style] of [...semanticStyles].entries()) {
+      style.textContent = frameStyles[index]?.textContent ?? "";
+    }
     const pageMedia: PaginationPageMedia = Object.freeze({
       rules: compiledPageMedia.rules,
       host: settings.page,
       warnings: pageMediaWarnings,
     });
     const semanticSnapshot = createPageSemanticSnapshot({
-      html: sourceFlow.innerHTML,
+      html: semanticSourceFlow.innerHTML,
       css: compiledPageMedia.css,
       baseUrl: source.baseUrl,
       assets: assets?.semanticAssets ?? Object.freeze([]),
