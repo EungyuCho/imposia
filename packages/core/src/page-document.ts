@@ -65,24 +65,28 @@ export function mountPageDocument(
           settings,
           controller.signal,
         );
-        const resourceFinishedAt = performance.now();
-        const paginationStartedAt = performance.now();
+        const commitStartedAt = performance.now();
         let committed = false;
         try {
           if (controller.signal.aborted || destroyed || id !== operationId) throw abortError();
-          settings.onProgress?.({ completedPages: 1 });
-          if (controller.signal.aborted || destroyed || id !== operationId) throw abortError();
+          for (let index = 0; index < generation.pages.length; index += 1) {
+            settings.onProgress?.({ completedPages: index + 1 });
+            if (controller.signal.aborted || destroyed || id !== operationId) throw abortError();
+          }
           commitGeneration(frameDocument, generation.body, generation.css);
-          const bounds = generation.page.getBoundingClientRect();
-          const metadata = Object.freeze({
-            number: 1 as const,
-            side: "right" as const,
-            blank: false,
-            widthCssPx: bounds.width,
-            heightCssPx: bounds.height,
-            bodyText: bodyText(generation.flow),
-          });
-          const pages = Object.freeze([metadata]);
+          const pages = Object.freeze(
+            generation.pages.map(({ page, flow }, index) => {
+              const bounds = page.getBoundingClientRect();
+              return Object.freeze({
+                number: index + 1,
+                side: index % 2 === 0 ? ("right" as const) : ("left" as const),
+                blank: false,
+                widthCssPx: bounds.width,
+                heightCssPx: bounds.height,
+                bodyText: bodyText(flow),
+              });
+            }),
+          );
           const document: PageDocument = Object.freeze({
             iframe,
             generation: (current?.generation ?? 0) + 1,
@@ -91,8 +95,8 @@ export function mountPageDocument(
             warnings: generation.warnings,
             timings: Object.freeze({
               totalMs: performance.now() - startedAt,
-              resourceMs: resourceFinishedAt - startedAt,
-              paginationMs: performance.now() - paginationStartedAt,
+              resourceMs: generation.timings.resourceMs,
+              paginationMs: generation.timings.paginationMs + performance.now() - commitStartedAt,
             }),
           });
           const oldBlobUrls = activeBlobUrls;
