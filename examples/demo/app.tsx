@@ -2,13 +2,15 @@ import {
   type ImposiaDocumentState,
   ImposiaPageViewer,
   type PageDocument,
+  type PageDocumentOptions,
   type PageExtension,
 } from "@imposia/react";
 import { useId, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 
-type SampleId = "editorial" | "brief" | "hangul";
+type SampleId = "editorial" | "brief" | "hangul" | "publishing";
 type CodeMode = "react" | "core";
+type ExportStatus = "idle" | "exporting" | "success" | "error";
 
 type DemoSample = Readonly<{
   id: SampleId;
@@ -16,6 +18,7 @@ type DemoSample = Readonly<{
   title: string;
   summary: string;
   html: string;
+  documentOptions?: Pick<PageDocumentOptions, "css" | "page" | "experimental">;
 }>;
 
 const documentStyle = `
@@ -74,6 +77,134 @@ const documentStyle = `
   [lang="ko"] h1, [lang="ko"] h2 { word-break: keep-all; letter-spacing: -0.055em; }
   [lang="ko"] p { word-break: keep-all; }
 `;
+
+const publishingDocumentCss = `
+  :root {
+    color: #18201d;
+    background: #f7f1e5;
+    font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+  }
+  body { color: #18201d; background: #f7f1e5; }
+  article { font-size: 13px; line-height: 1.45; }
+  h1, h2, h3 { margin: 0; font-weight: 500; letter-spacing: -0.04em; }
+  h1 { font-size: 38px; line-height: 0.98; }
+  h2 { margin-top: 28px; font-size: 24px; line-height: 1.05; }
+  h3 { margin-top: 22px; font-size: 17px; }
+  p { max-width: 72ch; margin: 12px 0 0; }
+  .publishing-kicker {
+    margin: 0 0 16px;
+    color: #c9532c;
+    font: 800 8px/1.3 "SFMono-Regular", Consolas, monospace;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+  }
+  .publishing-deck { max-width: 64ch; margin-top: 14px; font-size: 16px; }
+  .publishing-support {
+    display: grid;
+    gap: 4px;
+    margin-top: 18px;
+    padding: 10px 12px;
+    border-left: 2px solid #c9532c;
+    background: #ebe2d2;
+    font: 9px/1.55 "SFMono-Regular", Consolas, monospace;
+  }
+  .publishing-support strong { color: #c9532c; }
+  .publishing-table {
+    width: 100%;
+    margin-top: 18px;
+    border-collapse: collapse;
+    font: 10px/1.35 "SFMono-Regular", Consolas, monospace;
+  }
+  .publishing-table th,
+  .publishing-table td {
+    padding: 7px 9px;
+    border-top: 1px solid #cfc5b4;
+    text-align: left;
+    vertical-align: top;
+  }
+  .publishing-table th {
+    color: #66706c;
+    font-size: 8px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+  .publishing-table thead { display: table-header-group; }
+  .publishing-table tr { break-inside: avoid; }
+  .publishing-reference { color: #c9532c; font-weight: 700; }
+  .publishing-reference::after { margin-left: 4px; color: #66706c; }
+  .publishing-reference-text::before { margin-right: 4px; color: #66706c; }
+  .publishing-footnote { float: footnote; font-size: 9px; }
+  .publishing-float {
+    float: top;
+    float-reference: page;
+    margin: 18px 0;
+    padding: 10px 12px;
+    border: 1px solid #cfc5b4;
+    background: #fffaf0;
+  }
+  @page {
+    size: A4 landscape;
+    margin: 15mm 18mm 20mm 22mm;
+    @top-center { content: string(running-head, last) " · " counter(page) "/" counter(pages); }
+  }
+  @page :first {
+    @top-left { content: "IMPOSIA / PUBLISHING LAB"; }
+    @bottom-right { content: "STABLE SURFACE"; }
+  }
+  @page :left {
+    @bottom-left { content: "LEFT / " counter(page); }
+  }
+  @page :right {
+    @bottom-right { content: "RIGHT / " counter(page); }
+  }
+  h1, h2, h3 { string-set: running-head content; }
+  .publishing-reference::after { content: target-counter(attr(href), page); }
+  .publishing-reference-text::before { content: target-text(attr(href), content); }
+`;
+
+const publishingRows = [
+  ["01", "Geometry", "A4 landscape", "Stable / four authored margins"],
+  ["02", "Page rules", "first · left · right", "Stable / margin-box furniture"],
+  ["03", "References", "target-counter", "Stable / local fragment"],
+  ["04", "References", "target-text", "Stable / local fragment"],
+  ["05", "Tables", "thead continuation", "Stable / repeated heading"],
+  ["06", "Strings", "running-head", "Stable / named string"],
+  ["07", "Assets", "resolver boundary", "Stable / browser-only"],
+  ["08", "Flow", "ordered source", "Stable / canonical DOM"],
+  ["09", "Warnings", "explicit recovery", "Constrained / visible"],
+  ["10", "Footnotes", "float: footnote", "Experimental / opt-in"],
+  ["11", "Page floats", "float-reference: page", "Experimental / bounded"],
+  ["12", "Pagination", "Chromium reference", "Constrained / layout engine"],
+  ["13", "Printing", "same iframe", "Stable / no duplicate"],
+  ["14", "Export", "EPUB 3", "Stable / deterministic"],
+  ["15", "Lifecycle", "abort + cleanup", "Stable / controller-owned"],
+  ["16", "Typography", "authored CSS", "Stable / isolated"],
+  ["17", "Progress", "state callbacks", "Stable / React-first"],
+  ["18", "Surface", "one document", "Stable / portable"],
+  ["19", "Geometry", "content box", "Stable / measured"],
+  ["20", "Page rules", "top-center", "Stable / margin box"],
+  ["21", "References", "fragment target", "Stable / local only"],
+  ["22", "Tables", "row grouping", "Stable / continuation"],
+  ["23", "Strings", "first / start / last", "Stable / running"],
+  ["24", "Assets", "blocked remote", "Constrained / explicit"],
+  ["25", "Flow", "widow recovery", "Constrained / warning"],
+  ["26", "Warnings", "source identity", "Constrained / inspectable"],
+  ["27", "Footnotes", "bounded area", "Experimental / fallback"],
+  ["28", "Page floats", "top placement", "Experimental / fallback"],
+  ["29", "Pagination", "page sides", "Stable / deterministic"],
+  ["30", "Printing", "canonical frame", "Stable / shared"],
+  ["31", "Export", "mimetype first", "Stable / EPUB ZIP"],
+  ["32", "Lifecycle", "release cleanup", "Stable / owned"],
+  ["33", "Typography", "CSS isolation", "Stable / iframe"],
+  ["34", "Progress", "ready state", "Stable / observable"],
+  ["35", "Surface", "responsive shell", "Stable / compact"],
+  ["36", "Contract", "evidence cue", "Stable / reviewed"],
+]
+  .map(
+    ([index, topic, value, posture]) =>
+      `<tr><td>${index}</td><td>${topic}</td><td>${value}</td><td>${posture}</td></tr>`,
+  )
+  .join("");
 
 const samples: Record<SampleId, DemoSample> = {
   editorial: {
@@ -162,6 +293,49 @@ const samples: Record<SampleId, DemoSample> = {
       </section>
     `,
   },
+  publishing: {
+    id: "publishing",
+    index: "04",
+    title: "Publishing contract",
+    summary:
+      "A4 landscape rules, local references, repeated table heads, and opt-in publishing features.",
+    html: `
+      <article class="publishing-document">
+        <p class="publishing-kicker">Imposia / publishing lab / contract specimen</p>
+        <h1>Pages that carry their own evidence</h1>
+        <p class="publishing-deck">A deliberately dense document surface for checking geometry, running furniture, safe local references, and bounded experimental placement.</p>
+        <div class="publishing-support">
+          <span><strong>Stable</strong> A4 landscape geometry, authored page selectors, named strings, and deterministic EPUB export.</span>
+          <span><strong>Constrained</strong> local target references, table continuation, and Chromium-reference pagination.</span>
+          <span><strong>Experimental</strong> footnote and page-float markers are opt-in and remain bounded.</span>
+        </div>
+        <aside class="publishing-float">
+          <strong>Page-float probe.</strong> This bounded callout opts into page-referenced top placement.
+        </aside>
+        <h2 id="geometry">Geometry is an authored contract</h2>
+        <p>The host options pin A4 landscape with four named margins. The page rules below add first, left, and right furniture while the running head follows the latest named section.</p>
+        <p>Read the <a class="publishing-reference" href="#table-title">table page</a> and <a class="publishing-reference-text" href="#table-title">table heading</a> through safe local fragments.</p>
+        <h2 id="table-title">A repeated table head</h2>
+        <table class="publishing-table">
+          <thead><tr><th>Index</th><th>Concern</th><th>Authored signal</th><th>Support posture</th></tr></thead>
+          <tbody>${publishingRows}</tbody>
+        </table>
+        <h2>Placement stays explicit</h2>
+        <p>One note is anchored to a local footnote target: <span id="rights-anchor" data-footnote-anchor="rights">rights and recovery remain visible</span>.</p>
+        <aside class="publishing-footnote" data-footnote="rights">Footnote probe: this note is experimental and falls back to normal flow when the bounded area cannot fit.</aside>
+        <p class="publishing-support"><strong>Manual QA cue</strong> Check the Sheet metric, the top and bottom furniture, repeated table headings, the two local references, and the explicit support labels above.</p>
+      </article>
+    `,
+    documentOptions: {
+      css: [publishingDocumentCss],
+      page: {
+        size: "A4",
+        orientation: "landscape",
+        margin: { top: "15mm", right: "18mm", bottom: "20mm", left: "22mm" },
+      },
+      experimental: { footnotes: true, pageFloats: true },
+    },
+  },
 };
 
 const runningHeadExtension: PageExtension = {
@@ -202,21 +376,35 @@ function statusLabel(state: ImposiaDocumentState["status"]): string {
   return "Idle";
 }
 
+function exportStatusLabel(status: ExportStatus, message: string | undefined): string {
+  if (status === "exporting") return "Exporting…";
+  if (status === "success") return "EPUB downloaded";
+  if (status === "error") return message ?? "Export failed";
+  return "Awaiting document";
+}
+
 function App() {
   const sampleHeadingId = useId();
   const runtimeHeadingId = useId();
   const codeHeadingId = useId();
+  const exportHeadingId = useId();
   const [sampleId, setSampleId] = useState<SampleId>("editorial");
   const [extensionsEnabled, setExtensionsEnabled] = useState(true);
   const [codeMode, setCodeMode] = useState<CodeMode>("react");
   const [state, setState] = useState<ImposiaDocumentState>({ status: "idle" });
   const [pageDocument, setPageDocument] = useState<PageDocument>();
   const [error, setError] = useState<string>();
+  const [exportStatus, setExportStatus] = useState<ExportStatus>("idle");
+  const [exportMessage, setExportMessage] = useState<string>();
   const sample = samples[sampleId];
   const documentOptions = useMemo(
-    () => ({ extensions: extensionsEnabled ? [runningHeadExtension] : [] }),
-    [extensionsEnabled],
+    () => ({
+      ...sample.documentOptions,
+      extensions: extensionsEnabled ? [runningHeadExtension] : [],
+    }),
+    [extensionsEnabled, sample],
   );
+  const viewerKey = `${sample.id === "publishing" ? "publishing" : "standard"}-${extensionsEnabled ? "extensions-on" : "extensions-off"}`;
 
   const handleReady = (nextDocument: PageDocument) => {
     setPageDocument(nextDocument);
@@ -225,6 +413,68 @@ function App() {
 
   const handleError = (nextError: unknown) => {
     setError(nextError instanceof Error ? nextError.message : String(nextError));
+  };
+
+  const handleStateChange = (nextState: ImposiaDocumentState) => {
+    setState(nextState);
+    if (nextState.status === "loading") {
+      setExportStatus("idle");
+      setExportMessage(undefined);
+    }
+  };
+
+  const markDocumentLoading = () => {
+    setState(
+      pageDocument === undefined
+        ? { status: "loading" }
+        : { status: "loading", document: pageDocument },
+    );
+    setExportStatus("idle");
+    setExportMessage(undefined);
+  };
+
+  const handleSampleChange = (nextSampleId: SampleId) => {
+    if (nextSampleId === sampleId) return;
+    markDocumentLoading();
+    setSampleId(nextSampleId);
+  };
+
+  const handleExport = async () => {
+    const nextDocument = pageDocument;
+    if (nextDocument === undefined || state.status !== "ready") return;
+
+    setExportStatus("exporting");
+    setExportMessage(undefined);
+    try {
+      const blob = await nextDocument.exportEpub({
+        metadata: {
+          title: sample.title,
+          language: sample.id === "hangul" ? "ko" : "en",
+          identifier: `urn:imposia:demo:${sample.id}`,
+          modified: "2026-01-01T00:00:00Z",
+        },
+      });
+      const objectUrl = URL.createObjectURL(blob);
+      try {
+        const anchor = document.createElement("a");
+        try {
+          anchor.href = objectUrl;
+          anchor.download = `imposia-${sample.id}.epub`;
+          anchor.hidden = true;
+          document.body.append(anchor);
+          anchor.click();
+        } finally {
+          anchor.remove();
+        }
+      } finally {
+        window.setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
+      }
+      setExportStatus("success");
+    } catch (nextError: unknown) {
+      const message = nextError instanceof Error ? nextError.message : String(nextError);
+      setExportStatus("error");
+      setExportMessage(`Export failed: ${message}`);
+    }
   };
 
   return (
@@ -252,7 +502,7 @@ function App() {
         <section className="demo-control-section" aria-labelledby={sampleHeadingId}>
           <div className="demo-section-heading">
             <h2 id={sampleHeadingId}>Document specimen</h2>
-            <span>03 sources</span>
+            <span>04 sources</span>
           </div>
           <div className="demo-sample-list">
             {Object.values(samples).map((candidate) => (
@@ -262,7 +512,7 @@ function App() {
                 data-sample-id={candidate.id}
                 aria-pressed={sampleId === candidate.id}
                 key={candidate.id}
-                onClick={() => setSampleId(candidate.id)}
+                onClick={() => handleSampleChange(candidate.id)}
               >
                 <span>{candidate.index}</span>
                 <strong>{candidate.title}</strong>
@@ -285,10 +535,48 @@ function App() {
             <input
               type="checkbox"
               checked={extensionsEnabled}
-              onChange={(event) => setExtensionsEnabled(event.currentTarget.checked)}
+              onChange={(event) => {
+                markDocumentLoading();
+                setExtensionsEnabled(event.currentTarget.checked);
+              }}
             />
             <i aria-hidden="true"></i>
           </label>
+        </section>
+
+        <section
+          className="demo-control-section demo-export-section"
+          aria-labelledby={exportHeadingId}
+        >
+          <div className="demo-section-heading">
+            <h2 id={exportHeadingId}>Portable output</h2>
+            <span>EPUB 3</span>
+          </div>
+          <div className="demo-export-action">
+            <div className="demo-export-copy">
+              <strong>Download the current document</strong>
+              <small>Deterministic metadata / browser-only</small>
+            </div>
+            <button
+              type="button"
+              className="demo-export-button"
+              onClick={() => void handleExport()}
+              disabled={
+                state.status !== "ready" ||
+                pageDocument === undefined ||
+                exportStatus === "exporting"
+              }
+            >
+              Download EPUB
+            </button>
+          </div>
+          <output
+            className={`demo-export-status demo-export-status-${exportStatus}`}
+            data-testid="demo-export-status"
+            aria-live="polite"
+          >
+            {exportStatusLabel(exportStatus, exportMessage)}
+          </output>
         </section>
 
         <section className="demo-code" aria-labelledby={codeHeadingId}>
@@ -343,6 +631,14 @@ function App() {
                   : `${Math.round(pageDocument.timings.totalMs)} ms`}
               </dd>
             </div>
+            <div>
+              <dt>Sheet</dt>
+              <dd data-testid="metric-sheet">
+                {pageDocument?.pages[0]?.geometry === undefined
+                  ? "—"
+                  : `${Math.round(pageDocument.pages[0].geometry.sheetWidthCssPx)} × ${Math.round(pageDocument.pages[0].geometry.sheetHeightCssPx)} px`}
+              </dd>
+            </div>
           </dl>
         </header>
 
@@ -353,14 +649,14 @@ function App() {
           </div>
           <div className="demo-preview-surface" data-testid="demo-preview-surface">
             <ImposiaPageViewer
-              key={extensionsEnabled ? "extensions-on" : "extensions-off"}
+              key={viewerKey}
               source={{ html: sample.html }}
               documentOptions={documentOptions}
               viewerOptions={{ mode: "continuous", zoom: 0.9 }}
               className="demo-viewer"
               onReady={handleReady}
               onError={handleError}
-              onStateChange={setState}
+              onStateChange={handleStateChange}
             />
           </div>
           {error === undefined ? null : (
