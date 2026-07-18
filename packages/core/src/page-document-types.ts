@@ -65,12 +65,12 @@ export interface PageExtension {
   transform?(
     input: PageExtensionTransformInput,
     context: PageExtensionContext,
-  ): PageExtensionTransformOutput | void | Promise<PageExtensionTransformOutput | void>;
+  ): PageExtensionTransformOutput | undefined | Promise<PageExtensionTransformOutput | undefined>;
   allowAsset?(request: PageExtensionAssetRequest, context: PageExtensionContext): boolean;
   decoratePage?(
     page: PageExtensionPage,
     context: PageExtensionContext,
-  ): PageExtensionDecoration | void;
+  ): PageExtensionDecoration | undefined;
 }
 
 export interface PageLimits {

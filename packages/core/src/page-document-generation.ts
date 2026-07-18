@@ -6,11 +6,11 @@ import {
   applyExtensionTransforms,
   createExtensionWarningCollector,
   decorateExtensionPage,
-  snapshotExtensions,
-  validateExtensions,
   type ExtensionWarningCollector,
   type PageExtensionSnapshots,
+  snapshotExtensions,
   type ValidatedPageExtension,
+  validateExtensions,
 } from "./page-document-extensions.js";
 import { abortError, FRAME_STYLE } from "./page-document-frame.js";
 import {
@@ -205,7 +205,8 @@ function decoratePage(
   const footer = page.page.querySelector<HTMLElement>("[data-imposia-page-footer]");
   if (header === null || footer === null) throw new Error("Page decorations are unavailable.");
   let resourceBlocked = appendDecoration(frameDocument, header, settings.headerTemplate);
-  resourceBlocked = appendDecoration(frameDocument, footer, settings.footerTemplate) || resourceBlocked;
+  resourceBlocked =
+    appendDecoration(frameDocument, footer, settings.footerTemplate) || resourceBlocked;
   const decorations = decorateExtensionPage(
     extensions,
     {
@@ -220,12 +221,14 @@ function decoratePage(
     if (decoration.headerHtml !== undefined) {
       const prepared = prepareDecoration(decoration.headerHtml);
       decorationWarnings.push(...prepared.warnings);
-      resourceBlocked = appendDecoration(frameDocument, header, prepared.html, true) || resourceBlocked;
+      resourceBlocked =
+        appendDecoration(frameDocument, header, prepared.html, true) || resourceBlocked;
     }
     if (decoration.footerHtml !== undefined) {
       const prepared = prepareDecoration(decoration.footerHtml);
       decorationWarnings.push(...prepared.warnings);
-      resourceBlocked = appendDecoration(frameDocument, footer, prepared.html, true) || resourceBlocked;
+      resourceBlocked =
+        appendDecoration(frameDocument, footer, prepared.html, true) || resourceBlocked;
     }
   }
   return resourceBlocked;

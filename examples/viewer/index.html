@@ -3,12 +3,15 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Imposia Viewer</title>
+    <title>Imposia Client Viewer</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22><rect width=%22100%25%22 height=%22100%25%22 fill=%22%23ef6a3b%22/></svg>">
     <link rel="stylesheet" href="/packages/viewer/src/styles.css">
     <script type="importmap">
       {
         "imports": {
+          "@imposia/core": "/packages/core/dist/index.js",
+          "@imposia/viewer": "/packages/viewer/dist/index.js",
+          "@imposia/client": "/packages/client/dist/index.js",
           "pdfjs-dist": "/node_modules/pdfjs-dist/build/pdf.mjs"
         }
       }
@@ -17,15 +20,30 @@
   <body>
     <main id="viewer" aria-label="Document viewer"></main>
     <script type="module">
-      import { mountViewer } from "/packages/viewer/dist/index.js";
+      import { mountPageDocument, mountPageViewer } from "@imposia/client";
 
-      const params = new URLSearchParams(location.search);
-      const source = params.get("pdf") ?? "/output/pdf/imposia-example.pdf";
-      const delay = params.get("delay");
-      const url = delay === null ? source : `${source}?delay=${encodeURIComponent(delay)}`;
-      globalThis.imposiaViewer = mountViewer(document.querySelector("#viewer"), url, {
-        workerSrc: "/node_modules/pdfjs-dist/build/pdf.worker.min.mjs",
+      const host = document.querySelector("#viewer");
+      const controller = mountPageDocument(host, {
+        html: `
+          <template data-page-header>Imposia client example · {{pageNumber}} / {{totalPages}}</template>
+          <article>
+            <h1>Browser-only paginated document</h1>
+            <p>This page is produced by Core and presented by Viewer without a server renderer.</p>
+          </article>
+          <section style="break-before: page">
+            <h2>Second page</h2>
+            <p>The canonical iframe is shared by pagination, preview, and browser print.</p>
+          </section>
+        `,
       });
+      const pageDocument = await controller.ready;
+      const viewer = mountPageViewer(host, pageDocument);
+      globalThis.imposiaViewer = viewer;
+      globalThis.imposiaDocumentController = controller;
+      addEventListener("pagehide", () => {
+        viewer.destroy();
+        void controller.destroy();
+      }, { once: true });
     </script>
   </body>
 </html>
