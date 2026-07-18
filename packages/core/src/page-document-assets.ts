@@ -13,6 +13,7 @@ import {
   unsafeAuthoredUrl,
 } from "./page-document-assets-resolver.js";
 import { abortError } from "./page-document-frame.js";
+import type { ResolvedSemanticAsset } from "./page-document-semantic.js";
 import type {
   AssetResolver,
   PageExtensionAssetRequest,
@@ -25,6 +26,7 @@ export type ResolvedPageAssets = {
   readonly blobUrls: readonly string[];
   readonly resourceBlocked: boolean;
   readonly sourceIdentity: string | undefined;
+  readonly semanticAssets: readonly ResolvedSemanticAsset[];
   revoke(): void;
 };
 
@@ -76,6 +78,7 @@ export async function resolvePageAssets(
   else signal.addEventListener("abort", abortOperation, { once: true });
   const scope = createScope();
   let assetBytes = 0;
+  const semanticAssets: ResolvedSemanticAsset[] = [];
   let identity = 0;
   const makeRequest = (
     kind: AssetRequest["kind"],
@@ -154,6 +157,19 @@ export async function resolvePageAssets(
         const outcome = outcomes[index];
         if (outcome === undefined) continue;
         if (outcome.status === "blocked") markBlocked(request);
+        else {
+          semanticAssets.push(
+            Object.freeze({
+              kind: request.kind,
+              authoredUrl: request.url,
+              sourceIdentity: request.sourceIdentity,
+              mimeType: outcome.mimeType,
+              bytes: new Uint8Array(outcome.bytes),
+              ...(outcome.status === "asset" ? { blobUrl: outcome.blobUrl } : {}),
+              ...(outcome.resolvedUrl === undefined ? {} : { resolvedUrl: outcome.resolvedUrl }),
+            }),
+          );
+        }
         next.push(...request.apply(outcome));
       }
       queue = next;
@@ -165,6 +181,7 @@ export async function resolvePageAssets(
       blobUrls: Object.freeze([...scope.urls]),
       resourceBlocked: blocked,
       sourceIdentity: blockedIdentity,
+      semanticAssets: Object.freeze(semanticAssets),
       revoke: () => scope.revoke(),
     };
   } catch (error: unknown) {

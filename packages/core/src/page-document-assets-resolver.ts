@@ -5,8 +5,20 @@ import type { AssetResolution, AssetResolver } from "./page-document-types.js";
 
 export type AssetOutcome =
   | { readonly status: "blocked" }
-  | { readonly status: "asset"; readonly blobUrl: string }
-  | { readonly status: "stylesheet"; readonly root: Root; readonly resolvedUrl?: string };
+  | {
+      readonly status: "asset";
+      readonly blobUrl: string;
+      readonly bytes: Uint8Array;
+      readonly mimeType: string;
+      readonly resolvedUrl?: string;
+    }
+  | {
+      readonly status: "stylesheet";
+      readonly root: Root;
+      readonly bytes: Uint8Array;
+      readonly mimeType: string;
+      readonly resolvedUrl?: string;
+    };
 
 export type BlobScope = {
   readonly urls: Set<string>;
@@ -199,6 +211,8 @@ async function resolveOneWork(
       return {
         status: "stylesheet",
         root,
+        bytes: copied,
+        mimeType: mimeType(resolution.mimeType),
         ...(typeof resolution.resolvedUrl === "string"
           ? { resolvedUrl: resolution.resolvedUrl }
           : {}),
@@ -226,7 +240,13 @@ async function resolveOneWork(
     if (scope.urls.delete(blobUrl)) URL.revokeObjectURL(blobUrl);
     throw abortError();
   }
-  return { status: "asset", blobUrl };
+  return {
+    status: "asset",
+    blobUrl,
+    bytes: copied,
+    mimeType: mimeType(resolution.mimeType),
+    ...(typeof resolution.resolvedUrl === "string" ? { resolvedUrl: resolution.resolvedUrl } : {}),
+  };
 }
 
 export function resolveOne(
