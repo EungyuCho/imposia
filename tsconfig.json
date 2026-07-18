@@ -3,8 +3,7 @@
   "references": [
     { "path": "packages/core" },
     { "path": "packages/client" },
-    { "path": "packages/node" },
-    { "path": "packages/viewer" },
-    { "path": "packages/cli" }
+    { "path": "packages/react" },
+    { "path": "packages/viewer" }
   ]
 }

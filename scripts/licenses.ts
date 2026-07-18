@@ -113,7 +113,7 @@ async function main(): Promise<void> {
   }
 
   const packageManifests: PublishableManifest[] = await Promise.all(
-    ["packages/cli", "packages/core", "packages/node", "packages/viewer"].map(async (file) => {
+    ["packages/client", "packages/core", "packages/react", "packages/viewer"].map(async (file) => {
       const directory = path.resolve(file);
       const manifestPath = path.join(directory, "package.json");
       const value = JSON.parse(await readFile(manifestPath, "utf8"));

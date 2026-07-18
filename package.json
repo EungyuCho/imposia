@@ -18,19 +18,10 @@
     "test:unit": "vitest run tests/core",
     "test:integration": "vitest run tests/integration",
     "test:e2e": "playwright test",
-    "test:pdf": "node --import tsx scripts/test-pdf-regression.ts",
-    "test:pdf:update": "node --import tsx scripts/test-pdf-regression.ts --update",
-    "test:parity": "node --import tsx scripts/compare-renderer-parity.ts",
-    "test:visual": "node --import tsx scripts/test-visual-regression.ts",
-    "test:visual:update": "node --import tsx scripts/test-visual-regression.ts --update",
-    "benchmark": "node --import tsx scripts/benchmark.ts",
-    "benchmark:update": "node --import tsx scripts/benchmark.ts --update",
+    "test:parity": "playwright test tests/e2e/browser-core-fragmentation.spec.ts tests/e2e/browser-core-breaks.spec.ts",
     "licenses": "node --import tsx scripts/licenses.ts",
-    "audit:requirements": "node --import tsx scripts/audit-requirements.ts",
     "verify": "node --import tsx scripts/capture-check.ts",
-    "example:pdf": "pnpm cli -- render examples/book.html --output output/pdf/imposia-example.pdf --json",
-    "cli": "node --import tsx packages/cli/src/index.ts",
-    "check": "pnpm preflight && pnpm typecheck && pnpm lint && pnpm test && pnpm build && pnpm example:pdf && pnpm test:pdf && pnpm test:visual && pnpm test:e2e && pnpm run licenses && pnpm audit:requirements"
+    "check": "pnpm preflight && pnpm typecheck && pnpm lint && pnpm test && pnpm build && pnpm test:e2e && pnpm run licenses"
   },
   "devDependencies": {
     "@biomejs/biome": "2.2.7",
