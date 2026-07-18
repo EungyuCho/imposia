@@ -1,7 +1,15 @@
-import { ImposiaPageViewer, type ImposiaPageViewerProps } from "./page-viewer.js";
+import { forwardRef } from "react";
+import {
+  ImposiaPageViewer,
+  type ImposiaPageViewerHandle,
+  type ImposiaPageViewerProps,
+} from "./page-viewer.js";
 
 export type ImposiaDocumentProps = ImposiaPageViewerProps;
+export type ImposiaDocumentHandle = ImposiaPageViewerHandle;
 
-export function ImposiaDocument(props: ImposiaDocumentProps) {
-  return <ImposiaPageViewer {...props} />;
-}
+export const ImposiaDocument = forwardRef<ImposiaDocumentHandle, ImposiaDocumentProps>(
+  function ImposiaDocument(props, ref) {
+    return <ImposiaPageViewer {...props} ref={ref} />;
+  },
+);
