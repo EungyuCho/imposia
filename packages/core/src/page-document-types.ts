@@ -18,6 +18,61 @@ export type AssetResolver = (request: {
   signal: AbortSignal;
 }) => Promise<AssetResolution>;
 
+export type PageExtensionWarningCode = `EXTENSION_${string}`;
+
+export interface PageExtensionWarning {
+  readonly code: PageExtensionWarningCode;
+  readonly message: string;
+}
+
+export interface PageExtensionTransformInput {
+  readonly html: string;
+  readonly css: readonly string[];
+  readonly baseUrl: string | undefined;
+}
+
+export interface PageExtensionTransformOutput {
+  readonly html?: string;
+  readonly css?: readonly string[];
+}
+
+export interface PageExtensionAssetRequest {
+  readonly url: string;
+  readonly kind: "font" | "image" | "media" | "stylesheet";
+  readonly baseUrl: string | undefined;
+  readonly depth: number;
+  readonly sourceIdentity: string;
+}
+
+export interface PageExtensionPage {
+  readonly number: number;
+  readonly side: "left" | "right";
+  readonly blank: boolean;
+}
+
+export interface PageExtensionDecoration {
+  readonly headerHtml?: string;
+  readonly footerHtml?: string;
+}
+
+export interface PageExtensionContext {
+  readonly signal: AbortSignal;
+  warn(warning: PageExtensionWarning): void;
+}
+
+export interface PageExtension {
+  readonly name: string;
+  transform?(
+    input: PageExtensionTransformInput,
+    context: PageExtensionContext,
+  ): PageExtensionTransformOutput | void | Promise<PageExtensionTransformOutput | void>;
+  allowAsset?(request: PageExtensionAssetRequest, context: PageExtensionContext): boolean;
+  decoratePage?(
+    page: PageExtensionPage,
+    context: PageExtensionContext,
+  ): PageExtensionDecoration | void;
+}
+
 export interface PageLimits {
   maxInputBytes?: number;
   maxNodes?: number;
@@ -50,16 +105,19 @@ export interface PageDocumentOptions {
   headerTemplate?: string;
   footerTemplate?: string;
   decorateBlankPages?: boolean;
+  extensions?: readonly PageExtension[];
   signal?: AbortSignal;
   onProgress?: (progress: { completedPages: number }) => void;
 }
 
-export type PageWarningCode =
+export type CorePageWarningCode =
   | "PAGE_OVERFLOW"
   | "RESOURCE_BLOCKED"
   | "UNSUPPORTED_LAYOUT"
   | "UNSUPPORTED_DECORATION_TOKEN"
   | "AVOID_RELAXED";
+
+export type PageWarningCode = CorePageWarningCode | PageExtensionWarningCode;
 
 export interface PageMetadata {
   readonly number: number;
@@ -70,11 +128,20 @@ export interface PageMetadata {
   readonly bodyText: readonly string[];
 }
 
-export interface PageWarning {
-  readonly code: PageWarningCode;
+export interface CorePageWarning {
+  readonly code: CorePageWarningCode;
   readonly message: string;
   readonly sourceIdentity: string | undefined;
 }
+
+export interface ExtensionPageWarning {
+  readonly code: PageExtensionWarningCode;
+  readonly message: string;
+  readonly sourceIdentity: undefined;
+  readonly extension: string;
+}
+
+export type PageWarning = CorePageWarning | ExtensionPageWarning;
 
 export interface PageTimings {
   readonly totalMs: number;

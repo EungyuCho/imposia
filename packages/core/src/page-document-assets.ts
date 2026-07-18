@@ -13,7 +13,11 @@ import {
   unsafeAuthoredUrl,
 } from "./page-document-assets-resolver.js";
 import { abortError } from "./page-document-frame.js";
-import type { AssetResolver, PageLimits } from "./page-document-types.js";
+import type {
+  AssetResolver,
+  PageExtensionAssetRequest,
+  PageLimits,
+} from "./page-document-types.js";
 
 export type ResolvedPageAssets = {
   readonly html: string;
@@ -63,6 +67,7 @@ export async function resolvePageAssets(
   resolver: AssetResolver,
   limits: PageLimits | undefined,
   signal: AbortSignal,
+  allowAsset?: (request: PageExtensionAssetRequest) => boolean,
 ): Promise<ResolvedPageAssets> {
   const parsed = new DOMParser().parseFromString(html, "text/html");
   const operation = new AbortController();
@@ -117,6 +122,16 @@ export async function resolvePageAssets(
                 return Promise.reject(referenceError());
               if (limits?.maxAssetDepth !== undefined && request.depth >= limits.maxAssetDepth)
                 return Promise.reject(depthError());
+              const extensionRequest = Object.freeze({
+                url: request.url,
+                kind: request.kind,
+                baseUrl: request.baseUrl,
+                depth: request.depth,
+                sourceIdentity: request.sourceIdentity,
+              });
+              if (allowAsset !== undefined && !allowAsset(extensionRequest)) {
+                return Promise.resolve(markBlocked(request));
+              }
               if (blockedScheme(request.url)) return Promise.resolve(markBlocked(request));
               return resolveOne(request, resolver, operation.signal, scope, (bytes) => {
                 if (

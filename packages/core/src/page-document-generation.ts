@@ -1,6 +1,17 @@
-import { prepareDocument } from "./document.js";
+import { prepareDecoration, prepareDocument } from "./document.js";
 import { ImposiaError } from "./errors.js";
 import { type ResolvedPageAssets, resolvePageAssets } from "./page-document-assets.js";
+import {
+  allowExtensionAsset,
+  applyExtensionTransforms,
+  createExtensionWarningCollector,
+  decorateExtensionPage,
+  snapshotExtensions,
+  validateExtensions,
+  type ExtensionWarningCollector,
+  type PageExtensionSnapshots,
+  type ValidatedPageExtension,
+} from "./page-document-extensions.js";
 import { abortError, FRAME_STYLE } from "./page-document-frame.js";
 import {
   appendDecoration,
@@ -23,6 +34,7 @@ import type {
   PageWarning,
 } from "./page-document-types.js";
 import { DEFAULT_PAGE_LIMITS } from "./page-document-types.js";
+import type { DocumentWarning } from "./warnings.js";
 
 export interface PageGenerationSettings {
   css: readonly string[];
@@ -30,6 +42,7 @@ export interface PageGenerationSettings {
   headerTemplate?: string;
   footerTemplate?: string;
   decorateBlankPages: boolean;
+  extensions: PageExtensionSnapshots;
   page?: { size?: "A4"; margin?: "20mm" };
   limits: EffectivePageLimits;
   onProgress?: (progress: { completedPages: number }) => void;
@@ -53,6 +66,7 @@ export interface BuiltPage {
 
 interface PageParts extends BuiltPage {
   content: HTMLElement;
+  decorated: boolean;
 }
 
 type PageBreak = "auto" | "page" | "left" | "right";
@@ -121,6 +135,7 @@ export function snapshotSettings(options: PageDocumentOptions): PageGenerationSe
     ...(options.headerTemplate === undefined ? {} : { headerTemplate: options.headerTemplate }),
     ...(options.footerTemplate === undefined ? {} : { footerTemplate: options.footerTemplate }),
     decorateBlankPages: options.decorateBlankPages ?? true,
+    extensions: snapshotExtensions(options.extensions),
     ...(options.page === undefined
       ? {}
       : {
@@ -138,7 +153,7 @@ function createPage(
   frameDocument: Document,
   settings: PageGenerationSettings,
   pageNumber: number,
-): { page: PageParts; resourceBlocked: boolean } {
+): PageParts {
   const page = frameDocument.createElement("section");
   page.setAttribute("data-imposia-page", "");
   page.setAttribute("data-imposia-page-number", String(pageNumber));
@@ -160,23 +175,60 @@ function createPage(
   footer.setAttribute("data-imposia-page-footer", "");
   footer.style.gridRow = "3";
 
-  const headerResourceBlocked = appendDecoration(frameDocument, header, settings.headerTemplate);
-  const footerResourceBlocked = appendDecoration(frameDocument, footer, settings.footerTemplate);
   content.append(flow);
   page.append(content, header, footer);
-  return {
-    page: { page, flow, content, blank: false },
-    resourceBlocked: headerResourceBlocked || footerResourceBlocked,
-  };
+  return { page, flow, content, blank: false, decorated: false };
 }
 
 function setPageBlank(page: PageParts, blank: boolean, decorateBlankPages: boolean): void {
   page.blank = blank;
   page.page.setAttribute("data-imposia-blank", String(blank));
-  if (blank && !decorateBlankPages) {
+  if (blank && !decorateBlankPages && page.decorated) {
     page.page.querySelector("[data-imposia-page-header]")?.replaceChildren();
     page.page.querySelector("[data-imposia-page-footer]")?.replaceChildren();
   }
+}
+
+function decoratePage(
+  frameDocument: Document,
+  page: PageParts,
+  settings: PageGenerationSettings,
+  extensions: readonly ValidatedPageExtension[],
+  signal: AbortSignal,
+  warnings: ExtensionWarningCollector,
+  decorationWarnings: DocumentWarning[],
+): boolean {
+  if (page.decorated) return false;
+  page.decorated = true;
+  if (page.blank && !settings.decorateBlankPages) return false;
+  const header = page.page.querySelector<HTMLElement>("[data-imposia-page-header]");
+  const footer = page.page.querySelector<HTMLElement>("[data-imposia-page-footer]");
+  if (header === null || footer === null) throw new Error("Page decorations are unavailable.");
+  let resourceBlocked = appendDecoration(frameDocument, header, settings.headerTemplate);
+  resourceBlocked = appendDecoration(frameDocument, footer, settings.footerTemplate) || resourceBlocked;
+  const decorations = decorateExtensionPage(
+    extensions,
+    {
+      number: Number(page.page.getAttribute("data-imposia-page-number")),
+      side: pageSide(page),
+      blank: page.blank,
+    },
+    signal,
+    warnings,
+  );
+  for (const decoration of decorations) {
+    if (decoration.headerHtml !== undefined) {
+      const prepared = prepareDecoration(decoration.headerHtml);
+      decorationWarnings.push(...prepared.warnings);
+      resourceBlocked = appendDecoration(frameDocument, header, prepared.html, true) || resourceBlocked;
+    }
+    if (decoration.footerHtml !== undefined) {
+      const prepared = prepareDecoration(decoration.footerHtml);
+      decorationWarnings.push(...prepared.warnings);
+      resourceBlocked = appendDecoration(frameDocument, footer, prepared.html, true) || resourceBlocked;
+    }
+  }
+  return resourceBlocked;
 }
 
 function isNonFlowNode(node: Node): boolean {
@@ -259,12 +311,14 @@ function startPageForBreak(
   breakValue: PageBreak,
   nextPage: () => PageParts,
   decorateBlankPages: boolean,
+  decorateBlankPage: (page: PageParts) => void,
 ): PageParts {
   if (breakValue === "auto") return currentPage;
   let page = currentPage;
   if (flowHasContent(page.flow)) page = nextPage();
   if ((breakValue === "left" || breakValue === "right") && pageSide(page) !== breakValue) {
     setPageBlank(page, true, decorateBlankPages);
+    decorateBlankPage(page);
     page = nextPage();
   }
   return page;
@@ -365,6 +419,14 @@ function throwIfAborted(signal: AbortSignal): void {
   if (signal.aborted) throw abortError();
 }
 
+function ensureTransformedInputLimit(
+  html: string,
+  css: readonly string[],
+  limits: PageLimits,
+): void {
+  ensureInputLimit(`${html}\u0000${css.join("\u0000")}`, limits);
+}
+
 function fragmentText(
   text: Text,
   page: PageParts,
@@ -449,7 +511,16 @@ export async function buildGeneration(
   const paginationStartedAt = performance.now();
   const html = sourceHtml(source);
   ensureInputLimit(html, settings.limits);
-  const prepared = prepareDocument(html, {
+  const extensions = validateExtensions(settings.extensions);
+  const extensionWarnings = createExtensionWarningCollector(signal);
+  const transformed = await applyExtensionTransforms(
+    extensions,
+    Object.freeze({ html, css: settings.css, baseUrl: source.baseUrl }),
+    signal,
+    extensionWarnings,
+    (nextHtml, nextCss) => ensureTransformedInputLimit(nextHtml, nextCss, settings.limits),
+  );
+  const prepared = prepareDocument(transformed.html, {
     ...(settings.headerTemplate === undefined ? {} : { headerTemplate: settings.headerTemplate }),
     ...(settings.footerTemplate === undefined ? {} : { footerTemplate: settings.footerTemplate }),
     ...(settings.assetResolver === undefined ? {} : { allowRemoteResources: true }),
@@ -465,10 +536,13 @@ export async function buildGeneration(
     assets = await resolvePageAssets(
       sanitizeAssetResolverInput(prepared.html),
       source.baseUrl,
-      settings.css,
+      transformed.css,
       settings.assetResolver,
       settings.limits,
       signal,
+      extensions.length === 0
+        ? undefined
+        : (request) => allowExtensionAsset(extensions, request, signal, extensionWarnings),
     );
   }
   const resourceFinishedAt = performance.now();
@@ -495,7 +569,7 @@ export async function buildGeneration(
       );
     resourceBlocked ||= assets?.resourceBlocked ?? false;
 
-    const sanitizedCss = (assets?.css ?? settings.css).map((css) =>
+    const sanitizedCss = (assets?.css ?? transformed.css).map((css) =>
       sanitizeCss(
         css,
         assets !== undefined,
@@ -506,6 +580,7 @@ export async function buildGeneration(
     const css = Object.freeze([FRAME_STYLE, ...sanitizedCss.map((item) => item.css)]);
     const body = frameDocument.createDocumentFragment();
     const pages: PageParts[] = [];
+    const decorationWarnings: DocumentWarning[] = [];
     let overflowWarning: PageWarning | undefined;
     const reportOverflow = () => {
       overflowWarning ??= Object.freeze({
@@ -519,19 +594,35 @@ export async function buildGeneration(
     try {
       probe.append(sourceFlow);
       const breakConstraints = captureBreakConstraints(sourceFlow);
-      const nextPage = (): PageParts => {
+      const decorateCurrentPage = (page: PageParts) => {
+        resourceBlocked =
+          decoratePage(
+            frameDocument,
+            page,
+            pageSettings,
+            extensions,
+            signal,
+            extensionWarnings,
+            decorationWarnings,
+          ) || resourceBlocked;
+      };
+      const allocatePage = (): PageParts => {
         throwIfAborted(signal);
         if (pages.length >= settings.limits.maxPages) {
           throw new ImposiaError("PAGE_LIMIT", "Page limit exceeded.");
         }
         const created = createPage(frameDocument, pageSettings, pages.length + 1);
-        resourceBlocked ||= created.resourceBlocked;
-        pages.push(created.page);
-        probe.append(created.page.page);
-        return created.page;
+        pages.push(created);
+        probe.append(created.page);
+        return created;
+      };
+      const nextContentPage = (): PageParts => {
+        const page = allocatePage();
+        decorateCurrentPage(page);
+        return page;
       };
 
-      let currentPage = nextPage();
+      let currentPage = allocatePage();
       let pendingBreakAfter: PageBreak = "auto";
       for (const node of [...sourceFlow.childNodes]) {
         throwIfAborted(signal);
@@ -541,25 +632,37 @@ export async function buildGeneration(
           currentPage = startPageForBreak(
             currentPage,
             constraint.before === "auto" ? pendingBreakAfter : constraint.before,
-            nextPage,
+            allocatePage,
             settings.decorateBlankPages,
+            decorateCurrentPage,
           );
           setPageBlank(currentPage, false, settings.decorateBlankPages);
+          decorateCurrentPage(currentPage);
         }
         const currentHadContent = flowHasContent(currentPage.flow);
         currentPage.flow.append(node);
         if (pageOverflows(currentPage)) {
           if (currentHadContent) {
             node.remove();
-            currentPage = nextPage();
+            currentPage = nextContentPage();
             currentPage.flow.append(node);
           }
 
           if (pageOverflows(currentPage)) {
             if (node.nodeType === Node.TEXT_NODE) {
-              currentPage = fragmentText(node as Text, currentPage, nextPage, reportOverflow);
+              currentPage = fragmentText(
+                node as Text,
+                currentPage,
+                nextContentPage,
+                reportOverflow,
+              );
             } else if (node.nodeType === Node.ELEMENT_NODE && !isAtomicElement(node as Element)) {
-              currentPage = fragmentElement(node as Element, currentPage, nextPage, reportOverflow);
+              currentPage = fragmentElement(
+                node as Element,
+                currentPage,
+                nextContentPage,
+                reportOverflow,
+              );
             } else {
               reportOverflow();
             }
@@ -569,6 +672,7 @@ export async function buildGeneration(
         if (contributesToFlow) pendingBreakAfter = constraint.after;
       }
 
+      for (const page of pages) decorateCurrentPage(page);
       for (const [index, page] of pages.entries()) {
         resolveDecorationTokens(page.page, index + 1, pages.length);
       }
@@ -578,7 +682,7 @@ export async function buildGeneration(
       for (const style of probeStyles) style.remove();
     }
 
-    const warnings = [...pageWarnings(prepared.warnings)];
+    const warnings = [...pageWarnings([...prepared.warnings, ...decorationWarnings])];
     if (overflowWarning !== undefined) warnings.push(overflowWarning);
     if (resourceBlocked && !warnings.some((warning) => warning.code === "RESOURCE_BLOCKED")) {
       warnings.push(
@@ -589,6 +693,7 @@ export async function buildGeneration(
         }),
       );
     }
+    warnings.push(...extensionWarnings.finish());
 
     return {
       body,
