@@ -1,6 +1,6 @@
 # Third-party notices for @imposia/viewer
 
-This package declares pdfjs-dist as an external dependency. PDF.js source is not bundled into this tarball; the upstream license text is preserved here for the direct dependency.
+This package depends on `@imposia/core` for its public page-document types and declares pdfjs-dist as an external dependency. Core and PDF.js source are not bundled into this tarball; the upstream PDF.js license text is preserved here for that direct dependency.
 
 
 ## pdfjs-dist 5.4.530 — Apache-2.0 (external dependency)

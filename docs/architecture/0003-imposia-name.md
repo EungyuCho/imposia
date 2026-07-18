@@ -2,7 +2,7 @@
 
 Status: accepted for v1.
 
-Use **Imposia** as the project name and `@imposia/*` as the intended package scope. The name echoes print imposition without borrowing another paged-layout library's product or package name, and it works for the Core, Viewer, and CLI surfaces without implying that v1 implements the entire CSS Paged Media specification.
+Use **Imposia** as the project name and `@imposia/*` as the intended package scope. The name echoes print imposition without borrowing another paged-layout library's product or package name, and it works for the Core, Viewer, Client, and React packages without implying that v1 implements the entire CSS Paged Media specification.
 
 Point-in-time collision checks performed on 2026-07-17:
 

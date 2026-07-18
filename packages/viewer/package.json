@@ -8,6 +8,7 @@
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
       "default": "./dist/index.js"
     },
     "./styles.css": "./src/styles.css"
@@ -15,21 +16,15 @@
   "files": [
     "dist",
     "src/styles.css",
+    "README.md",
     "LICENSE",
     "THIRD_PARTY_NOTICES.md"
   ],
   "dependencies": {
+    "@imposia/core": "workspace:^",
     "pdfjs-dist": "5.4.530"
   },
-  "peerDependencies": {
-    "@imposia/core": "^0.1.0"
-  },
-  "peerDependenciesMeta": {
-    "@imposia/core": {
-      "optional": true
-    }
-  },
-  "devDependencies": {
-    "@imposia/core": "workspace:*"
+  "publishConfig": {
+    "access": "public"
   }
 }

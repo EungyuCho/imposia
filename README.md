@@ -1,11 +1,11 @@
 # Imposia
 
-Imposia is a clean-room, browser-first HTML/CSS publishing toolkit. The client runtime is exposed through `@imposia/client`, which combines Core pagination and Viewer presentation without importing Node or CLI code.
+Imposia is a clean-room, browser-first HTML/CSS publishing toolkit. The client runtime is exposed through `@imposia/client`, which combines Core pagination and Viewer presentation.
 
 ## Packages
 
 - `@imposia/core`: browser-only `mountPageDocument()` API, isolated canonical page-DOM pagination, and resolver-mediated asset loading. The current implementation is Chromium-reference pagination, not the complete target fragmentation engine.
-- `@imposia/client`: browser-only convenience entrypoint re-exporting Core and Viewer APIs; it has no Node, filesystem, or CLI dependency.
+- `@imposia/client`: browser-only convenience entrypoint re-exporting Core and Viewer APIs.
 - `@imposia/react`: React-first adapter for mounting the Core page document and Viewer.
 - `@imposia/viewer`: accessible continuous/single-page PDF canvas viewer for Chromium, Firefox, and WebKit, plus `mountPageViewer()` for presenting the existing canonical Core iframe in Chromium.
 
@@ -16,10 +16,9 @@ corepack pnpm install --frozen-lockfile
 pnpm setup:browsers
 pnpm preflight
 pnpm build
-pnpm build
 ```
 
-PDF export and Node/CLI adapters are intentionally outside this browser-only package set.
+The published packages are browser ESM libraries. Each package tarball contains its own README, license, and third-party notices.
 
 ## Browser Core API (current canonical pagination)
 
@@ -35,7 +34,7 @@ const pageDocument = await controller.ready;
 console.log(pageDocument.pageCount, pageDocument.pages, pageDocument.warnings);
 ```
 
-This browser surface paginates canonical pages in an isolated iframe. It accepts an optional `assetResolver`; discovered HTML and CSS assets are resolved only through that boundary and inserted as Core-owned blob URLs. `mountPageViewer()` can present that same iframe without cloning it or rerunning layout. The current paginator is verified against Chromium; broader target fragmentation and Node PDF generation through this same paginator remain pending.
+This browser surface paginates canonical pages in an isolated iframe. It accepts an optional `assetResolver`; discovered HTML and CSS assets are resolved only through that boundary and inserted as Core-owned blob URLs. `mountPageViewer()` can present that same iframe without cloning it or rerunning layout. The current paginator is verified against Chromium; broader target fragmentation remains pending.
 
 For client applications that want one browser-only dependency, use the unified entrypoint:
 

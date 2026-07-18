@@ -11,6 +11,7 @@ export interface PublishableManifest {
   directory: string;
   dependencies: string[];
   files: string[];
+  exports: Record<string, unknown>;
 }
 
 interface PackRecord {
@@ -27,6 +28,41 @@ function record(value: unknown): value is Record<string, unknown> {
 
 function normalizeText(value: string): string {
   return value.replaceAll("\r\n", "\n").trim();
+}
+
+function exportTargets(value: unknown): string[] {
+  if (typeof value === "string") return [value];
+  if (!record(value)) return [];
+  return Object.values(value).flatMap((entry) => exportTargets(entry));
+}
+
+function packagePathForExport(target: string, packageName: string): string {
+  if (!target.startsWith("./") || target.includes("\\\\") || target.split("/").includes("..")) {
+    throw new Error(`${packageName} has an unsafe export target: ${target}.`);
+  }
+  return target.slice(2);
+}
+
+function requireExportTargets(manifest: PublishableManifest, packContents: Set<string>): void {
+  const targets = [...new Set(exportTargets(manifest.exports))];
+  if (targets.length === 0) {
+    throw new Error(
+      `${manifest.name} package.json must expose at least one package-relative target.`,
+    );
+  }
+  for (const target of targets) {
+    if (target.includes("*")) {
+      throw new Error(
+        `${manifest.name} wildcard exports are not supported by this release audit: ${target}.`,
+      );
+    }
+    const packagePath = packagePathForExport(target, manifest.name);
+    if (!packContents.has(packagePath)) {
+      throw new Error(
+        `${manifest.name} export target is missing from pnpm pack --dry-run: ${target}.`,
+      );
+    }
+  }
 }
 
 function parsePackFiles(output: string, packageName: string): Set<string> {
@@ -143,14 +179,21 @@ export async function auditPackageArtifact(
   rootNoticeText: string,
 ): Promise<ArtifactAuditResult> {
   const packageRoot = path.resolve(manifest.directory);
+  const readmePath = path.join(packageRoot, "README.md");
   const noticePath = path.join(packageRoot, "THIRD_PARTY_NOTICES.md");
   const licensePath = path.join(packageRoot, "LICENSE");
-  const [noticeText, packageLicenseText, licenseStat, noticeStat] = await Promise.all([
-    readFile(noticePath, "utf8"),
-    readFile(licensePath, "utf8"),
-    stat(licensePath),
-    stat(noticePath),
-  ]);
+  const [readmeText, noticeText, packageLicenseText, readmeStat, licenseStat, noticeStat] =
+    await Promise.all([
+      readFile(readmePath, "utf8"),
+      readFile(noticePath, "utf8"),
+      readFile(licensePath, "utf8"),
+      stat(readmePath),
+      stat(licensePath),
+      stat(noticePath),
+    ]);
+  if (!readmeStat.isFile() || readmeStat.size === 0 || !normalizeText(readmeText)) {
+    throw new Error(`${manifest.name} README.md is missing or empty.`);
+  }
   if (!licenseStat.isFile() || licenseStat.size === 0) {
     throw new Error(`${manifest.name} LICENSE is missing or empty.`);
   }
@@ -161,7 +204,7 @@ export async function auditPackageArtifact(
     throw new Error(`${manifest.name} THIRD_PARTY_NOTICES.md is missing or empty.`);
   }
   const packContents = await packFiles(manifest);
-  for (const required of ["LICENSE", "THIRD_PARTY_NOTICES.md"] as const) {
+  for (const required of ["README.md", "LICENSE", "THIRD_PARTY_NOTICES.md"] as const) {
     if (!manifest.files.includes(required)) {
       throw new Error(`${manifest.name} package.json files must explicitly include ${required}.`);
     }
@@ -169,6 +212,7 @@ export async function auditPackageArtifact(
       throw new Error(`${manifest.name} pnpm pack --dry-run output is missing ${required}.`);
     }
   }
+  requireExportTargets(manifest, packContents);
   for (const dependency of manifest.dependencies) {
     if (!noticeText.toLowerCase().includes(dependency.toLowerCase())) {
       throw new Error(

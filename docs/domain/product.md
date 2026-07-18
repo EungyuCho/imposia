@@ -4,4 +4,4 @@ Imposia is a browser-only publishing library. `@imposia/react` is the primary in
 
 React adapters mount and dispose the same Core controller and canonical iframe. They do not clone pages, run a second layout pass, fetch authored resources, or own Core lifecycle outside React effects.
 
-The public browser contract is structural: page count, dimensions, ordered text, page-side metadata, decorations, blank-page positions, resolver boundaries, warnings, CSP isolation, and resource revocation. Node, filesystem, server, and CLI adapters are intentionally not part of this repository.
+The public browser contract is structural: page count, dimensions, ordered text, page-side metadata, decorations, blank-page positions, resolver boundaries, warnings, CSP isolation, and resource revocation. These browser packages are the complete published product surface.

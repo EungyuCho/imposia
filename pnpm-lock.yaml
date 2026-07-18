@@ -87,13 +87,12 @@ importers:
 
   packages/viewer:
     dependencies:
+      '@imposia/core':
+        specifier: workspace:^
+        version: link:../core
       pdfjs-dist:
         specifier: 5.4.530
         version: 5.4.530
-    devDependencies:
-      '@imposia/core':
-        specifier: workspace:*
-        version: link:../core
 
 packages:
 

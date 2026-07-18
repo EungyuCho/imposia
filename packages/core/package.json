@@ -8,14 +8,19 @@
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
       "default": "./dist/index.js"
     }
   },
   "files": [
     "dist",
+    "README.md",
     "LICENSE",
     "THIRD_PARTY_NOTICES.md"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "dependencies": {
     "parse5": "8.0.0",
     "postcss": "8.5.6"
