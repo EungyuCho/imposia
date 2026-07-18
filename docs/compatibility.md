@@ -1,6 +1,6 @@
 # Compatibility
 
-The legacy PDF-first evidence below was verified on 2026-07-17. Fresh 2026-07-18 evidence verifies the current package split and one-page browser-Core vertical slice; the Chromium-reference rows still distinguish that slice from the pending full target.
+The legacy PDF-first evidence below was verified on 2026-07-17. Fresh 2026-07-18 evidence verifies the current package split and Chromium-reference browser-Core canonical pagination; it remains distinct from the pending complete target.
 
 ## Current stable PDF-first path
 
@@ -19,10 +19,10 @@ The PDF adapter is Chromium-only by design. Cross-browser claims apply to viewin
 
 | Surface | Reference | Status | Acceptance meaning |
 | --- | --- | --- | --- |
-| Browser Core (`@imposia/core`) | Chromium, Firefox, WebKit | One-page vertical slice verified | The browser-Core matrix recorded 28 passes and 2 expected Firefox/WebKit print skips. Resolver-mediated HTML/CSS asset loading, restrictive frame isolation, bounded resource handling, and blob-URL cleanup are implemented; full fragmentation remains pending. |
+| Browser Core (`@imposia/core`) | Chromium reference | Multi-page canonical pagination verified | Fragmentation coverage proves real A4 canonical pages, ordered text without duplication, page metadata and recto/verso sides, and presentation through the same iframe. Resolver-mediated HTML/CSS asset loading, restrictive frame isolation, bounded resource handling, and blob-URL cleanup are implemented. |
 | Canonical iframe Viewer (`mountPageViewer`) | Chromium reference | Verified | It presents the exact Core iframe without canvas reconstruction or page cloning, supports newer-generation refreshes for that iframe, and prints the frame. It does not establish multi-engine pagination parity. |
-| Browser print | Chromium | CSS-driven one-page print verified | Canonical page-document CSS with `preferCSSPageSize` produced one A4 sheet (approximately 594.96 × 841.92 pt). Separate lifecycle E2E tests prove `print()` targets the exact canonical iframe; this row does not claim a live-frame physical capture. Firefox/WebKit print cases are expected skips; full target resource/readiness coverage remains pending. |
-| `@imposia/node` PDF adapter and CLI | Chromium reference | Legacy renderer and CLI verified; shared paginator pending | `createRenderer()` and the `render`/`pdf` CLI commands own the stable PDF export path; the real CLI produced a three-page PDF. It does not yet invoke the exported browser paginator. |
+| Browser print | Chromium | CSS-driven canonical-page print verified | Canonical page-document CSS with `preferCSSPageSize` produced A4 output (approximately 594.96 × 841.92 pt). Separate lifecycle E2E tests prove `print()` targets the exact canonical iframe; this row does not claim Node export through the browser paginator. Firefox/WebKit print cases are expected skips; full target resource/readiness coverage remains pending. |
+| `@imposia/node` PDF adapter and CLI | Chromium reference | Legacy renderer and CLI verified | `createRenderer()` and the `render`/`pdf` CLI commands own the stable PDF export path; the real CLI produced a three-page PDF. The Node adapter has not yet been connected to the verified Core paginator. |
 | Preview/export comparison | DOM structural comparator | Not implemented | Equality means page count, page dimensions, ordered text, decorations, and blank-page positions; not PDF bytes or pixels. |
 
-Firefox and WebKit are not target pagination references. They may host the PDF.js Viewer shell where supported, but do not establish engine-identical page layout. The one-page Core slice does not satisfy the ADR 0004 rollback gate; the target remains pending structural equality, isolation, and cleanup tests.
+Firefox and WebKit are not target pagination references. They may host the PDF.js Viewer shell where supported, but do not establish engine-identical page layout. Chromium-reference Core pagination does not by itself satisfy the ADR 0004 rollback gate; the target remains pending structural equality, isolation, cleanup, and Node-export parity tests.
