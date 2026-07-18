@@ -11,6 +11,9 @@ importers:
       '@biomejs/biome':
         specifier: 2.2.7
         version: 2.2.7
+      '@imposia/react':
+        specifier: workspace:*
+        version: link:packages/react
       '@playwright/test':
         specifier: 1.57.0
         version: 1.57.0
@@ -23,6 +26,12 @@ importers:
       '@types/pngjs':
         specifier: 6.0.5
         version: 6.0.5
+      '@types/react':
+        specifier: 19.2.17
+        version: 19.2.17
+      '@types/react-dom':
+        specifier: 19.2.3
+        version: 19.2.3(@types/react@19.2.17)
       esbuild:
         specifier: 0.25.12
         version: 0.25.12
@@ -38,6 +47,12 @@ importers:
       pngjs:
         specifier: 7.0.0
         version: 7.0.0
+      react:
+        specifier: 19.2.7
+        version: 19.2.7
+      react-dom:
+        specifier: 19.2.7
+        version: 19.2.7(react@19.2.7)
       tsx:
         specifier: 4.20.6
         version: 4.20.6
