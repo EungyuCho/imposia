@@ -33,10 +33,13 @@ test("presents the real canonical iframe without taking over its lifecycle", asy
       const importMap = document.createElement("script");
       importMap.type = "importmap";
       importMap.textContent = JSON.stringify({
-        imports: { "pdfjs-dist": "/node_modules/pdfjs-dist/build/pdf.mjs" },
+        imports: {
+          "@imposia/core": "/packages/core/dist/index.js",
+          "pdfjs-dist": "/node_modules/pdfjs-dist/build/pdf.mjs",
+        },
       });
       document.head.append(importMap);
-      const core = (await import("/packages/core/dist/index.js")) as {
+      const core = (await import("@imposia/core")) as {
         mountPageDocument(
           container: HTMLElement,
           source: { html: string },
