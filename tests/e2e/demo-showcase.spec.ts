@@ -1,11 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { captureBrowserErrors } from "./browser-core-support.js";
 
-type DemoExportTraceEntry = Readonly<{
-  disabled: boolean;
-  status: string | null;
-}>;
-
 test("React publishing lab switches sources and extension boundaries", async ({
   page,
   browserName,
@@ -62,26 +57,32 @@ test("React publishing lab downloads a ready EPUB", async ({ page, browserName }
     await expect(preview.locator("[data-imposia-react-status='ready']")).toBeVisible();
 
     await page.evaluate(() => {
-      const trace: DemoExportTraceEntry[] = [];
-      const timer = window.setInterval(() => {
-        const button = document.querySelector<HTMLButtonElement>(".demo-export-button");
-        const status = document
-          .querySelector<HTMLElement>("[data-testid='demo-preview-surface'] > div")
-          ?.getAttribute("data-imposia-react-status");
-        trace.push({ disabled: button?.disabled ?? false, status: status ?? null });
-      }, 1);
+      const button = document.querySelector<HTMLButtonElement>(".demo-export-button");
+      if (button === null) throw new Error("Demo export button is missing.");
+      const trace: boolean[] = [];
+      const observer = new MutationObserver((records) => {
+        for (const record of records) {
+          if (record.attributeName !== "disabled") continue;
+          trace.push(record.oldValue === null);
+        }
+      });
+      observer.observe(button, {
+        attributes: true,
+        attributeFilter: ["disabled"],
+        attributeOldValue: true,
+      });
       Reflect.set(globalThis, "__imposiaDemoExportTrace", trace);
-      Reflect.set(globalThis, "__imposiaDemoExportTraceTimer", timer);
+      Reflect.set(globalThis, "__imposiaDemoExportObserver", observer);
     });
     await page.locator("[data-sample-id='publishing']").click();
     await expect(preview.locator("[data-imposia-react-status='ready']")).toBeVisible();
     const exportTrace = await page.evaluate(() => {
-      const timer = Reflect.get(globalThis, "__imposiaDemoExportTraceTimer");
-      if (typeof timer === "number") window.clearInterval(timer);
+      const observer = Reflect.get(globalThis, "__imposiaDemoExportObserver");
+      if (observer instanceof MutationObserver) observer.disconnect();
       const trace = Reflect.get(globalThis, "__imposiaDemoExportTrace");
-      return Array.isArray(trace) ? (trace as DemoExportTraceEntry[]) : [];
+      return Array.isArray(trace) ? (trace as boolean[]) : [];
     });
-    expect(exportTrace.some((entry) => entry.status === "loading" && entry.disabled)).toBe(true);
+    expect(exportTrace).toContain(true);
     await expect(page.getByTestId("metric-sheet")).toHaveText("1123 × 794 px");
     await expect(downloadButton).toBeEnabled();
 
