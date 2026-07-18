@@ -1,3 +1,4 @@
+import { ImposiaError } from "./errors.js";
 import {
   abortError,
   commitGeneration,
@@ -36,6 +37,7 @@ export function mountPageDocument(
   let destroyPromise: Promise<void> | undefined;
   let operationId = 0;
   let active: ActiveOperation | undefined;
+  let activeBlobUrls: readonly string[] = [];
   let latestWork: Promise<PageDocument> | undefined;
   const operations = new Set<Promise<PageDocument>>();
 
@@ -48,40 +50,68 @@ export function mountPageDocument(
     const unlink = linkSignal(callerSignal, controller);
     const startedAt = performance.now();
     const operation = Promise.resolve().then(async () => {
-      if (controller.signal.aborted) throw abortError();
-      const frameDocument = await frameReady(iframe, controller.signal);
-      if (controller.signal.aborted || destroyed || id !== operationId) throw abortError();
-      const resourceFinishedAt = performance.now();
-      const paginationStartedAt = performance.now();
-      const generation = buildGeneration(frameDocument, nextSource, settings);
-      if (controller.signal.aborted || destroyed || id !== operationId) throw abortError();
-      settings.onProgress?.({ completedPages: 1 });
-      if (controller.signal.aborted || destroyed || id !== operationId) throw abortError();
-      commitGeneration(frameDocument, generation.body, generation.css);
-      const bounds = generation.page.getBoundingClientRect();
-      const metadata = Object.freeze({
-        number: 1 as const,
-        side: "right" as const,
-        blank: false,
-        widthCssPx: bounds.width,
-        heightCssPx: bounds.height,
-        bodyText: bodyText(generation.flow),
-      });
-      const pages = Object.freeze([metadata]);
-      const document: PageDocument = Object.freeze({
-        iframe,
-        generation: (current?.generation ?? 0) + 1,
-        pageCount: pages.length,
-        pages,
-        warnings: generation.warnings,
-        timings: Object.freeze({
-          totalMs: performance.now() - startedAt,
-          resourceMs: resourceFinishedAt - startedAt,
-          paginationMs: performance.now() - paginationStartedAt,
-        }),
-      });
-      current = document;
-      return document;
+      let deadlineExceeded = false;
+      const deadline = setTimeout(() => {
+        deadlineExceeded = true;
+        controller.abort();
+      }, settings.limits.resourceDeadlineMs);
+      try {
+        if (controller.signal.aborted) throw abortError();
+        const frameDocument = await frameReady(iframe, controller.signal);
+        if (controller.signal.aborted || destroyed || id !== operationId) throw abortError();
+        const generation = await buildGeneration(
+          frameDocument,
+          nextSource,
+          settings,
+          controller.signal,
+        );
+        const resourceFinishedAt = performance.now();
+        const paginationStartedAt = performance.now();
+        let committed = false;
+        try {
+          if (controller.signal.aborted || destroyed || id !== operationId) throw abortError();
+          settings.onProgress?.({ completedPages: 1 });
+          if (controller.signal.aborted || destroyed || id !== operationId) throw abortError();
+          commitGeneration(frameDocument, generation.body, generation.css);
+          const bounds = generation.page.getBoundingClientRect();
+          const metadata = Object.freeze({
+            number: 1 as const,
+            side: "right" as const,
+            blank: false,
+            widthCssPx: bounds.width,
+            heightCssPx: bounds.height,
+            bodyText: bodyText(generation.flow),
+          });
+          const pages = Object.freeze([metadata]);
+          const document: PageDocument = Object.freeze({
+            iframe,
+            generation: (current?.generation ?? 0) + 1,
+            pageCount: pages.length,
+            pages,
+            warnings: generation.warnings,
+            timings: Object.freeze({
+              totalMs: performance.now() - startedAt,
+              resourceMs: resourceFinishedAt - startedAt,
+              paginationMs: performance.now() - paginationStartedAt,
+            }),
+          });
+          const oldBlobUrls = activeBlobUrls;
+          activeBlobUrls = generation.blobUrls;
+          current = document;
+          committed = true;
+          for (const url of oldBlobUrls) URL.revokeObjectURL(url);
+          return document;
+        } finally {
+          if (!committed) generation.revoke();
+        }
+      } catch (error: unknown) {
+        if (deadlineExceeded) {
+          throw new ImposiaError("RESOURCE_TIMEOUT", "Resource loading timed out.");
+        }
+        throw error;
+      } finally {
+        clearTimeout(deadline);
+      }
     });
     let tracked: Promise<PageDocument>;
     tracked = operation.then(
@@ -140,6 +170,8 @@ export function mountPageDocument(
       if (destroyPromise !== undefined) return destroyPromise;
       destroyed = true;
       active?.controller.abort();
+      for (const url of activeBlobUrls) URL.revokeObjectURL(url);
+      activeBlobUrls = [];
       current = undefined;
       iframe.remove();
       destroyPromise = Promise.allSettled([...operations]).then(() => undefined);

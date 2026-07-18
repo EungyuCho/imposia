@@ -200,6 +200,31 @@ body:has(.imposia-viewer) {
   background: white;
 }
 
+.imposia-page-viewer {
+  overflow: auto;
+  justify-items: center;
+}
+
+.imposia-page-viewer .imposia-canonical-frame {
+  grid-row: 2;
+  align-self: start;
+  justify-self: center;
+  display: block;
+  max-width: none;
+  border: 0;
+  background: white;
+  box-shadow:
+    0 1px 0 rgb(255 255 255 / 80%) inset,
+    0 20px 55px rgb(16 21 20 / 22%),
+    0 2px 8px rgb(16 21 20 / 18%);
+  transform-origin: top left;
+}
+
+.imposia-page-viewer .imposia-rail {
+  position: sticky;
+  top: 0;
+}
+
 .imposia-page-tag {
   position: absolute;
   top: 0;

@@ -20,5 +20,16 @@
   ],
   "dependencies": {
     "pdfjs-dist": "5.4.530"
+  },
+  "peerDependencies": {
+    "@imposia/core": "^0.1.0"
+  },
+  "peerDependenciesMeta": {
+    "@imposia/core": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@imposia/core": "workspace:*"
   }
 }
