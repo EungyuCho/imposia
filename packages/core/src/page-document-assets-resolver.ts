@@ -191,9 +191,7 @@ async function resolveOneWork(
   } else {
     blobUrl = createBlob(scope, copied, resolution.mimeType);
     ready =
-      request.kind === "font"
-        ? await loadFont(blobUrl)
-        : await loadMedia(blobUrl, request.kind);
+      request.kind === "font" ? await loadFont(blobUrl) : await loadMedia(blobUrl, request.kind);
   }
   if (!ready) {
     if (blobUrl !== undefined) revokeBlob(scope, blobUrl);

@@ -54,6 +54,15 @@ importers:
         specifier: workspace:*
         version: link:../node
 
+  packages/client:
+    dependencies:
+      '@imposia/core':
+        specifier: workspace:*
+        version: link:../core
+      '@imposia/viewer':
+        specifier: workspace:*
+        version: link:../viewer
+
   packages/core:
     dependencies:
       parse5:

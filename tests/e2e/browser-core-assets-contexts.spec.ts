@@ -107,10 +107,10 @@ test.describe("Chromium Core asset contexts", () => {
         let controller: Controller | undefined;
         let readySettled = false;
         try {
-          window.createImageBitmap = function (
+          window.createImageBitmap = (
             source: ImageBitmapSource,
             options?: ImageBitmapOptions,
-          ): Promise<ImageBitmap> {
+          ): Promise<ImageBitmap> => {
             calls.image += 1;
             imageStartedResolve?.();
             return imageGate
