@@ -1,9 +1,9 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { performance } from "node:perf_hooks";
+import { ImposiaError, prepareDocument } from "@imposia/core";
 import type { Browser, Page } from "playwright";
 import { type BrowserSession, launchBrowserSession } from "./browser-session.js";
-import { prepareDocument, withTimeout } from "./document.js";
-import { ImposiaError } from "./errors.js";
+import { withTimeout } from "./input-boundary.js";
 import { renderPdfWithPageSides } from "./page-sides.js";
 import { inspectPdf, pdfOptions } from "./pdf-output.js";
 import {

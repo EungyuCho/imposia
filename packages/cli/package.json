@@ -6,7 +6,12 @@
   "bin": {
     "imposia": "./dist/index.js"
   },
+  "files": [
+    "dist",
+    "LICENSE",
+    "THIRD_PARTY_NOTICES.md"
+  ],
   "dependencies": {
-    "@imposia/core": "workspace:*"
+    "@imposia/node": "workspace:*"
   }
 }

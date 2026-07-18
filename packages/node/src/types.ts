@@ -1,28 +1,10 @@
+import type { DocumentWarning, DocumentWarningCode } from "@imposia/core";
+
 export type RenderInput = { html: string; baseUrl?: string } | { file: string } | { url: string };
 
-export type WarningCode =
-  | "OVERRIDDEN_LEGACY_BREAK"
-  | "UNSUPPORTED_BREAK_VALUE"
-  | "OVERRIDDEN_EMBEDDED_HEADER"
-  | "OVERRIDDEN_EMBEDDED_FOOTER"
-  | "UNSUPPORTED_DECORATION_TOKEN"
-  | "UNSUPPORTED_CSS_FEATURE"
-  | "RESOURCE_BLOCKED"
-  | "RESOURCE_TIMEOUT"
-  | "FONT_TIMEOUT"
-  | "SCRIPT_REMOVED"
-  | "PAGE_OVERFLOW"
-  | "BROWSER_DIFFERENCE";
+export type WarningCode = DocumentWarningCode;
 
-export interface RenderWarning {
-  code: WarningCode;
-  severity: "warning";
-  message: string;
-  feature?: string;
-  property?: string;
-  value?: string;
-  sourceIndex?: number;
-}
+export type RenderWarning = DocumentWarning;
 
 export interface RenderTimings {
   totalMs: number;

@@ -1,7 +1,7 @@
 import { Buffer } from "node:buffer";
 import { realpath } from "node:fs/promises";
 import path from "node:path";
-import { ImposiaError } from "./errors.js";
+import { ImposiaError } from "@imposia/core";
 import type { RenderInput } from "./types.js";
 
 function valueAt(input: object, key: string): unknown {

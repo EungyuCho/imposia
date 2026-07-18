@@ -1,20 +1,20 @@
 export type { PrepareDocumentOptions, PreparedDocument } from "./document.js";
-export {
-  assertFileWithinRoot,
-  prepareDocument,
-  validateRenderInput,
-  withTimeout,
-} from "./document.js";
+export { prepareDocument } from "./document.js";
 export { ImposiaError } from "./errors.js";
-export { createRenderer } from "./renderer.js";
+export { mountPageDocument } from "./page-document.js";
 export type {
-  Renderer,
-  RenderHooks,
-  RenderInput,
-  RenderOptions,
-  RenderPage,
-  RenderResult,
-  RenderTimings,
-  RenderWarning,
-  WarningCode,
-} from "./types.js";
+  AssetResolution,
+  AssetResolver,
+  PageDocument,
+  PageDocumentController,
+  PageDocumentOptions,
+  PageLimits,
+  PageMetadata,
+  PageSource,
+  PageTimings,
+  PageWarning,
+  PageWarningCode,
+} from "./page-document-types.js";
+export type { PageSideConstraint } from "./page-side-parity.js";
+export { selectBlankMarkers } from "./page-side-parity.js";
+export type { DocumentWarning, DocumentWarningCode } from "./warnings.js";

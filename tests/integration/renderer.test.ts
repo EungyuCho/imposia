@@ -4,8 +4,8 @@ import os from "node:os";
 import path from "node:path";
 import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
 import { afterAll, describe, expect, it, vi } from "vitest";
-import { ImposiaError } from "../../packages/core/src/errors.js";
-import { createRenderer } from "../../packages/core/src/renderer.js";
+import { ImposiaError } from "../../packages/node/src/index.js";
+import { createRenderer } from "../../packages/node/src/renderer.js";
 
 const html = `<!doctype html>
 <html lang="en">

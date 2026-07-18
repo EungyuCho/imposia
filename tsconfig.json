@@ -2,6 +2,7 @@
   "files": [],
   "references": [
     { "path": "packages/core" },
+    { "path": "packages/node" },
     { "path": "packages/viewer" },
     { "path": "packages/cli" }
   ]

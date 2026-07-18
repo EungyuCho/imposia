@@ -3,17 +3,31 @@ import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 
 export async function benchmarkSourceHash(): Promise<string> {
-  const coreDirectory = "packages/core/src";
-  const coreSources = (await readdir(path.resolve(coreDirectory), { withFileTypes: true }))
-    .filter((entry) => entry.isFile() && entry.name.endsWith(".ts"))
-    .map((entry) => `${coreDirectory}/${entry.name}`)
+  const sourceDirectories = ["packages/core/src", "packages/node/src"];
+  const sources = (
+    await Promise.all(
+      sourceDirectories.map(async (directory) =>
+        (
+          await readdir(path.resolve(directory), { withFileTypes: true })
+        )
+          .filter((entry) => entry.isFile() && entry.name.endsWith(".ts"))
+          .map((entry) => `${directory}/${entry.name}`),
+      ),
+    )
+  )
+    .flat()
     .sort();
   const files = [
     "package.json",
     "pnpm-lock.yaml",
+    "tsconfig.json",
     "tsconfig.base.json",
     "packages/core/package.json",
-    ...coreSources,
+    "packages/core/tsconfig.json",
+    "packages/node/package.json",
+    "packages/node/tsconfig.json",
+    ...sources,
+    "scripts/build-core-browser.ts",
     "scripts/benchmark-integrity.ts",
     "scripts/benchmark-thresholds.ts",
     "scripts/benchmark.ts",

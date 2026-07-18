@@ -2,13 +2,13 @@ import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from "node:fs/promis
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { prepareDocument } from "../../packages/core/src/document.js";
+import { ImposiaError } from "../../packages/node/src/index.js";
 import {
   assertFileWithinRoot,
-  prepareDocument,
   validateRenderInput,
   withTimeout,
-} from "../../packages/core/src/document.js";
-import { ImposiaError } from "../../packages/core/src/errors.js";
+} from "../../packages/node/src/input-boundary.js";
 
 describe("untrusted HTML and input boundaries", () => {
   it("rejects ambiguous, empty, and oversized render inputs", () => {

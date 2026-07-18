@@ -1,6 +1,6 @@
 import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
 import { afterAll, describe, expect, it } from "vitest";
-import { createRenderer } from "../../packages/core/src/renderer.js";
+import { createRenderer } from "../../packages/node/src/renderer.js";
 
 async function pdfPageTexts(pdf: Uint8Array): Promise<string[]> {
   const document = await getDocument({ data: pdf.slice() }).promise;

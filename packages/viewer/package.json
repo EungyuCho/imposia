@@ -14,7 +14,9 @@
   },
   "files": [
     "dist",
-    "src/styles.css"
+    "src/styles.css",
+    "LICENSE",
+    "THIRD_PARTY_NOTICES.md"
   ],
   "dependencies": {
     "pdfjs-dist": "5.4.530"

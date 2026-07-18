@@ -1,9 +1,9 @@
 import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+import { ImposiaError } from "@imposia/core";
 import type { Page } from "playwright";
-import { assertFileWithinRoot, validateRenderInput } from "./document.js";
-import { ImposiaError } from "./errors.js";
+import { assertFileWithinRoot, validateRenderInput } from "./input-boundary.js";
 import type { RenderInput, RenderOptions } from "./types.js";
 
 export const DEFAULT_TIMEOUT_MS = 30_000;
