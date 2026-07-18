@@ -51,14 +51,15 @@ export function mountPageDocument(
     const startedAt = performance.now();
     const operation = Promise.resolve().then(async () => {
       let deadlineExceeded = false;
-      const deadline = setTimeout(() => {
-        deadlineExceeded = true;
-        controller.abort();
-      }, settings.limits.resourceDeadlineMs);
+      let deadline: ReturnType<typeof setTimeout> | undefined;
       try {
         if (controller.signal.aborted) throw abortError();
         const frameDocument = await frameReady(iframe, controller.signal);
         if (controller.signal.aborted || destroyed || id !== operationId) throw abortError();
+        deadline = setTimeout(() => {
+          deadlineExceeded = true;
+          controller.abort();
+        }, settings.limits.resourceDeadlineMs);
         const generation = await buildGeneration(
           frameDocument,
           nextSource,
@@ -114,7 +115,7 @@ export function mountPageDocument(
         }
         throw error;
       } finally {
-        clearTimeout(deadline);
+        if (deadline !== undefined) clearTimeout(deadline);
       }
     });
     let tracked: Promise<PageDocument>;
