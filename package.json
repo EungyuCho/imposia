@@ -12,7 +12,7 @@
     "check:core-boundary": "node --import tsx scripts/check-core-package-boundary.ts",
     "setup:browsers": "playwright install chromium firefox webkit",
     "preflight": "node --import tsx scripts/preflight.ts",
-    "typecheck": "tsc -b --pretty false",
+    "typecheck": "tsc -b --pretty false && tsc --noEmit --pretty false -p tests/typecheck/tsconfig.json",
     "lint": "biome check .",
     "test": "vitest run",
     "test:unit": "vitest run tests/core",

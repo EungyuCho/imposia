@@ -17,14 +17,15 @@ test("runs immutable transforms in order, sanitizes their output, and keeps abor
       type Controller = {
         ready: Promise<Result>;
         current: Result | undefined;
-        update(
-          source: { html: string },
-          options?: { signal?: AbortSignal },
-        ): Promise<Result>;
+        update(source: { html: string }, options?: { signal?: AbortSignal }): Promise<Result>;
         destroy(): Promise<void>;
       };
       type Core = {
-        mountPageDocument(container: HTMLElement, source: { html: string }, options: object): Controller;
+        mountPageDocument(
+          container: HTMLElement,
+          source: { html: string },
+          options: object,
+        ): Controller;
       };
       const core = (await import("/packages/core/dist/index.js")) as Core;
       const host = document.body.appendChild(document.createElement("div"));
@@ -43,7 +44,10 @@ test("runs immutable transforms in order, sanitizes their output, and keeps abor
             if (input.html.includes("large")) return { html: `<p>${"x".repeat(400)}</p>` };
             return {
               html: input.html.replace(/initial|updated/g, "first"),
-              css: [...input.css, ".transformed{background-image:url('https://assets.example.test/nope.png')}"] ,
+              css: [
+                ...input.css,
+                ".transformed{background-image:url('https://assets.example.test/nope.png')}",
+              ],
             };
           },
         },
@@ -57,7 +61,11 @@ test("runs immutable transforms in order, sanitizes their output, and keeps abor
       ];
       let controller: Controller | undefined;
       try {
-        controller = core.mountPageDocument(host, { html: "<p>initial</p>" }, { extensions, limits: { maxInputBytes: 256 } });
+        controller = core.mountPageDocument(
+          host,
+          { html: "<p>initial</p>" },
+          { extensions, limits: { maxInputBytes: 256 } },
+        );
         const initial = await controller.ready;
         extensions.push({
           name: "acme/late",
@@ -65,7 +73,10 @@ test("runs immutable transforms in order, sanitizes their output, and keeps abor
         });
         const updated = await controller.update({ html: "<p>updated</p>" });
         const abortController = new AbortController();
-        const holding = controller.update({ html: "<p>hold</p>" }, { signal: abortController.signal });
+        const holding = controller.update(
+          { html: "<p>hold</p>" },
+          { signal: abortController.signal },
+        );
         await Promise.resolve();
         abortController.abort();
         const aborted = await holding.then(
@@ -130,7 +141,11 @@ test("runs asset policies before the resolver and freezes namespaced warnings", 
       };
       type Controller = { ready: Promise<Result>; destroy(): Promise<void> };
       type Core = {
-        mountPageDocument(container: HTMLElement, source: { html: string; baseUrl: string }, options: object): Controller;
+        mountPageDocument(
+          container: HTMLElement,
+          source: { html: string; baseUrl: string },
+          options: object,
+        ): Controller;
       };
       const core = (await import("/packages/core/dist/index.js")) as Core;
       const host = document.body.appendChild(document.createElement("div"));
@@ -224,7 +239,11 @@ test("decorates allocated pages through Core token and blank-page handling", asy
       type Result = { iframe: HTMLIFrameElement };
       type Controller = { ready: Promise<Result>; destroy(): Promise<void> };
       type Core = {
-        mountPageDocument(container: HTMLElement, source: { html: string }, options: object): Controller;
+        mountPageDocument(
+          container: HTMLElement,
+          source: { html: string },
+          options: object,
+        ): Controller;
       };
       const core = (await import("/packages/core/dist/index.js")) as Core;
       const run = async (decorateBlankPages: boolean) => {
@@ -325,7 +344,11 @@ test("rejects malformed extension work without replacing a committed page", asyn
         destroy(): Promise<void>;
       };
       type Core = {
-        mountPageDocument(container: HTMLElement, source: { html: string }, options: object): Controller;
+        mountPageDocument(
+          container: HTMLElement,
+          source: { html: string },
+          options: object,
+        ): Controller;
       };
       const core = (await import("/packages/core/dist/index.js")) as Core;
       const host = document.body.appendChild(document.createElement("div"));
@@ -408,7 +431,9 @@ test("rejects malformed extension work without replacing a committed page", asyn
     expect(observation.thrown).toBe("extension callback failed");
     expect(observation.warning).toContain("warning code must start with EXTENSION_");
     expect(observation.duplicateError).toContain("duplicate name");
-    expect(observation.nonArrayError).toContain("name must be a lowercase package-style identifier");
+    expect(observation.nonArrayError).toContain(
+      "name must be a lowercase package-style identifier",
+    );
     expect(observation.currentPreserved).toBe(true);
     expect(observation.frameText).toContain("stable");
     expect(observation.frameText).not.toContain("invalid");

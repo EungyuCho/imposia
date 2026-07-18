@@ -14,6 +14,7 @@
       "!!packages/*/dist",
       "!!packages/core/dist",
       "!!packages/viewer/dist",
+      "!examples/react/app.js",
       "!!artifacts",
       "!!output",
       "!!benchmarks/latest.*"

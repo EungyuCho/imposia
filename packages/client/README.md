@@ -22,6 +22,20 @@ const viewer = mountPageViewer(host, pageDocument);
 viewer.setMode("single");
 ```
 
-The entrypoint re-exports the public APIs and types from `@imposia/core` and `@imposia/viewer`. `mountPageViewer()` presents Core's existing canonical iframe; it does not clone pages or run a second layout pass.
+The entrypoint re-exports the Core page-document API and types together with the Viewer APIs and types. `mountPageViewer()` presents Core's existing canonical iframe; it does not clone pages or run a second layout pass.
+
+The Core extension contract is available from the same entrypoint:
+
+```ts
+import type { PageExtension } from "@imposia/client";
+
+const runningHead: PageExtension = {
+  name: "example/running-head",
+  decoratePage: ({ blank }) =>
+    blank ? undefined : { headerHtml: "Chapter · {{pageNumber}} / {{totalPages}}" },
+};
+```
+
+Pass extensions through `mountPageDocument(..., { extensions: [runningHead] })`. They run in declaration order and remain inside Core's sanitizer, resolver, warning, abort, and cleanup boundaries.
 
 See `LICENSE` and `THIRD_PARTY_NOTICES.md` in this package for distribution terms.

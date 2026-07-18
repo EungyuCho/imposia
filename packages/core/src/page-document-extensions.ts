@@ -104,16 +104,16 @@ export function validateExtensions(
       throw invalidExtension("name must be a lowercase package-style identifier.");
     }
     if (names.has(snapshot.name)) {
-      throw invalidExtension(`duplicate name \"${snapshot.name}\".`);
+      throw invalidExtension(`duplicate name "${snapshot.name}".`);
     }
     if (snapshot.transform !== undefined && typeof snapshot.transform !== "function") {
-      throw invalidExtension(`transform for \"${snapshot.name}\" must be a function.`);
+      throw invalidExtension(`transform for "${snapshot.name}" must be a function.`);
     }
     if (snapshot.allowAsset !== undefined && typeof snapshot.allowAsset !== "function") {
-      throw invalidExtension(`allowAsset for \"${snapshot.name}\" must be a function.`);
+      throw invalidExtension(`allowAsset for "${snapshot.name}" must be a function.`);
     }
     if (snapshot.decoratePage !== undefined && typeof snapshot.decoratePage !== "function") {
-      throw invalidExtension(`decoratePage for \"${snapshot.name}\" must be a function.`);
+      throw invalidExtension(`decoratePage for "${snapshot.name}" must be a function.`);
     }
     names.add(snapshot.name);
     extensions.push(
@@ -149,7 +149,10 @@ function validateWarning(value: unknown): Readonly<{
   ) {
     throw invalidExtension("warning code must start with EXTENSION_ and include a string message.");
   }
-  return Object.freeze({ code: warning.code as PageExtensionWarningCode, message: warning.message });
+  return Object.freeze({
+    code: warning.code as PageExtensionWarningCode,
+    message: warning.message,
+  });
 }
 
 export function createExtensionWarningCollector(signal: AbortSignal): ExtensionWarningCollector {
@@ -269,7 +272,10 @@ export async function applyExtensionTransforms(
       baseUrl: input.baseUrl,
     });
     const output = validateTransformOutput(
-      await awaitWithAbort(extension.transform(transformInput, warnings.context(extension)), signal),
+      await awaitWithAbort(
+        extension.transform(transformInput, warnings.context(extension)),
+        signal,
+      ),
     );
     throwIfAborted(signal);
     if (output === undefined) continue;
@@ -292,7 +298,7 @@ export function allowExtensionAsset(
     const allowed = extension.allowAsset(request, warnings.context(extension));
     throwIfAborted(signal);
     if (typeof allowed !== "boolean") {
-      throw invalidExtension(`allowAsset for \"${extension.name}\" must return a boolean.`);
+      throw invalidExtension(`allowAsset for "${extension.name}" must return a boolean.`);
     }
     if (!allowed) return false;
   }
@@ -302,7 +308,8 @@ export function allowExtensionAsset(
 function validateDecoration(value: unknown): PageExtensionDecoration | undefined {
   if (value === undefined) return undefined;
   const decoration = valueRecord(value);
-  if (decoration === undefined) throw invalidExtension("decoratePage must return an object or undefined.");
+  if (decoration === undefined)
+    throw invalidExtension("decoratePage must return an object or undefined.");
   if (decoration.headerHtml !== undefined && typeof decoration.headerHtml !== "string") {
     throw invalidExtension("decoratePage headerHtml must be a string.");
   }

@@ -5,7 +5,7 @@ Imposia is a clean-room, browser-first HTML/CSS publishing toolkit. The client r
 ## Packages
 
 - `@imposia/core`: browser-only `mountPageDocument()` API, isolated canonical page-DOM pagination, and resolver-mediated asset loading. The current implementation is Chromium-reference pagination, not the complete target fragmentation engine.
-- `@imposia/client`: browser-only convenience entrypoint re-exporting Core and Viewer APIs.
+- `@imposia/client`: browser-only convenience entrypoint for the Core page-document and Viewer APIs.
 - `@imposia/react`: React-first adapter for mounting the Core page document and Viewer.
 - `@imposia/viewer`: accessible continuous/single-page PDF canvas viewer for Chromium, Firefox, and WebKit, plus `mountPageViewer()` for presenting the existing canonical Core iframe in Chromium.
 
@@ -50,9 +50,31 @@ import { ImposiaPageViewer } from "@imposia/react";
 import "@imposia/react/styles.css";
 
 export function BookPreview() {
-  return <ImposiaPageViewer source={{ html: "<article><h1>Hello</h1></article>" }} />;
+  return (
+    <ImposiaPageViewer
+      source={{ html: "<article><h1>Hello</h1></article>" }}
+      onReady={(pageDocument) => console.log(pageDocument.pageCount)}
+      onError={(error) => console.error(error)}
+    />
+  );
 }
 ```
+
+Core behavior can be composed through ordered, controller-lifetime extensions:
+
+```ts
+import { mountPageDocument, type PageExtension } from "@imposia/client";
+
+const runningHead: PageExtension = {
+  name: "example/running-head",
+  decoratePage: ({ blank }) =>
+    blank ? undefined : { headerHtml: "Chapter · {{pageNumber}} / {{totalPages}}" },
+};
+
+const controller = mountPageDocument(host, source, { extensions: [runningHead] });
+```
+
+Transform, asset-policy, and decoration output is treated as untrusted input and stays inside Core's sanitizer, resolver, warning, abort, rollback, and cleanup boundaries. Extension order is the composition order and is fixed for the controller lifetime.
 
 ## Viewer APIs
 
