@@ -22,14 +22,15 @@ Intentional RED artifacts are retained in `artifacts/evidence/*-red.log`; matchi
 
 ## Browser-Core, canonical-Viewer, and package-split ledger
 
-Executed on 2026-07-18. This evidence covers the current one-page `@imposia/core` vertical slice, its resolver-mediated asset boundary, the canonical-iframe Viewer surface, and the ownership move of the legacy PDF renderer to `@imposia/node`; it does not claim completion of full fragmentation or a shared Node paginator.
+Executed on 2026-07-18. This evidence covers the current Chromium-reference multi-page `@imposia/core` canonical paginator, its resolver-mediated asset boundary, the canonical-iframe Viewer surface, and the ownership move of the legacy PDF renderer to `@imposia/node`; it does not claim completion of the full target or Node PDF output from the Core paginator.
 
 | Requirement | Command / observable evidence | Result |
 | --- | --- | --- |
 | Clean browser-Core builds and package boundary | Two clean builds plus the Core artifact audit | Both clean builds passed; 48 publishable Core artifacts were boundary-clean. |
 | Static checks | TypeScript typecheck and Biome lint | Both passed; Biome checked 77 files. |
 | Automated tests | Vitest | 66/66 tests passed. |
-| Browser-Core matrix | Browser-Core matrix across Chromium, Firefox, and WebKit | 28 tests passed; 2 Firefox/WebKit print cases were expected skips. |
+| Browser-Core matrix | Browser-Core matrix across Chromium, Firefox, and WebKit | 28 tests passed; 2 Firefox/WebKit print cases were expected skips. Chromium is the pagination reference. |
+| Canonical browser pagination | Chromium fragmentation E2E coverage | Real A4 canonical pages are produced from ordered flow; all 84 markers occur exactly once, page metadata and recto/verso sides match the DOM, and the canonical iframe Viewer navigates the resulting page count. |
 | Resolver-mediated Core assets | Browser-Core asset and lifecycle E2E coverage | HTML and CSS assets resolve only through the host resolver; frame markup contains only Core-created blob URLs, authored URLs do not fetch, blocked resources warn deterministically, and URLs are revoked on replacement, failure, and destruction. |
 | Canonical iframe Viewer | Chromium page-Viewer E2E coverage | `mountPageViewer()` retains the exact Core iframe and page DOM, creates no canvas reconstruction, prints the frame rather than the parent, accepts only newer generations from the same iframe, and restores the host on idempotent destruction. |
 | CSS-driven browser print | Chromium print CSS probe on the canonical page document | Passed; canonical page-document CSS with `preferCSSPageSize` produced one A4 sheet with an approximately 594.96 × 841.92 pt viewport. Separate lifecycle tests prove `print()` targets the exact canonical iframe; this row does not claim a live-frame physical capture. |

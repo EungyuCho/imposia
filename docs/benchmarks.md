@@ -1,6 +1,6 @@
 # Benchmarks
 
-The benchmark measures the legacy `@imposia/node` PDF renderer with pinned Chromium and verifies exact 10, 50, and 200-page A4 output for a deterministic local workload containing embedded font data, SVG images, tables, headings, and body text. It performs three cold renderer runs and seven warm renders after an unmeasured warm-up for each size. It does not benchmark the current one-page `@imposia/core` browser vertical slice.
+The benchmark measures the legacy `@imposia/node` PDF renderer with pinned Chromium and verifies exact 10, 50, and 200-page A4 output for a deterministic local workload containing embedded font data, SVG images, tables, headings, and body text. It performs three cold renderer runs and seven warm renders after an unmeasured warm-up for each size. It does not benchmark the current browser-Core canonical paginator.
 
 The schema records OS release, architecture, CPU, logical CPU count, memory, Node, Playwright, and Chromium versions. Comparison stops when the stable-host identity differs. To reject real regressions without treating small host jitter as one, totals use paired percentage and absolute limits: warm total regresses only when it is both more than 25% and more than 150 ms slower; cold total regresses only when it is both more than 35% and more than 500 ms slower. A phase whose baseline is at least 100 ms regresses only when it is both more than 40% and more than 100 ms slower; smaller phases remain diagnostic rather than gating.
 
