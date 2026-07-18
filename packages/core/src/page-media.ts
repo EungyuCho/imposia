@@ -29,7 +29,12 @@ export type PageMarginBoxName = (typeof PAGE_MARGIN_BOX_NAMES)[number];
 
 export type PageMarginContentPart =
   | Readonly<{ type: "text"; value: string }>
-  | Readonly<{ type: "counter"; name: "page" | "pages" }>;
+  | Readonly<{ type: "counter"; name: "page" | "pages" }>
+  | Readonly<{
+      type: "string";
+      name: string;
+      position: "first" | "start" | "last";
+    }>;
 
 type PageSelector = Readonly<{
   name: string | undefined;
@@ -302,6 +307,23 @@ export function parseMarginBoxContent(value: string): readonly PageMarginContent
       if (name !== "page" && name !== "pages") return undefined;
       parts.push(Object.freeze({ type: "counter", name }));
       index += counter[0].length;
+      continue;
+    }
+    const namedString = /^string\(\s*([^\s,)]+)\s*,\s*(first|start|last)\s*\)/i.exec(
+      value.slice(index),
+    );
+    if (namedString !== null) {
+      const name = namedString[1];
+      const position = namedString[2]?.toLowerCase();
+      if (
+        name === undefined ||
+        !CSS_IDENTIFIER.test(name) ||
+        (position !== "first" && position !== "start" && position !== "last")
+      ) {
+        return undefined;
+      }
+      parts.push(Object.freeze({ type: "string", name, position }));
+      index += namedString[0].length;
       continue;
     }
     return undefined;
@@ -772,12 +794,16 @@ export function marginBoxText(
   content: readonly PageMarginContentPart[] | undefined,
   pageNumber: number,
   totalPages: number,
+  namedString: (name: string, position: "first" | "start" | "last") => string = () => "",
 ): string {
   if (content === undefined) return "";
   return content
     .map((part) => {
       if (part.type === "text") return part.value;
-      return String(part.name === "page" ? pageNumber : totalPages);
+      if (part.type === "counter") {
+        return String(part.name === "page" ? pageNumber : totalPages);
+      }
+      return namedString(part.name, part.position);
     })
     .join("");
 }

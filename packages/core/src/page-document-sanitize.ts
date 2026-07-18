@@ -144,11 +144,9 @@ export function sanitizeFrameContent(
         element.removeAttribute(attribute.name);
         continue;
       }
-      const svgFragment =
-        (name === "href" || name === "xlink:href") &&
-        element.namespaceURI === "http://www.w3.org/2000/svg" &&
-        sameDocumentFragment(attribute.value);
-      if (svgFragment) element.setAttribute(attribute.name, attribute.value.trim());
+      const safeFragment =
+        (name === "href" || name === "xlink:href") && sameDocumentFragment(attribute.value);
+      if (safeFragment) element.setAttribute(attribute.name, attribute.value.trim());
       const resolved =
         preserveResolvedResources &&
         resolvedAttribute(element, name, attribute.value, resolvedUrls);
@@ -159,7 +157,7 @@ export function sanitizeFrameContent(
       }
       if (
         name.startsWith("on") ||
-        (RESOURCE_ATTRIBUTES.has(name) && !resolved && !svgFragment) ||
+        (RESOURCE_ATTRIBUTES.has(name) && !resolved && !safeFragment) ||
         name === "target"
       ) {
         if (RESOURCE_ATTRIBUTES.has(name)) {
@@ -182,6 +180,9 @@ export function sanitizeFrameContent(
       const sanitized = sanitizeCss(style, preserveResolvedResources, resolvedUrls);
       resourceBlocked ||= sanitized.resourceBlocked;
       element.setAttribute("style", sanitized.css);
+    }
+    if (localName === "img" && !element.hasAttribute("src") && !element.hasAttribute("srcset")) {
+      element.remove();
     }
   }
   return resourceBlocked;
@@ -210,7 +211,7 @@ export function pageWarnings(warnings: readonly DocumentWarning[]): readonly Pag
         ? "RESOURCE_BLOCKED"
         : warning.code === "UNSUPPORTED_DECORATION_TOKEN"
           ? "UNSUPPORTED_DECORATION_TOKEN"
-          : warning.code === "UNSUPPORTED_BREAK_VALUE"
+          : warning.code === "UNSUPPORTED_BREAK_VALUE" || warning.code === "UNSUPPORTED_CSS_FEATURE"
             ? "UNSUPPORTED_LAYOUT"
             : undefined;
     if (code === undefined || mapped.has(code)) continue;
