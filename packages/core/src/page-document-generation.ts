@@ -47,10 +47,19 @@ export interface BuiltGeneration {
 export interface BuiltPage {
   page: HTMLElement;
   flow: HTMLElement;
+  blank: boolean;
 }
 
 interface PageParts extends BuiltPage {
   content: HTMLElement;
+}
+
+type PageBreak = "auto" | "page" | "left" | "right";
+
+interface BreakConstraint {
+  before: PageBreak;
+  after: PageBreak;
+  contributesToFlow: boolean;
 }
 
 const ATOMIC_ELEMENT_NAMES = new Set([
@@ -72,6 +81,7 @@ const ATOMIC_ELEMENT_NAMES = new Set([
 
 const NON_FLOW_ELEMENT_NAMES = new Set(["style", "template"]);
 const OVERFLOW_TOLERANCE_CSS_PX = 0.5;
+const PAGE_BREAK_VALUES = new Set<PageBreak>(["auto", "page", "left", "right"]);
 
 function limitError(name: keyof PageLimits, maximum: number): Error {
   return new Error(`${name} must be a finite positive number no greater than ${maximum}.`);
@@ -141,21 +151,29 @@ function createPage(
 
   const header = frameDocument.createElement("header");
   header.setAttribute("data-imposia-page-header", "");
+  header.style.gridRow = "1";
   const content = frameDocument.createElement("main");
   content.setAttribute("data-imposia-page-content", "");
+  content.style.gridRow = "2";
   const flow = frameDocument.createElement("div");
   flow.setAttribute("data-imposia-page-flow", "");
   const footer = frameDocument.createElement("footer");
   footer.setAttribute("data-imposia-page-footer", "");
+  footer.style.gridRow = "3";
 
   const headerResourceBlocked = appendDecoration(frameDocument, header, settings.headerTemplate);
   const footerResourceBlocked = appendDecoration(frameDocument, footer, settings.footerTemplate);
   content.append(flow);
-  page.append(header, content, footer);
+  page.append(content, header, footer);
   return {
-    page: { page, flow, content },
+    page: { page, flow, content, blank: false },
     resourceBlocked: headerResourceBlocked || footerResourceBlocked,
   };
+}
+
+function setPageBlank(page: PageParts, blank: boolean): void {
+  page.blank = blank;
+  page.page.setAttribute("data-imposia-blank", String(blank));
 }
 
 function isNonFlowNode(node: Node): boolean {
@@ -169,6 +187,83 @@ function isNonFlowNode(node: Node): boolean {
 
 function flowHasContent(flow: HTMLElement): boolean {
   return [...flow.childNodes].some((node) => !isNonFlowNode(node));
+}
+
+function pageBreak(value: string): PageBreak {
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "always") return "page";
+  return PAGE_BREAK_VALUES.has(normalized as PageBreak) ? (normalized as PageBreak) : "auto";
+}
+
+function isInlineDisplay(display: string): boolean {
+  return display === "inline" || display.startsWith("inline-") || display.startsWith("inline ");
+}
+
+function isReplacedElement(element: Element): boolean {
+  return ATOMIC_ELEMENT_NAMES.has(element.localName.toLowerCase());
+}
+
+function captureBreakConstraints(root: HTMLElement): ReadonlyMap<Element, BreakConstraint> {
+  const constraints = new Map<Element, BreakConstraint>();
+  const view = root.ownerDocument.defaultView;
+  if (view === null) return constraints;
+
+  for (const element of root.querySelectorAll<Element>("*")) {
+    const localName = element.localName.toLowerCase();
+    if (NON_FLOW_ELEMENT_NAMES.has(localName)) {
+      constraints.set(element, { before: "auto", after: "auto", contributesToFlow: false });
+      continue;
+    }
+    const style = view.getComputedStyle(element);
+    const contributesToFlow =
+      style.display !== "none" && style.position !== "absolute" && style.position !== "fixed";
+    const supportsBreak =
+      contributesToFlow &&
+      style.display !== "contents" &&
+      (!isInlineDisplay(style.display) || isReplacedElement(element));
+    constraints.set(element, {
+      before: supportsBreak ? pageBreak(style.breakBefore) : "auto",
+      after: supportsBreak ? pageBreak(style.breakAfter) : "auto",
+      contributesToFlow,
+    });
+  }
+  return constraints;
+}
+
+function nodeContributesToFlow(
+  node: Node,
+  constraints: ReadonlyMap<Element, BreakConstraint>,
+): boolean {
+  if (node.nodeType === Node.TEXT_NODE) return (node.textContent ?? "").trim() !== "";
+  if (node.nodeType !== Node.ELEMENT_NODE) return false;
+  return constraints.get(node as Element)?.contributesToFlow ?? !isNonFlowNode(node);
+}
+
+function breakConstraintFor(
+  node: Node,
+  constraints: ReadonlyMap<Element, BreakConstraint>,
+): Pick<BreakConstraint, "before" | "after"> {
+  if (node.nodeType !== Node.ELEMENT_NODE) return { before: "auto", after: "auto" };
+  return constraints.get(node as Element) ?? { before: "auto", after: "auto" };
+}
+
+function pageSide(page: PageParts): "left" | "right" {
+  return page.page.getAttribute("data-imposia-page-side") === "left" ? "left" : "right";
+}
+
+function startPageForBreak(
+  currentPage: PageParts,
+  breakValue: PageBreak,
+  nextPage: () => PageParts,
+): PageParts {
+  if (breakValue === "auto") return currentPage;
+  let page = currentPage;
+  if (flowHasContent(page.flow)) page = nextPage();
+  if ((breakValue === "left" || breakValue === "right") && pageSide(page) !== breakValue) {
+    setPageBlank(page, true);
+    page = nextPage();
+  }
+  return page;
 }
 
 function pageOverflows(page: PageParts): boolean {
@@ -355,6 +450,11 @@ export async function buildGeneration(
     ...(settings.footerTemplate === undefined ? {} : { footerTemplate: settings.footerTemplate }),
     ...(settings.assetResolver === undefined ? {} : { allowRemoteResources: true }),
   });
+  const pageSettings: PageGenerationSettings = {
+    ...settings,
+    ...(prepared.headerTemplate === undefined ? {} : { headerTemplate: prepared.headerTemplate }),
+    ...(prepared.footerTemplate === undefined ? {} : { footerTemplate: prepared.footerTemplate }),
+  };
   let assets: ResolvedPageAssets | undefined;
   const resourceStartedAt = performance.now();
   if (settings.assetResolver !== undefined) {
@@ -413,12 +513,14 @@ export async function buildGeneration(
     const probeStyles = appendProbeStyles(frameDocument, css);
     const probe = createProbe(frameDocument);
     try {
+      probe.append(sourceFlow);
+      const breakConstraints = captureBreakConstraints(sourceFlow);
       const nextPage = (): PageParts => {
         throwIfAborted(signal);
         if (pages.length >= settings.limits.maxPages) {
           throw new ImposiaError("PAGE_LIMIT", "Page limit exceeded.");
         }
-        const created = createPage(frameDocument, settings, pages.length + 1);
+        const created = createPage(frameDocument, pageSettings, pages.length + 1);
         resourceBlocked ||= created.resourceBlocked;
         pages.push(created.page);
         probe.append(created.page.page);
@@ -426,26 +528,40 @@ export async function buildGeneration(
       };
 
       let currentPage = nextPage();
+      let pendingBreakAfter: PageBreak = "auto";
       for (const node of [...sourceFlow.childNodes]) {
         throwIfAborted(signal);
+        const contributesToFlow = nodeContributesToFlow(node, breakConstraints);
+        const constraint = breakConstraintFor(node, breakConstraints);
+        if (contributesToFlow) {
+          currentPage = startPageForBreak(
+            currentPage,
+            constraint.before === "auto" ? pendingBreakAfter : constraint.before,
+            nextPage,
+          );
+          setPageBlank(currentPage, false);
+        }
         const currentHadContent = flowHasContent(currentPage.flow);
         currentPage.flow.append(node);
-        if (!pageOverflows(currentPage)) continue;
+        if (pageOverflows(currentPage)) {
+          if (currentHadContent) {
+            node.remove();
+            currentPage = nextPage();
+            currentPage.flow.append(node);
+          }
 
-        if (currentHadContent) {
-          node.remove();
-          currentPage = nextPage();
-          currentPage.flow.append(node);
-          if (!pageOverflows(currentPage)) continue;
+          if (pageOverflows(currentPage)) {
+            if (node.nodeType === Node.TEXT_NODE) {
+              currentPage = fragmentText(node as Text, currentPage, nextPage, reportOverflow);
+            } else if (node.nodeType === Node.ELEMENT_NODE && !isAtomicElement(node as Element)) {
+              currentPage = fragmentElement(node as Element, currentPage, nextPage, reportOverflow);
+            } else {
+              reportOverflow();
+            }
+          }
         }
 
-        if (node.nodeType === Node.TEXT_NODE) {
-          currentPage = fragmentText(node as Text, currentPage, nextPage, reportOverflow);
-        } else if (node.nodeType === Node.ELEMENT_NODE && !isAtomicElement(node as Element)) {
-          currentPage = fragmentElement(node as Element, currentPage, nextPage, reportOverflow);
-        } else {
-          reportOverflow();
-        }
+        if (contributesToFlow) pendingBreakAfter = constraint.after;
       }
 
       for (const [index, page] of pages.entries()) {
@@ -472,7 +588,7 @@ export async function buildGeneration(
     return {
       body,
       css,
-      pages: Object.freeze(pages.map(({ page, flow }) => ({ page, flow }))),
+      pages: Object.freeze(pages.map(({ page, flow, blank }) => ({ page, flow, blank }))),
       warnings: Object.freeze(warnings),
       timings: Object.freeze({
         resourceMs: resourceFinishedAt - resourceStartedAt,
