@@ -51,12 +51,47 @@ interface PageDocumentOptions {
   onProgress?: (progress: { completedPages: number }) => void;
 }
 
+type PageWarningCode =
+  | "PAGE_OVERFLOW"
+  | "RESOURCE_BLOCKED"
+  | "RESOURCE_TIMEOUT"
+  | "UNSUPPORTED_LAYOUT"
+  | "UNSUPPORTED_DECORATION_TOKEN"
+  | "AVOID_RELAXED";
+
+interface PageMetadata {
+  readonly number: number;
+  readonly side: "left" | "right";
+  readonly blank: boolean;
+  readonly widthCssPx: number;
+  readonly heightCssPx: number;
+  readonly bodyText: readonly string[];
+}
+
+interface PageWarning {
+  readonly code: PageWarningCode;
+  readonly message: string;
+  readonly sourceIdentity: string | undefined;
+}
+
+interface PageTimings {
+  readonly totalMs: number;
+  readonly resourceMs: number;
+  readonly paginationMs: number;
+}
+
 interface PageDocument {
   readonly iframe: HTMLIFrameElement;
+  readonly generation: number;
+  readonly pageCount: number;
+  readonly pages: readonly PageMetadata[];
+  readonly warnings: readonly PageWarning[];
+  readonly timings: PageTimings;
 }
 
 interface PageDocumentController {
   readonly ready: Promise<PageDocument>;
+  readonly current: PageDocument | undefined;
   update(source: PageSource, options?: { signal?: AbortSignal }): Promise<PageDocument>;
   print(): Promise<void>;
   destroy(): Promise<void>;
@@ -76,9 +111,11 @@ declare function mountViewer(
 
 `css` defaults to an empty list so plain HTML is valid. When supplied, it is an explicit list of CSS texts and its array order is cascade order. `baseUrl`, when supplied with either source form, is only the base used to identify asset references for the resolver; it does not authorize a browser fetch. An HTML string is parsed into a detached document. A `lightDom` value is deeply cloned before sanitization. In either form, the caller's source is never mutated, event listeners are never copied, shadow trees are excluded, and custom-element runtime state is not copied or upgraded for the source object. The canonical, sanitized clone is the only source the paginator uses.
 
-`ready` settles for the initial canonical page document. `PageDocumentOptions.signal` cancels that initial operation; `update()` accepts its own signal and replaces the current document atomically after the replacement is ready. The most recently started update wins: every earlier unsettled update rejects an `AbortError`, even when it has no caller signal. An aborted caller signal also rejects that operation with `AbortError`. `print()` waits for the current winning document, then invokes that iframe's browser print method; it never produces or prints a reconstructed copy. `destroy()` is asynchronous, idempotent, rejects future work, waits for active teardown, and revokes every resource owned by the controller.
+`ready` settles for the initial canonical page document. `PageDocumentOptions.signal` cancels that initial operation; `update()` accepts its own signal and replaces the current document atomically after the replacement is ready. The most recently started update wins: every earlier unsettled update rejects an `AbortError`, even when it has no caller signal. An aborted caller signal also rejects that operation with `AbortError`. `current` is the most recently ready `PageDocument`, is `undefined` before the first ready generation and after `destroy()`, and is not cleared by a rejected replacement. `print()` waits for the current winning document, then invokes that iframe's browser print method; it never produces or prints a reconstructed copy. `destroy()` is asynchronous, idempotent, rejects future work, waits for active teardown, and revokes every resource owned by the controller.
 
-The resolved `PageDocument` exposes the canonical iframe. Target `mountViewer()` may put that iframe inside Viewer chrome and control its presentation, but it must retain that node and may not clone it, clone its page descendants, or invoke pagination.
+The resolved `PageDocument` exposes the canonical iframe plus an immutable generation snapshot. `generation` starts at 1 for the first ready document and increments for each ready replacement. `pageCount` equals `pages.length`; page dimensions are measured in browser CSS pixels, never PDF points. Each immutable `PageMetadata` records the physical page number, side, blank status, CSS-pixel box dimensions, and body text strings in tree order from `data-imposia-page-flow` only; headers and footers are excluded, and blank pages have an empty `bodyText` array. Target `mountViewer()` may put that iframe inside Viewer chrome and control its presentation, but it must retain that node and may not clone it, clone its page descendants, or invoke pagination.
+
+`warnings` is an immutable, deterministic list. Each warning has a stable code, stable human-readable message, and `sourceIdentity`, which is the deterministic pre-order identity of the sanitized source node or `undefined` for a document-level condition. It includes at least `PAGE_OVERFLOW`, `RESOURCE_BLOCKED`, `RESOURCE_TIMEOUT`, and `UNSUPPORTED_LAYOUT`; `UNSUPPORTED_DECORATION_TOKEN` and `AVOID_RELAXED` cover the target rules above. Warnings are emitted and deduplicated by code plus source identity in first-occurrence sanitized-source order, with document-level warnings first and page-local ties ordered by page number. `timings` is an immutable millisecond snapshot: `totalMs` covers the generation end to end, `resourceMs` covers resolver and readiness work, and `paginationMs` covers page construction after resource readiness.
 
 ## Canonical page DOM
 
@@ -121,6 +158,6 @@ Before `ready` settles, all resolved resources must either become ready or hit t
 
 ## Equality and export
 
-Browser preview and Node PDF export are equivalent when their canonical page DOM has the same page count, page dimensions, ordered text, decorations, and blank-page positions. PDF bytes, raster pixels, accessibility-tree serialization, font subset ordering, and metadata are explicitly not equality criteria.
+Browser preview and Node PDF export are equivalent when their canonical page DOM has the same page count, CSS-pixel page dimensions, ordered body text, decorations, and blank-page positions. PDF bytes, raster pixels, accessibility-tree serialization, font subset ordering, and metadata are explicitly not equality criteria.
 
 The migration is complete only when the browser path produces that canonical DOM, Viewer displays that instance, and `@imposia/node` prints that frame. Until then, the legacy PDF-first path remains the stable release path. The rollback gate is any failure of the structural equality contract, isolation contract, or required resource cleanup in Chromium-reference tests; release traffic stays on the legacy path until the failing target change is corrected or withdrawn.
