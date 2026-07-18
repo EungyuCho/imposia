@@ -1,10 +1,16 @@
+import * as React from "react";
 import type {
+  EpubExportOptions,
   ExtensionPageWarning,
   PageDocument,
   PageExtension,
   PageExtensionContext,
 } from "../../packages/client/src/index.js";
-import type { PageExtension as ReactPageExtension } from "../../packages/react/src/index.js";
+import {
+  ImposiaPageViewer,
+  type ImposiaPageViewerHandle,
+  type PageExtension as ReactPageExtension,
+} from "../../packages/react/src/index.js";
 
 const extension = {
   name: "example/running-head",
@@ -27,9 +33,7 @@ const warning: ExtensionPageWarning = {
 
 void warning;
 
-type RuntimeEpubExport = (options: {
-  metadata: { title: string; language: string; identifier: string; modified?: string };
-}) => Promise<Blob>;
+type RuntimeEpubExport = (options: EpubExportOptions) => Promise<Blob>;
 
 declare const committedPageDocument: PageDocument;
 const exportCandidate = Reflect.get(committedPageDocument, "exportEpub");
@@ -44,3 +48,28 @@ if (typeof exportCandidate === "function") {
     },
   });
 }
+
+const reactHandle = React.createRef<ImposiaPageViewerHandle>();
+const reactElement = React.createElement(ImposiaPageViewer, {
+  source: { html: "<p>React handle typecheck</p>" },
+  ref: reactHandle,
+});
+const runtimeHandleCandidate = Reflect.get(reactHandle, "current");
+if (runtimeHandleCandidate !== null && typeof runtimeHandleCandidate === "object") {
+  const currentCandidate = Reflect.get(runtimeHandleCandidate, "current");
+  const printCandidate = Reflect.get(runtimeHandleCandidate, "print");
+  const exportCandidate = Reflect.get(runtimeHandleCandidate, "exportEpub");
+  if (currentCandidate !== undefined && typeof printCandidate === "function") {
+    void (printCandidate as ImposiaPageViewerHandle["print"]).call(runtimeHandleCandidate);
+  }
+  if (typeof exportCandidate === "function") {
+    void (exportCandidate as ImposiaPageViewerHandle["exportEpub"]).call(runtimeHandleCandidate, {
+      metadata: {
+        title: "React handle typecheck",
+        language: "en",
+        identifier: "urn:imposia:react-handle-typecheck",
+      },
+    });
+  }
+}
+void reactElement;
