@@ -1,6 +1,11 @@
 import { expect, test } from "@playwright/test";
 import { captureBrowserErrors } from "./browser-core-support.js";
 
+const CSS_PX_PER_MM = 96 / 25.4;
+const A4_WIDTH_CSS_PX = 210 * CSS_PX_PER_MM;
+const A4_HEIGHT_CSS_PX = 297 * CSS_PX_PER_MM;
+const CSS_LAYOUT_UNIT_CSS_PX = 1 / 64;
+
 test("mounts the browser-core canonical page document", async ({ page, browserName }) => {
   const { errors, pageErrors } = captureBrowserErrors(page, browserName);
 
@@ -149,7 +154,7 @@ test("mounts the browser-core canonical page document", async ({ page, browserNa
   }
 });
 
-test("publishes page metadata measured from the canonical page element", async ({
+test("publishes normalized page metadata aligned with the canonical page element", async ({
   page,
   browserName,
 }) => {
@@ -164,7 +169,13 @@ test("publishes page metadata measured from the canonical page element", async (
         | {
             ready: Promise<{
               iframe: HTMLIFrameElement;
-              pages: readonly { widthCssPx: number; heightCssPx: number }[];
+              pages: readonly [
+                {
+                  widthCssPx: number;
+                  heightCssPx: number;
+                  geometry: { sheetWidthCssPx: number; sheetHeightCssPx: number };
+                },
+              ];
               timings: { paginationMs: number };
             }>;
             destroy(): Promise<void>;
@@ -199,7 +210,14 @@ test("publishes page metadata measured from the canonical page element", async (
         const metadata = ready.pages[0];
         if (metadata === undefined) throw new Error("Missing page metadata.");
         return {
-          metadata: { width: metadata.widthCssPx, height: metadata.heightCssPx },
+          metadata: {
+            width: metadata.widthCssPx,
+            height: metadata.heightCssPx,
+            geometry: {
+              width: metadata.geometry.sheetWidthCssPx,
+              height: metadata.geometry.sheetHeightCssPx,
+            },
+          },
           rect: { width: rect.width, height: rect.height },
           paginationMs: ready.timings.paginationMs,
           parseDelayMs,
@@ -211,12 +229,24 @@ test("publishes page metadata measured from the canonical page element", async (
       }
     });
 
-    expect(Math.abs(observation.metadata.width - observation.rect.width)).toBeLessThan(0.01);
-    expect(Math.abs(observation.metadata.height - observation.rect.height)).toBeLessThan(0.01);
+    expect(observation.metadata.width).toBe(observation.metadata.geometry.width);
+    expect(observation.metadata.height).toBe(observation.metadata.geometry.height);
+    expect(observation.metadata.geometry.width).toBe(A4_WIDTH_CSS_PX);
+    expect(observation.metadata.geometry.height).toBe(A4_HEIGHT_CSS_PX);
+    expect(Math.abs(observation.metadata.width - observation.rect.width)).toBeLessThanOrEqual(
+      CSS_LAYOUT_UNIT_CSS_PX,
+    );
+    expect(Math.abs(observation.metadata.height - observation.rect.height)).toBeLessThanOrEqual(
+      CSS_LAYOUT_UNIT_CSS_PX,
+    );
     expect(observation.rect.width).toBeGreaterThan(0);
-    expect(observation.rect.width).toBeLessThan(793.7);
+    expect(Math.abs(observation.rect.width - A4_WIDTH_CSS_PX)).toBeLessThanOrEqual(
+      CSS_LAYOUT_UNIT_CSS_PX,
+    );
     expect(observation.rect.height).toBeGreaterThan(0);
-    expect(observation.rect.height).toBeLessThan(1122.52);
+    expect(Math.abs(observation.rect.height - A4_HEIGHT_CSS_PX)).toBeLessThanOrEqual(
+      CSS_LAYOUT_UNIT_CSS_PX,
+    );
     expect(observation.paginationMs).toBeGreaterThanOrEqual(observation.parseDelayMs);
   } finally {
     expect(errors).toEqual([]);
