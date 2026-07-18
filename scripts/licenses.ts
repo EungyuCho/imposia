@@ -1,5 +1,6 @@
 import { readdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { auditPackageArtifact, type PublishableManifest } from "./license-package-audit.ts";
 
 const pnpmRoot = path.resolve("node_modules/.pnpm");
 const reportPath = path.resolve("artifacts/evidence/licenses.json");
@@ -21,6 +22,10 @@ interface PackageLicense {
 
 function record(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function stringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((entry): entry is string => typeof entry === "string");
 }
 
 async function directories(directory: string): Promise<string[]> {
@@ -100,29 +105,56 @@ async function main(): Promise<void> {
       `Disallowed or unreviewed dependency licenses: ${rejected.map((item) => `${item.name}@${item.version} (${item.license})`).join(", ")}`,
     );
   }
+  const copyleft = sorted.filter((item) => /\b(?:A?GPL|LGPL)\b/i.test(item.license));
+  if (copyleft.length > 0) {
+    throw new Error(
+      `Copyleft dependency licenses require review and are not allowed: ${copyleft.map((item) => `${item.name}@${item.version} (${item.license})`).join(", ")}`,
+    );
+  }
 
-  const packageManifests = await Promise.all(
-    ["packages/core/package.json", "packages/viewer/package.json"].map(async (file) => {
-      const value = JSON.parse(await readFile(path.resolve(file), "utf8"));
+  const packageManifests: PublishableManifest[] = await Promise.all(
+    ["packages/cli", "packages/core", "packages/node", "packages/viewer"].map(async (file) => {
+      const directory = path.resolve(file);
+      const manifestPath = path.join(directory, "package.json");
+      const value = JSON.parse(await readFile(manifestPath, "utf8"));
       if (typeof value !== "object" || value === null || !("dependencies" in value)) {
-        throw new Error(`Invalid package manifest: ${file}.`);
+        throw new Error(`Invalid package manifest: ${manifestPath}.`);
+      }
+      if (!("name" in value) || typeof value.name !== "string") {
+        throw new Error(`Invalid package name: ${manifestPath}.`);
       }
       const dependencies = Reflect.get(value, "dependencies");
       if (typeof dependencies !== "object" || dependencies === null) {
-        throw new Error(`Invalid package dependencies: ${file}.`);
+        throw new Error(`Invalid package dependencies: ${manifestPath}.`);
       }
-      return Object.keys(dependencies);
+      const files = Reflect.get(value, "files");
+      if (!stringArray(files)) {
+        throw new Error(`Invalid package files: ${manifestPath}.`);
+      }
+      return {
+        name: value.name,
+        directory,
+        dependencies: Object.keys(dependencies),
+        files,
+      };
     }),
   );
-  const shippedDependencies = [...new Set(packageManifests.flat())].sort();
+  const workspacePackages = new Set(packageManifests.map((manifest) => manifest.name));
+  const shippedDependencies = [
+    ...new Set(packageManifests.flatMap((manifest) => manifest.dependencies)),
+  ].sort();
   for (const dependency of shippedDependencies) {
     if (!noticeText.toLowerCase().includes(dependency.toLowerCase())) {
       throw new Error(`THIRD_PARTY_NOTICES.md is missing shipped dependency ${dependency}.`);
     }
-    if (!sorted.some((item) => item.name === dependency)) {
+    if (!sorted.some((item) => item.name === dependency) && !workspacePackages.has(dependency)) {
       throw new Error(`Installed license inventory is missing shipped dependency ${dependency}.`);
     }
   }
+  const auditResults = await Promise.all(
+    packageManifests.map((manifest) => auditPackageArtifact(manifest, licenseText, noticeText)),
+  );
+  const bundledPackages = auditResults.flatMap((result) => result.bundledPackages);
 
   const counts = Object.fromEntries(
     [...allowedLicenses]
@@ -133,10 +165,10 @@ async function main(): Promise<void> {
   );
   await writeFile(
     reportPath,
-    `${JSON.stringify({ packageCount: sorted.length, counts, shippedDependencies: shippedDependencies.join(", "), releaseArtifacts: releaseArtifacts.join(", "), packages: sorted }, null, 2)}\n`,
+    `${JSON.stringify({ packageCount: sorted.length, counts, shippedDependencies: shippedDependencies.join(", "), releaseArtifacts: releaseArtifacts.join(", "), packageArtifacts: packageManifests.map((manifest) => manifest.name), bundledPackages, packages: sorted }, null, 2)}\n`,
   );
   process.stdout.write(
-    `License audit passed: ${sorted.length} installed packages, all on the reviewed permissive allowlist.\n`,
+    `License audit passed: ${sorted.length} installed packages, all on the reviewed permissive allowlist; package dry-runs include LICENSE and THIRD_PARTY_NOTICES.md.\n`,
   );
 }
 

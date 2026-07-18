@@ -3,8 +3,8 @@ import { readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { chromium } from "playwright";
-import { createRenderer } from "../packages/core/src/renderer.js";
-import type { RenderTimings } from "../packages/core/src/types.js";
+import { createRenderer } from "../packages/node/src/renderer.js";
+import type { RenderTimings } from "../packages/node/src/types.js";
 import { benchmarkSourceHash } from "./benchmark-integrity.js";
 import { BENCHMARK_THRESHOLD_POLICY, isBenchmarkRegression } from "./benchmark-thresholds.js";
 

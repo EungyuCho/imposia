@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { type CliDependencies, runCli } from "../../packages/cli/src/index.js";
-import { ImposiaError } from "../../packages/core/src/errors.js";
-import type { RenderResult } from "../../packages/core/src/types.js";
+import { ImposiaError } from "../../packages/node/src/index.js";
+import type { RenderResult } from "../../packages/node/src/types.js";
 
 function result(): RenderResult {
   return {

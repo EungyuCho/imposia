@@ -2,7 +2,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { createRenderer, ImposiaError, type RenderResult } from "@imposia/core";
+import { createRenderer, ImposiaError, type RenderResult } from "@imposia/node";
 
 const USAGE = "Usage: imposia <render|pdf> <input.html> --output <output.pdf> [--json]";
 

@@ -1,5 +1,5 @@
+import { type PageSideConstraint, selectBlankMarkers } from "@imposia/core";
 import type { Page } from "playwright";
-import { type PageSideConstraint, selectBlankMarkers } from "./page-side-parity.js";
 import { applyPageSideSpacers } from "./page-side-spacers.js";
 import { locateTextMarkers, type PdfTextMarker } from "./pdf-marker-locator.js";
 

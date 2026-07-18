@@ -1,11 +1,33 @@
-import type { RenderWarning } from "./types.js";
+export type DocumentWarningCode =
+  | "OVERRIDDEN_LEGACY_BREAK"
+  | "UNSUPPORTED_BREAK_VALUE"
+  | "OVERRIDDEN_EMBEDDED_HEADER"
+  | "OVERRIDDEN_EMBEDDED_FOOTER"
+  | "UNSUPPORTED_DECORATION_TOKEN"
+  | "UNSUPPORTED_CSS_FEATURE"
+  | "RESOURCE_BLOCKED"
+  | "RESOURCE_TIMEOUT"
+  | "FONT_TIMEOUT"
+  | "SCRIPT_REMOVED"
+  | "PAGE_OVERFLOW"
+  | "BROWSER_DIFFERENCE";
 
-export type WarningInput = Omit<RenderWarning, "severity">;
+export interface DocumentWarning {
+  code: DocumentWarningCode;
+  severity: "warning";
+  message: string;
+  feature?: string;
+  property?: string;
+  value?: string;
+  sourceIndex?: number;
+}
+
+export type WarningInput = Omit<DocumentWarning, "severity">;
 
 interface PendingWarning {
   order: number;
   sequence: number;
-  warning: RenderWarning;
+  warning: DocumentWarning;
 }
 
 function identity(warning: WarningInput): string {
@@ -14,7 +36,7 @@ function identity(warning: WarningInput): string {
 
 export interface WarningCollector {
   add(warning: WarningInput, order?: number): boolean;
-  finish(): RenderWarning[];
+  finish(): DocumentWarning[];
 }
 
 export function createWarningCollector(): WarningCollector {

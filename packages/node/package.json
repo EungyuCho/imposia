@@ -1,5 +1,5 @@
 {
-  "name": "@imposia/core",
+  "name": "@imposia/node",
   "version": "0.1.0",
   "type": "module",
   "license": "Apache-2.0",
@@ -17,7 +17,8 @@
     "THIRD_PARTY_NOTICES.md"
   ],
   "dependencies": {
-    "parse5": "8.0.0",
-    "postcss": "8.5.6"
+    "@imposia/core": "workspace:*",
+    "pdfjs-dist": "5.4.530",
+    "playwright": "1.57.0"
   }
 }

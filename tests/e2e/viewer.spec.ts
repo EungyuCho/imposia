@@ -1,7 +1,7 @@
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { expect, test } from "@playwright/test";
-import { createRenderer } from "../../packages/core/src/renderer.js";
+import { createRenderer } from "../../packages/node/src/renderer.js";
 
 let largePdfPath = "";
 let largePdfUrl = "";

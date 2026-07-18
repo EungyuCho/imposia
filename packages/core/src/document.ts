@@ -10,10 +10,7 @@ import {
   visitElements,
 } from "./html-policy.js";
 
-export { assertFileWithinRoot, validateRenderInput, withTimeout } from "./input-boundary.js";
-
-import type { RenderWarning } from "./types.js";
-import { createWarningCollector, type WarningCollector } from "./warnings.js";
+import { createWarningCollector, type DocumentWarning, type WarningCollector } from "./warnings.js";
 
 type Document = DefaultTreeAdapterTypes.Document;
 type Element = DefaultTreeAdapterTypes.Element;
@@ -29,7 +26,7 @@ export interface PreparedDocument {
   html: string;
   headerTemplate?: string;
   footerTemplate?: string;
-  warnings: RenderWarning[];
+  warnings: DocumentWarning[];
 }
 
 function textContent(element: Element): string {

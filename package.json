@@ -8,7 +8,8 @@
     "node": ">=22.12.0"
   },
   "scripts": {
-    "build": "tsc -b",
+    "build": "node --import tsx scripts/clean-package-dists.ts && tsc -b && node --import tsx scripts/build-core-browser.ts && node --import tsx scripts/check-core-package-boundary.ts",
+    "check:core-boundary": "node --import tsx scripts/check-core-package-boundary.ts",
     "setup:browsers": "playwright install chromium firefox webkit",
     "preflight": "node --import tsx scripts/preflight.ts",
     "typecheck": "tsc -b --pretty false",
@@ -36,6 +37,7 @@
     "@types/node": "24.10.1",
     "@types/pixelmatch": "5.2.6",
     "@types/pngjs": "6.0.5",
+    "esbuild": "0.25.12",
     "pixelmatch": "7.1.0",
     "pdfjs-dist": "5.4.530",
     "playwright": "1.57.0",

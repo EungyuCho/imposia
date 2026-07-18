@@ -1,8 +1,8 @@
 import { createServer, type Server } from "node:http";
 import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
 import { describe, expect, it } from "vitest";
-import { ImposiaError } from "../../packages/core/src/errors.js";
-import { createRenderer } from "../../packages/core/src/renderer.js";
+import { ImposiaError } from "../../packages/node/src/index.js";
+import { createRenderer } from "../../packages/node/src/renderer.js";
 
 async function listen(server: Server): Promise<number> {
   await new Promise<void>((resolve, reject) => {
