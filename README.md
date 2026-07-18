@@ -1,10 +1,11 @@
 # Imposia
 
-Imposia is a clean-room HTML/CSS publishing toolkit. The current implementation has browser-Core canonical page-DOM pagination with resolver-mediated assets, a canonical-iframe Viewer surface, and a separate Node/Chromium PDF renderer; the full browser-first product remains in progress.
+Imposia is a clean-room, browser-first HTML/CSS publishing toolkit. The client runtime is exposed through `@imposia/client`, which combines Core pagination and Viewer presentation without importing Node or CLI code.
 
 ## Packages
 
 - `@imposia/core`: browser-only `mountPageDocument()` API, isolated canonical page-DOM pagination, and resolver-mediated asset loading. The current implementation is Chromium-reference pagination, not the complete target fragmentation engine.
+- `@imposia/client`: browser-only convenience entrypoint re-exporting Core and Viewer APIs; it has no Node, filesystem, or CLI dependency.
 - `@imposia/node`: legacy Node/Playwright PDF renderer, Chromium lifecycle, PDF metadata, and timing data.
 - `@imposia/viewer`: accessible continuous/single-page PDF canvas viewer for Chromium, Firefox, and WebKit, plus `mountPageViewer()` for presenting the existing canonical Core iframe in Chromium.
 - `@imposia/cli`: `render` and `pdf` commands with JSON output and stable exit codes, backed by `@imposia/node`.
@@ -38,6 +39,13 @@ console.log(pageDocument.pageCount, pageDocument.pages, pageDocument.warnings);
 ```
 
 This browser surface paginates canonical pages in an isolated iframe. It accepts an optional `assetResolver`; discovered HTML and CSS assets are resolved only through that boundary and inserted as Core-owned blob URLs. `mountPageViewer()` can present that same iframe without cloning it or rerunning layout. The current paginator is verified against Chromium; broader target fragmentation and Node PDF generation through this same paginator remain pending.
+
+For client applications that want one browser-only dependency, use the unified entrypoint:
+
+```ts
+import { mountPageDocument, mountPageViewer } from "@imposia/client";
+import "@imposia/client/styles.css";
+```
 
 ## Node PDF API (current stable PDF path)
 
