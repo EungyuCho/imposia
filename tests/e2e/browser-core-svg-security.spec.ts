@@ -1,5 +1,32 @@
-import { expect, test } from "@playwright/test";
+import { type ConsoleMessage, expect, test } from "@playwright/test";
 import { captureBrowserErrors } from "./browser-core-support.js";
+
+const CHROMIUM_SVG_SELF_REFERENCE_CSP_ERROR =
+  /^Loading the image 'http:\/\/127\.0\.0\.1:4178\/examples\/book\.html' violates the following Content Security Policy directive: "img-src blob:"\. The action has been blocked\.$/;
+const WEBKIT_SVG_SELF_REFERENCE_CSP_ERROR =
+  /^Refused to load http:\/\/127\.0\.0\.1:4178\/examples\/book\.html because it does not appear in the img-src directive of the Content Security Policy\.$/;
+const FIREFOX_SVG_SELF_REFERENCE_CSP_ERROR =
+  /Content-Security-Policy: The page’s settings blocked the loading of a resource \(img-src\) at http:\/\/127\.0\.0\.1:4178\/examples\/book\.html#safe because it violates the following directive: “img-src blob:”/;
+
+function isSvgSelfReferenceCspError(browserName: string, message: ConsoleMessage): boolean {
+  if (browserName === "chromium") {
+    return (
+      message.location().url === "about:srcdoc" &&
+      CHROMIUM_SVG_SELF_REFERENCE_CSP_ERROR.test(message.text())
+    );
+  }
+  if (browserName === "firefox") {
+    return (
+      message.location().url === "http://127.0.0.1:4178/packages/core/dist/index.js" &&
+      FIREFOX_SVG_SELF_REFERENCE_CSP_ERROR.test(message.text())
+    );
+  }
+  return (
+    browserName === "webkit" &&
+    message.location().url === "" &&
+    WEBKIT_SVG_SELF_REFERENCE_CSP_ERROR.test(message.text())
+  );
+}
 
 test("preserves safe head CSS while sanitizing escaped resources", async ({
   page,
@@ -71,7 +98,9 @@ test("preserves safe head CSS while sanitizing escaped resources", async ({
 });
 
 test("sanitizes SVG CSS resources and presentation attributes", async ({ page, browserName }) => {
-  const { errors, pageErrors } = captureBrowserErrors(page, browserName);
+  const { errors, pageErrors } = captureBrowserErrors(page, browserName, {
+    allowConsoleError: (message) => isSvgSelfReferenceCspError(browserName, message),
+  });
   const blockedRequests: string[] = [];
   const blockedRoute = async (route: import("@playwright/test").Route) => {
     blockedRequests.push(route.request().url());
