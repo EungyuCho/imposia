@@ -21,6 +21,8 @@ pnpm cli -- render examples/book.html --output output/pdf/imposia-example.pdf --
 
 The successful command exits `0` and reports the page count, A4 point dimensions, warnings, and phase timings. Usage, input, output, and unexpected internal failures exit `2`, `3`, `4`, and `5` respectively.
 
+The stable CLI default uses the legacy Chromium renderer. `--engine core` is an explicit Chromium-reference preview that paginates with the browser-Core canonical page DOM before printing; it remains opt-in while its output-equivalence gate is incomplete.
+
 ## Browser Core API (current canonical pagination)
 
 ```ts

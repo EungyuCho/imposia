@@ -75,6 +75,44 @@ describe("Chromium PDF renderer", () => {
     await pdf.destroy();
   });
 
+  it("exports the Core canonical page document when explicitly selected", async () => {
+    const image =
+      "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
+    const markers = Array.from(
+      { length: 84 },
+      (_value, index) => `core-export-${String(index + 1).padStart(3, "0")}`,
+    );
+    const result = await renderer.render(
+      {
+        html: `<article><img src="${image}" alt="Core-owned image">${markers
+          .map(
+            (marker) =>
+              `<p>${marker} canonical browser export text for ordered PDF verification.</p>`,
+          )
+          .join("")}</article>`,
+      },
+      { engine: "core" },
+    );
+
+    expect(result.pageCount).toBeGreaterThanOrEqual(3);
+    expect(result.warnings.map((warning) => warning.code)).not.toContain("RESOURCE_BLOCKED");
+    const pdf = await getDocument({ data: result.pdf.slice() }).promise;
+    try {
+      const text = (
+        await Promise.all(
+          Array.from({ length: pdf.numPages }, async (_value, index) => {
+            const page = await pdf.getPage(index + 1);
+            const content = await page.getTextContent();
+            return content.items.map((item) => ("str" in item ? item.str : "")).join(" ");
+          }),
+        )
+      ).join(" ");
+      for (const marker of markers) expect(text.split(marker)).toHaveLength(2);
+    } finally {
+      await pdf.destroy();
+    }
+  });
+
   it("reuses the browser process across renders", async () => {
     const first = await renderer.render({ html: "<h1>Warm one</h1>" });
     const second = await renderer.render({ html: "<h1>Warm two</h1>" });
