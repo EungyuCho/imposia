@@ -1,0 +1,12 @@
+{
+  "name": "@imposia/cli",
+  "version": "0.1.0",
+  "type": "module",
+  "license": "Apache-2.0",
+  "bin": {
+    "imposia": "./dist/index.js"
+  },
+  "dependencies": {
+    "@imposia/core": "workspace:*"
+  }
+}
