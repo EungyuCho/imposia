@@ -15,6 +15,15 @@ import {
 } from "./page-document-extensions.js";
 import { abortError, FRAME_STYLE, frameStyle } from "./page-document-frame.js";
 import {
+  cleanPublishingInternals,
+  extractPublishingCss,
+  finalizePublishingPass,
+  namedStringValue,
+  type PublishingCssRule,
+  preparePublishingContent,
+  preparePublishingPass,
+} from "./page-document-publishing.js";
+import {
   appendDecoration,
   bodyText,
   copyPreparedBody,
@@ -380,11 +389,21 @@ function decoratePage(
   return resourceBlocked;
 }
 
-function resolveMarginBoxes(page: PageParts, pageNumber: number, totalPages: number): void {
+function resolveMarginBoxes(
+  page: PageParts,
+  pageNumber: number,
+  totalPages: number,
+  namedStrings?: ReadonlyMap<string, string>,
+): void {
   for (const boxName of PAGE_MARGIN_BOX_NAMES) {
     const box = page.page.querySelector<HTMLElement>(`[data-imposia-margin-box="${boxName}"]`);
     if (box === null) throw new Error(`Page margin box ${boxName} is unavailable.`);
-    box.textContent = marginBoxText(page.marginBoxes.get(boxName), pageNumber, totalPages);
+    box.textContent = marginBoxText(
+      page.marginBoxes.get(boxName),
+      pageNumber,
+      totalPages,
+      (name, position) => namedStringValue(namedStrings, name, position),
+    );
   }
 }
 
@@ -723,26 +742,39 @@ function compilePageMediaCss(
   sourceFlow: HTMLElement,
   css: readonly string[],
   warnings: WarningCollector,
-): Readonly<{ css: readonly string[]; rules: readonly AuthoredPageRule[] }> {
+): Readonly<{
+  css: readonly string[];
+  rules: readonly AuthoredPageRule[];
+  publishingRules: readonly PublishingCssRule[];
+}> {
   const rules: AuthoredPageRule[] = [];
+  const publishingRules: PublishingCssRule[] = [];
   const outputCss: string[] = [];
   let order = 0;
   for (const value of css) {
     const normalized = normalizeCss(value, warnings, order);
     const extracted = extractPageMediaCss(normalized, order);
-    outputCss.push(extracted.css);
+    const publishing = extractPublishingCss(extracted.css, extracted.nextOrder, warnings);
+    outputCss.push(publishing.css);
     rules.push(...extracted.rules);
-    order = Math.max(extracted.nextOrder, order + value.length + 1);
+    publishingRules.push(...publishing.rules);
+    order = Math.max(publishing.nextOrder, order + value.length + 1);
   }
   for (const style of sourceFlow.querySelectorAll<HTMLStyleElement>("style")) {
     const value = style.textContent ?? "";
     const normalized = normalizeCss(value, warnings, order);
     const extracted = extractPageMediaCss(normalized, order);
-    style.textContent = extracted.css;
+    const publishing = extractPublishingCss(extracted.css, extracted.nextOrder, warnings);
+    style.textContent = publishing.css;
     rules.push(...extracted.rules);
-    order = Math.max(extracted.nextOrder, order + value.length + 1);
+    publishingRules.push(...publishing.rules);
+    order = Math.max(publishing.nextOrder, order + value.length + 1);
   }
-  return Object.freeze({ css: Object.freeze(outputCss), rules: Object.freeze(rules) });
+  return Object.freeze({
+    css: Object.freeze(outputCss),
+    rules: Object.freeze(rules),
+    publishingRules: Object.freeze(publishingRules),
+  });
 }
 
 function mappedDocumentWarnings(warnings: readonly DocumentWarning[]): readonly PageWarning[] {
@@ -1521,108 +1553,171 @@ export async function buildGeneration(
       baseUrl: source.baseUrl,
       assets: assets?.semanticAssets ?? Object.freeze([]),
     });
+    const publishing = preparePublishingContent(
+      sourceFlow,
+      compiledPageMedia.publishingRules,
+      settings.limits,
+    );
     const probeCss = Object.freeze([FRAME_STYLE, ...compiledPageMedia.css]);
     const body = frameDocument.createDocumentFragment();
-    const pages: PageParts[] = [];
-    const decorationWarnings: DocumentWarning[] = [];
-    const fragmentationWarnings: PageWarning[] = [];
-    let overflowWarning: PageWarning | undefined;
-    const reportOverflow = () => {
-      overflowWarning ??= Object.freeze({
-        code: "PAGE_OVERFLOW",
-        message: "Content exceeds the usable page area.",
-        sourceIdentity: undefined,
-      });
-    };
     const probeStyles = appendProbeStyles(frameDocument, probeCss);
     const probe = createProbe(frameDocument);
+    let pages: PageParts[] = [];
+    let decorationWarnings: DocumentWarning[] = [];
+    let fragmentationWarnings: PageWarning[] = [];
+    let publishingWarnings: readonly PageWarning[] = Object.freeze([]);
+    let overflowWarning: PageWarning | undefined;
     try {
-      probe.append(sourceFlow);
-      const checkPagination = () => {
-        throwIfAborted(signal);
-        if (performance.now() > deadlineAt) {
-          throw new ImposiaError("RESOURCE_TIMEOUT", "Page generation timed out.");
+      const paginate = (generatedValues: ReadonlyMap<string, string>) => {
+        probe.replaceChildren();
+        const passSource = sourceFlow.cloneNode(true) as HTMLElement;
+        preparePublishingPass(
+          passSource,
+          publishing,
+          generatedValues,
+          settings.experimental,
+          settings.limits,
+        );
+        probe.append(passSource);
+        const passPages: PageParts[] = [];
+        const passDecorationWarnings: DocumentWarning[] = [];
+        const passFragmentationWarnings: PageWarning[] = [];
+        let passOverflowWarning: PageWarning | undefined;
+        const reportOverflow = () => {
+          passOverflowWarning ??= Object.freeze({
+            code: "PAGE_OVERFLOW",
+            message: "Content exceeds the usable page area.",
+            sourceIdentity: undefined,
+          });
+        };
+        const checkPagination = () => {
+          throwIfAborted(signal);
+          if (performance.now() > deadlineAt) {
+            throw new ImposiaError("RESOURCE_TIMEOUT", "Page generation timed out.");
+          }
+        };
+        const breakConstraints = captureBreakConstraints(passSource, checkPagination);
+        const decorateCurrentPage = (page: PageParts) => {
+          resourceBlocked =
+            decoratePage(
+              frameDocument,
+              page,
+              pageSettings,
+              extensions,
+              signal,
+              extensionWarnings,
+              passDecorationWarnings,
+            ) || resourceBlocked;
+        };
+        const allocatePage = (name: string | undefined): PageParts => {
+          throwIfAborted(signal);
+          if (passPages.length >= settings.limits.maxPages) {
+            throw new ImposiaError("PAGE_LIMIT", "Page limit exceeded.");
+          }
+          const created = createPage(frameDocument, pageMedia, passPages.length + 1, name);
+          passPages.push(created);
+          probe.append(created.page);
+          return created;
+        };
+        const nextContentPage = (name: string | undefined): PageParts => {
+          const page = allocatePage(name);
+          decorateCurrentPage(page);
+          return page;
+        };
+        const fragmenter = new RecursiveFragmenter({
+          constraints: breakConstraints,
+          signal,
+          deadlineAt,
+          limits: settings.limits,
+          decorateBlankPages: settings.decorateBlankPages,
+          pageMedia,
+          decoratePage: decorateCurrentPage,
+          reportOverflow,
+          warnings: passFragmentationWarnings,
+        });
+        const initialPage = allocatePage(undefined);
+        let currentCursor: FragmentCursor = { page: initialPage, container: initialPage.flow };
+        const continueRoot: ContinueFragment = (name) => {
+          const page = nextContentPage(name);
+          return { page, container: page.flow };
+        };
+        let pendingBreakAfter: PageBreak = "auto";
+        for (const node of [...passSource.childNodes]) {
+          fragmenter.check();
+          const contributesToFlow = nodeContributesToFlow(node, breakConstraints);
+          const constraint = breakConstraintFor(node, breakConstraints);
+          if (contributesToFlow) {
+            const requestedName =
+              node.nodeType === Node.ELEMENT_NODE ? authoredPageName(node as Element) : undefined;
+            let requestedBreak =
+              constraint.before === "auto" ? pendingBreakAfter : constraint.before;
+            if (
+              requestedBreak === "auto" &&
+              flowHasContent(currentCursor.page.flow) &&
+              currentCursor.page.name !== requestedName
+            ) {
+              requestedBreak = "page";
+            }
+            currentCursor = fragmenter.startForBreak(
+              currentCursor,
+              requestedBreak,
+              continueRoot,
+              requestedName,
+            );
+          }
+          currentCursor = fragmenter.placeNode(node, currentCursor, continueRoot);
+          if (contributesToFlow) pendingBreakAfter = constraint.after;
         }
-      };
-      const breakConstraints = captureBreakConstraints(sourceFlow, checkPagination);
-      const decorateCurrentPage = (page: PageParts) => {
-        resourceBlocked =
-          decoratePage(
-            frameDocument,
-            page,
-            pageSettings,
-            extensions,
-            signal,
-            extensionWarnings,
-            decorationWarnings,
-          ) || resourceBlocked;
-      };
-      const allocatePage = (name: string | undefined): PageParts => {
-        throwIfAborted(signal);
-        if (pages.length >= settings.limits.maxPages) {
-          throw new ImposiaError("PAGE_LIMIT", "Page limit exceeded.");
+        for (const page of passPages) decorateCurrentPage(page);
+        for (const [index, page] of passPages.entries()) {
+          resolveDecorationTokens(page.page, index + 1, passPages.length);
         }
-        const created = createPage(frameDocument, pageMedia, pages.length + 1, name);
-        pages.push(created);
-        probe.append(created.page);
-        return created;
-      };
-      const nextContentPage = (name: string | undefined): PageParts => {
-        const page = allocatePage(name);
-        decorateCurrentPage(page);
-        return page;
+        const finalized = finalizePublishingPass(passPages, publishing, settings.experimental);
+        for (const [index, page] of passPages.entries()) {
+          resolveMarginBoxes(page, index + 1, passPages.length, finalized.namedStrings[index]);
+        }
+        return {
+          pages: passPages,
+          decorationWarnings: passDecorationWarnings,
+          fragmentationWarnings: passFragmentationWarnings,
+          overflowWarning: passOverflowWarning,
+          publishing: finalized,
+        };
       };
 
-      const fragmenter = new RecursiveFragmenter({
-        constraints: breakConstraints,
-        signal,
-        deadlineAt,
-        limits: settings.limits,
-        decorateBlankPages: settings.decorateBlankPages,
-        pageMedia,
-        decoratePage: decorateCurrentPage,
-        reportOverflow,
-        warnings: fragmentationWarnings,
-      });
-      const initialPage = allocatePage(undefined);
-      let currentCursor: FragmentCursor = { page: initialPage, container: initialPage.flow };
-      const continueRoot: ContinueFragment = (name) => {
-        const page = nextContentPage(name);
-        return { page, container: page.flow };
-      };
-      let pendingBreakAfter: PageBreak = "auto";
-      for (const node of [...sourceFlow.childNodes]) {
-        fragmenter.check();
-        const contributesToFlow = nodeContributesToFlow(node, breakConstraints);
-        const constraint = breakConstraintFor(node, breakConstraints);
-        if (contributesToFlow) {
-          const requestedName =
-            node.nodeType === Node.ELEMENT_NODE ? authoredPageName(node as Element) : undefined;
-          let requestedBreak = constraint.before === "auto" ? pendingBreakAfter : constraint.before;
-          if (
-            requestedBreak === "auto" &&
-            flowHasContent(currentCursor.page.flow) &&
-            currentCursor.page.name !== requestedName
-          ) {
-            requestedBreak = "page";
-          }
-          currentCursor = fragmenter.startForBreak(
-            currentCursor,
-            requestedBreak,
-            continueRoot,
-            requestedName,
+      let generatedValues: ReadonlyMap<string, string> = new Map();
+      let previousSignature: string | undefined;
+      const signatures = new Set<string>();
+      let accepted: ReturnType<typeof paginate> | undefined;
+      const passLimit = publishing.requiresConvergence ? settings.limits.maxLayoutPasses : 1;
+      for (let pass = 0; pass < passLimit; pass += 1) {
+        const result = paginate(generatedValues);
+        if (!publishing.requiresConvergence || result.publishing.signature === previousSignature) {
+          accepted = result;
+          break;
+        }
+        if (signatures.has(result.publishing.signature)) {
+          throw new ImposiaError(
+            "LAYOUT_NON_CONVERGENT",
+            "Generated publishing layout entered a non-convergent cycle.",
           );
         }
-        currentCursor = fragmenter.placeNode(node, currentCursor, continueRoot);
-
-        if (contributesToFlow) pendingBreakAfter = constraint.after;
+        signatures.add(result.publishing.signature);
+        previousSignature = result.publishing.signature;
+        generatedValues = result.publishing.generatedValues;
       }
-
-      for (const page of pages) decorateCurrentPage(page);
-      for (const [index, page] of pages.entries()) {
-        resolveDecorationTokens(page.page, index + 1, pages.length);
-        resolveMarginBoxes(page, index + 1, pages.length);
+      if (accepted === undefined) {
+        throw new ImposiaError(
+          "LAYOUT_NON_CONVERGENT",
+          "Generated publishing layout did not converge within the configured pass limit.",
+        );
       }
+      pages = accepted.pages;
+      decorationWarnings = accepted.decorationWarnings;
+      fragmentationWarnings = accepted.fragmentationWarnings;
+      publishingWarnings = accepted.publishing.warnings;
+      overflowWarning = accepted.overflowWarning;
+      cleanPublishingInternals(pages);
       body.append(...pages.map((page) => page.page));
     } finally {
       probe.remove();
@@ -1640,6 +1735,7 @@ export async function buildGeneration(
         ...decorationWarnings,
         ...pageMediaWarnings.finish(),
       ]),
+      ...publishingWarnings,
       ...fragmentationWarnings,
     ];
     if (overflowWarning !== undefined) warnings.push(overflowWarning);
