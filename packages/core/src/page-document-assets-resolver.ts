@@ -80,10 +80,12 @@ async function decodeImage(blobUrl: string): Promise<boolean> {
   image.src = blobUrl;
   try {
     await image.decode();
+    const decoded = image.naturalWidth > 0 && image.naturalHeight > 0;
+    image.removeAttribute("src");
+    return decoded;
   } catch (_error: unknown) {
     return false;
   }
-  return image.naturalWidth > 0 && image.naturalHeight > 0;
 }
 
 async function loadFont(blobUrl: string): Promise<boolean> {
