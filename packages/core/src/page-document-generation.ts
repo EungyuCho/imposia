@@ -862,7 +862,6 @@ interface RecursiveFragmenterOptions {
   readonly limits: EffectivePageLimits;
   readonly decorateBlankPages: boolean;
   readonly pageMedia: PaginationPageMedia;
-  readonly decoratePage: (page: PageParts) => void;
   readonly reportOverflow: () => void;
   readonly warnings: PageWarning[];
 }
@@ -874,7 +873,6 @@ class RecursiveFragmenter {
   readonly #limits: EffectivePageLimits;
   readonly #decorateBlankPages: boolean;
   readonly #pageMedia: PaginationPageMedia;
-  readonly #decoratePage: (page: PageParts) => void;
   readonly #reportOverflow: () => void;
   readonly #warnings: PageWarning[];
   readonly #warned = new Set<string>();
@@ -889,7 +887,6 @@ class RecursiveFragmenter {
     this.#limits = options.limits;
     this.#decorateBlankPages = options.decorateBlankPages;
     this.#pageMedia = options.pageMedia;
-    this.#decoratePage = options.decoratePage;
     this.#reportOverflow = options.reportOverflow;
     this.#warnings = options.warnings;
   }
@@ -1012,13 +1009,11 @@ class RecursiveFragmenter {
         pageSide(current.page) !== breakValue
       ) {
         setPageBlank(current.page, true, this.#decorateBlankPages, this.#pageMedia);
-        this.#decoratePage(current.page);
         current = continueParent(requestedName);
       }
     }
     if (current.page.name !== requestedName) {
       updatePageMedia(current.page, this.#pageMedia, requestedName, false);
-      this.#decoratePage(current.page);
     }
     return current;
   }
@@ -1568,7 +1563,7 @@ export async function buildGeneration(
     const probeStyles = appendProbeStyles(frameDocument, probeCss);
     const probe = createProbe(frameDocument);
     let pages: PageParts[] = [];
-    let decorationWarnings: DocumentWarning[] = [];
+    const decorationWarnings: DocumentWarning[] = [];
     let fragmentationWarnings: PageWarning[] = [];
     let publishingWarnings: readonly PageWarning[] = Object.freeze([]);
     let overflowWarning: PageWarning | undefined;
@@ -1585,7 +1580,6 @@ export async function buildGeneration(
         );
         probe.append(passSource);
         const passPages: PageParts[] = [];
-        const passDecorationWarnings: DocumentWarning[] = [];
         const passFragmentationWarnings: PageWarning[] = [];
         let passOverflowWarning: PageWarning | undefined;
         const reportOverflow = () => {
@@ -1602,18 +1596,6 @@ export async function buildGeneration(
           }
         };
         const breakConstraints = captureBreakConstraints(passSource, checkPagination);
-        const decorateCurrentPage = (page: PageParts) => {
-          resourceBlocked =
-            decoratePage(
-              frameDocument,
-              page,
-              pageSettings,
-              extensions,
-              signal,
-              extensionWarnings,
-              passDecorationWarnings,
-            ) || resourceBlocked;
-        };
         const allocatePage = (name: string | undefined): PageParts => {
           throwIfAborted(signal);
           if (passPages.length >= settings.limits.maxPages) {
@@ -1625,9 +1607,7 @@ export async function buildGeneration(
           return created;
         };
         const nextContentPage = (name: string | undefined): PageParts => {
-          const page = allocatePage(name);
-          decorateCurrentPage(page);
-          return page;
+          return allocatePage(name);
         };
         const fragmenter = new RecursiveFragmenter({
           constraints: breakConstraints,
@@ -1636,7 +1616,6 @@ export async function buildGeneration(
           limits: settings.limits,
           decorateBlankPages: settings.decorateBlankPages,
           pageMedia,
-          decoratePage: decorateCurrentPage,
           reportOverflow,
           warnings: passFragmentationWarnings,
         });
@@ -1673,17 +1652,9 @@ export async function buildGeneration(
           currentCursor = fragmenter.placeNode(node, currentCursor, continueRoot);
           if (contributesToFlow) pendingBreakAfter = constraint.after;
         }
-        for (const page of passPages) decorateCurrentPage(page);
-        for (const [index, page] of passPages.entries()) {
-          resolveDecorationTokens(page.page, index + 1, passPages.length);
-        }
         const finalized = finalizePublishingPass(passPages, publishing, settings.experimental);
-        for (const [index, page] of passPages.entries()) {
-          resolveMarginBoxes(page, index + 1, passPages.length, finalized.namedStrings[index]);
-        }
         return {
           pages: passPages,
-          decorationWarnings: passDecorationWarnings,
           fragmentationWarnings: passFragmentationWarnings,
           overflowWarning: passOverflowWarning,
           publishing: finalized,
@@ -1718,10 +1689,23 @@ export async function buildGeneration(
         );
       }
       pages = accepted.pages;
-      decorationWarnings = accepted.decorationWarnings;
       fragmentationWarnings = accepted.fragmentationWarnings;
       publishingWarnings = accepted.publishing.warnings;
       overflowWarning = accepted.overflowWarning;
+      for (const [index, page] of pages.entries()) {
+        resourceBlocked =
+          decoratePage(
+            frameDocument,
+            page,
+            pageSettings,
+            extensions,
+            signal,
+            extensionWarnings,
+            decorationWarnings,
+          ) || resourceBlocked;
+        resolveDecorationTokens(page.page, index + 1, pages.length);
+        resolveMarginBoxes(page, index + 1, pages.length, accepted.publishing.namedStrings[index]);
+      }
       cleanPublishingInternals(pages);
       body.append(...pages.map((page) => page.page));
     } finally {

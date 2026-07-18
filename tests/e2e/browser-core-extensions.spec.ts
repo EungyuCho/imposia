@@ -254,9 +254,10 @@ test("decorates allocated pages through Core token and blank-page handling", asy
           controller = core.mountPageDocument(
             host,
             {
-              html: '<section>FIRST</section><section style="break-before:right">SECOND</section>',
+              html: '<section><a id="extension-page-ref" href="#extension-target">FIRST</a></section><section id="extension-target" style="break-before:right">SECOND</section>',
             },
             {
+              css: ["#extension-page-ref::after { content: target-counter(attr(href), page); }"],
               decorateBlankPages,
               headerTemplate: "CORE {{pageNumber}} / {{totalPages}}",
               extensions: [
