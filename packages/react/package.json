@@ -1,8 +1,20 @@
 {
   "name": "@imposia/react",
   "version": "0.1.0",
+  "description": "React adapter for browser-native HTML/CSS pagination, native print, and EPUB export.",
+  "keywords": [
+    "react",
+    "pagination",
+    "paged-media",
+    "html",
+    "css",
+    "epub"
+  ],
   "type": "module",
   "license": "Apache-2.0",
+  "sideEffects": [
+    "./src/styles.css"
+  ],
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {

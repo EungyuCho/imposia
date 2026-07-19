@@ -1,8 +1,20 @@
 {
   "name": "@imposia/client",
   "version": "0.1.0",
+  "description": "Browser-native paginated document and viewer APIs for HTML/CSS publishing.",
+  "keywords": [
+    "pagination",
+    "paged-media",
+    "html",
+    "css",
+    "viewer",
+    "browser"
+  ],
   "type": "module",
   "license": "Apache-2.0",
+  "sideEffects": [
+    "./src/styles.css"
+  ],
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {

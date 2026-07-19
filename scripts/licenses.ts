@@ -123,6 +123,16 @@ async function main(): Promise<void> {
       if (!("name" in value) || typeof value.name !== "string") {
         throw new Error(`Invalid package name: ${manifestPath}.`);
       }
+      if (
+        !("description" in value) ||
+        typeof value.description !== "string" ||
+        !value.description.trim()
+      ) {
+        throw new Error(`Package description is missing: ${manifestPath}.`);
+      }
+      if (!("keywords" in value) || !stringArray(value.keywords) || value.keywords.length === 0) {
+        throw new Error(`Package keywords are missing: ${manifestPath}.`);
+      }
       const dependencies = Reflect.get(value, "dependencies");
       if (typeof dependencies !== "object" || dependencies === null) {
         throw new Error(`Invalid package dependencies: ${manifestPath}.`);

@@ -417,6 +417,14 @@ Product contracts and architecture decisions are routed from
 [`docs/routing.md`](./docs/routing.md). The compatibility matrix is the source of
 truth when examples and implementation details differ.
 
+## Contributing and releases
+
+Read [CONTRIBUTING.md](./CONTRIBUTING.md) before proposing a change, especially
+the clean-room and browser-observability requirements. Maintainers can follow
+[RELEASING.md](./RELEASING.md) for the checked package order and the final
+registry prerequisites. Versioned public changes are recorded in
+[CHANGELOG.md](./CHANGELOG.md).
+
 ---
 
 <p align="center">
