@@ -25,6 +25,7 @@ export type ImposiaPageViewerProps = ImposiaDocumentCallbacks & {
   readonly source: PageSource;
   readonly sourceRevision?: string | number;
   readonly documentOptions?: PageDocumentOptions;
+  readonly documentOptionsRevision?: string | number;
   readonly viewerOptions?: PageViewerOptions;
   readonly className?: string;
   readonly style?: CSSProperties;
@@ -57,6 +58,7 @@ export const ImposiaPageViewer = forwardRef<ImposiaPageViewerHandle, ImposiaPage
       source,
       sourceRevision,
       documentOptions,
+      documentOptionsRevision,
       viewerOptions,
       className,
       style,
@@ -70,6 +72,7 @@ export const ImposiaPageViewer = forwardRef<ImposiaPageViewerHandle, ImposiaPage
       source,
       sourceRevision,
       documentOptions,
+      documentOptionsRevision,
       onReady,
       onError,
       onStateChange,

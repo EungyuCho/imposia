@@ -1,4 +1,4 @@
-import type { PageDocument } from "@imposia/core";
+import { hasPageDocumentFrameSandbox, type PageDocument } from "@imposia/core";
 import type {
   PageViewerController,
   PageViewerOptions,
@@ -124,12 +124,7 @@ function validatePageDocument(pageDocument: PageDocument): void {
   if (iframe.getAttribute("data-imposia-frame") !== "page-document") {
     invalidPageDocument("iframe is not a canonical page-document frame.");
   }
-  const sandboxTokens = [...iframe.sandbox];
-  if (
-    sandboxTokens.length !== 2 ||
-    !sandboxTokens.includes("allow-same-origin") ||
-    !sandboxTokens.includes("allow-modals")
-  ) {
+  if (!hasPageDocumentFrameSandbox(iframe)) {
     invalidPageDocument("iframe sandbox must allow same-origin and modals only.");
   }
   const frameDocument = iframe.contentDocument;

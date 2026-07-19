@@ -12,6 +12,16 @@ export const FRAME_CSP =
 export const FRAME_BLOB_CSP =
   "default-src 'none'; script-src 'none'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'; style-src 'unsafe-inline'; img-src blob:; font-src blob:; media-src blob:";
 export const FRAME_DOCUMENT = `<!DOCTYPE html><html data-imposia-document="v1"><head><meta http-equiv="Content-Security-Policy" content="${FRAME_BLOB_CSP}"></head><body data-imposia-pages></body></html>`;
+export const PAGE_DOCUMENT_FRAME_SANDBOX = Object.freeze(["allow-same-origin", "allow-modals"]);
+
+export function hasPageDocumentFrameSandbox(iframe: HTMLIFrameElement): boolean {
+  const tokens = [...iframe.sandbox];
+  return (
+    tokens.length === PAGE_DOCUMENT_FRAME_SANDBOX.length &&
+    PAGE_DOCUMENT_FRAME_SANDBOX.every((token) => tokens.includes(token))
+  );
+}
+
 const DEFAULT_GEOMETRY: PageGeometry = Object.freeze({
   sheetWidthCssPx: A4_WIDTH_CSS_PX,
   sheetHeightCssPx: A4_HEIGHT_CSS_PX,

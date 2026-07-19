@@ -88,6 +88,11 @@ updates reuse the same canonical iframe; failed updates retain the previous
 committed generation, and unmount destroys the controller and releases resources.
 Pass `sourceRevision` when extension state must reprocess otherwise identical
 HTML without remounting the controller or adding revision markers to the document.
+`documentOptions` are fixed for a controller lifetime. When a new resolver,
+extension set, limit, or page configuration must take effect, increment
+`documentOptionsRevision`; React replaces the controller and canonical iframe
+with one configured from the new options. This explicit revision avoids
+accidental remounts when a parent recreates an equivalent options object.
 
 The package also re-exports the public `@imposia/client` APIs and types, including
 `PageExtension`, `EpubMetadata`, `EpubExportOptions`, and `EpubExportLimits`.

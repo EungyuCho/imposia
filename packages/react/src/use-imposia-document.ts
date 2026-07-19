@@ -25,6 +25,7 @@ export type UseImposiaDocumentProps = ImposiaDocumentCallbacks & {
   readonly source: PageSource;
   readonly sourceRevision?: string | number | undefined;
   readonly documentOptions?: PageDocumentOptions | undefined;
+  readonly documentOptionsRevision?: string | number | undefined;
 };
 
 export type UseImposiaDocumentResult = Readonly<{
@@ -66,12 +67,14 @@ export function useImposiaDocument({
   source,
   sourceRevision,
   documentOptions,
+  documentOptionsRevision,
   onReady,
   onError,
   onStateChange,
 }: UseImposiaDocumentProps): UseImposiaDocumentResult {
   const hostRef = useRef<HTMLDivElement>(null);
   const sourceRef = useRef(source);
+  const sourceRevisionRef = useRef(sourceRevision);
   const optionsRef = useRef(documentOptions);
   const progressRef = useRef(documentOptions?.onProgress);
   const onReadyRef = useRef(onReady);
@@ -81,11 +84,13 @@ export function useImposiaDocument({
   const currentRef = useRef<PageDocument | undefined>(undefined);
   const previousSourceRef = useRef(source);
   const previousSourceRevisionRef = useRef(sourceRevision);
+  const mountedDocumentOptionsRevisionRef = useRef(documentOptionsRevision);
   const operationRef = useRef(0);
   const disposedRef = useRef(false);
   const [state, setState] = useState<ImposiaDocumentState>({ status: "idle" });
 
   sourceRef.current = source;
+  sourceRevisionRef.current = sourceRevision;
   optionsRef.current = documentOptions;
   progressRef.current = documentOptions?.onProgress;
   onReadyRef.current = onReady;
@@ -110,6 +115,10 @@ export function useImposiaDocument({
     if (host === null) return;
 
     disposedRef.current = false;
+    previousSourceRef.current = sourceRef.current;
+    previousSourceRevisionRef.current = sourceRevisionRef.current;
+    const mountedOptionsRevision = documentOptionsRevision;
+    mountedDocumentOptionsRevisionRef.current = mountedOptionsRevision;
     transition(stateForLoading(undefined));
 
     let controller: PageDocumentController | undefined;
@@ -130,13 +139,23 @@ export function useImposiaDocument({
     const operation = operationRef.current;
     void controller.ready.then(
       (pageDocument) => {
-        if (disposedRef.current || operationRef.current !== operation) return;
+        if (
+          disposedRef.current ||
+          operationRef.current !== operation ||
+          !Object.is(mountedDocumentOptionsRevisionRef.current, mountedOptionsRevision)
+        )
+          return;
         currentRef.current = pageDocument;
         transition({ status: "ready", document: pageDocument });
         onReadyRef.current?.(pageDocument);
       },
       (error: unknown) => {
-        if (disposedRef.current || operationRef.current !== operation || isAbortError(error))
+        if (
+          disposedRef.current ||
+          operationRef.current !== operation ||
+          !Object.is(mountedDocumentOptionsRevisionRef.current, mountedOptionsRevision) ||
+          isAbortError(error)
+        )
           return;
         reportError(error);
       },
@@ -149,7 +168,7 @@ export function useImposiaDocument({
       currentRef.current = undefined;
       if (controller !== undefined) void controller.destroy();
     };
-  }, [reportError, transition]);
+  }, [documentOptionsRevision, reportError, transition]);
 
   useEffect(() => {
     const previous = previousSourceRef.current;

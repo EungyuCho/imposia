@@ -2,6 +2,7 @@ export type { PrepareDocumentOptions, PreparedDocument } from "./document.js";
 export { prepareDocument } from "./document.js";
 export { ImposiaError } from "./errors.js";
 export { mountPageDocument } from "./page-document.js";
+export { hasPageDocumentFrameSandbox, PAGE_DOCUMENT_FRAME_SANDBOX } from "./page-document-frame.js";
 export type {
   AssetResolution,
   AssetResolver,
