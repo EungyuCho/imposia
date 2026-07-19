@@ -131,7 +131,7 @@ export function createPublicationThumbnails(
   }
 
   function onOpenerClick(): void {
-    setOpen(panel.hidden);
+    setOpen(panel.hidden !== false);
   }
 
   function onListClick(event: MouseEvent): void {
@@ -200,7 +200,7 @@ export function createPublicationThumbnails(
       setOpen(false, options?.restoreFocus);
     },
     toggle() {
-      const opening = panel.hidden;
+      const opening = panel.hidden !== false;
       setOpen(opening, !opening);
     },
     destroy() {

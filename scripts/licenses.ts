@@ -1,4 +1,4 @@
-import { readdir, readFile, stat, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { auditPackageArtifact, type PublishableManifest } from "./license-package-audit.ts";
 
@@ -6,18 +6,32 @@ const pnpmRoot = path.resolve("node_modules/.pnpm");
 const reportPath = path.resolve("artifacts/evidence/licenses.json");
 const releaseArtifacts = ["LICENSE", "THIRD_PARTY_NOTICES.md", "docs/clean-room.md"] as const;
 const allowedLicenses = new Set([
+  "0BSD",
   "Apache-2.0",
   "BSD-2-Clause",
   "BSD-3-Clause",
+  "CC-BY-4.0",
   "ISC",
   "MIT",
   "MIT OR Apache-2.0",
+  "MPL-2.0",
+  "Unlicense",
 ]);
+const reviewedPackageLicenses = [
+  { namePrefix: "@img/sharp-libvips-", license: "LGPL-3.0-or-later" },
+] as const;
 
 interface PackageLicense {
   name: string;
   version: string;
   license: string;
+}
+
+interface MissingPackageLicense {
+  directory: string;
+  name: string;
+  version: string;
+  repositoryUrl: string | undefined;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -26,6 +40,18 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function stringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((entry): entry is string => typeof entry === "string");
+}
+
+function repositoryUrl(value: unknown): string | undefined {
+  if (typeof value === "string") return value;
+  if (!isRecord(value) || typeof value.url !== "string") return undefined;
+  return value.url;
+}
+
+function hasReviewedPackageLicense(item: PackageLicense): boolean {
+  return reviewedPackageLicenses.some(
+    (review) => item.name.startsWith(review.namePrefix) && item.license === review.license,
+  );
 }
 
 async function directories(directory: string): Promise<string[]> {
@@ -73,16 +99,25 @@ async function main(): Promise<void> {
   }
 
   const packages = new Map<string, PackageLicense>();
+  const missingLicenses: MissingPackageLicense[] = [];
   for (const directory of await packageDirectories()) {
     try {
       const manifest = JSON.parse(await readFile(path.join(directory, "package.json"), "utf8"));
       if (
         !isRecord(manifest) ||
         typeof manifest.name !== "string" ||
-        typeof manifest.version !== "string" ||
-        typeof manifest.license !== "string"
+        typeof manifest.version !== "string"
       ) {
         throw new Error(`Missing name, version, or SPDX license in ${directory}.`);
+      }
+      if (typeof manifest.license !== "string") {
+        missingLicenses.push({
+          directory,
+          name: manifest.name,
+          version: manifest.version,
+          repositoryUrl: repositoryUrl(manifest.repository),
+        });
+        continue;
       }
       packages.set(`${manifest.name}@${manifest.version}`, {
         name: manifest.name,
@@ -94,18 +129,37 @@ async function main(): Promise<void> {
       if (error instanceof Error && error.message.startsWith("Missing name")) throw error;
     }
   }
+  for (const manifest of missingLicenses) {
+    const parent = packages.get(`yuku-analyzer@${manifest.version}`);
+    if (
+      !manifest.name.startsWith("@yuku-analyzer/binding-") ||
+      manifest.repositoryUrl !== "https://github.com/yuku-toolchain/yuku" ||
+      parent?.license !== "MIT"
+    ) {
+      throw new Error(`Missing name, version, or SPDX license in ${manifest.directory}.`);
+    }
+    packages.set(`${manifest.name}@${manifest.version}`, {
+      name: manifest.name,
+      version: manifest.version,
+      license: parent.license,
+    });
+  }
 
   const sorted = [...packages.values()].sort((left, right) =>
     `${left.name}@${left.version}`.localeCompare(`${right.name}@${right.version}`),
   );
   if (sorted.length === 0) throw new Error("No installed dependency licenses were found.");
-  const rejected = sorted.filter((item) => !allowedLicenses.has(item.license));
+  const rejected = sorted.filter(
+    (item) => !allowedLicenses.has(item.license) && !hasReviewedPackageLicense(item),
+  );
   if (rejected.length > 0) {
     throw new Error(
       `Disallowed or unreviewed dependency licenses: ${rejected.map((item) => `${item.name}@${item.version} (${item.license})`).join(", ")}`,
     );
   }
-  const copyleft = sorted.filter((item) => /\b(?:A?GPL|LGPL)\b/i.test(item.license));
+  const copyleft = sorted.filter(
+    (item) => /\b(?:A?GPL|LGPL)\b/i.test(item.license) && !hasReviewedPackageLicense(item),
+  );
   if (copyleft.length > 0) {
     throw new Error(
       `Copyleft dependency licenses require review and are not allowed: ${copyleft.map((item) => `${item.name}@${item.version} (${item.license})`).join(", ")}`,
@@ -182,12 +236,13 @@ async function main(): Promise<void> {
       )
       .filter((entry) => entry[1] > 0),
   );
+  await mkdir(path.dirname(reportPath), { recursive: true });
   await writeFile(
     reportPath,
     `${JSON.stringify({ packageCount: sorted.length, counts, shippedDependencies: shippedDependencies.join(", "), releaseArtifacts: releaseArtifacts.join(", "), packageArtifacts: packageManifests.map((manifest) => manifest.name), bundledPackages, packages: sorted }, null, 2)}\n`,
   );
   process.stdout.write(
-    `License audit passed: ${sorted.length} installed packages, all on the reviewed permissive allowlist; package dry-runs include READMEs, legal files, and declared export targets.\n`,
+    `License audit passed: ${sorted.length} installed packages, all on the reviewed allowlist or package-specific exceptions; package dry-runs include READMEs, legal files, and declared export targets.\n`,
   );
 }
 

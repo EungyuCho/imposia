@@ -132,11 +132,11 @@ export function createPublicationSearchIndex(
         ...page.querySelectorAll<HTMLElement>(":scope > [data-imposia-page-float]"),
       ].filter((root): root is HTMLElement => root !== null);
       for (const root of contentRoots) {
-        const walker = frameDocument.createTreeWalker(
+        const walker: TreeWalker = frameDocument.createTreeWalker(
           root,
           NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT,
         );
-        let node = walker.nextNode();
+        let node: Node | null = walker.nextNode();
         while (node !== null) {
           if (node.nodeType === Node.ELEMENT_NODE) {
             const element = node as Element;
@@ -156,8 +156,9 @@ export function createPublicationSearchIndex(
             node = walker.nextNode();
             continue;
           }
-          const parent = node.parentElement;
-          const wrapper = parent?.closest<HTMLElement>(`[${PUBLICATION_ENTRY_MARKER}]`);
+          const parent: HTMLElement | null = node.parentElement;
+          const wrapper: HTMLElement | null =
+            parent?.closest<HTMLElement>(`[${PUBLICATION_ENTRY_MARKER}]`) ?? null;
           const entryIndex = Number(wrapper?.getAttribute(PUBLICATION_ENTRY_MARKER));
           if (
             parent !== null &&

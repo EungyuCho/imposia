@@ -216,7 +216,7 @@ export function createViewerInspector(
   }
 
   function onOpenerClick(): void {
-    setOpen(panel.hidden);
+    setOpen(panel.hidden !== false);
   }
 
   function onListClick(event: MouseEvent): void {
@@ -273,7 +273,7 @@ export function createViewerInspector(
     },
     toggle() {
       assertActive();
-      const opening = panel.hidden;
+      const opening = panel.hidden !== false;
       setOpen(opening, !opening);
     },
     select,
