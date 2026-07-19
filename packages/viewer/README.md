@@ -27,6 +27,36 @@ viewer.setMode("single");
 `mountViewer()` uses PDF.js and supports continuous and single-page modes in
 Chromium, Firefox, and WebKit.
 
+## Theme modules
+
+The Viewer shell is themed through the public `--imposia-viewer-*` custom
+properties declared by `@imposia/viewer/styles.css`. A theme is an ordinary CSS
+module loaded after the package stylesheet, so it can be published or composed
+like a plugin without adding a second runtime lifecycle:
+
+```css
+/* viewer-theme.css */
+.imposia-viewer {
+  --imposia-viewer-color-ink: #171522;
+  --imposia-viewer-color-ink-soft: #28233b;
+  --imposia-viewer-color-paper: #fff8e8;
+  --imposia-viewer-color-accent: #8b6cff;
+  --imposia-viewer-font-serif: "Iowan Old Style", Georgia, serif;
+  --imposia-viewer-control-size: 40px;
+}
+```
+
+```ts
+import "@imposia/viewer/styles.css";
+import "./viewer-theme.css";
+```
+
+Scope the overrides to a parent selector when different viewer instances need
+different themes. The tokens cover the shell palette, spacing, typography,
+controls, borders, and shadows. They do not cross Core's iframe isolation or
+change the authored document CSS; pass document styles through Core's `css`
+input instead.
+
 ## Present a Core page document
 
 ```ts

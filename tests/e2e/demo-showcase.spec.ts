@@ -344,3 +344,83 @@ test("React publishing lab keeps viewer controls inside a 320px viewport", async
     expect(pageErrors).toEqual([]);
   }
 });
+
+test("React publishing lab stacks nested viewer controls at edge widths", async ({
+  page,
+  browserName,
+}) => {
+  test.skip(browserName !== "chromium", "Responsive demo geometry is Chromium-reference only.");
+  const { errors, pageErrors } = captureBrowserErrors(page, browserName);
+
+  try {
+    for (const width of [821, 900]) {
+      await page.setViewportSize({ width, height: 568 });
+      await page.goto("/examples/demo/");
+      const preview = page.getByTestId("demo-preview-surface");
+      await expect(preview.locator("[data-imposia-react-status='ready']")).toBeVisible();
+      const geometry = await page.evaluate(() => {
+        const rect = (selector: string) => {
+          const element = document.querySelector<HTMLElement>(selector);
+          if (element === null) throw new Error(`Missing ${selector}.`);
+          const bounds = element.getBoundingClientRect();
+          return {
+            left: bounds.left,
+            right: bounds.right,
+            top: bounds.top,
+            bottom: bounds.bottom,
+          };
+        };
+        const toolbar = document.querySelector<HTMLElement>(".imposia-toolbar");
+        if (toolbar === null) throw new Error("Demo viewer toolbar is missing.");
+        const identity = rect(".imposia-identity");
+        const toolbarBounds = rect(".imposia-toolbar");
+        const controls = [...toolbar.querySelectorAll<HTMLElement>("button")].map((control) => {
+          const bounds = control.getBoundingClientRect();
+          return {
+            left: bounds.left,
+            right: bounds.right,
+            width: bounds.width,
+            height: bounds.height,
+          };
+        });
+        const overlaps =
+          identity.left < toolbarBounds.right &&
+          toolbarBounds.left < identity.right &&
+          identity.top < toolbarBounds.bottom &&
+          toolbarBounds.top < identity.bottom;
+        return {
+          viewportWidth: document.documentElement.clientWidth,
+          documentScrollWidth: document.documentElement.scrollWidth,
+          identity,
+          toolbar: toolbarBounds,
+          overlaps,
+          toolbarClientWidth: toolbar.clientWidth,
+          toolbarScrollWidth: toolbar.scrollWidth,
+          controls,
+        };
+      });
+
+      expect(geometry.documentScrollWidth).toBe(geometry.viewportWidth);
+      expect(geometry.overlaps).toBe(false);
+      expect(geometry.toolbar.left).toBeGreaterThanOrEqual(0);
+      expect(geometry.toolbar.right).toBeLessThanOrEqual(width);
+      expect(geometry.controls).toHaveLength(6);
+      for (const control of geometry.controls) {
+        expect(control.left).toBeGreaterThanOrEqual(geometry.toolbar.left);
+        expect(control.right).toBeLessThanOrEqual(
+          geometry.toolbar.left + geometry.toolbarScrollWidth,
+        );
+        expect(control.width).toBeGreaterThanOrEqual(24);
+        expect(control.height).toBeGreaterThanOrEqual(24);
+      }
+      for (let index = 1; index < geometry.controls.length; index += 1) {
+        expect(geometry.controls[index]?.left).toBeGreaterThanOrEqual(
+          geometry.controls[index - 1]?.right ?? 0,
+        );
+      }
+    }
+  } finally {
+    expect(errors).toEqual([]);
+    expect(pageErrors).toEqual([]);
+  }
+});

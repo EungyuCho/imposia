@@ -174,6 +174,31 @@ The React API does not promise fixed-layout EPUB, PDF bytes, a second layout
 engine, or complete CSS parity. Native browser Save as PDF remains available
 through `print()`.
 
+## Theme modules
+
+Viewer themes are CSS modules, not Core extensions. Load the adapter stylesheet
+first, then override the public `--imposia-viewer-*` variables in a consumer-owned
+file:
+
+```ts
+import "@imposia/react/styles.css";
+import "./viewer-theme.css";
+```
+
+```css
+.imposia-viewer {
+  --imposia-viewer-color-ink: #171522;
+  --imposia-viewer-color-paper: #fff8e8;
+  --imposia-viewer-color-accent: #8b6cff;
+  --imposia-viewer-font-serif: "Iowan Old Style", Georgia, serif;
+}
+```
+
+This keeps themes independently packageable and instance-scoped while Core
+continues to own document processing, iframe isolation, and authored page CSS.
+See [`@imposia/viewer` theming](packages/viewer/README.md#theme-modules) for the
+override contract.
+
 ## Viewer APIs
 
 ```ts

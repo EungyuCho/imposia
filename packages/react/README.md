@@ -56,6 +56,13 @@ The handle always delegates to the current Core generation. `current` becomes
 can offer Save as PDF. `exportEpub()` returns a reflowable `application/epub+zip`
 Blob from semantic source, not a fixed-layout EPUB or PDF bytes.
 
+## Theme CSS
+
+Load a consumer theme after `@imposia/react/styles.css` and override the public
+`--imposia-viewer-*` properties on `.imposia-viewer`. This makes themes
+independently packageable and instance-scoped without adding a React or Core
+lifecycle. See the [Viewer theme-module contract](../../packages/viewer/README.md#theme-modules).
+
 ## Hook for custom React presentation
 
 ```tsx
