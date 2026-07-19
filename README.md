@@ -25,6 +25,12 @@
 </p>
 
 <p align="center">
+  <a href="https://imposia.pages.dev">Documentation</a> ·
+  <a href="https://www.npmjs.com/org/imposia">npm packages</a> ·
+  <a href="https://github.com/EungyuCho/imposia">GitHub</a>
+</p>
+
+<p align="center">
   <a href="#quick-start">Quick Start</a> ·
   <a href="#why-imposia">Why</a> ·
   <a href="#how-it-works">How It Works</a> ·
@@ -217,10 +223,10 @@ integration layers:
 
 | Package | Role | Choose it when… |
 | :--- | :--- | :--- |
-| [`@imposia/react`](./packages/react) | Primary React adapter | Your application uses React 18+ and needs components, hooks, or an imperative page handle |
-| [`@imposia/client`](./packages/client) | Unified framework-neutral entrypoint | You want Core and Viewer APIs from one browser-only dependency |
-| [`@imposia/core`](./packages/core) | Canonical page-document runtime | You want direct lifecycle, pagination, resolver, extension, print, and EPUB control without React |
-| [`@imposia/viewer`](./packages/viewer) | Page and PDF presentation | You need to present the Core iframe or mount an independent PDF.js canvas viewer |
+| [`@imposia/react`](https://www.npmjs.com/package/@imposia/react) | Primary React adapter | Your application uses React 18+ and needs components, hooks, or an imperative page handle |
+| [`@imposia/client`](https://www.npmjs.com/package/@imposia/client) | Unified framework-neutral entrypoint | You want Core and Viewer APIs from one browser-only dependency |
+| [`@imposia/core`](https://www.npmjs.com/package/@imposia/core) | Canonical page-document runtime | You want direct lifecycle, pagination, resolver, extension, print, and EPUB control without React |
+| [`@imposia/viewer`](https://www.npmjs.com/package/@imposia/viewer) | Page and PDF presentation | You need to present the Core iframe or mount an independent PDF.js canvas viewer |
 
 The package split changes integration ergonomics, not document ownership. Core
 remains the single source of truth.

@@ -2,6 +2,15 @@
   "name": "@imposia/viewer",
   "version": "0.1.0",
   "description": "Browser-native viewer for canonical Imposia page documents and PDF.js documents.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/EungyuCho/imposia.git",
+    "directory": "packages/viewer"
+  },
+  "homepage": "https://imposia.pages.dev",
+  "bugs": {
+    "url": "https://github.com/EungyuCho/imposia/issues"
+  },
   "keywords": [
     "viewer",
     "pdf",

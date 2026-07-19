@@ -2,6 +2,15 @@
   "name": "@imposia/core",
   "version": "0.1.0",
   "description": "Browser-native HTML/CSS pagination, publishing diagnostics, and reflowable EPUB export.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/EungyuCho/imposia.git",
+    "directory": "packages/core"
+  },
+  "homepage": "https://imposia.pages.dev",
+  "bugs": {
+    "url": "https://github.com/EungyuCho/imposia/issues"
+  },
   "keywords": [
     "pagination",
     "paged-media",

@@ -2,6 +2,15 @@
   "name": "@imposia/client",
   "version": "0.1.0",
   "description": "Browser-native paginated document and viewer APIs for HTML/CSS publishing.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/EungyuCho/imposia.git",
+    "directory": "packages/client"
+  },
+  "homepage": "https://imposia.pages.dev",
+  "bugs": {
+    "url": "https://github.com/EungyuCho/imposia/issues"
+  },
   "keywords": [
     "pagination",
     "paged-media",
