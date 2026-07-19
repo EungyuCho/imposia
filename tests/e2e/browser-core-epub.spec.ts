@@ -675,6 +675,47 @@ test("rejects malformed metadata, AbortSignal, and destroyed-document exports at
   }
 });
 
+test("rejects malformed BCP47 language metadata atomically and preserves valid tags", async ({
+  page,
+  browserName,
+}) => {
+  const captured = captureBrowserErrors(page, browserName);
+  await page.goto("/examples/book.html");
+  try {
+    const source = { html: "<article><p>Language boundary</p></article>" };
+    const validMetadata = { ...METADATA, language: "en-US" };
+    const initial = await page.evaluate(exportBytesInPage, {
+      source,
+      options: { metadata: validMetadata },
+    });
+    expect(initial.status).toBe("fulfilled");
+    if (initial.status !== "fulfilled") throw new Error(initial.error.message);
+
+    for (const language of ["not a language", "en-1901-1901", "en-a-foo-a-bar"]) {
+      const malformed = await page.evaluate(exportBytesInPage, {
+        source,
+        options: { metadata: { ...validMetadata, language } },
+      });
+      expect(malformed.status, language).toBe("rejected");
+      if (malformed.status !== "rejected") throw new Error(`${language} was accepted`);
+      expect(malformed.error.code, language).toBe("INVALID_EPUB_METADATA");
+    }
+
+    const afterMalformed = await page.evaluate(exportBytesInPage, {
+      source,
+      options: { metadata: validMetadata },
+    });
+    expect(afterMalformed.status).toBe("fulfilled");
+    if (afterMalformed.status !== "fulfilled") throw new Error(afterMalformed.error.message);
+    expect(afterMalformed.bytes).toEqual(initial.bytes);
+    const entries = inspectArchive(Uint8Array.from(afterMalformed.bytes));
+    expect(entryText(entries, "EPUB/package.opf")).toContain("<dc:language>en-US</dc:language>");
+    expect(entryText(entries, "EPUB/nav.xhtml")).toContain('lang="en-US" xml:lang="en-US"');
+  } finally {
+    assertNoBrowserErrors(captured.errors, captured.pageErrors);
+  }
+});
+
 test("retains the last committed generation after a failed update and does not rerun extensions or resolvers", async ({
   page,
   browserName,

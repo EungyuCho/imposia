@@ -10,6 +10,7 @@ import {
 } from "./page-document-frame.js";
 import { bodyText, buildGeneration, snapshotSettings } from "./page-document-generation.js";
 import {
+  pageSemanticSnapshot,
   releasePageSemanticSnapshot,
   retainPageSemanticSnapshot,
 } from "./page-document-semantic.js";
@@ -26,6 +27,36 @@ interface ActiveOperation {
   controller: AbortController;
 }
 
+function exportSignal(value: unknown): AbortSignal | undefined {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const signal = (value as Readonly<Record<string, unknown>>).signal;
+  return signal instanceof AbortSignal ? signal : undefined;
+}
+
+function awaitWithAbort<T>(work: Promise<T>, signal: AbortSignal | undefined): Promise<T> {
+  if (signal === undefined) return work;
+  if (signal.aborted) return Promise.reject(abortError());
+  return new Promise<T>((resolve, reject) => {
+    const cleanup = () => signal.removeEventListener("abort", onAbort);
+    const onAbort = () => {
+      cleanup();
+      reject(abortError());
+    };
+    signal.addEventListener("abort", onAbort, { once: true });
+    work.then(
+      (value) => {
+        cleanup();
+        resolve(value);
+      },
+      (error: unknown) => {
+        cleanup();
+        reject(error);
+      },
+    );
+    if (signal.aborted) onAbort();
+  });
+}
+
 export function mountPageDocument(
   container: HTMLElement,
   source: PageSource,
@@ -34,7 +65,7 @@ export function mountPageDocument(
   const settings = snapshotSettings(options);
   const iframe = document.createElement("iframe");
   iframe.setAttribute("data-imposia-frame", "page-document");
-  iframe.setAttribute("sandbox", "allow-same-origin");
+  iframe.setAttribute("sandbox", "allow-same-origin allow-modals");
   iframe.srcdoc = FRAME_DOCUMENT;
   container.append(iframe);
 
@@ -46,6 +77,96 @@ export function mountPageDocument(
   let activeBlobUrls: readonly string[] = [];
   let latestWork: Promise<PageDocument> | undefined;
   const operations = new Set<Promise<PageDocument>>();
+  const exportControllers = new Set<AbortController>();
+  const exportOperations = new Set<Promise<Blob>>();
+  const exportLeases = new Map<PageDocument, number>();
+  const deferredSnapshotReleases = new Set<PageDocument>();
+
+  const releaseSnapshot = (pageDocument: PageDocument): void => {
+    if ((exportLeases.get(pageDocument) ?? 0) > 0) {
+      deferredSnapshotReleases.add(pageDocument);
+      return;
+    }
+    releasePageSemanticSnapshot(pageDocument);
+  };
+
+  const retainExportSnapshot = (pageDocument: PageDocument): boolean => {
+    if (pageSemanticSnapshot(pageDocument) === undefined) return false;
+    exportLeases.set(pageDocument, (exportLeases.get(pageDocument) ?? 0) + 1);
+    return true;
+  };
+
+  const releaseExportSnapshot = (pageDocument: PageDocument): void => {
+    const count = exportLeases.get(pageDocument) ?? 0;
+    if (count > 1) {
+      exportLeases.set(pageDocument, count - 1);
+      return;
+    }
+    exportLeases.delete(pageDocument);
+    if (deferredSnapshotReleases.delete(pageDocument)) {
+      releasePageSemanticSnapshot(pageDocument);
+    }
+  };
+
+  const latestCommitted = async (signal: AbortSignal | undefined): Promise<PageDocument> => {
+    if (signal?.aborted) throw abortError();
+    let observedWork: Promise<PageDocument> | undefined;
+    while (true) {
+      if (destroyed) throw destroyedError();
+      observedWork = latestWork;
+      if (observedWork !== undefined) {
+        try {
+          await awaitWithAbort(observedWork, signal);
+        } catch (error: unknown) {
+          if (destroyed) throw destroyedError();
+          if (signal?.aborted) throw abortError();
+          if (latestWork !== observedWork) continue;
+          if (current === undefined) throw error;
+        }
+      }
+      if (destroyed) throw destroyedError();
+      if (signal?.aborted) throw abortError();
+      if (latestWork !== observedWork) continue;
+      const committed = current;
+      if (committed === undefined) throw new Error("Page document is not ready.");
+      return committed;
+    }
+  };
+
+  const exportLatestEpub = (options: EpubExportOptions): Promise<Blob> => {
+    const controller = new AbortController();
+    const unlink = linkSignal(exportSignal(options), controller);
+    const operation = Promise.resolve().then(async () => {
+      const committed = await latestCommitted(controller.signal);
+      const retained = retainExportSnapshot(committed);
+      try {
+        return await exportPageDocumentEpub(committed, {
+          ...options,
+          signal: controller.signal,
+        });
+      } finally {
+        if (retained) releaseExportSnapshot(committed);
+      }
+    });
+    let tracked: Promise<Blob>;
+    tracked = operation.then(
+      (result) => {
+        unlink();
+        exportControllers.delete(controller);
+        exportOperations.delete(tracked);
+        return result;
+      },
+      (error: unknown) => {
+        unlink();
+        exportControllers.delete(controller);
+        exportOperations.delete(tracked);
+        throw error;
+      },
+    );
+    exportControllers.add(controller);
+    exportOperations.add(tracked);
+    return tracked;
+  };
 
   const begin = (nextSource: PageSource, callerSignal: AbortSignal | undefined) => {
     if (destroyed) return Promise.reject(destroyedError());
@@ -114,7 +235,7 @@ export function mountPageDocument(
               if (committedDocument === undefined) {
                 return Promise.reject(new Error("Page document is not ready."));
               }
-              return exportPageDocumentEpub(committedDocument, exportOptions);
+              return exportLatestEpub(exportOptions);
             },
           }) satisfies PageDocument;
           committedDocument = document;
@@ -123,7 +244,7 @@ export function mountPageDocument(
           activeBlobUrls = generation.blobUrls;
           current = document;
           retainPageSemanticSnapshot(document, generation.semanticSnapshot);
-          if (previous !== undefined) releasePageSemanticSnapshot(previous);
+          if (previous !== undefined) releaseSnapshot(previous);
           committed = true;
           for (const url of oldBlobUrls) URL.revokeObjectURL(url);
           return document;
@@ -196,12 +317,15 @@ export function mountPageDocument(
       if (destroyPromise !== undefined) return destroyPromise;
       destroyed = true;
       active?.controller.abort();
+      for (const controller of exportControllers) controller.abort();
       for (const url of activeBlobUrls) URL.revokeObjectURL(url);
       activeBlobUrls = [];
-      if (current !== undefined) releasePageSemanticSnapshot(current);
+      if (current !== undefined) releaseSnapshot(current);
       current = undefined;
       iframe.remove();
-      destroyPromise = Promise.allSettled([...operations]).then(() => undefined);
+      destroyPromise = Promise.allSettled([...operations, ...exportOperations]).then(
+        () => undefined,
+      );
       return destroyPromise;
     },
   };

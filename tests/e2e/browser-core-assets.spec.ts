@@ -70,7 +70,7 @@ test("resolves HTML and CSS assets only through the resolver", async ({ page, br
       }
     });
 
-    expect(observation.sandbox).toBe("allow-same-origin");
+    expect(observation.sandbox).toBe("allow-same-origin allow-modals");
     expect(observation.csp).toContain("img-src blob:");
     expect(observation.csp).toContain("font-src blob:");
     expect(observation.csp).toContain("media-src blob:");

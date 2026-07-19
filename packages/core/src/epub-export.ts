@@ -77,6 +77,153 @@ function releasedDocumentError(): Error {
   return new Error("Page document has been destroyed or released.");
 }
 
+const GRANDFATHERED_LANGUAGE_TAGS: ReadonlySet<string> = new Set([
+  "art-lojban",
+  "cel-gaulish",
+  "en-gb-oed",
+  "i-ami",
+  "i-bnn",
+  "i-default",
+  "i-enochian",
+  "i-hak",
+  "i-klingon",
+  "i-lux",
+  "i-mingo",
+  "i-navajo",
+  "i-pwn",
+  "i-tao",
+  "i-tay",
+  "i-tsu",
+  "no-bok",
+  "no-nyn",
+  "sgn-be-fr",
+  "sgn-be-nl",
+  "sgn-ch-de",
+  "zh-guoyu",
+  "zh-hakka",
+  "zh-min",
+  "zh-min-nan",
+  "zh-xiang",
+]);
+
+function isAsciiAlpha(value: string): boolean {
+  return /^[A-Za-z]+$/u.test(value);
+}
+
+function isAsciiDigit(value: string): boolean {
+  return /^[0-9]+$/u.test(value);
+}
+
+function isAsciiAlphanumeric(value: string): boolean {
+  return /^[A-Za-z0-9]+$/u.test(value);
+}
+
+function validBcp47LanguageTag(value: string): boolean {
+  const lower = value.toLowerCase();
+  if (GRANDFATHERED_LANGUAGE_TAGS.has(lower)) return true;
+  const subtags = value.split("-");
+  if (subtags.some((subtag) => subtag === "")) return false;
+
+  const language = subtags[0];
+  if (language === undefined) return false;
+  let index = 1;
+  if (language.toLowerCase() === "x") {
+    return (
+      subtags.length > 1 && subtags.slice(1).every((subtag) => /^[A-Za-z0-9]{1,8}$/u.test(subtag))
+    );
+  }
+
+  if (isAsciiAlpha(language) && language.length >= 2 && language.length <= 3) {
+    let extlangCount = 0;
+    while (
+      index < subtags.length &&
+      extlangCount < 3 &&
+      subtags[index] !== undefined &&
+      isAsciiAlpha(subtags[index] ?? "") &&
+      subtags[index]?.length === 3
+    ) {
+      index += 1;
+      extlangCount += 1;
+    }
+  } else if (
+    !(
+      (isAsciiAlpha(language) && language.length === 4) ||
+      (isAsciiAlpha(language) && language.length >= 5 && language.length <= 8)
+    )
+  ) {
+    return false;
+  }
+
+  const script = subtags[index];
+  if (script !== undefined && isAsciiAlpha(script) && script.length === 4) index += 1;
+
+  const region = subtags[index];
+  if (
+    region !== undefined &&
+    ((isAsciiAlpha(region) && region.length === 2) || (isAsciiDigit(region) && region.length === 3))
+  ) {
+    index += 1;
+  }
+
+  const variants = new Set<string>();
+  while (index < subtags.length) {
+    const variant = subtags[index];
+    if (variant === undefined) return false;
+    const validVariant =
+      (isAsciiAlphanumeric(variant) && variant.length >= 5 && variant.length <= 8) ||
+      (/^[0-9][A-Za-z0-9]{3}$/u.test(variant) && variant.length === 4);
+    if (!validVariant) break;
+    const normalizedVariant = variant.toLowerCase();
+    if (variants.has(normalizedVariant)) return false;
+    variants.add(normalizedVariant);
+    index += 1;
+  }
+
+  const extensionSingletons = new Set<string>();
+  while (index < subtags.length) {
+    const singleton = subtags[index]?.toLowerCase();
+    if (singleton === "x") break;
+    if (singleton === undefined || !/^[0-9A-WY-Za-wy-z]$/u.test(singleton)) return false;
+    if (extensionSingletons.has(singleton)) return false;
+    extensionSingletons.add(singleton);
+    index += 1;
+    let extensionSubtagCount = 0;
+    while (index < subtags.length) {
+      const extensionSubtag = subtags[index];
+      if (
+        extensionSubtag === undefined ||
+        extensionSubtag.length < 2 ||
+        extensionSubtag.length > 8 ||
+        !isAsciiAlphanumeric(extensionSubtag)
+      ) {
+        break;
+      }
+      index += 1;
+      extensionSubtagCount += 1;
+    }
+    if (extensionSubtagCount === 0) return false;
+  }
+
+  if (subtags[index]?.toLowerCase() === "x") {
+    index += 1;
+    if (index >= subtags.length) return false;
+    while (index < subtags.length) {
+      const privateUseSubtag = subtags[index];
+      if (
+        privateUseSubtag === undefined ||
+        privateUseSubtag.length < 1 ||
+        privateUseSubtag.length > 8 ||
+        !isAsciiAlphanumeric(privateUseSubtag)
+      ) {
+        return false;
+      }
+      index += 1;
+    }
+  }
+
+  return index === subtags.length;
+}
+
 function recordValue(value: unknown): Readonly<Record<string, unknown>> | undefined {
   if (value === null || typeof value !== "object" || Array.isArray(value)) return undefined;
   return value as Readonly<Record<string, unknown>>;
@@ -93,7 +240,11 @@ function nonblankMetadata(value: unknown, name: string): string {
   if (hasInvalidXmlCharacter) {
     throw invalidMetadata(`EPUB ${name} contains invalid XML characters.`);
   }
-  return value.trim();
+  const trimmed = value.trim();
+  if (name === "language" && !validBcp47LanguageTag(trimmed)) {
+    throw invalidMetadata("EPUB language must be a well-formed BCP 47 language tag.");
+  }
+  return trimmed;
 }
 
 function validModifiedTimestamp(value: string): boolean {

@@ -98,7 +98,9 @@ Printing remains native browser printing:
 await controller.print(); // invokes the current canonical iframe's Window.print()
 ```
 
-The browser can offer Save as PDF from the print dialog; Core does not return PDF
-bytes. Call `controller.destroy()` when the host is no longer needed.
+The canonical iframe sandbox permits modals only so this native print dialog can
+open; authored scripts remain disabled by the sandbox and CSP. The browser can
+offer Save as PDF from the print dialog; Core does not return PDF bytes. Call
+`controller.destroy()` when the host is no longer needed.
 
 See `LICENSE` and `THIRD_PARTY_NOTICES.md` in this package for distribution terms.
