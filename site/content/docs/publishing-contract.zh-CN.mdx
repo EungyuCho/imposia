@@ -30,6 +30,26 @@ staging iframe 从不用于预览、展示或打印。
 
 `PageDocument.exportEpub()` 不会重新运行 extension，也不会序列化固定页面布局。
 
+## Viewer 与原生打印为何保持一致
+
+先在 Viewer 中查看 committed generation 的第 2、3 页，再在浏览器打印预览中选择“保存为 PDF”。打印预览会显示相同的内容与页面顺序。
+
+![Imposia Viewer 中显示的同一第二页](/images/publishing-contract/committed-page-viewer.png)
+
+*Viewer 第 2 页包含表格的 01–22 行、重复表头与 `LEFT / 2` 页眉页脚。*
+
+![Imposia Viewer 中显示的下一页表格与页眉页脚](/images/publishing-contract/committed-page-continuation.png)
+
+*Viewer 第 3 页继续显示 23–36 行与 `RIGHT / 3` 页眉页脚。*
+
+![浏览器打印预览中选择保存为 PDF 的同一份文档](/images/publishing-contract/native-print-save-pdf.png)
+
+*保存为 PDF 的预览保留了上方第 2、3 页相同的表格内容、页面顺序、重复表头与页眉页脚。*
+
+Imposia 不会复制 Viewer 页面，也不会为打印创建单独的 PDF renderer。`print()` 会对 Viewer 显示的 canonical iframe 调用 `Window.print()`。因此，在文档所列的支持范围内，页面方向、margin box、重复表头、页码与内容顺序会在 Viewer、浏览器打印和保存为 PDF 的结果之间保持一致。
+
+Viewer 与保存为 PDF 的预览内容一致，是因为两个路径读取同一个 committed generation。这并不表示 Imposia 会直接返回 PDF 字节。打印机驱动的页边距、缩放、颜色校正以及不同浏览器的字体度量仍可能影响最终结果。
+
 ## 控制外部资源
 
 宿主应用的 `assetResolver` 是外部资源的唯一入口。Core 拥有通过该入口生成的 Blob URL，并会在文档被替换、失败或销毁时撤销它们。
