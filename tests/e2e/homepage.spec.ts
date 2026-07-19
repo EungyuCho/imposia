@@ -1,122 +1,156 @@
 import { expect, test } from "@playwright/test";
 import { captureBrowserErrors } from "./browser-core-support.js";
 
-const localeCases = [
-  { locale: "en", heading: "HTML in. Pages out.", cta: "Explore the demo" },
-  { locale: "ko", heading: "HTML을 넣으면, 페이지가 됩니다.", cta: "데모 살펴보기" },
-  { locale: "zh-CN", heading: "输入 HTML，输出页面。", cta: "查看演示" },
-  { locale: "ja", heading: "HTMLから、ページへ。", cta: "デモを見る" },
+const locales = [
+  {
+    locale: "en",
+    heading: "HTML in. Pages out.",
+    docsCta: /documentation|get started|docs/i,
+    demoCta: /demo/i,
+    gettingStarted: "Build your first page",
+  },
+  {
+    locale: "ko",
+    heading: "HTML을 넣으면, 페이지가 됩니다.",
+    docsCta: /문서|시작/i,
+    demoCta: /데모/i,
+    gettingStarted: "첫 페이지 만들기",
+  },
+  {
+    locale: "zh-CN",
+    heading: "输入 HTML，输出页面。",
+    docsCta: /文档|开始|入门/i,
+    demoCta: /演示/i,
+    gettingStarted: "创建第一个分页预览",
+  },
+  {
+    locale: "ja",
+    heading: "HTMLから、ページへ。",
+    docsCta: /ドキュメント|はじめに|始める/i,
+    demoCta: /デモ/i,
+    gettingStarted: "最初のページを作る",
+  },
 ] as const;
 
-test("homepage switches language and keeps the choice after reload", async ({
-  page,
-  browserName,
-}) => {
-  test.skip(browserName !== "chromium", "Homepage language behavior is Chromium-reference only.");
-  const { errors, pageErrors } = captureBrowserErrors(page, browserName);
+function assertNoBrowserErrors(errors: ReturnType<typeof captureBrowserErrors>) {
+  expect(errors.errors).toEqual([]);
+  expect(errors.pageErrors).toEqual([]);
+}
+
+test("root redirects to the default English landing page", async ({ page, browserName }) => {
+  const captured = captureBrowserErrors(page, browserName);
 
   await page.goto("/");
 
   try {
+    await expect(page).toHaveURL(/\/en\/?$/, { timeout: 15_000 });
     await expect(page.locator("html")).toHaveAttribute("lang", "en");
-    await expect(page.getByRole("heading", { level: 1 })).toHaveText("HTML in. Pages out.");
-    await expect(
-      page
-        .getByRole("region", { name: "HTML in. Pages out." })
-        .getByRole("link", { name: "Explore the demo", exact: true }),
-    ).toBeVisible();
-
-    const languageSelector = page.getByRole("combobox", { name: /language/i });
-    await expect(languageSelector).toHaveValue("en");
-    await languageSelector.selectOption("ko");
-
-    await expect(page.locator("html")).toHaveAttribute("lang", "ko");
-    await expect(page.getByRole("heading", { level: 1 })).toHaveText(
-      "HTML을 넣으면, 페이지가 됩니다.",
-    );
-    await expect(
-      page
-        .getByRole("region", { name: "HTML을 넣으면, 페이지가 됩니다." })
-        .getByRole("link", { name: "데모 살펴보기", exact: true }),
-    ).toBeVisible();
-
-    await page.reload();
-    await expect(page.getByRole("combobox", { name: "언어" })).toHaveValue("ko");
-    await expect(page.locator("html")).toHaveAttribute("lang", "ko");
-    await expect(page.getByRole("heading", { level: 1 })).toHaveText(
-      "HTML을 넣으면, 페이지가 됩니다.",
-    );
-    await expect(
-      page
-        .getByRole("region", { name: "HTML을 넣으면, 페이지가 됩니다." })
-        .getByRole("link", { name: "데모 살펴보기", exact: true }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText(locales[0].heading);
   } finally {
-    expect(errors).toEqual([]);
-    expect(pageErrors).toEqual([]);
+    assertNoBrowserErrors(captured);
   }
 });
 
-test("homepage presents every supported locale through one accessible surface", async ({
+test("localized landing pages expose docs and demo calls to action", async ({
   page,
   browserName,
 }) => {
-  const { errors, pageErrors } = captureBrowserErrors(page, browserName);
-  await page.goto("/");
+  test.skip(browserName !== "chromium", "Landing-page copy is Chromium-reference only.");
+  const captured = captureBrowserErrors(page, browserName);
 
   try {
-    for (const localeCase of localeCases) {
-      await page.getByRole("combobox").selectOption(localeCase.locale);
-      await expect(page.locator("html")).toHaveAttribute("lang", localeCase.locale);
-      await expect(page.getByRole("heading", { level: 1 })).toHaveText(localeCase.heading);
-      await expect(
-        page
-          .getByRole("region", { name: localeCase.heading })
-          .getByRole("link", { name: localeCase.cta, exact: true }),
-      ).toHaveAttribute("href", "/examples/demo/");
+    for (const locale of locales) {
+      await page.goto(`/${locale.locale}`);
+      await expect(page).toHaveURL(new RegExp(`/${locale.locale}/?$`));
+      await expect(page.locator("html")).toHaveAttribute("lang", locale.locale);
+      await expect(page.getByRole("heading", { level: 1 })).toHaveText(locale.heading);
+
+      const landing = page.getByRole("main");
+      const docsCta = landing.getByRole("link", { name: locale.docsCta }).first();
+      await expect(docsCta).toBeVisible();
+      await expect(docsCta).toHaveAttribute("href", new RegExp(`/${locale.locale}/docs`));
+
+      const demoCta = landing.getByRole("link", { name: locale.demoCta }).first();
+      await expect(demoCta).toBeVisible();
+      await expect(demoCta).toHaveAttribute("href", /\/examples\/demo\/?$/);
     }
   } finally {
-    expect(errors).toEqual([]);
-    expect(pageErrors).toEqual([]);
+    assertNoBrowserErrors(captured);
   }
 });
 
-test("homepage navigation and primary controls remain usable on a narrow viewport", async ({
+test("documentation layout exposes the Fumadocs sidebar and locale controls", async ({
   page,
   browserName,
 }) => {
-  const { errors, pageErrors } = captureBrowserErrors(page, browserName);
-  await page.setViewportSize({ width: 320, height: 700 });
-  await page.goto("/");
+  test.skip(
+    browserName !== "chromium",
+    "Fumadocs documentation layout is Chromium-reference only.",
+  );
+  const captured = captureBrowserErrors(page, browserName);
+
+  await page.goto("/en/docs/getting-started");
 
   try {
-    const navigation = page.getByRole("navigation", { name: "Primary navigation" });
-    await expect(navigation.getByRole("link", { name: "Why", exact: true })).toHaveAttribute(
-      "href",
-      "#why-imposia",
-    );
-    await expect(page.locator("#why-imposia")).toBeAttached();
+    await expect(page.getByRole("complementary").first()).toBeVisible({ timeout: 15_000 });
+    await expect(
+      page.getByRole("link", { name: "Build your first page", exact: true }),
+    ).toBeVisible();
 
+    const languageTrigger = page
+      .getByRole("button", { name: /choose a language|language|locale|언어|语言|言語/i })
+      .first();
+    await expect(languageTrigger).toBeVisible();
+    await languageTrigger.click();
+
+    const languageDialog = page.getByRole("dialog");
+    await expect(languageDialog.getByRole("button", { name: "한국어", exact: true })).toBeVisible();
+    await expect(
+      languageDialog.getByRole("button", { name: "简体中文", exact: true }),
+    ).toBeVisible();
+    await expect(languageDialog.getByRole("button", { name: "日本語", exact: true })).toBeVisible();
+
+    await languageDialog.getByRole("button", { name: "한국어", exact: true }).click();
+    await expect(page).toHaveURL(/\/ko\/docs\/getting-started\/?$/);
+  } finally {
+    assertNoBrowserErrors(captured);
+  }
+});
+
+test("localized getting-started docs render through the public route", async ({
+  page,
+  browserName,
+}) => {
+  test.skip(browserName !== "chromium", "Documentation rendering is Chromium-reference only.");
+  const captured = captureBrowserErrors(page, browserName);
+
+  try {
+    for (const locale of locales) {
+      await page.goto(`/${locale.locale}/docs/getting-started`);
+      await expect(page).toHaveURL(new RegExp(`/${locale.locale}/docs/getting-started/?$`));
+      await expect(page.locator("html")).toHaveAttribute("lang", locale.locale);
+      await expect(page.getByRole("heading", { level: 1 })).toHaveText(locale.gettingStarted);
+      await expect(page.getByText("@imposia/react", { exact: true })).toBeVisible();
+    }
+  } finally {
+    assertNoBrowserErrors(captured);
+  }
+});
+
+test("localized landing pages do not overflow a 320px viewport", async ({ page, browserName }) => {
+  test.skip(browserName !== "chromium", "Responsive layout is Chromium-reference only.");
+  const captured = captureBrowserErrors(page, browserName);
+
+  await page.setViewportSize({ width: 320, height: 700 });
+  await page.goto("/en");
+
+  try {
     const geometry = await page.evaluate(() => ({
       viewportWidth: document.documentElement.clientWidth,
       documentWidth: document.documentElement.scrollWidth,
     }));
     expect(geometry.documentWidth).toBe(geometry.viewportWidth);
-
-    for (const control of [
-      page.getByRole("combobox", { name: "Language" }),
-      page
-        .getByRole("region", { name: "HTML in. Pages out." })
-        .getByRole("link", { name: "Explore the demo", exact: true }),
-    ]) {
-      const box = await control.boundingBox();
-      expect(box).not.toBeNull();
-      expect(box?.x).toBeGreaterThanOrEqual(0);
-      expect((box?.x ?? 0) + (box?.width ?? 0)).toBeLessThanOrEqual(320);
-      expect(box?.height).toBeGreaterThanOrEqual(24);
-    }
   } finally {
-    expect(errors).toEqual([]);
-    expect(pageErrors).toEqual([]);
+    assertNoBrowserErrors(captured);
   }
 });

@@ -1,0 +1,29 @@
+---
+title: Imposia Documentation
+description: Render HTML and CSS as browser pages for preview and print, then export EPUB from the same committed source.
+---
+
+Imposia turns HTML and CSS into pages inside the browser. Preview and print use the completed pages; EPUB export uses the semantic source committed with them.
+
+## Choose where to start
+
+- **Build a working preview:** follow [Build your first page](/en/docs/getting-started) to install the React package and render HTML as A4 pages.
+- **Understand the output:** read [How preview and output stay consistent](/en/docs/publishing-contract) before you connect printing, EPUB downloads, or external assets.
+
+## What happens to your HTML
+
+1. Your app passes HTML, CSS, and page options to Imposia.
+2. Core paginates the next version in a temporary iframe.
+3. When pagination finishes, Imposia replaces the visible document in one step.
+
+If pagination fails or a newer update arrives first, readers keep seeing the last completed document. They never see a half-finished layout.
+
+## Use one committed source in three ways
+
+- **Preview:** show the completed pages through the React Viewer.
+- **Print:** open the browser print dialog for those same pages.
+- **EPUB:** create a reflowable EPUB 3.3 `Blob` from the document's committed semantic source.
+
+## Know the boundary
+
+Imposia runs in the browser and ships as ESM. It does not include a Node renderer, a CLI renderer, a server publishing API, or a PDF generator. If that matches your application, continue with [Build your first page](/en/docs/getting-started).

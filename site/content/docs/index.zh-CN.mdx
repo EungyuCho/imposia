@@ -1,0 +1,29 @@
+---
+title: Imposia 文档
+description: 将 HTML 和 CSS 渲染为浏览器页面，用于预览和打印，并从同一份已提交源内容导出 EPUB。
+---
+
+Imposia 在浏览器中把 HTML 和 CSS 转换成分页文档。预览和打印使用已完成的页面，EPUB 则根据与页面同时提交的语义源生成。
+
+## 选择你的起点
+
+- **先构建可用的预览：** 按照[创建第一个分页预览](/zh-CN/docs/getting-started)安装 React 软件包，并把 HTML 渲染成 A4 页面。
+- **先了解输出机制：** 在接入打印、EPUB 下载或外部资源前，阅读[预览与输出为何始终一致](/zh-CN/docs/publishing-contract)。
+
+## Imposia 如何处理 HTML
+
+1. 应用把 HTML、CSS 和页面选项交给 Imposia。
+2. Core 在临时 iframe 中为下一个版本完成分页。
+3. 分页结束后，Imposia 一次性替换当前可见文档。
+
+如果分页失败，或较新的更新先完成，读者仍会看到上一次完成的文档，不会遇到未完成的布局。
+
+## 一份已提交源内容，三种用途
+
+- **预览：** 通过 React Viewer 显示已完成的分页结果。
+- **打印：** 为同一组页面打开浏览器原生打印对话框。
+- **EPUB：** 根据文档最新已提交语义源创建可重排 EPUB 3.3 `Blob`。
+
+## 先确认适用范围
+
+Imposia 仅运行于浏览器，并以 ESM 形式发布。它不包含 Node 渲染器、CLI 渲染器、服务端出版 API 或 PDF 生成器。如果这些边界符合你的应用，请继续[创建第一个分页预览](/zh-CN/docs/getting-started)。

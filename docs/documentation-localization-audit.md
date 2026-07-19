@@ -8,10 +8,10 @@ against the package source, then records which surfaces are localized.
 
 | Language | Localized consumer files | Discrepancies corrected |
 | --- | --- | --- |
-| English | `README.md`; `site/content.ts` (`en`); `site/index.html` | Added the ordered Publication and Reader entry path; aligned Reader, search, thumbnail, Inspector, spread, revision, and staged-generation boundaries; removed stale scenario counts. |
-| Korean | `README.ko.md`; `site/content.ts` (`ko`) | Matched the English heading and example structure; corrected `documentOptionsRevision`, persistent canonical iframe, staging, runtime theme, extension cleanup, and release guidance; rewrote the Publication/Reader section as natural Korean developer prose. |
-| Japanese | `README.ja.md`; `site/content.ts` (`ja`) | Matched the English heading and example structure; corrected controller replacement, staging, runtime theme, extension cleanup, and release guidance; rewrote the Publication/Reader section as natural Japanese developer prose. |
-| Simplified Chinese | `README.zh-CN.md`; `site/content.ts` (`zh-CN`) | Matched the English heading and example structure; corrected controller replacement, staging, runtime theme, extension cleanup, and release guidance; rewrote the Publication/Reader section as natural Simplified Chinese developer prose. |
+| English | `README.md`; `site/components/marketing-copy.ts` (`en`); `site/content/docs/*.en.mdx` | Added the ordered Publication and Reader entry path; aligned Reader, search, thumbnail, Inspector, spread, revision, and staged-generation boundaries; removed stale scenario counts. |
+| Korean | `README.ko.md`; `site/components/marketing-copy.ts` (`ko`); `site/content/docs/*.ko.mdx` | Matched the English heading and example structure; corrected `documentOptionsRevision`, persistent canonical iframe, staging, runtime theme, extension cleanup, and release guidance; rewrote the Publication/Reader section as natural Korean developer prose. |
+| Japanese | `README.ja.md`; `site/components/marketing-copy.ts` (`ja`); `site/content/docs/*.ja.mdx` | Matched the English heading and example structure; corrected controller replacement, staging, runtime theme, extension cleanup, and release guidance; rewrote the Publication/Reader section as natural Japanese developer prose. |
+| Simplified Chinese | `README.zh-CN.md`; `site/components/marketing-copy.ts` (`zh-CN`); `site/content/docs/*.zh-CN.mdx` | Matched the English heading and example structure; corrected `documentOptionsRevision`, persistent canonical iframe, staging, runtime theme, extension cleanup, and release guidance; rewrote the Publication/Reader section as natural Simplified Chinese developer prose. |
 
 All four root READMEs now contain the same 17 level-two/level-three sections and
 16 fenced examples in the same order. Localized prose may adapt sentence order,
@@ -56,8 +56,8 @@ TypeScript projects.
   source-aware diagnostics, constrained complex fragmentation, and CJK
   typography.
 - `examples/book.html` no longer describes browser print as deterministic PDF
-  output. Each localized site Documentation label now resolves to its matching
-  root guide, while compatibility and license labels resolve to shared files.
+  output. Each localized site Documentation link now resolves to the matching
+  Fumadocs MDX route while the runnable demo remains shared.
 
 ## Missing locale coverage
 
@@ -76,9 +76,11 @@ distribution directories:
 ```bash
 pnpm exec tsc --noEmit --pretty false -p tests/typecheck/tsconfig.json
 pnpm exec tsc --noEmit --pretty false -p examples/demo/tsconfig.json
-pnpm exec tsc --noEmit --pretty false -p site/tsconfig.json
+pnpm site:typecheck
 pnpm exec biome check README.md README.ko.md README.ja.md README.zh-CN.md site packages docs examples
 pnpm build:demo
+pnpm site:build
+pnpm test:site
 ```
 
 Local Markdown paths and heading anchors, homepage paths and fragment targets,
@@ -94,12 +96,14 @@ Recorded on 2026-07-19:
   paths and fragment targets;
 - the four root guides aligned at 17 headings, 16 fenced examples, the same
   fence-language order, and 29 inline public identifiers;
-- every homepage locale retained 4 invariants, 3 workflow steps, 5
-  compatibility rows, and 4 package entries;
-- `pnpm build:demo` regenerated the demo, React example, and homepage bundles;
-  the ignored `site/app.js` contains the current four-locale metadata, atomic
-  commit copy, locale-specific Documentation paths, compatibility path, and
-  license path;
+- every homepage locale exposes the same six product boundaries, localized
+  Fumadocs documentation, and the shared runnable demo;
+- `pnpm site:build` generated a client-only React Router SPA at
+  `site/build/client/index.html`; runtime routes do not depend on Next.js or a
+  server-side MDX loader;
+- `pnpm test:site` passed 5/5 Chromium scenarios covering the root redirect,
+  four localized landing pages, localized documentation, Fumadocs navigation
+  and language controls, browser errors, and 320px horizontal overflow;
 - the focused constrained-layout invocation names the current seven suites and
   contains exactly 22 Chromium scenarios;
 - the Inspector matrix contains 12/12 scenarios across Chromium, Firefox, and

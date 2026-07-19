@@ -1,0 +1,46 @@
+---
+title: 预览与输出为何始终一致
+description: 了解 Imposia 显示、打印以及生成 EPUB 时分别使用哪一份文档。
+---
+
+文档包含图片、表格或大量页面时，分页需要一定时间。Imposia 会在准备新版本时继续显示上一次完成的文档，让读者始终看到完整布局。
+
+## 读者实际看到的文档
+
+Core 拥有一个持久的 canonical iframe。该 iframe 始终保存最近一次成功完成分页的文档。
+
+React 组件与 Viewer 直接显示这个 iframe。它们不会复制页面，也不会创建第二份展示文档。
+
+## 源内容更新时会发生什么
+
+1. Core 为新源内容创建一个临时 staging iframe。
+2. Core 在其中加载已获准的资源，并对完整文档执行分页。
+3. 分页成功后，Core 一次性替换 canonical iframe 的内容。
+4. 如果任务失败、被取消或被较新任务取代，Core 会移除 staging iframe，并继续显示之前的文档。
+
+staging iframe 从不用于预览、展示或打印。
+
+## 每种输出如何生成
+
+| 输出 | 来源 | 结果 |
+| --- | --- | --- |
+| 预览 | Canonical iframe | Viewer 显示的已完成分页页面 |
+| 打印 | 通过 `Window.print()` 使用 canonical iframe | 浏览器原生打印流程；Imposia 不返回 PDF 字节 |
+| EPUB | 最新已提交语义源 | 可重排 EPUB 3.3 `Blob`，不是页面 DOM 的固定版式副本 |
+
+`PageDocument.exportEpub()` 不会重新运行 extension，也不会序列化固定页面布局。
+
+## 控制外部资源
+
+宿主应用的 `assetResolver` 是外部资源的唯一入口。Core 拥有通过该入口生成的 Blob URL，并会在文档被替换、失败或销毁时撤销它们。
+
+经过清理的输入、resolver 输出与 extension 仍受已记录的限制约束。当 Imposia 无法精确应用某项功能时，它会返回类型化警告，而不是静默猜测。
+
+## 检查兼容性边界
+
+- **稳定：** 浏览器 ESM API、iframe 生命周期、resolver 隔离、支持的页面媒体、原生打印与可重排 EPUB。
+- **受限：** 已记录的表格、flex、grid、多栏布局、引用和 named string 子集。
+- **实验性：** 需显式启用的页内脚注和页浮动；这些功能会返回警告。
+- **不支持：** Node 或 CLI 渲染、服务端导出、PDF 字节、固定版式 EPUB、任意 CSS 分片，以及各浏览器页数完全一致。
+
+请以 Chromium 作为结构分页基准。Firefox 与 WebKit 支持公开 API 和生命周期，但尺寸计算与换行结果可能不同。

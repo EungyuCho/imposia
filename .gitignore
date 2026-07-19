@@ -5,6 +5,7 @@ dist/
 tmp/
 test-results/
 playwright-report/
+.playwright-mcp/
 .omo/
 .ouroboros/
 .scratch/
@@ -12,6 +13,9 @@ artifacts/
 output/
 benchmarks/latest.json
 benchmarks/latest.md
-site/app.js
+site/.source/
+/.source/
+site/.react-router/
+site/build/
 *.tsbuildinfo
 .agents/
