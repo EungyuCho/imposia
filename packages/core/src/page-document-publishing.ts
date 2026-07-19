@@ -16,6 +16,7 @@ const CSS_IDENTIFIER = /^-?(?:[_a-z]|[^\0-\x7f])(?:[-_a-z0-9]|[^\0-\x7f])*$/i;
 type TargetKind = "target-counter" | "target-text";
 type TargetPosition = "before" | "after";
 type StringPosition = "first" | "start" | "last";
+type SelectorSpecificity = readonly [ids: number, classes: number, elements: number];
 type StringSource =
   | Readonly<{ type: "content" }>
   | Readonly<{ type: "attribute"; name: string }>
@@ -28,6 +29,8 @@ export type PublishingCssRule =
       position: TargetPosition;
       kind: TargetKind;
       markerStyle: string;
+      important: boolean;
+      specificity: SelectorSpecificity;
       order: number;
     }>
   | Readonly<{
@@ -44,6 +47,8 @@ export type PublishingCssRule =
       pageReference: boolean | undefined;
       order: number;
     }>;
+
+type TargetPublishingCssRule = Extract<PublishingCssRule, { readonly type: "target" }>;
 
 export interface ExtractedPublishingCss {
   readonly css: string;
@@ -120,12 +125,180 @@ function targetKind(value: string): TargetKind | undefined {
   return undefined;
 }
 
+function selectorNameEnd(value: string, start: number): number {
+  let index = start;
+  while (index < value.length) {
+    const character = value[index] ?? "";
+    if (character === "\\") {
+      index += Math.min(2, value.length - index);
+      continue;
+    }
+    if (/[_a-z0-9\u0080-\uffff-]/iu.test(character)) {
+      index += 1;
+      continue;
+    }
+    break;
+  }
+  return index;
+}
+
+function skipSelectorBlock(value: string, start: number, open: string, close: string): number {
+  let depth = 0;
+  let quote: string | undefined;
+  for (let index = start; index < value.length; index += 1) {
+    const character = value[index] ?? "";
+    if (quote !== undefined) {
+      if (character === "\\") index += 1;
+      else if (character === quote) quote = undefined;
+      continue;
+    }
+    if (character === "/" && value[index + 1] === "*") {
+      const commentEnd = value.indexOf("*/", index + 2);
+      index = commentEnd === -1 ? value.length : commentEnd + 1;
+      continue;
+    }
+    if (character === '"' || character === "'") {
+      quote = character;
+      continue;
+    }
+    if (character === open) depth += 1;
+    else if (character === close) {
+      depth -= 1;
+      if (depth === 0) return index + 1;
+    }
+  }
+  return value.length;
+}
+
+function maxSpecificity(
+  left: SelectorSpecificity,
+  right: SelectorSpecificity,
+): SelectorSpecificity {
+  return compareSpecificity(left, right) >= 0 ? left : right;
+}
+
+function selectorSpecificity(selector: string): SelectorSpecificity {
+  let ids = 0;
+  let classes = 0;
+  let elements = 0;
+  let index = 0;
+  while (index < selector.length) {
+    const character = selector[index] ?? "";
+    if (character === "\\") {
+      index += Math.min(2, selector.length - index);
+      continue;
+    }
+    if (character === "/" && selector[index + 1] === "*") {
+      const commentEnd = selector.indexOf("*/", index + 2);
+      index = commentEnd === -1 ? selector.length : commentEnd + 2;
+      continue;
+    }
+    if (character === '"' || character === "'") {
+      index = skipSelectorBlock(selector, index, character, character);
+      continue;
+    }
+    if (character === "[") {
+      classes += 1;
+      index = skipSelectorBlock(selector, index, "[", "]");
+      continue;
+    }
+    if (character === "#") {
+      const end = selectorNameEnd(selector, index + 1);
+      if (end > index + 1) ids += 1;
+      index = end;
+      continue;
+    }
+    if (character === ".") {
+      const end = selectorNameEnd(selector, index + 1);
+      if (end > index + 1) classes += 1;
+      index = end;
+      continue;
+    }
+    if (character === ":") {
+      const pseudoElement = selector[index + 1] === ":";
+      const nameStart = index + (pseudoElement ? 2 : 1);
+      const nameEnd = selectorNameEnd(selector, nameStart);
+      if (nameEnd > nameStart) {
+        if (pseudoElement) {
+          elements += 1;
+        } else if (selector[nameEnd] === "(") {
+          const end = skipSelectorBlock(selector, nameEnd, "(", ")");
+          const argumentEnd = end > nameEnd && selector[end - 1] === ")" ? end - 1 : end;
+          const name = selector.slice(nameStart, nameEnd).toLowerCase();
+          if (name === "is" || name === "not" || name === "has") {
+            let argumentSpecificity: SelectorSpecificity = Object.freeze([0, 0, 0]);
+            for (const argument of splitSelectors(selector.slice(nameEnd + 1, argumentEnd))) {
+              argumentSpecificity = maxSpecificity(
+                argumentSpecificity,
+                selectorSpecificity(argument),
+              );
+            }
+            ids += argumentSpecificity[0];
+            classes += argumentSpecificity[1];
+            elements += argumentSpecificity[2];
+          } else if (name !== "where") classes += 1;
+          index = end;
+          continue;
+        } else {
+          classes += 1;
+        }
+      }
+      index = nameEnd;
+      continue;
+    }
+    if (/[a-z_\u0080-\uffff]/iu.test(character)) {
+      index = selectorNameEnd(selector, index);
+      elements += 1;
+      continue;
+    }
+    index += 1;
+  }
+  return Object.freeze([ids, classes, elements]);
+}
+
+function compareSpecificity(left: SelectorSpecificity, right: SelectorSpecificity): number {
+  for (const [index, value] of left.entries()) {
+    const other = right[index] ?? 0;
+    if (value !== other) return value - other;
+  }
+  return 0;
+}
+
+function targetRuleWins(
+  candidate: Pick<TargetPublishingCssRule, "important" | "specificity" | "order">,
+  current: Pick<TargetPublishingCssRule, "important" | "specificity" | "order">,
+): boolean {
+  if (candidate.important !== current.important) return candidate.important;
+  const specificity = compareSpecificity(candidate.specificity, current.specificity);
+  if (specificity !== 0) return specificity > 0;
+  return candidate.order >= current.order;
+}
+
 function splitSelectors(value: string): readonly string[] {
   const selectors: string[] = [];
   let depth = 0;
   let start = 0;
+  let quote: string | undefined;
   for (let index = 0; index < value.length; index += 1) {
     const character = value[index];
+    if (quote !== undefined) {
+      if (character === "\\") index += 1;
+      else if (character === quote) quote = undefined;
+      continue;
+    }
+    if (character === '"' || character === "'") {
+      quote = character;
+      continue;
+    }
+    if (character === "/" && value[index + 1] === "*") {
+      const commentEnd = value.indexOf("*/", index + 2);
+      index = commentEnd === -1 ? value.length : commentEnd + 1;
+      continue;
+    }
+    if (character === "\\") {
+      index += 1;
+      continue;
+    }
     if (character === "(" || character === "[") depth += 1;
     else if (character === ")" || character === "]") depth = Math.max(0, depth - 1);
     else if (character === "," && depth === 0) {
@@ -137,10 +310,18 @@ function splitSelectors(value: string): readonly string[] {
   return selectors.filter((selector) => selector !== "");
 }
 
-function targetSelectors(
-  value: string,
-): readonly Readonly<{ selector: string; position: TargetPosition }>[] | undefined {
-  const result: Readonly<{ selector: string; position: TargetPosition }>[] = [];
+function targetSelectors(value: string):
+  | readonly Readonly<{
+      selector: string;
+      position: TargetPosition;
+      specificity: SelectorSpecificity;
+    }>[]
+  | undefined {
+  const result: Readonly<{
+    selector: string;
+    position: TargetPosition;
+    specificity: SelectorSpecificity;
+  }>[] = [];
   for (const selector of splitSelectors(value)) {
     const match = /^(.*)::(before|after)\s*$/i.exec(selector);
     const host = match?.[1]?.trim();
@@ -148,7 +329,13 @@ function targetSelectors(
     if (host === undefined || host === "" || (position !== "before" && position !== "after")) {
       return undefined;
     }
-    result.push(Object.freeze({ selector: host, position }));
+    result.push(
+      Object.freeze({
+        selector: host,
+        position,
+        specificity: selectorSpecificity(host),
+      }),
+    );
   }
   return Object.freeze(result);
 }
@@ -217,9 +404,21 @@ function placementFloat(value: string): "footnote" | "top" | "bottom" | undefine
 
 function targetMarkerStyle(rule: Rule, content: Declaration): string {
   return rule.nodes
-    .filter((node): node is Declaration => node.type === "decl" && node !== content)
+    .filter(
+      (node): node is Declaration =>
+        node.type === "decl" && node.prop.toLowerCase() !== "content" && node !== content,
+    )
     .map((declaration) => declaration.toString())
     .join(";");
+}
+
+function winningContentDeclaration(declarations: readonly Declaration[]): Declaration | undefined {
+  let winner: Declaration | undefined;
+  for (const declaration of declarations) {
+    if (declaration.prop.toLowerCase() !== "content") continue;
+    if (winner === undefined || declaration.important || !winner.important) winner = declaration;
+  }
+  return winner;
 }
 
 function unsupportedPublishingDeclaration(
@@ -252,9 +451,7 @@ export function extractPublishingCss(
   let nextOrder = startOrder;
   root.walkRules((rule) => {
     const declarations = rule.nodes.filter((node): node is Declaration => node.type === "decl");
-    const content = declarations.find(
-      (declaration) => declaration.prop.toLowerCase() === "content",
-    );
+    const content = winningContentDeclaration(declarations);
     const generated = content === undefined ? undefined : targetKind(content.value);
     const selectors = generated === undefined ? undefined : targetSelectors(rule.selector);
     if (content !== undefined && generated !== undefined && selectors !== undefined) {
@@ -267,6 +464,8 @@ export function extractPublishingCss(
             position: target.position,
             kind: generated,
             markerStyle,
+            important: content.important === true,
+            specificity: target.specificity,
             order: declarationOrder(content, startOrder, nextOrder),
           }),
         );
@@ -434,7 +633,13 @@ export function preparePublishingContent(
     element.removeAttribute("id");
   }
 
-  const targets: TargetBinding[] = [];
+  interface TargetCandidate {
+    readonly rule: TargetPublishingCssRule;
+    readonly hostKey: string;
+    readonly sourceOrder: number;
+    readonly targetId: string | undefined;
+  }
+  const targetWinners = new Map<string, TargetCandidate>();
   const stringByElementAndName = new Map<string, StringBinding>();
   type PlacementState = {
     float: "footnote" | "top" | "bottom" | undefined;
@@ -447,17 +652,17 @@ export function preparePublishingContent(
       for (const element of matches) {
         const order = sourceOrder.get(element);
         if (order === undefined) continue;
-        targets.push(
-          Object.freeze({
-            key: `target-${targets.length + 1}`,
-            hostKey: String(order),
-            sourceOrder: order,
-            position: rule.position,
-            kind: rule.kind,
-            targetId: anchorHref(element),
-            markerStyle: rule.markerStyle,
-          }),
-        );
+        const slot = `${order}\u0000${rule.position}`;
+        const candidate = Object.freeze({
+          rule,
+          hostKey: String(order),
+          sourceOrder: order,
+          targetId: anchorHref(element),
+        });
+        const current = targetWinners.get(slot);
+        if (current === undefined || targetRuleWins(rule, current.rule)) {
+          targetWinners.set(slot, candidate);
+        }
       }
       continue;
     }
@@ -483,6 +688,18 @@ export function preparePublishingContent(
       });
     }
   }
+
+  const targets: TargetBinding[] = [...targetWinners.values()].map((candidate, index) =>
+    Object.freeze({
+      key: `target-${index + 1}`,
+      hostKey: candidate.hostKey,
+      sourceOrder: candidate.sourceOrder,
+      position: candidate.rule.position,
+      kind: candidate.rule.kind,
+      targetId: candidate.targetId,
+      markerStyle: candidate.rule.markerStyle,
+    }),
+  );
 
   for (const element of elements) {
     const order = sourceOrder.get(element);

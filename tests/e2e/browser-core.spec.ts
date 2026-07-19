@@ -121,7 +121,7 @@ test("mounts the browser-core canonical page document", async ({ page, browserNa
       }
     });
 
-    expect(observation.sandbox).toBe("allow-same-origin");
+    expect(observation.sandbox).toBe("allow-same-origin allow-modals");
     expect(observation.sameController).toBe(true);
     expect(observation.generation).toBe(1);
     expect(observation.pageCount).toBe(1);

@@ -196,6 +196,123 @@ test("resolves target page and text markers after pagination with a stable repea
   }
 });
 
+test("applies generated-content cascade winners per pseudo-element slot", async ({
+  page,
+  browserName,
+}) => {
+  chromiumOnly(browserName);
+  const { errors, pageErrors } = captureBrowserErrors(page, browserName);
+  await page.goto("/examples/book.html");
+  try {
+    const observation = await page.evaluate(async () => {
+      const modulePath = "/packages/core/dist/index.js";
+      const core = (await import(modulePath)) as CoreModuleView;
+      const host = document.createElement("div");
+      document.body.replaceChildren(host);
+      const css = `
+        .specificity::after { content: target-counter(attr(href), page); }
+        a::after { content: target-text(attr(href), content); }
+        .source-order::after { content: target-counter(attr(href), page); }
+        .source-order::after { content: target-text(attr(href), content); }
+        #important::after { content: target-counter(attr(href), page); }
+        a.important::after { content: target-text(attr(href), content) !important; }
+        a.where-reference::after { content: target-counter(attr(href), page); }
+        a:where(#where-reference)::after { content: target-text(attr(href), content); }
+        a:is(#is-reference)::after { content: target-counter(attr(href), page); }
+        a.is-reference::after { content: target-text(attr(href), content); }
+        a.not-case:not(#not-other)::after { content: target-counter(attr(href), page); }
+        a.not-case.other::after { content: target-text(attr(href), content); }
+        a:has(> #has-child)::after { content: target-counter(attr(href), page); }
+        a.has-reference::after { content: target-text(attr(href), content); }
+        #same-rule-order::after {
+          content: target-counter(attr(href), page);
+          content: target-text(attr(href), content);
+          border: 1px solid red;
+        }
+        #same-rule-important::after {
+          content: target-text(attr(href), content) !important;
+          content: target-counter(attr(href), page);
+          background: yellow;
+        }
+        a { font: 16px/24px Arial, sans-serif; }
+      `;
+      let controller: PageDocumentControllerView | undefined;
+      try {
+        controller = core.mountPageDocument(
+          host,
+          {
+            html: `
+              <article>
+                <p><a id="specificity" class="specificity" href="#target">Specificity</a></p>
+                <p><a id="source-order" class="source-order" href="#target">Source order</a></p>
+                <p><a id="important" class="important" href="#target">Important</a></p>
+                <p><a id="where-reference" class="where-reference" href="#target">Where</a></p>
+                <p><a id="is-reference" class="is-reference" href="#target">Is</a></p>
+                <p><a id="not-reference" class="not-case other" href="#target">Not</a></p>
+                <p><a id="has-reference" class="has-reference" href="#target"><span id="has-child">Has</span></a></p>
+                <p><a id="same-rule-order" href="#target">Same rule order</a></p>
+                <p><a id="same-rule-important" href="#target">Same rule important</a></p>
+                <h2 id="target">Target text</h2>
+              </article>
+            `,
+          },
+          { css: [css] },
+        );
+        const ready = await controller.ready;
+        const frame = ready.iframe.contentDocument;
+        if (frame === null) throw new Error("Missing canonical frame.");
+        return [
+          "specificity",
+          "source-order",
+          "important",
+          "where-reference",
+          "is-reference",
+          "not-reference",
+          "has-reference",
+          "same-rule-order",
+          "same-rule-important",
+        ].map((id) => {
+          const host = frame.querySelector(`#${id}`);
+          return {
+            id,
+            markers: [
+              ...(host?.querySelectorAll<HTMLElement>("[data-imposia-generated]") ?? []),
+            ].map((marker) => ({
+              kind: marker.getAttribute("data-imposia-generated"),
+              text: marker.textContent?.trim() ?? "",
+              style: marker.getAttribute("style"),
+            })),
+          };
+        });
+      } finally {
+        await controller?.destroy();
+        host.replaceChildren();
+      }
+    });
+
+    expect(observation).toEqual([
+      { id: "specificity", markers: [{ kind: "target-counter", text: "1", style: null }] },
+      { id: "source-order", markers: [{ kind: "target-text", text: "Target text", style: null }] },
+      { id: "important", markers: [{ kind: "target-text", text: "Target text", style: null }] },
+      { id: "where-reference", markers: [{ kind: "target-counter", text: "1", style: null }] },
+      { id: "is-reference", markers: [{ kind: "target-counter", text: "1", style: null }] },
+      { id: "not-reference", markers: [{ kind: "target-counter", text: "1", style: null }] },
+      { id: "has-reference", markers: [{ kind: "target-counter", text: "1", style: null }] },
+      {
+        id: "same-rule-order",
+        markers: [{ kind: "target-text", text: "Target text", style: "border: 1px solid red" }],
+      },
+      {
+        id: "same-rule-important",
+        markers: [{ kind: "target-text", text: "Target text", style: "background: yellow" }],
+      },
+    ]);
+  } finally {
+    expect(errors).toEqual([]);
+    expect(pageErrors).toEqual([]);
+  }
+});
+
 test("reports missing and duplicate fragment references deterministically without crashing", async ({
   page,
   browserName,

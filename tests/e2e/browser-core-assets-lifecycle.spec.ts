@@ -231,7 +231,7 @@ async function runProbe(page: Page, browserName: string, scenario: Scenario): Pr
 function lifecycleTest(name: string, scenario: Scenario, check: (o: Probe) => void): void {
   test(name, async ({ page, browserName }) => {
     const o = await runProbe(page, browserName, scenario);
-    expect(o.sandbox).toBe("allow-same-origin");
+    expect(o.sandbox).toBe("allow-same-origin allow-modals");
     assertUrlLedger(o);
     check(o);
   });

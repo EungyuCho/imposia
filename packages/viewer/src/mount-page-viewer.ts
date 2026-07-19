@@ -124,8 +124,13 @@ function validatePageDocument(pageDocument: PageDocument): void {
   if (iframe.getAttribute("data-imposia-frame") !== "page-document") {
     invalidPageDocument("iframe is not a canonical page-document frame.");
   }
-  if (iframe.getAttribute("sandbox") !== "allow-same-origin") {
-    invalidPageDocument("iframe sandbox must be allow-same-origin.");
+  const sandboxTokens = [...iframe.sandbox];
+  if (
+    sandboxTokens.length !== 2 ||
+    !sandboxTokens.includes("allow-same-origin") ||
+    !sandboxTokens.includes("allow-modals")
+  ) {
+    invalidPageDocument("iframe sandbox must allow same-origin and modals only.");
   }
   const frameDocument = iframe.contentDocument;
   if (frameDocument === null) invalidPageDocument("iframe content document is unavailable.");
