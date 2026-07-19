@@ -12,6 +12,7 @@ async function installReaderFixture(
   hostWidth?: string,
 ): Promise<void> {
   await page.goto("/examples/book.html");
+  await page.addStyleTag({ url: "/packages/viewer/src/styles.css" });
   await page.evaluate(async (width) => {
     const importMap = document.createElement("script");
     importMap.type = "importmap";

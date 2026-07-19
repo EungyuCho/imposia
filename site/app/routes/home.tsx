@@ -20,6 +20,7 @@ export const meta: MetaFunction = ({ params }) => {
 
 export default function HomeRoute() {
   const { lang } = useParams<"lang">();
+  const mainContentId = useId();
   const heroTitleId = useId();
   const featureTitleId = useId();
   if (!lang || !isSupportedLocale(lang)) {
@@ -35,10 +36,10 @@ export default function HomeRoute() {
       className="imposia-home-layout"
       themeSwitch={{ enabled: false }}
     >
-      <a className="skip-link" href="#main-content">
+      <a className="skip-link" href={`#${mainContentId}`}>
         {copy.skipLink}
       </a>
-      <div className="landing-page" id="main-content" tabIndex={-1}>
+      <div className="landing-page" id={mainContentId} tabIndex={-1}>
         <section className="landing-hero" aria-labelledby={heroTitleId}>
           <p className="hero-eyebrow">{copy.eyebrow}</p>
           <h1 id={heroTitleId}>{copy.title}</h1>

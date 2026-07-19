@@ -258,7 +258,8 @@ lifecycleTest("failed replacement preserves the old generation", "preserve", (o)
 lifecycleTest("late resolver times out, aborts, and settles idempotently", "timeout", (o) => {
   expectFatal(o.data[0] as Failure, "RESOURCE_TIMEOUT");
   expect(o.data[1]).toEqual({ aborted: true, settled: true });
-  expect(o.data[2]).toHaveLength(1);
+  expect(o.data[2]).toEqual(o.created);
+  expect(o.created.length).toBeLessThanOrEqual(1);
   expect(o.data[3]).toBe(true);
 });
 

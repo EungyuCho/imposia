@@ -373,6 +373,7 @@ describe("packed Publication adapters", () => {
       [
         "exec",
         "tsc",
+        "--ignoreConfig",
         "--noEmit",
         "--pretty",
         "false",

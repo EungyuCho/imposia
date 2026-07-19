@@ -104,7 +104,7 @@ export function createPublicationToc(
     }
   }
 
-  opener.addEventListener("click", () => setOpen(panel.hidden));
+  opener.addEventListener("click", () => setOpen(panel.hidden !== false));
   panel.addEventListener("keydown", onPanelKeydown);
   toolbar.prepend(opener);
   root.insertBefore(panel, iframe);
@@ -135,7 +135,7 @@ export function createPublicationToc(
       setOpen(false, options?.restoreFocus);
     },
     toggle() {
-      const opening = panel.hidden;
+      const opening = panel.hidden !== false;
       setOpen(opening, !opening);
     },
     destroy() {
