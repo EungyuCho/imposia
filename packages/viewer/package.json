@@ -1,8 +1,20 @@
 {
   "name": "@imposia/viewer",
   "version": "0.1.0",
+  "description": "Browser-native viewer for canonical Imposia page documents and PDF.js documents.",
+  "keywords": [
+    "viewer",
+    "pdf",
+    "pagination",
+    "paged-media",
+    "browser",
+    "pdfjs"
+  ],
   "type": "module",
   "license": "Apache-2.0",
+  "sideEffects": [
+    "./src/styles.css"
+  ],
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {

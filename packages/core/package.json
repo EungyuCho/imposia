@@ -1,8 +1,18 @@
 {
   "name": "@imposia/core",
   "version": "0.1.0",
+  "description": "Browser-native HTML/CSS pagination, publishing diagnostics, and reflowable EPUB export.",
+  "keywords": [
+    "pagination",
+    "paged-media",
+    "html",
+    "css",
+    "epub",
+    "browser"
+  ],
   "type": "module",
   "license": "Apache-2.0",
+  "sideEffects": false,
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
