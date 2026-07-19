@@ -1,21 +1,25 @@
+import { ImposiaError } from "./errors.js";
 import { abortError } from "./page-document-frame.js";
 import type {
   PageExtension,
   PageExtensionAssetRequest,
   PageExtensionContext,
   PageExtensionDecoration,
+  PageExtensionEntryTransformInput,
   PageExtensionPage,
   PageExtensionTransformInput,
   PageExtensionTransformOutput,
   PageExtensionWarning,
   PageExtensionWarningCode,
   PageWarning,
+  PublicationExtension,
 } from "./page-document-types.js";
 
 type ExtensionSnapshot = Readonly<{
   index: number;
   name: unknown;
   transform: unknown;
+  transformEntry: unknown;
   allowAsset: unknown;
   decoratePage: unknown;
 }>;
@@ -26,6 +30,7 @@ export type ValidatedPageExtension = Readonly<{
   index: number;
   name: string;
   transform?: PageExtension["transform"];
+  transformEntry?: PublicationExtension["transformEntry"];
   allowAsset?: PageExtension["allowAsset"];
   decoratePage?: PageExtension["decoratePage"];
 }>;
@@ -35,11 +40,19 @@ type ExtensionWarningEntry = Readonly<{
   sequence: number;
   code: PageExtensionWarningCode;
   message: string;
+  entryId: string | undefined;
+  page: number | undefined;
+}>;
+
+export type ExtensionWarningScope = Readonly<{
+  entryId?: string;
+  page?: number;
 }>;
 
 export interface ExtensionWarningCollector {
-  context(extension: ValidatedPageExtension): PageExtensionContext;
+  context(extension: ValidatedPageExtension, scope?: ExtensionWarningScope): PageExtensionContext;
   finish(): readonly PageWarning[];
+  cleanup(): void;
 }
 
 export type ExtensionTransformResult = Readonly<{
@@ -75,6 +88,7 @@ export function snapshotExtensions(value: unknown): PageExtensionSnapshots {
         index: 0,
         name: undefined,
         transform: undefined,
+        transformEntry: undefined,
         allowAsset: undefined,
         decoratePage: undefined,
       }),
@@ -87,6 +101,7 @@ export function snapshotExtensions(value: unknown): PageExtensionSnapshots {
         index,
         name: record?.name,
         transform: record?.transform,
+        transformEntry: record?.transformEntry,
         allowAsset: record?.allowAsset,
         decoratePage: record?.decoratePage,
       });
@@ -109,6 +124,9 @@ export function validateExtensions(
     if (snapshot.transform !== undefined && typeof snapshot.transform !== "function") {
       throw invalidExtension(`transform for "${snapshot.name}" must be a function.`);
     }
+    if (snapshot.transformEntry !== undefined && typeof snapshot.transformEntry !== "function") {
+      throw invalidExtension(`transformEntry for "${snapshot.name}" must be a function.`);
+    }
     if (snapshot.allowAsset !== undefined && typeof snapshot.allowAsset !== "function") {
       throw invalidExtension(`allowAsset for "${snapshot.name}" must be a function.`);
     }
@@ -123,6 +141,11 @@ export function validateExtensions(
         ...(snapshot.transform === undefined
           ? {}
           : { transform: snapshot.transform as PageExtension["transform"] }),
+        ...(snapshot.transformEntry === undefined
+          ? {}
+          : {
+              transformEntry: snapshot.transformEntry as PublicationExtension["transformEntry"],
+            }),
         ...(snapshot.allowAsset === undefined
           ? {}
           : { allowAsset: snapshot.allowAsset as PageExtension["allowAsset"] }),
@@ -158,18 +181,23 @@ function validateWarning(value: unknown): Readonly<{
 export function createExtensionWarningCollector(signal: AbortSignal): ExtensionWarningCollector {
   const entries: ExtensionWarningEntry[] = [];
   const seen = new Set<string>();
-  const contexts = new Map<ValidatedPageExtension, PageExtensionContext>();
+  const contexts = new Map<string, PageExtensionContext>();
+  const cleanups: Array<() => void> = [];
   let sequence = 0;
+  let cleaned = false;
   return {
-    context(extension) {
-      const existing = contexts.get(extension);
+    context(extension, scope = {}) {
+      const entryId = scope.entryId;
+      const page = scope.page;
+      const contextKey = `${extension.index}\u0000${entryId ?? ""}\u0000${page ?? ""}`;
+      const existing = contexts.get(contextKey);
       if (existing !== undefined) return existing;
       const context = Object.freeze({
         signal,
         warn(value: PageExtensionWarning) {
           throwIfAborted(signal);
           const warning = validateWarning(value);
-          const key = `${extension.name}\u0000${warning.code}`;
+          const key = `${extension.name}\u0000${warning.code}\u0000${entryId ?? ""}\u0000${page ?? ""}`;
           if (seen.has(key)) return;
           seen.add(key);
           entries.push(
@@ -178,12 +206,25 @@ export function createExtensionWarningCollector(signal: AbortSignal): ExtensionW
               sequence,
               code: warning.code,
               message: warning.message,
+              entryId,
+              page,
             }),
           );
           sequence += 1;
         },
+        onCleanup(cleanup: () => void) {
+          if (typeof cleanup !== "function") {
+            throw invalidExtension("cleanup must be a function.");
+          }
+          if (cleaned || signal.aborted) {
+            cleanup();
+            throwIfAborted(signal);
+            return;
+          }
+          cleanups.push(cleanup);
+        },
       });
-      contexts.set(extension, context);
+      contexts.set(contextKey, context);
       return context;
     },
     finish() {
@@ -198,12 +239,62 @@ export function createExtensionWarningCollector(signal: AbortSignal): ExtensionW
               code: entry.code,
               message: entry.message,
               sourceIdentity: undefined,
+              location: Object.freeze({
+                generation: undefined,
+                entryId: entry.entryId,
+                page: entry.page,
+              }),
               extension: entry.extension.name,
             }),
           ),
       );
     },
+    cleanup() {
+      if (cleaned) return;
+      cleaned = true;
+      let firstError: unknown;
+      for (const cleanup of cleanups.reverse()) {
+        try {
+          cleanup();
+        } catch (error: unknown) {
+          firstError ??= extensionCallbackError(error);
+        }
+      }
+      cleanups.length = 0;
+      if (firstError !== undefined) throw firstError;
+    },
   };
+}
+
+function extensionCallbackError(error: unknown): unknown {
+  if (error instanceof DOMException && error.name === "AbortError") return error;
+  if (error instanceof ImposiaError) return error;
+  if (error instanceof TypeError && error.message.startsWith("Invalid page extension:")) {
+    return error;
+  }
+  return new ImposiaError(
+    "EXTENSION_FAILED",
+    error instanceof Error ? error.message : "An extension callback failed.",
+  );
+}
+
+async function callExtension<T>(
+  callback: () => PromiseLike<T> | T,
+  signal: AbortSignal,
+): Promise<T> {
+  try {
+    return await awaitWithAbort(callback(), signal);
+  } catch (error: unknown) {
+    throw extensionCallbackError(error);
+  }
+}
+
+function callExtensionSync<T>(callback: () => T): T {
+  try {
+    return callback();
+  } catch (error: unknown) {
+    throw extensionCallbackError(error);
+  }
 }
 
 function awaitWithAbort<T>(value: PromiseLike<T> | T, signal: AbortSignal): Promise<T> {
@@ -260,9 +351,9 @@ export async function applyExtensionTransforms(
   signal: AbortSignal,
   warnings: ExtensionWarningCollector,
   ensureLimit: (html: string, css: readonly string[]) => void,
+  prepareInput: (html: string, css: readonly string[]) => ExtensionTransformResult,
 ): Promise<ExtensionTransformResult> {
-  let html = input.html;
-  let css = Object.freeze([...input.css]);
+  let { html, css } = prepareInput(input.html, input.css);
   for (const extension of extensions) {
     if (extension.transform === undefined) continue;
     throwIfAborted(signal);
@@ -272,8 +363,8 @@ export async function applyExtensionTransforms(
       baseUrl: input.baseUrl,
     });
     const output = validateTransformOutput(
-      await awaitWithAbort(
-        extension.transform(transformInput, warnings.context(extension)),
+      await callExtension(
+        () => extension.transform?.(transformInput, warnings.context(extension)),
         signal,
       ),
     );
@@ -282,6 +373,45 @@ export async function applyExtensionTransforms(
     html = output.html ?? html;
     css = output.css === undefined ? css : Object.freeze([...output.css]);
     ensureLimit(html, css);
+    ({ html, css } = prepareInput(html, css));
+  }
+  return Object.freeze({ html, css });
+}
+
+export async function applyExtensionEntryTransforms(
+  extensions: readonly ValidatedPageExtension[],
+  input: PageExtensionEntryTransformInput,
+  signal: AbortSignal,
+  warnings: ExtensionWarningCollector,
+  ensureLimit: (html: string, css: readonly string[]) => void,
+  prepareInput: (html: string, css: readonly string[]) => ExtensionTransformResult,
+): Promise<ExtensionTransformResult> {
+  let { html, css } = prepareInput(input.html, input.css);
+  for (const extension of extensions) {
+    if (extension.transformEntry === undefined) continue;
+    throwIfAborted(signal);
+    const transformInput = Object.freeze({
+      html,
+      css,
+      publication: input.publication,
+      entry: input.entry,
+    });
+    const output = validateTransformOutput(
+      await callExtension(
+        () =>
+          extension.transformEntry?.(
+            transformInput,
+            warnings.context(extension, { entryId: input.entry.id }),
+          ),
+        signal,
+      ),
+    );
+    throwIfAborted(signal);
+    if (output === undefined) continue;
+    html = output.html ?? html;
+    css = output.css === undefined ? css : Object.freeze([...output.css]);
+    ensureLimit(html, css);
+    ({ html, css } = prepareInput(html, css));
   }
   return Object.freeze({ html, css });
 }
@@ -295,7 +425,9 @@ export function allowExtensionAsset(
   for (const extension of extensions) {
     if (extension.allowAsset === undefined) continue;
     throwIfAborted(signal);
-    const allowed = extension.allowAsset(request, warnings.context(extension));
+    const allowed = callExtensionSync(() =>
+      extension.allowAsset?.(request, warnings.context(extension)),
+    );
     throwIfAborted(signal);
     if (typeof allowed !== "boolean") {
       throw invalidExtension(`allowAsset for "${extension.name}" must return a boolean.`);
@@ -333,7 +465,12 @@ export function decorateExtensionPage(
     if (extension.decoratePage === undefined) continue;
     throwIfAborted(signal);
     const output = validateDecoration(
-      extension.decoratePage(Object.freeze({ ...page }), warnings.context(extension)),
+      callExtensionSync(() =>
+        extension.decoratePage?.(
+          Object.freeze({ ...page }),
+          warnings.context(extension, { page: page.number }),
+        ),
+      ),
     );
     throwIfAborted(signal);
     if (output === undefined) continue;

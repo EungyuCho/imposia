@@ -37,7 +37,13 @@
         `,
       });
       const pageDocument = await controller.ready;
-      const viewer = mountPageViewer(host, pageDocument);
+      const viewer = mountPageViewer(host, pageDocument, {
+        theme: {
+          "--imposia-viewer-color-accent": "#8b6cff",
+          "--imposia-viewer-color-signal": "#b8f2d0",
+          "--imposia-viewer-control-size": "40px",
+        },
+      });
       globalThis.imposiaViewer = viewer;
       globalThis.imposiaDocumentController = controller;
       addEventListener("pagehide", () => {

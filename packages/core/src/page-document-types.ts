@@ -36,6 +36,28 @@ export interface PageExtensionTransformOutput {
   readonly css?: readonly string[];
 }
 
+export interface PageExtensionPublicationMetadata {
+  readonly title: string;
+  readonly language: string | undefined;
+  readonly identifier: string | undefined;
+  readonly entryCount: number;
+}
+
+export interface PageExtensionEntryMetadata {
+  readonly id: string;
+  readonly title: string;
+  readonly index: number;
+  readonly totalEntries: number;
+  readonly baseUrl: string | undefined;
+}
+
+export interface PageExtensionEntryTransformInput {
+  readonly html: string;
+  readonly css: readonly string[];
+  readonly publication: PageExtensionPublicationMetadata;
+  readonly entry: PageExtensionEntryMetadata;
+}
+
 export interface PageExtensionAssetRequest {
   readonly url: string;
   readonly kind: "font" | "image" | "media" | "stylesheet";
@@ -46,6 +68,7 @@ export interface PageExtensionAssetRequest {
 
 export interface PageExtensionPage {
   readonly number: number;
+  readonly totalPages: number;
   readonly side: "left" | "right";
   readonly blank: boolean;
 }
@@ -58,12 +81,26 @@ export interface PageExtensionDecoration {
 export interface PageExtensionContext {
   readonly signal: AbortSignal;
   warn(warning: PageExtensionWarning): void;
+  onCleanup(cleanup: () => void): void;
 }
 
 export interface PageExtension {
   readonly name: string;
   transform?(
     input: PageExtensionTransformInput,
+    context: PageExtensionContext,
+  ): PageExtensionTransformOutput | undefined | Promise<PageExtensionTransformOutput | undefined>;
+  allowAsset?(request: PageExtensionAssetRequest, context: PageExtensionContext): boolean;
+  decoratePage?(
+    page: PageExtensionPage,
+    context: PageExtensionContext,
+  ): PageExtensionDecoration | undefined;
+}
+
+export interface PublicationExtension {
+  readonly name: string;
+  transformEntry?(
+    input: PageExtensionEntryTransformInput,
     context: PageExtensionContext,
   ): PageExtensionTransformOutput | undefined | Promise<PageExtensionTransformOutput | undefined>;
   allowAsset?(request: PageExtensionAssetRequest, context: PageExtensionContext): boolean;
@@ -175,7 +212,7 @@ export interface PageDocumentOptions {
   footerTemplate?: string;
   decorateBlankPages?: boolean;
   experimental?: ExperimentalPageFeatures;
-  extensions?: readonly PageExtension[];
+  extensions?: readonly (PageExtension | PublicationExtension)[];
   signal?: AbortSignal;
   onProgress?: (progress: { completedPages: number }) => void;
 }
@@ -188,6 +225,9 @@ export type CorePageWarningCode =
   | "PAGE_RULE_UNSUPPORTED"
   | "BREAK_CONSTRAINT_RELAXED"
   | "WIDOW_ORPHAN_RELAXED"
+  | "WIDOW_ORPHAN_FALLBACK"
+  | "HYPHENATION_FALLBACK"
+  | "UNBREAKABLE_CONTENT"
   | "UNSUPPORTED_FRAGMENTATION_CONTEXT"
   | "REFERENCE_MISSING"
   | "REFERENCE_DUPLICATE"
@@ -211,10 +251,23 @@ export interface PageMetadata {
   readonly bodyText: readonly string[];
 }
 
+export interface PageWarningLocation {
+  readonly generation: number | undefined;
+  readonly entryId: string | undefined;
+  readonly page: number | undefined;
+}
+
+export const UNLOCATED_PAGE_WARNING_LOCATION: PageWarningLocation = Object.freeze({
+  generation: undefined,
+  entryId: undefined,
+  page: undefined,
+});
+
 export interface CorePageWarning {
   readonly code: CorePageWarningCode;
   readonly message: string;
   readonly sourceIdentity: string | undefined;
+  readonly location: PageWarningLocation;
   readonly property?: string;
   readonly value?: string;
   readonly recovery?: string;
@@ -224,6 +277,7 @@ export interface ExtensionPageWarning {
   readonly code: PageExtensionWarningCode;
   readonly message: string;
   readonly sourceIdentity: undefined;
+  readonly location: PageWarningLocation;
   readonly extension: string;
 }
 

@@ -6,6 +6,7 @@ export { sanitizeCss } from "./page-document-sanitize-css.js";
 export { sanitizeAssetResolverInput } from "./page-document-sanitize-resolver-input.js";
 
 import type { PageLimits, PageSource, PageWarning } from "./page-document-types.js";
+import { UNLOCATED_PAGE_WARNING_LOCATION } from "./page-document-types.js";
 import type { DocumentWarning } from "./warnings.js";
 
 export const DEFAULT_MAX_INPUT_BYTES = 5 * 1024 * 1024;
@@ -13,6 +14,7 @@ export const DEFAULT_MAX_INPUT_BYTES = 5 * 1024 * 1024;
 export interface PreparedFragment {
   fragment: DocumentFragment;
   resourceBlocked: boolean;
+  documentLanguage?: string;
 }
 
 export { prepareDocument } from "./document.js";
@@ -36,6 +38,10 @@ const DYNAMIC_ELEMENTS = new Set([
   "animatetransform",
   "discard",
   "set",
+]);
+const RESERVED_DECORATION_ATTRIBUTES = Object.freeze([
+  "data-imposia-publication-entry",
+  "data-imposia-publishing-source",
 ]);
 export function isLightDomSource(value: unknown): value is Element | DocumentFragment {
   if (value === null || typeof value !== "object" || !("nodeType" in value)) return false;
@@ -95,7 +101,12 @@ export function copyPreparedBody(
   for (const child of [...parsed.body.childNodes]) {
     fragment.append(frameDocument.importNode(child, true));
   }
-  return { fragment, resourceBlocked: headResourceBlocked || bodyResourceBlocked };
+  const documentLanguage = parsed.documentElement.getAttribute("lang");
+  return {
+    fragment,
+    resourceBlocked: headResourceBlocked || bodyResourceBlocked,
+    ...(documentLanguage === null ? {} : { documentLanguage: documentLanguage.trim() }),
+  };
 }
 
 function resolvedAttribute(
@@ -236,6 +247,7 @@ export function pageWarnings(warnings: readonly DocumentWarning[]): readonly Pag
             ? "Unsupported layout declaration was ignored."
             : warning.message,
         sourceIdentity: undefined,
+        location: UNLOCATED_PAGE_WARNING_LOCATION,
       }),
     );
   }
@@ -253,6 +265,9 @@ export function appendDecoration(
   const holder = frameDocument.createElement("div");
   holder.append(prepared.fragment);
   const resourceBlocked = prepared.resourceBlocked || sanitizeFrameContent(holder);
+  for (const element of holder.querySelectorAll<Element>("*")) {
+    for (const attribute of RESERVED_DECORATION_ATTRIBUTES) element.removeAttribute(attribute);
+  }
   const nodes = [...holder.childNodes];
   if (append) target.append(...nodes);
   else target.replaceChildren(...nodes);

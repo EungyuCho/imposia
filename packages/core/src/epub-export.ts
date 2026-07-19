@@ -1,7 +1,7 @@
 import postcss, { type AtRule, type Declaration, type Root } from "postcss";
 import { createStoredZip, type StoredZipEntry } from "./epub-zip.js";
 import { ImposiaError } from "./errors.js";
-import { scanCssUrls } from "./page-document-assets-css.js";
+import { hasUnsupportedCssResourceFunction, scanCssUrls } from "./page-document-assets-css.js";
 import {
   rewriteSrcset,
   sameDocumentFragment,
@@ -16,6 +16,8 @@ import type {
   EpubMetadata,
   PageDocument,
 } from "./page-document-types.js";
+import { PUBLICATION_DESTINATION_MARKER, PUBLICATION_ENTRY_MARKER } from "./publication-outline.js";
+import type { CommittedPublicationEntry, PublicationOutlineItem } from "./publication-types.js";
 
 const EPUB_MIME_TYPE = "application/epub+zip";
 const DEFAULT_MODIFIED = "1970-01-01T00:00:00Z";
@@ -354,8 +356,9 @@ async function collectAssets(
   snapshot: PageSemanticSnapshot,
   limits: Required<EpubExportLimits>,
   signal: AbortSignal | undefined,
+  fixedEntryCount = FIXED_EPUB_ENTRY_COUNT,
 ): Promise<Readonly<{ assets: readonly EpubAsset[]; blobHrefs: ReadonlyMap<string, string> }>> {
-  if (limits.maxEntries < FIXED_EPUB_ENTRY_COUNT) {
+  if (limits.maxEntries < fixedEntryCount) {
     throw archiveLimit("EPUB archive entry limit exceeded.");
   }
   const assets: EpubAsset[] = [];
@@ -373,7 +376,7 @@ async function collectAssets(
       throw invalidResource(`Unsupported retained EPUB media type: ${mediaType || "unknown"}`);
     }
     retainedAssetCount += 1;
-    if (retainedAssetCount + FIXED_EPUB_ENTRY_COUNT > limits.maxEntries) {
+    if (retainedAssetCount + fixedEntryCount > limits.maxEntries) {
       throw archiveLimit("EPUB archive entry limit exceeded.");
     }
     if (
@@ -411,6 +414,7 @@ async function collectAssets(
 }
 
 function replaceCssUrls(value: string, blobHrefs: ReadonlyMap<string, string>): string | undefined {
+  if (hasUnsupportedCssResourceFunction(value)) return undefined;
   let output = value;
   const tokens = [...scanCssUrls(value)];
   for (const token of tokens.reverse()) {
@@ -501,12 +505,14 @@ function sanitizeContentDocument(
   snapshot: PageSemanticSnapshot,
   metadata: ValidatedMetadata,
   blobHrefs: ReadonlyMap<string, string>,
+  html = snapshot.html,
+  documentTitle = metadata.title,
 ): Readonly<{ xhtml: string; css: string }> {
   const parsed = new DOMParser().parseFromString(
     "<!DOCTYPE html><html><head></head><body></body></html>",
     "text/html",
   );
-  parsed.body.innerHTML = snapshot.html;
+  parsed.body.innerHTML = html;
   for (const element of parsed.querySelectorAll(
     "script,iframe,object,embed,base,meta,link,frame,portal,template",
   )) {
@@ -575,7 +581,7 @@ function sanitizeContentDocument(
     .filter((css) => css.trim() !== "")
     .join("\n");
   const title = parsed.createElement("title");
-  title.textContent = metadata.title;
+  title.textContent = documentTitle;
   const stylesheet = parsed.createElement("link");
   stylesheet.setAttribute("rel", "stylesheet");
   stylesheet.setAttribute("type", "text/css");
@@ -585,6 +591,22 @@ function sanitizeContentDocument(
   parsed.documentElement.setAttributeNS(XML_NAMESPACE, "xml:lang", metadata.language);
   parsed.documentElement.setAttributeNS(XMLNS_NAMESPACE, "xmlns", XHTML_NAMESPACE);
   parsed.documentElement.setAttributeNS(XMLNS_NAMESPACE, "xmlns:epub", EPUB_NAMESPACE);
+  for (const element of [parsed.documentElement, ...parsed.querySelectorAll<Element>("*")]) {
+    for (const attribute of [...element.attributes]) {
+      const value = xmlSafeText(attribute.value);
+      if (value !== attribute.value) element.setAttribute(attribute.name, value);
+    }
+  }
+  const commentWalker = parsed.createTreeWalker(parsed.documentElement, NodeFilter.SHOW_COMMENT);
+  const comments: Comment[] = [];
+  for (let node = commentWalker.nextNode(); node !== null; node = commentWalker.nextNode()) {
+    if (node instanceof Comment) comments.push(node);
+  }
+  for (const comment of comments) comment.remove();
+  const textWalker = parsed.createTreeWalker(parsed.documentElement, NodeFilter.SHOW_TEXT);
+  for (let node = textWalker.nextNode(); node !== null; node = textWalker.nextNode()) {
+    node.textContent = xmlSafeText(node.textContent ?? "");
+  }
   const xhtml = `<?xml version="1.0" encoding="UTF-8"?>${new XMLSerializer().serializeToString(parsed.documentElement)}`;
   if (/data-imposia-|\bblob:/iu.test(xhtml) || /\bblob:/iu.test(styles)) {
     throw invalidResource("EPUB semantic projection contains a page-only or unresolved resource.");
@@ -592,8 +614,24 @@ function sanitizeContentDocument(
   return Object.freeze({ xhtml, css: styles });
 }
 
+function xmlSafeText(value: string): string {
+  return [...value]
+    .map((character) => {
+      const codePoint = character.codePointAt(0) ?? 0xfffd;
+      return codePoint === 0x09 ||
+        codePoint === 0x0a ||
+        codePoint === 0x0d ||
+        (codePoint >= 0x20 && codePoint <= 0xd7ff) ||
+        (codePoint >= 0xe000 && codePoint <= 0xfffd) ||
+        (codePoint >= 0x10000 && codePoint <= 0x10ffff)
+        ? character
+        : "\ufffd";
+    })
+    .join("");
+}
+
 function escapeXml(value: string): string {
-  return value
+  return xmlSafeText(value)
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
@@ -617,6 +655,119 @@ function navigationDocument(metadata: ValidatedMetadata): string {
   const title = escapeXml(metadata.title);
   const language = escapeXml(metadata.language);
   return `<?xml version="1.0" encoding="UTF-8"?><html xmlns="${XHTML_NAMESPACE}" xmlns:epub="${EPUB_NAMESPACE}" lang="${language}" xml:lang="${language}"><head><title>${title}</title></head><body><nav epub:type="toc" id="toc"><h1>${title}</h1><ol><li><a href="content.xhtml">${title}</a></li></ol></nav></body></html>`;
+}
+
+function publicationEntryName(index: number): string {
+  return `entry-${String(index + 1).padStart(4, "0")}`;
+}
+
+function publicationEntryHtml(snapshot: PageSemanticSnapshot, entryIndex: number): string {
+  const parsed = new DOMParser().parseFromString(
+    "<!DOCTYPE html><html><head></head><body></body></html>",
+    "text/html",
+  );
+  parsed.body.innerHTML = snapshot.html;
+  const wrapper = [...parsed.body.children].find(
+    (element) => element.getAttribute(PUBLICATION_ENTRY_MARKER) === String(entryIndex),
+  );
+  if (wrapper === undefined) {
+    throw invalidResource(`Publication EPUB entry ${entryIndex + 1} is unavailable.`);
+  }
+  const destinationElements = [
+    wrapper,
+    ...wrapper.querySelectorAll<Element>(`[${PUBLICATION_DESTINATION_MARKER}]`),
+  ];
+  const destinationIds = new Set(
+    destinationElements
+      .map((element) => element.getAttribute(PUBLICATION_DESTINATION_MARKER))
+      .filter((destination): destination is string => destination !== null),
+  );
+  const usedIds = new Set<string>();
+  for (const element of [wrapper, ...wrapper.querySelectorAll<Element>("*")]) {
+    const rawAuthoredId = element.getAttribute("id");
+    if (rawAuthoredId === null) continue;
+    const authoredId = xmlSafeText(rawAuthoredId);
+    if (authoredId !== rawAuthoredId) element.setAttribute("id", authoredId);
+    const destination = element.getAttribute(PUBLICATION_DESTINATION_MARKER);
+    if (
+      authoredId === "" ||
+      usedIds.has(authoredId) ||
+      (destinationIds.has(authoredId) && authoredId !== destination)
+    ) {
+      element.removeAttribute("id");
+    } else {
+      usedIds.add(authoredId);
+    }
+  }
+  for (const element of destinationElements) {
+    const destination = element.getAttribute(PUBLICATION_DESTINATION_MARKER);
+    if (destination === null) continue;
+    const authoredId = element.getAttribute("id");
+    if (authoredId === null || authoredId === "") {
+      element.setAttribute("id", destination);
+      continue;
+    }
+    if (authoredId === destination) continue;
+    const anchor = parsed.createElement("span");
+    anchor.setAttribute("id", destination);
+    element.before(anchor);
+  }
+  return wrapper.outerHTML;
+}
+
+function publicationPackageDocument(
+  metadata: ValidatedMetadata,
+  entries: readonly CommittedPublicationEntry[],
+  assets: readonly EpubAsset[],
+): string {
+  const contentItems = entries
+    .map((_, index) => {
+      const name = publicationEntryName(index);
+      return `<item id="${name}" href="${name}.xhtml" media-type="application/xhtml+xml"/>`;
+    })
+    .join("");
+  const spine = entries
+    .map((_, index) => `<itemref idref="${publicationEntryName(index)}"/>`)
+    .join("");
+  const assetItems = assets
+    .map((asset) => `<item id="${asset.id}" href="${asset.href}" media-type="${asset.mediaType}"/>`)
+    .join("");
+  const identifier = escapeXml(metadata.identifier);
+  return `<?xml version="1.0" encoding="UTF-8"?><package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="pub-id" xml:lang="${escapeXml(metadata.language)}"><metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:identifier>${identifier}</dc:identifier><dc:identifier id="pub-id">${identifier}</dc:identifier><dc:title>${escapeXml(metadata.title)}</dc:title><dc:language>${escapeXml(metadata.language)}</dc:language><meta property="dcterms:modified">${metadata.modified}</meta></metadata><manifest><item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>${contentItems}<item id="css" href="styles.css" media-type="text/css"/>${assetItems}</manifest><spine>${spine}</spine></package>`;
+}
+
+function publicationNavigationItems(
+  items: readonly PublicationOutlineItem[],
+  entryFiles: ReadonlyMap<string, string>,
+): string {
+  return items
+    .map((item) => {
+      const file = entryFiles.get(item.destination.entryId);
+      if (file === undefined) {
+        throw invalidResource(
+          `Publication EPUB destination entry "${item.destination.entryId}" is unavailable.`,
+        );
+      }
+      const children =
+        item.children.length === 0
+          ? ""
+          : `<ol>${publicationNavigationItems(item.children, entryFiles)}</ol>`;
+      return `<li><a href="${file}.xhtml#${escapeXml(item.destination.id)}">${escapeXml(item.title)}</a>${children}</li>`;
+    })
+    .join("");
+}
+
+function publicationNavigationDocument(
+  metadata: ValidatedMetadata,
+  entries: readonly CommittedPublicationEntry[],
+  outline: readonly PublicationOutlineItem[],
+): string {
+  const title = escapeXml(metadata.title);
+  const language = escapeXml(metadata.language);
+  const entryFiles = new Map(
+    entries.map((entry, index) => [entry.id, publicationEntryName(index)] as const),
+  );
+  return `<?xml version="1.0" encoding="UTF-8"?><html xmlns="${XHTML_NAMESPACE}" xmlns:epub="${EPUB_NAMESPACE}" lang="${language}" xml:lang="${language}"><head><title>${title}</title></head><body><nav epub:type="toc" id="toc"><h1>${title}</h1><ol>${publicationNavigationItems(outline, entryFiles)}</ol></nav></body></html>`;
 }
 
 function textEntry(name: string, value: string): StoredZipEntry {
@@ -650,6 +801,54 @@ export async function exportPageDocumentEpub(
     ),
   ];
   const archive = createStoredZip(entries, limits);
+  throwIfAborted(signal);
+  requireSnapshot(pageDocument, snapshot);
+  return new Blob([archive], { type: EPUB_MIME_TYPE });
+}
+
+export async function exportPublicationEpub(
+  pageDocument: PageDocument,
+  entries: readonly CommittedPublicationEntry[],
+  outline: readonly PublicationOutlineItem[],
+  options: EpubExportOptions,
+): Promise<Blob> {
+  const input = recordValue(options);
+  if (input === undefined) throw invalidMetadata("EPUB export options must be an object.");
+  const signal = input.signal instanceof AbortSignal ? input.signal : undefined;
+  throwIfAborted(signal);
+  const metadata = validateMetadata(input.metadata as EpubMetadata | undefined);
+  const limits = validateLimits(input.limits);
+  const snapshot = requireSnapshot(pageDocument);
+  const fixedEntryCount = 5 + entries.length;
+  const collected = await collectAssets(pageDocument, snapshot, limits, signal, fixedEntryCount);
+  throwIfAborted(signal);
+  requireSnapshot(pageDocument, snapshot);
+  const content = entries.map((entry, index) =>
+    sanitizeContentDocument(
+      snapshot,
+      metadata,
+      collected.blobHrefs,
+      publicationEntryHtml(snapshot, index),
+      entry.title,
+    ),
+  );
+  const styles = [...new Set(content.map((entry) => entry.css).filter((css) => css !== ""))].join(
+    "\n",
+  );
+  const entriesByArchive: StoredZipEntry[] = [
+    textEntry("mimetype", EPUB_MIME_TYPE),
+    textEntry("META-INF/container.xml", containerDocument()),
+    textEntry("EPUB/package.opf", publicationPackageDocument(metadata, entries, collected.assets)),
+    textEntry("EPUB/nav.xhtml", publicationNavigationDocument(metadata, entries, outline)),
+    ...content.map((entry, index) =>
+      textEntry(`EPUB/${publicationEntryName(index)}.xhtml`, entry.xhtml),
+    ),
+    textEntry("EPUB/styles.css", styles),
+    ...collected.assets.map((asset) =>
+      Object.freeze({ name: asset.archivePath, bytes: asset.bytes }),
+    ),
+  ];
+  const archive = createStoredZip(entriesByArchive, limits);
   throwIfAborted(signal);
   requireSnapshot(pageDocument, snapshot);
   return new Blob([archive], { type: EPUB_MIME_TYPE });

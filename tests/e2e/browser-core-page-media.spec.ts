@@ -397,7 +397,11 @@ test("unsupported authored page values recover with deterministic warnings and d
         iframe: HTMLIFrameElement;
         generation: number;
         pages: readonly [{ widthCssPx: number; heightCssPx: number; bodyText: readonly string[] }];
-        warnings: readonly { code: string; message: string }[];
+        warnings: readonly {
+          code: string;
+          message: string;
+          location: { generation: number | undefined };
+        }[];
       };
       type Controller = {
         ready: Promise<PageDocument>;
@@ -421,7 +425,13 @@ test("unsupported authored page values recover with deterministic warnings and d
         iframe: document.iframe,
         page: document.pages[0],
         warningCodes: document.warnings.map(({ code }) => code),
-        warnings: document.warnings,
+        warningGenerations: [
+          ...new Set(document.warnings.map((warning) => warning.location.generation)),
+        ],
+        warnings: document.warnings.map(({ location, ...warning }) => ({
+          ...warning,
+          location: { ...location, generation: undefined },
+        })),
         text: document.pages[0]?.bodyText.join(" ") ?? "",
         iframeCount: host.querySelectorAll("iframe[data-imposia-frame]").length,
       });
@@ -478,6 +488,8 @@ test("unsupported authored page values recover with deterministic warnings and d
     expect(
       observation.recovered.warningCodes.every((code) => code === "PAGE_RULE_UNSUPPORTED"),
     ).toBe(true);
+    expect(observation.recovered.warningGenerations).toEqual([2]);
+    expect(observation.repeated.warningGenerations).toEqual([3]);
     expect(observation.repeated.warningCodes).toEqual(observation.recovered.warningCodes);
     expect(observation.repeated.warnings).toEqual(observation.recovered.warnings);
     expectCssPx(observation.recovered.page.widthCssPx, A4_WIDTH_CSS_PX);

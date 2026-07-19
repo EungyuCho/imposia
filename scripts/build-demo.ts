@@ -1,8 +1,12 @@
+import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const demoOutput = "examples/demo/app.js";
+const reactOutput = "examples/react/app.js";
+const siteOutput = "site/app.js";
 
 const shared = {
   absWorkingDir: root,
@@ -20,9 +24,22 @@ const shared = {
 };
 
 await Promise.all([
-  build({ ...shared, entryPoints: ["examples/demo/app.tsx"], outfile: "examples/demo/app.js" }),
-  build({ ...shared, entryPoints: ["examples/react/app.tsx"], outfile: "examples/react/app.js" }),
-  build({ ...shared, entryPoints: ["site/app.tsx"], outfile: "site/app.js" }),
+  build({ ...shared, entryPoints: ["examples/demo/app.tsx"], outfile: demoOutput }),
+  build({
+    ...shared,
+    entryPoints: ["examples/react/app.tsx"],
+    outfile: reactOutput,
+    define: { "process.env.NODE_ENV": '"development"' },
+  }),
+  build({ ...shared, entryPoints: ["site/app.tsx"], outfile: siteOutput }),
 ]);
+
+await Promise.all(
+  [demoOutput, reactOutput, siteOutput].map(async (output) => {
+    const file = path.join(root, output);
+    const source = await readFile(file, "utf8");
+    await writeFile(file, source.replace(/[\t ]+$/gmu, ""), "utf8");
+  }),
+);
 
 console.log("Built examples/demo/app.js, examples/react/app.js, and site/app.js.");

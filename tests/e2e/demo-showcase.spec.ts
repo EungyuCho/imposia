@@ -33,7 +33,7 @@ test("React publishing lab switches sources and extension boundaries", async ({
     const preview = page.getByTestId("demo-preview-surface");
     await expect(preview.locator("[data-imposia-react-status='ready']")).toBeVisible();
     await expect(page.getByTestId("metric-pages")).toHaveText("3");
-    await expect(page.getByTestId("metric-warnings")).toHaveText("1");
+    await expect(page.getByTestId("metric-warnings")).toHaveText("3");
     await expect(preview.locator("iframe[data-imposia-frame='page-document']")).toHaveCount(1);
 
     await page.evaluate(() => {
@@ -69,7 +69,7 @@ test("React publishing lab switches sources and extension boundaries", async ({
 
     await page.getByRole("checkbox", { name: "Running-head extension" }).check();
     await expect(page.getByTestId("metric-generation")).toHaveText("4");
-    await expect(page.getByTestId("metric-warnings")).toHaveText("1");
+    await expect(page.getByTestId("metric-warnings")).toHaveText("2");
     expect(
       await page.evaluate(
         () =>
@@ -312,6 +312,7 @@ test("React publishing lab keeps viewer controls inside a 320px viewport", async
       "Zoom in",
       "Continuous pages",
       "Single page",
+      "Spread pages",
     ]);
     for (const control of geometry.controls) {
       expect(control.rect.width, `${control.name} width`).toBeGreaterThanOrEqual(24);
@@ -323,7 +324,10 @@ test("React publishing lab keeps viewer controls inside a 320px viewport", async
         geometry.controls[index - 1]?.offsetRight ?? 0,
       );
     }
-    expect(geometry.controls[0]?.rect.left).toBeGreaterThanOrEqual(0);
+    const activeModeControl = geometry.controls.find(({ name }) => name === "Continuous pages");
+    if (activeModeControl === undefined) throw new Error("Demo active mode control is missing.");
+    expect(activeModeControl.rect.left).toBeGreaterThanOrEqual(0);
+    expect(activeModeControl.rect.right).toBeLessThanOrEqual(geometry.viewportWidth);
 
     const finalControl = await page.evaluate(() => {
       const toolbar = document.querySelector<HTMLElement>(".imposia-toolbar");
@@ -404,7 +408,7 @@ test("React publishing lab stacks nested viewer controls at edge widths", async 
       expect(geometry.overlaps).toBe(false);
       expect(geometry.toolbar.left).toBeGreaterThanOrEqual(0);
       expect(geometry.toolbar.right).toBeLessThanOrEqual(width);
-      expect(geometry.controls).toHaveLength(6);
+      expect(geometry.controls).toHaveLength(7);
       for (const control of geometry.controls) {
         expect(control.left).toBeGreaterThanOrEqual(geometry.toolbar.left);
         expect(control.right).toBeLessThanOrEqual(

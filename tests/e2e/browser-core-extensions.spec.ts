@@ -137,7 +137,12 @@ test("runs asset policies before the resolver and freezes namespaced warnings", 
     const observation = await page.evaluate(async () => {
       type Result = {
         iframe: HTMLIFrameElement;
-        warnings: readonly { code: string; message: string; extension?: string }[];
+        warnings: readonly {
+          code: string;
+          message: string;
+          extension?: string;
+          location: { generation?: number; entryId?: string; page?: number };
+        }[];
       };
       type Controller = { ready: Promise<Result>; destroy(): Promise<void> };
       type Core = {
@@ -189,6 +194,9 @@ test("runs asset policies before the resolver and freezes namespaced warnings", 
           warnings: ready.warnings,
           warningsFrozen: Object.isFrozen(ready.warnings),
           warningElementsFrozen: ready.warnings.every((warning) => Object.isFrozen(warning)),
+          warningLocationsFrozen: ready.warnings.every((warning) =>
+            Object.isFrozen(warning.location),
+          ),
           frameHtml: frameDocument.documentElement.outerHTML,
         };
       } finally {
@@ -203,22 +211,26 @@ test("runs asset policies before the resolver and freezes namespaced warnings", 
         code: "RESOURCE_BLOCKED",
         message: "Resource was blocked by the loading policy.",
         sourceIdentity: "resource-0",
+        location: { generation: 1, entryId: undefined, page: undefined },
       },
       {
         code: "EXTENSION_POLICY",
         message: "Audited asset policy.",
         sourceIdentity: undefined,
+        location: { generation: 1, entryId: undefined, page: undefined },
         extension: "acme/audit",
       },
       {
         code: "EXTENSION_POLICY",
         message: "Blocked asset policy.",
         sourceIdentity: undefined,
+        location: { generation: 1, entryId: undefined, page: undefined },
         extension: "acme/block",
       },
     ]);
     expect(observation.warningsFrozen).toBe(true);
     expect(observation.warningElementsFrozen).toBe(true);
+    expect(observation.warningLocationsFrozen).toBe(true);
     expect(observation.frameHtml).not.toContain("cover.png");
     expect(observation.frameHtml).not.toContain("assets.example.test");
   } finally {
@@ -248,7 +260,12 @@ test("decorates allocated pages through Core token and blank-page handling", asy
       const core = (await import("/packages/core/dist/index.js")) as Core;
       const run = async (decorateBlankPages: boolean) => {
         const host = document.body.appendChild(document.createElement("div"));
-        const calls: Array<{ number: number; blank: boolean; mutable: boolean }> = [];
+        const calls: Array<{
+          number: number;
+          totalPages: number;
+          blank: boolean;
+          mutable: boolean;
+        }> = [];
         let controller: Controller | undefined;
         try {
           controller = core.mountPageDocument(
@@ -263,16 +280,19 @@ test("decorates allocated pages through Core token and blank-page handling", asy
               extensions: [
                 {
                   name: "acme/running-head",
-                  decoratePage(pageInfo: { number: number; blank: boolean }) {
+                  decoratePage(pageInfo: { number: number; totalPages: number; blank: boolean }) {
                     calls.push({
                       number: pageInfo.number,
+                      totalPages: pageInfo.totalPages,
                       blank: pageInfo.blank,
                       mutable: Reflect.set(pageInfo, "number", 99),
                     });
                     return {
                       headerHtml:
                         '<img src="https://assets.example.test/decorator.png">EXT {{pageNumber}} / {{totalPages}}',
-                      footerHtml: "FOOT {{pageNumber}} / {{totalPages}}",
+                      ...(pageInfo.number === pageInfo.totalPages
+                        ? { footerHtml: "LAST {{pageNumber}} / {{totalPages}}" }
+                        : {}),
                     };
                   },
                 },
@@ -302,25 +322,22 @@ test("decorates allocated pages through Core token and blank-page handling", asy
     });
 
     expect(observation.decorated.calls).toEqual([
-      { number: 1, blank: false, mutable: false },
-      { number: 2, blank: true, mutable: false },
-      { number: 3, blank: false, mutable: false },
+      { number: 1, totalPages: 3, blank: false, mutable: false },
+      { number: 2, totalPages: 3, blank: true, mutable: false },
+      { number: 3, totalPages: 3, blank: false, mutable: false },
     ]);
     expect(observation.decorated.pages.map((page) => page.header)).toEqual([
       "CORE 1 / 3EXT 1 / 3",
       "CORE 2 / 3EXT 2 / 3",
       "CORE 3 / 3EXT 3 / 3",
     ]);
-    expect(observation.decorated.pages.map((page) => page.footer)).toEqual([
-      "FOOT 1 / 3",
-      "FOOT 2 / 3",
-      "FOOT 3 / 3",
-    ]);
+    expect(observation.decorated.pages.map((page) => page.footer)).toEqual(["", "", "LAST 3 / 3"]);
     expect(observation.undecorated.calls).toEqual([
-      { number: 1, blank: false, mutable: false },
-      { number: 3, blank: false, mutable: false },
+      { number: 1, totalPages: 3, blank: false, mutable: false },
+      { number: 3, totalPages: 3, blank: false, mutable: false },
     ]);
     expect(observation.undecorated.pages[1]).toEqual({ blank: "true", header: "", footer: "" });
+    expect(observation.undecorated.pages[2]?.footer).toBe("LAST 3 / 3");
     expect(observation.decorated.frameHtml).not.toContain("assets.example.test/decorator.png");
   } finally {
     expect(errors).toEqual([]);
@@ -439,6 +456,215 @@ test("rejects malformed extension work without replacing a committed page", asyn
     expect(observation.frameText).toContain("stable");
     expect(observation.frameText).not.toContain("invalid");
     expect(observation.frameText).not.toContain("throw");
+  } finally {
+    expect(errors).toEqual([]);
+    expect(pageErrors).toEqual([]);
+  }
+});
+
+test("runs capability-bounded Publication entry extensions with provenance and cleanup", async ({
+  page,
+  browserName,
+}) => {
+  const { errors, pageErrors } = captureBrowserErrors(page, browserName);
+  await page.goto("/examples/book.html");
+  try {
+    const observation = await page.evaluate(async () => {
+      const core = await import("/packages/core/dist/index.js");
+      const host = document.body.appendChild(document.createElement("div"));
+      const calls: Array<Record<string, unknown>> = [];
+      let cleanups = 0;
+      let interExtensionSanitized = true;
+      let releaseHold: (() => void) | undefined;
+      let holdStarted: (() => void) | undefined;
+      const started = new Promise<void>((resolve) => {
+        holdStarted = resolve;
+      });
+      const extension = {
+        name: "acme/publication-policy",
+        async transformEntry(
+          input: {
+            html: string;
+            css: readonly string[];
+            publication: { title: string; entryCount: number };
+            entry: { id: string; title: string; index: number; totalEntries: number };
+          },
+          context: {
+            signal: AbortSignal;
+            warn(value: object): void;
+            onCleanup(cleanup: () => void): void;
+          },
+        ) {
+          calls.push({
+            publication: input.publication.title,
+            entryCount: input.publication.entryCount,
+            id: input.entry.id,
+            index: input.entry.index,
+            totalEntries: input.entry.totalEntries,
+            frozen:
+              Object.isFrozen(input) &&
+              Object.isFrozen(input.publication) &&
+              Object.isFrozen(input.entry) &&
+              Object.isFrozen(input.css),
+            hasDom: Object.values(input).some(
+              (value) => value instanceof Node || value instanceof Document,
+            ),
+            sanitizedInput: !/<script|onload\s*=/i.test(input.html),
+          });
+          if (input.html.includes("HOLD")) {
+            holdStarted?.();
+            await new Promise<void>((resolve) => {
+              releaseHold = resolve;
+            });
+            context.onCleanup(() => {
+              cleanups += 1;
+            });
+            return;
+          }
+          context.onCleanup(() => {
+            cleanups += 1;
+          });
+          if (input.html.includes("FAIL")) throw new Error("entry policy failed");
+          if (input.entry.id === "chapter") {
+            context.warn({ code: "EXTENSION_ENTRY_POLICY", message: "Chapter policy applied." });
+          }
+          return {
+            html: `${input.html}<script>globalThis.extensionEscaped=true</script><p>SAFE-${input.entry.id}</p>`,
+            css: ["p { color: rgb(1, 2, 3) }"] as const,
+          };
+        },
+        decoratePage(pageInfo: { number: number }, context: { warn(value: object): void }) {
+          if (pageInfo.number === 1) {
+            context.warn({ code: "EXTENSION_PAGE_POLICY", message: "First page decorated." });
+            return { footerHtml: "Policy page {{pageNumber}}" };
+          }
+        },
+      };
+      const auditExtension = {
+        name: "acme/sanitized-input-audit",
+        transformEntry(input: { html: string }) {
+          interExtensionSanitized &&= !/<script|onload\s*=/i.test(input.html);
+        },
+      };
+      const controller = core.mountPublication(
+        host,
+        {
+          metadata: { title: "Policy book", language: "en", identifier: "urn:policy" },
+          entries: [
+            {
+              id: "cover",
+              title: "Cover",
+              html: '<script>globalThis.rawEscaped=true</script><h1 onload="bad()">Cover</h1>',
+            },
+            { id: "chapter", title: "Chapter", html: "<h1>Chapter</h1>" },
+          ],
+        },
+        { extensions: [extension, auditExtension] },
+      );
+      try {
+        const committed = await controller.ready;
+        const committedHtml = committed.iframe.contentDocument?.documentElement.outerHTML ?? "";
+        const stable = controller.current;
+        const abortController = new AbortController();
+        const holding = controller.update(
+          {
+            metadata: { title: "Policy book" },
+            entries: [{ id: "hold", title: "Hold", html: "<p>HOLD</p>" }],
+          },
+          { signal: abortController.signal },
+        );
+        await started;
+        abortController.abort();
+        const aborted = await holding.then(
+          () => "fulfilled",
+          (error: unknown) => (error instanceof DOMException ? error.name : "unknown"),
+        );
+        releaseHold?.();
+        const failed = await controller
+          .update({
+            metadata: { title: "Policy book" },
+            entries: [{ id: "fail", title: "Fail", html: "<p>FAIL</p>" }],
+          })
+          .then(
+            () => ({ code: "fulfilled", message: "fulfilled" }),
+            (error: unknown) => ({
+              code:
+                error !== null && typeof error === "object"
+                  ? String(Reflect.get(error, "code"))
+                  : "unknown",
+              message: error instanceof Error ? error.message : "unknown",
+            }),
+          );
+        return {
+          calls,
+          cleanups,
+          warnings: committed.warnings,
+          pageRanges: committed.entries.map((entry) => entry.pageRange),
+          committedText: committed.pages.flatMap((item) => item.bodyText),
+          committedHtml,
+          aborted,
+          failed,
+          preserved: controller.current === stable,
+          escaped: Reflect.get(globalThis, "extensionEscaped"),
+          rawEscaped: Reflect.get(globalThis, "rawEscaped"),
+          interExtensionSanitized,
+        };
+      } finally {
+        await controller.destroy();
+        host.remove();
+      }
+    });
+
+    expect(observation.calls.slice(0, 2)).toEqual([
+      {
+        publication: "Policy book",
+        entryCount: 2,
+        id: "cover",
+        index: 0,
+        totalEntries: 2,
+        frozen: true,
+        hasDom: false,
+        sanitizedInput: true,
+      },
+      {
+        publication: "Policy book",
+        entryCount: 2,
+        id: "chapter",
+        index: 1,
+        totalEntries: 2,
+        frozen: true,
+        hasDom: false,
+        sanitizedInput: true,
+      },
+    ]);
+    expect(observation.warnings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: "EXTENSION_ENTRY_POLICY",
+          extension: "acme/publication-policy",
+          location: { generation: 1, entryId: "chapter", page: undefined },
+        }),
+        expect.objectContaining({
+          code: "EXTENSION_PAGE_POLICY",
+          extension: "acme/publication-policy",
+          location: { generation: 1, entryId: undefined, page: 1 },
+        }),
+      ]),
+    );
+    expect(observation.committedText.join(" ")).toContain("SAFE-cover");
+    expect(observation.committedText.join(" ")).toContain("SAFE-chapter");
+    expect(observation.committedHtml).not.toMatch(/<script|extensionEscaped/i);
+    expect(observation.pageRanges).toHaveLength(2);
+    expect(observation.aborted).toBe("AbortError");
+    expect(observation.failed).toEqual({
+      code: "EXTENSION_FAILED",
+      message: "entry policy failed",
+    });
+    expect(observation.preserved).toBe(true);
+    expect(observation.cleanups).toBeGreaterThanOrEqual(4);
+    expect(observation.escaped).toBeUndefined();
+    expect(observation.rawEscaped).toBeUndefined();
+    expect(observation.interExtensionSanitized).toBe(true);
   } finally {
     expect(errors).toEqual([]);
     expect(pageErrors).toEqual([]);
