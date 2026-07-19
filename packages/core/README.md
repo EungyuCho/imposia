@@ -34,6 +34,12 @@ local references, and named strings are described in the [compatibility matrix](
 Structural pagination is a Chromium-reference behavior; this package does not
 claim complete CSS parity across engines.
 
+Local `target-counter()` and `target-text()` support is intentionally bounded to
+top-level `::before`/`::after` rules. It follows authored `content` importance,
+specificity, and source order. Keep marker styling in the same rule as the target
+function; conditional/layered target content and competing conditional
+pseudo-content recover with a typed warning instead of being flattened.
+
 ## Resolver-only assets and ordered extensions
 
 Core accepts an optional `assetResolver`. Every discovered HTML or CSS resource
