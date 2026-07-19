@@ -1,0 +1,64 @@
+---
+title: 첫 페이지 만들기
+description: React 앱에 Imposia를 추가하고 HTML을 A4 페이지로 표시한 뒤 인쇄와 EPUB 동작을 연결합니다.
+---
+
+기존 React 앱에 페이지 미리보기를 추가해 보겠습니다. 이 문서를 끝까지 따라 하면 하나의 컴포넌트로 HTML을 A4 페이지로 보여주고 인쇄와 EPUB 내보내기를 호출할 수 있습니다.
+
+## 시작하기 전에
+
+React 18 이상과 브라우저에서 실행되는 클라이언트 환경이 필요합니다. Imposia는 Node.js나 서버 사이드 렌더링 과정에서 페이지를 만들지 않습니다.
+
+## 1. React 패키지를 설치합니다
+
+```bash
+pnpm add @imposia/react react react-dom
+```
+
+패키지 스타일은 컴포넌트나 앱의 클라이언트 진입 파일에서 한 번만 불러오세요.
+
+## 2. 페이지 문서를 표시합니다
+
+```tsx
+import { ImposiaPageViewer, type ImposiaPageViewerHandle } from "@imposia/react";
+import { useRef } from "react";
+import "@imposia/react/styles.css";
+
+export function Preview() {
+  const viewer = useRef<ImposiaPageViewerHandle>(null);
+
+  return (
+    <>
+      <ImposiaPageViewer
+        ref={viewer}
+        source={{ html: "<article><h1>안녕하세요</h1><p>브라우저에서 만든 페이지입니다.</p></article>" }}
+        documentOptions={{ page: { size: "A4", margin: "18mm" } }}
+      />
+      <button type="button" onClick={() => void viewer.current?.print()}>
+        인쇄
+      </button>
+      <button
+        type="button"
+        onClick={() =>
+          void viewer.current?.exportEpub({
+            metadata: { title: "안녕하세요", language: "ko", identifier: "urn:example:hello" },
+          })
+        }
+      >
+        EPUB 내보내기
+      </button>
+    </>
+  );
+}
+```
+
+`source.html`에는 페이지로 만들 내용을 넣습니다. `documentOptions.page`에서는 용지 크기와 여백을 정합니다. `viewer` 핸들은 가장 최근에 완성된 페이지 문서를 가리킵니다.
+
+## 3. 결과를 확인합니다
+
+브라우저에서 컴포넌트를 열고 HTML이 A4 페이지로 표시되는지 확인하세요.
+
+- **인쇄**를 누르면 Viewer에 표시된 페이지로 브라우저 인쇄 절차를 시작합니다.
+- **EPUB 내보내기**는 리플로우형 EPUB 3.3 `Blob`을 반환합니다. 위 예제는 내보내기 메서드까지만 호출하므로, 실제 앱에서는 반환된 `Blob`을 다운로드나 저장 흐름에 연결하세요.
+
+`source`가 바뀌어도 다음 문서를 완성할 때까지 현재 페이지를 계속 보여줍니다. 에셋 로딩이나 실제 출력 UI를 붙이기 전에 [미리보기와 출력이 일치하는 방식](/ko/docs/publishing-contract)을 확인하세요.

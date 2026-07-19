@@ -1,0 +1,64 @@
+---
+title: 最初のページを作る
+description: React アプリに Imposia を追加し、HTML を A4 ページとして表示して、印刷と EPUB の操作を接続します。
+---
+
+このガイドでは、既存の React アプリにページ分割プレビューを追加します。完了すると、1つのコンポーネントで HTML を A4 ページとして表示し、印刷と EPUB 書き出しを実行できます。
+
+## 始める前に
+
+React 18 以降と、クライアント側のブラウザー環境が必要です。Imposia は Node.js やサーバーサイドレンダリング中にページを生成しません。
+
+## 1. React パッケージをインストールする
+
+```bash
+pnpm add @imposia/react react react-dom
+```
+
+パッケージのスタイルシートは、コンポーネントまたはアプリのクライアントエントリーファイルで一度だけ読み込みます。
+
+## 2. ページ文書を表示する
+
+```tsx
+import { ImposiaPageViewer, type ImposiaPageViewerHandle } from "@imposia/react";
+import { useRef } from "react";
+import "@imposia/react/styles.css";
+
+export function Preview() {
+  const viewer = useRef<ImposiaPageViewerHandle>(null);
+
+  return (
+    <>
+      <ImposiaPageViewer
+        ref={viewer}
+        source={{ html: "<article><h1>こんにちは</h1><p>ブラウザーネイティブなページ。</p></article>" }}
+        documentOptions={{ page: { size: "A4", margin: "18mm" } }}
+      />
+      <button type="button" onClick={() => void viewer.current?.print()}>
+        印刷
+      </button>
+      <button
+        type="button"
+        onClick={() =>
+          void viewer.current?.exportEpub({
+            metadata: { title: "こんにちは", language: "ja", identifier: "urn:example:hello" },
+          })
+        }
+      >
+        EPUB を書き出す
+      </button>
+    </>
+  );
+}
+```
+
+`source.html` がページ分割する内容です。`documentOptions.page` でページサイズと余白を指定します。ハンドルは常に、直近でページ分割に成功したページ文書を指します。
+
+## 3. 結果を確認する
+
+ブラウザーでコンポーネントを開き、HTML が A4 ページとして表示されることを確認してください。
+
+- **印刷**を押すと、Viewer に表示中のページを対象にブラウザーの印刷フローが開きます。
+- **EPUB を書き出す**を押すと、リフロー型 EPUB 3.3 `Blob` が返ります。この例は書き出しメソッドを呼ぶだけなので、返された `Blob` をアプリのダウンロードまたは保存処理につないでください。
+
+`source` を更新しても、次のバージョンが完成するまでは現在のページが表示され続けます。アセット読み込みや本番用の書き出し操作を追加する前に、[プレビューと出力が一致する仕組み](/ja/docs/publishing-contract)を確認してください。

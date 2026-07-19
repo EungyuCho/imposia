@@ -6,7 +6,6 @@ import { build } from "esbuild";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const demoOutput = "examples/demo/app.js";
 const reactOutput = "examples/react/app.js";
-const siteOutput = "site/app.js";
 
 const shared = {
   absWorkingDir: root,
@@ -31,15 +30,14 @@ await Promise.all([
     outfile: reactOutput,
     define: { "process.env.NODE_ENV": '"development"' },
   }),
-  build({ ...shared, entryPoints: ["site/app.tsx"], outfile: siteOutput }),
 ]);
 
 await Promise.all(
-  [demoOutput, reactOutput, siteOutput].map(async (output) => {
+  [demoOutput, reactOutput].map(async (output) => {
     const file = path.join(root, output);
     const source = await readFile(file, "utf8");
     await writeFile(file, source.replace(/[\t ]+$/gmu, ""), "utf8");
   }),
 );
 
-console.log("Built examples/demo/app.js, examples/react/app.js, and site/app.js.");
+console.log("Built examples/demo/app.js and examples/react/app.js.");

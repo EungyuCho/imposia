@@ -1,0 +1,64 @@
+---
+title: 创建第一个分页预览
+description: 在 React 应用中接入 Imposia，将 HTML 渲染成 A4 页面，并添加打印和 EPUB 操作。
+---
+
+本指南会在现有 React 应用中加入分页预览。完成后，同一个组件既能把 HTML 显示为 A4 页面，也能提供打印和 EPUB 操作。
+
+## 开始前
+
+你需要 React 18 或更高版本，以及客户端浏览器环境。Imposia 不会在 Node.js 或服务端渲染阶段生成页面。
+
+## 1. 安装 React 软件包
+
+```bash
+pnpm add @imposia/react react react-dom
+```
+
+在组件中或应用的客户端入口文件中导入一次软件包样式。
+
+## 2. 渲染分页文档
+
+```tsx
+import { ImposiaPageViewer, type ImposiaPageViewerHandle } from "@imposia/react";
+import { useRef } from "react";
+import "@imposia/react/styles.css";
+
+export function Preview() {
+  const viewer = useRef<ImposiaPageViewerHandle>(null);
+
+  return (
+    <>
+      <ImposiaPageViewer
+        ref={viewer}
+        source={{ html: "<article><h1>你好</h1><p>浏览器原生页面。</p></article>" }}
+        documentOptions={{ page: { size: "A4", margin: "18mm" } }}
+      />
+      <button type="button" onClick={() => void viewer.current?.print()}>
+        打印
+      </button>
+      <button
+        type="button"
+        onClick={() =>
+          void viewer.current?.exportEpub({
+            metadata: { title: "你好", language: "zh-CN", identifier: "urn:example:hello" },
+          })
+        }
+      >
+        导出 EPUB
+      </button>
+    </>
+  );
+}
+```
+
+`source.html` 是要分页的内容。`documentOptions.page` 设置页面尺寸和边距。命令式句柄始终指向最近一次成功完成分页的文档。
+
+## 3. 检查结果
+
+在浏览器中打开该组件，确认 HTML 已显示为 A4 页面。
+
+- **打印**会为 Viewer 当前显示的页面打开浏览器原生打印流程。
+- **导出 EPUB**会返回可重排 EPUB 3.3 `Blob`。示例只调用导出方法；请把返回的 `Blob` 接入应用的下载或存储流程。
+
+更新 `source` 时，Imposia 会继续显示当前页面，直到下一个版本准备完成。在加入资源加载或生产环境导出控件前，请阅读[预览与输出为何始终一致](/zh-CN/docs/publishing-contract)。
