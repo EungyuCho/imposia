@@ -113,7 +113,7 @@ export function scanCssUrls(text: string): readonly CssUrlToken[] {
   return tokens;
 }
 
-function hasUnsupportedFunction(text: string): boolean {
+export function hasUnsupportedCssResourceFunction(text: string): boolean {
   let index = 0;
   while (index < text.length) {
     const character = text[index];
@@ -129,8 +129,12 @@ function hasUnsupportedFunction(text: string): boolean {
     }
     let open = identifier.end;
     while (/\s/.test(text[open] ?? "")) open += 1;
+    const functionName = identifier.value.toLowerCase();
     if (
-      ["image-set", "cross-fade"].includes(identifier.value.toLowerCase()) &&
+      (functionName === "image" ||
+        functionName === "src" ||
+        functionName.endsWith("image-set") ||
+        functionName.endsWith("cross-fade")) &&
       text[open] === "("
     ) {
       return true;
@@ -164,7 +168,7 @@ export function cssReferences(root: Root): readonly CssReference[] {
         }
         return;
       }
-      if (hasUnsupportedFunction(node.params)) return;
+      if (hasUnsupportedCssResourceFunction(node.params)) return;
       for (const token of scanCssUrls(node.params)) {
         references.push({ kind: "image", node, token, importRule: false });
       }
@@ -174,7 +178,7 @@ export function cssReferences(root: Root): readonly CssReference[] {
     if (node.prop.trim().toLowerCase() === "src") {
       node.value = node.value.replace(/\blocal\s*\([^)]*\)\s*,?/gi, "");
     }
-    if (hasUnsupportedFunction(node.value)) return;
+    if (hasUnsupportedCssResourceFunction(node.value)) return;
     const kind: CssReferenceKind = node.prop.trim().toLowerCase() === "src" ? "font" : "image";
     for (const token of scanCssUrls(node.value)) {
       references.push({ kind, node, token, importRule: false });

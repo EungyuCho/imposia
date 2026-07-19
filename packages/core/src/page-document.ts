@@ -9,23 +9,158 @@ import {
   linkSignal,
   PAGE_DOCUMENT_FRAME_SANDBOX,
 } from "./page-document-frame.js";
-import { bodyText, buildGeneration, snapshotSettings } from "./page-document-generation.js";
+import {
+  type BuiltWarningSourceLocation,
+  bodyText,
+  buildGeneration,
+  snapshotSettings,
+} from "./page-document-generation.js";
 import {
   pageSemanticSnapshot,
   releasePageSemanticSnapshot,
   retainPageSemanticSnapshot,
 } from "./page-document-semantic.js";
 import type {
+  CorePageWarning,
   EpubExportOptions,
+  ExtensionPageWarning,
   PageDocument,
   PageDocumentController,
   PageDocumentOptions,
   PageSource,
+  PageWarning,
 } from "./page-document-types.js";
 
 interface ActiveOperation {
   id: number;
   controller: AbortController;
+  stagingIframe: HTMLIFrameElement;
+}
+
+const warningPublicationEntryIndexes = new WeakMap<PageDocument, ReadonlyMap<string, number>>();
+const warningSourceTargets = new WeakMap<PageDocument, ReadonlyMap<string, Element>>();
+
+export interface PageWarningTargetBounds {
+  readonly left: number;
+  readonly top: number;
+  readonly width: number;
+  readonly height: number;
+}
+
+export function pageWarningTargetBounds(
+  pageDocument: PageDocument,
+  warning: PageWarning,
+): PageWarningTargetBounds | undefined {
+  if (!pageDocument.warnings.includes(warning) || warning.sourceIdentity === undefined) {
+    return undefined;
+  }
+  const target = warningSourceTargets.get(pageDocument)?.get(warning.sourceIdentity);
+  const frameDocument = pageDocument.iframe.contentDocument;
+  if (
+    target === undefined ||
+    frameDocument === null ||
+    target.ownerDocument !== frameDocument ||
+    !frameDocument.body.contains(target)
+  ) {
+    return undefined;
+  }
+  const bounds = target.getBoundingClientRect();
+  return Object.freeze({
+    left: bounds.left,
+    top: bounds.top,
+    width: bounds.width,
+    height: bounds.height,
+  });
+}
+
+export function warningPublicationEntryIndex(
+  pageDocument: PageDocument,
+  sourceIdentity: string,
+): number | undefined {
+  return warningPublicationEntryIndexes.get(pageDocument)?.get(sourceIdentity);
+}
+
+export function retainDerivedWarningSourceTargets(
+  source: PageDocument,
+  derived: PageDocument,
+): void {
+  const targets = warningSourceTargets.get(source);
+  if (targets !== undefined) warningSourceTargets.set(derived, targets);
+}
+
+function locateWarning(
+  warning: PageWarning,
+  generation: number,
+  sourceLocations: ReadonlyMap<string, BuiltWarningSourceLocation>,
+): PageWarning {
+  const sourceLocation =
+    warning.sourceIdentity === undefined ? undefined : sourceLocations.get(warning.sourceIdentity);
+  const location = Object.freeze({
+    generation,
+    entryId: warning.location.entryId,
+    page: sourceLocation?.page ?? warning.location.page,
+  });
+  return "extension" in warning
+    ? (Object.freeze({ ...warning, location }) satisfies ExtensionPageWarning)
+    : (Object.freeze({ ...warning, location }) satisfies CorePageWarning);
+}
+
+function committedWarnings(
+  warnings: readonly PageWarning[],
+  generation: number,
+  sourceLocations: ReadonlyMap<string, BuiltWarningSourceLocation>,
+): readonly PageWarning[] {
+  return Object.freeze(
+    warnings.map((warning) => locateWarning(warning, generation, sourceLocations)),
+  );
+}
+
+function retainWarningEntryIndexes(
+  pageDocument: PageDocument,
+  sourceLocations: ReadonlyMap<string, BuiltWarningSourceLocation>,
+): void {
+  const warningSourceIdentities = new Set(
+    pageDocument.warnings.flatMap((warning) =>
+      warning.sourceIdentity === undefined ? [] : [warning.sourceIdentity],
+    ),
+  );
+  const entryIndexes = new Map<string, number>();
+  const sourceTargets = new Map<string, Element>();
+  for (const [sourceIdentity, location] of sourceLocations) {
+    if (!warningSourceIdentities.has(sourceIdentity)) continue;
+    sourceTargets.set(sourceIdentity, location.target);
+    if (location.publicationEntryIndex !== undefined) {
+      entryIndexes.set(sourceIdentity, location.publicationEntryIndex);
+    }
+  }
+  warningPublicationEntryIndexes.set(pageDocument, entryIndexes);
+  warningSourceTargets.set(pageDocument, sourceTargets);
+}
+
+type PageDocumentEpubExporter = (
+  pageDocument: PageDocument,
+  options: EpubExportOptions,
+) => Promise<Blob>;
+
+function createStagingIframe(
+  container: HTMLElement,
+  canonicalIframe: HTMLIFrameElement,
+): HTMLIFrameElement {
+  const stagingIframe = document.createElement("iframe");
+  stagingIframe.setAttribute("data-imposia-frame", "page-document-staging");
+  stagingIframe.setAttribute("sandbox", PAGE_DOCUMENT_FRAME_SANDBOX.join(" "));
+  stagingIframe.setAttribute("aria-hidden", "true");
+  stagingIframe.tabIndex = -1;
+  stagingIframe.srcdoc = FRAME_DOCUMENT;
+  stagingIframe.style.position = "fixed";
+  stagingIframe.style.inset = "0 auto auto -100000px";
+  stagingIframe.style.width = `${Math.max(canonicalIframe.clientWidth, 300)}px`;
+  stagingIframe.style.height = `${Math.max(canonicalIframe.clientHeight, 150)}px`;
+  stagingIframe.style.visibility = "hidden";
+  stagingIframe.style.pointerEvents = "none";
+  stagingIframe.style.border = "0";
+  container.append(stagingIframe);
+  return stagingIframe;
 }
 
 function exportSignal(value: unknown): AbortSignal | undefined {
@@ -58,10 +193,14 @@ function awaitWithAbort<T>(work: Promise<T>, signal: AbortSignal | undefined): P
   });
 }
 
-export function mountPageDocument(
+function createPageDocumentController(
   container: HTMLElement,
   source: PageSource,
-  options: PageDocumentOptions = {},
+  options: PageDocumentOptions,
+  finalizeCommit?: (
+    document: PageDocument,
+    source: PageSource,
+  ) => PageDocumentEpubExporter | undefined,
 ): PageDocumentController {
   const settings = snapshotSettings(options);
   const iframe = document.createElement("iframe");
@@ -81,6 +220,7 @@ export function mountPageDocument(
   const exportControllers = new Set<AbortController>();
   const exportOperations = new Set<Promise<Blob>>();
   const exportLeases = new Map<PageDocument, number>();
+  const epubExporters = new WeakMap<PageDocument, PageDocumentEpubExporter>();
   const deferredSnapshotReleases = new Set<PageDocument>();
 
   const releaseSnapshot = (pageDocument: PageDocument): void => {
@@ -141,7 +281,8 @@ export function mountPageDocument(
       const committed = await latestCommitted(controller.signal);
       const retained = retainExportSnapshot(committed);
       try {
-        return await exportPageDocumentEpub(committed, {
+        const exporter = epubExporters.get(committed) ?? exportPageDocumentEpub;
+        return await exporter(committed, {
           ...options,
           signal: controller.signal,
         });
@@ -172,9 +313,11 @@ export function mountPageDocument(
   const begin = (nextSource: PageSource, callerSignal: AbortSignal | undefined) => {
     if (destroyed) return Promise.reject(destroyedError());
     active?.controller.abort();
+    active?.stagingIframe.remove();
     const id = operationId + 1;
     operationId = id;
     const controller = new AbortController();
+    const stagingIframe = createStagingIframe(container, iframe);
     const unlink = linkSignal(callerSignal, controller);
     const startedAt = performance.now();
     const operation = Promise.resolve().then(async () => {
@@ -182,14 +325,17 @@ export function mountPageDocument(
       let deadline: ReturnType<typeof setTimeout> | undefined;
       try {
         if (controller.signal.aborted) throw abortError();
-        const frameDocument = await frameReady(iframe, controller.signal);
+        const [frameDocument, stagingDocument] = await Promise.all([
+          frameReady(iframe, controller.signal),
+          frameReady(stagingIframe, controller.signal),
+        ]);
         if (controller.signal.aborted || destroyed || id !== operationId) throw abortError();
         deadline = setTimeout(() => {
           deadlineExceeded = true;
           controller.abort();
         }, settings.limits.resourceDeadlineMs);
         const generation = await buildGeneration(
-          frameDocument,
+          stagingDocument,
           nextSource,
           settings,
           controller.signal,
@@ -202,7 +348,17 @@ export function mountPageDocument(
             settings.onProgress?.({ completedPages: index + 1 });
             if (controller.signal.aborted || destroyed || id !== operationId) throw abortError();
           }
-          commitGeneration(frameDocument, generation.body, generation.css);
+          const previousHead = [...frameDocument.head.childNodes];
+          const previousBody = [...frameDocument.body.childNodes];
+          const previousDocumentLanguage = frameDocument.documentElement.getAttribute("lang");
+          let canonicalReplaced = false;
+          commitGeneration(
+            frameDocument,
+            generation.body,
+            generation.css,
+            generation.documentLanguage,
+          );
+          canonicalReplaced = true;
           const pages = Object.freeze(
             generation.pages.map(({ flow, blank, name, geometry }, index) => {
               const side = index % 2 === 0 ? ("right" as const) : ("left" as const);
@@ -220,13 +376,18 @@ export function mountPageDocument(
               });
             }),
           );
+          const documentGeneration = (current?.generation ?? 0) + 1;
           let committedDocument: PageDocument | undefined;
           const document = Object.freeze({
             iframe,
-            generation: (current?.generation ?? 0) + 1,
+            generation: documentGeneration,
             pageCount: pages.length,
             pages,
-            warnings: generation.warnings,
+            warnings: committedWarnings(
+              generation.warnings,
+              documentGeneration,
+              generation.warningSourceLocations,
+            ),
             timings: Object.freeze({
               totalMs: performance.now() - startedAt,
               resourceMs: generation.timings.resourceMs,
@@ -240,15 +401,34 @@ export function mountPageDocument(
             },
           }) satisfies PageDocument;
           committedDocument = document;
-          const oldBlobUrls = activeBlobUrls;
-          const previous = current;
-          activeBlobUrls = generation.blobUrls;
-          current = document;
-          retainPageSemanticSnapshot(document, generation.semanticSnapshot);
-          if (previous !== undefined) releaseSnapshot(previous);
-          committed = true;
-          for (const url of oldBlobUrls) URL.revokeObjectURL(url);
-          return document;
+          retainWarningEntryIndexes(document, generation.warningSourceLocations);
+          let semanticRetained = false;
+          try {
+            retainPageSemanticSnapshot(document, generation.semanticSnapshot);
+            semanticRetained = true;
+            const epubExporter = finalizeCommit?.(document, nextSource);
+            if (epubExporter !== undefined) epubExporters.set(document, epubExporter);
+            const oldBlobUrls = activeBlobUrls;
+            const previous = current;
+            activeBlobUrls = generation.blobUrls;
+            current = document;
+            if (previous !== undefined) releaseSnapshot(previous);
+            committed = true;
+            for (const url of oldBlobUrls) URL.revokeObjectURL(url);
+            return document;
+          } catch (error: unknown) {
+            if (semanticRetained) releasePageSemanticSnapshot(document);
+            if (canonicalReplaced) {
+              frameDocument.head.replaceChildren(...previousHead);
+              frameDocument.body.replaceChildren(...previousBody);
+              if (previousDocumentLanguage === null) {
+                frameDocument.documentElement.removeAttribute("lang");
+              } else {
+                frameDocument.documentElement.lang = previousDocumentLanguage;
+              }
+            }
+            throw error;
+          }
         } finally {
           if (!committed) generation.revoke();
         }
@@ -259,6 +439,7 @@ export function mountPageDocument(
         throw error;
       } finally {
         if (deadline !== undefined) clearTimeout(deadline);
+        stagingIframe.remove();
       }
     });
     let tracked: Promise<PageDocument>;
@@ -277,7 +458,7 @@ export function mountPageDocument(
       },
     );
     operations.add(tracked);
-    active = { id, controller };
+    active = { id, controller, stagingIframe };
     latestWork = tracked;
     return tracked;
   };
@@ -318,6 +499,7 @@ export function mountPageDocument(
       if (destroyPromise !== undefined) return destroyPromise;
       destroyed = true;
       active?.controller.abort();
+      active?.stagingIframe.remove();
       for (const controller of exportControllers) controller.abort();
       for (const url of activeBlobUrls) URL.revokeObjectURL(url);
       activeBlobUrls = [];
@@ -330,4 +512,24 @@ export function mountPageDocument(
       return destroyPromise;
     },
   };
+}
+
+export function mountPageDocument(
+  container: HTMLElement,
+  source: PageSource,
+  options: PageDocumentOptions = {},
+): PageDocumentController {
+  return createPageDocumentController(container, source, options);
+}
+
+export function mountPageDocumentWithFinalizer(
+  container: HTMLElement,
+  source: PageSource,
+  options: PageDocumentOptions,
+  finalizeCommit: (
+    document: PageDocument,
+    source: PageSource,
+  ) => PageDocumentEpubExporter | undefined,
+): PageDocumentController {
+  return createPageDocumentController(container, source, options, finalizeCommit);
 }

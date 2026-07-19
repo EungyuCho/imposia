@@ -4,7 +4,7 @@ import { captureBrowserErrors } from "./browser-core-support.js";
 type TransformInput = { html: string; css: readonly string[] };
 type AssetRequest = { url: string };
 type ExtensionContext = { warn(warning: { code: string; message: string }): void };
-type DecorationPage = { blank: boolean };
+type DecorationPage = { number: number; totalPages: number; blank: boolean };
 type CoreWarning = { code: string; message: string; extension?: string; sourceIdentity?: string };
 type CoreDocument = {
   iframe: HTMLIFrameElement;
@@ -149,7 +149,9 @@ test.describe("manual Core extension contract QA (Chromium)", () => {
                 decoratePage(page: DecorationPage) {
                   return {
                     headerHtml: `EXT {{pageNumber}}/{{totalPages}}/${page.blank ? "BLANK" : "FULL"}`,
-                    footerHtml: "FOOTER {{pageNumber}}/{{totalPages}}",
+                    ...(page.number === page.totalPages
+                      ? { footerHtml: "LAST {{pageNumber}}/{{totalPages}}" }
+                      : {}),
                   };
                 },
               },
@@ -174,11 +176,16 @@ test.describe("manual Core extension contract QA (Chromium)", () => {
       return { decorated: await run(true), plain: await run(false) };
     });
     expect(observation.decorated).toEqual([
-      { blank: "false", header: "EXT 1/3/FULL", footer: "FOOTER 1/3" },
-      { blank: "true", header: "EXT 2/3/BLANK", footer: "FOOTER 2/3" },
-      { blank: "false", header: "EXT 3/3/FULL", footer: "FOOTER 3/3" },
+      { blank: "false", header: "EXT 1/3/FULL", footer: "" },
+      { blank: "true", header: "EXT 2/3/BLANK", footer: "" },
+      { blank: "false", header: "EXT 3/3/FULL", footer: "LAST 3/3" },
     ]);
     expect(observation.plain[1]).toEqual({ blank: "true", header: "", footer: "" });
+    expect(observation.plain[2]).toEqual({
+      blank: "false",
+      header: "EXT 3/3/FULL",
+      footer: "LAST 3/3",
+    });
     expect(errors).toEqual([]);
     expect(pageErrors).toEqual([]);
   });
@@ -215,7 +222,7 @@ test.describe("manual Core extension contract QA (Chromium)", () => {
           warnings: ready.warnings,
           before,
           after: JSON.stringify(ready.warnings),
-          repeatWarnings: JSON.stringify(repeat.warnings),
+          repeatWarnings: repeat.warnings,
           frozen: Object.isFrozen(ready.warnings),
           itemsFrozen: ready.warnings.every((warning) => Object.isFrozen(warning)),
           mutation,
@@ -238,7 +245,13 @@ test.describe("manual Core extension contract QA (Chromium)", () => {
     expect(observation.itemsFrozen).toBe(true);
     expect(observation.mutation).toBe(false);
     expect(observation.after).toBe(observation.before);
-    expect(observation.repeatWarnings).toBe(observation.before);
+    expect(observation.warnings.every((warning) => warning.location?.generation === 1)).toBe(true);
+    expect(observation.repeatWarnings.every((warning) => warning.location?.generation === 2)).toBe(
+      true,
+    );
+    expect(
+      observation.repeatWarnings.map(({ location: _location, ...warning }) => warning),
+    ).toEqual(observation.warnings.map(({ location: _location, ...warning }) => warning));
     expect(errors).toEqual([]);
     expect(pageErrors).toEqual([]);
   });

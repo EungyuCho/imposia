@@ -2,11 +2,11 @@ import { type ConsoleMessage, expect, test } from "@playwright/test";
 import { captureBrowserErrors } from "./browser-core-support.js";
 
 const CHROMIUM_SVG_SELF_REFERENCE_CSP_ERROR =
-  /^Loading the image 'http:\/\/127\.0\.0\.1:4178\/examples\/book\.html' violates the following Content Security Policy directive: "img-src blob:"\. The action has been blocked\.$/;
+  /^Loading the image 'http:\/\/127\.0\.0\.1:\d+\/examples\/book\.html' violates the following Content Security Policy directive: "img-src blob:"\. The action has been blocked\.$/;
 const WEBKIT_SVG_SELF_REFERENCE_CSP_ERROR =
-  /^Refused to load http:\/\/127\.0\.0\.1:4178\/examples\/book\.html because it does not appear in the img-src directive of the Content Security Policy\.$/;
+  /^Refused to load http:\/\/127\.0\.0\.1:\d+\/examples\/book\.html because it does not appear in the img-src directive of the Content Security Policy\.$/;
 const FIREFOX_SVG_SELF_REFERENCE_CSP_ERROR =
-  /Content-Security-Policy: The page’s settings blocked the loading of a resource \(img-src\) at http:\/\/127\.0\.0\.1:4178\/examples\/book\.html#safe because it violates the following directive: “img-src blob:”/;
+  /Content-Security-Policy: The page’s settings blocked the loading of a resource \(img-src\) at http:\/\/127\.0\.0\.1:\d+\/examples\/book\.html#safe because it violates the following directive: “img-src blob:”/;
 
 function isSvgSelfReferenceCspError(browserName: string, message: ConsoleMessage): boolean {
   if (browserName === "chromium") {
@@ -17,7 +17,7 @@ function isSvgSelfReferenceCspError(browserName: string, message: ConsoleMessage
   }
   if (browserName === "firefox") {
     return (
-      message.location().url === "http://127.0.0.1:4178/packages/core/dist/index.js" &&
+      /^http:\/\/127\.0\.0\.1:\d+\/packages\/core\/dist\/index\.js$/.test(message.location().url) &&
       FIREFOX_SVG_SELF_REFERENCE_CSP_ERROR.test(message.text())
     );
   }

@@ -6,9 +6,11 @@ import type {
   PageGeometry,
   PageWarning,
 } from "./page-document-types.js";
+import { UNLOCATED_PAGE_WARNING_LOCATION } from "./page-document-types.js";
 import type { WarningCollector } from "./warnings.js";
 
 const SOURCE_KEY = "data-imposia-publishing-source";
+export const PUBLISHING_SOURCE_MARKER = SOURCE_KEY;
 const GENERATED_KEY = "data-imposia-publishing-generated";
 const FOOTNOTE_CALL_KEY = "data-imposia-publishing-footnote-call";
 const CSS_IDENTIFIER = /^-?(?:[_a-z]|[^\0-\x7f])(?:[-_a-z0-9]|[^\0-\x7f])*$/i;
@@ -1078,7 +1080,13 @@ function coreWarning(
   sourceIdentity: string,
   recovery: string,
 ): PageWarning {
-  return Object.freeze({ code, message, sourceIdentity, recovery });
+  return Object.freeze({
+    code,
+    message,
+    sourceIdentity,
+    location: UNLOCATED_PAGE_WARNING_LOCATION,
+    recovery,
+  });
 }
 
 function footnoteArea(page: PublishingPage): HTMLElement {

@@ -34,6 +34,12 @@ export interface PreparedDecoration {
   warnings: DocumentWarning[];
 }
 
+export interface PreparedExtensionInput {
+  html: string;
+  css: readonly string[];
+  warnings: DocumentWarning[];
+}
+
 function textContent(element: Element): string {
   return element.childNodes
     .filter((node): node is DefaultTreeAdapterTypes.TextNode => node.nodeName === "#text")
@@ -166,6 +172,22 @@ function normalizeStyles(document: ParentNode, warnings: WarningCollector): void
     const style = element.attrs.find((item) => item.name.toLowerCase() === "style");
     if (style !== undefined) style.value = normalizeInlineCss(style.value, warnings, order);
   });
+}
+
+export function prepareExtensionInput(
+  html: string,
+  css: readonly string[],
+): PreparedExtensionInput {
+  const warnings = createWarningCollector();
+  const document = parse(html, { sourceCodeLocationInfo: true });
+  normalizeStyles(document, warnings);
+  enforceResourcePolicy(document, { allowRemoteResources: true }, warnings);
+  const serialized = serialize(document);
+  return {
+    html: /^<!doctype html>/i.test(serialized) ? serialized : `<!DOCTYPE html>${serialized}`,
+    css: Object.freeze(css.map((value) => normalizeCss(value, warnings))),
+    warnings: warnings.finish(),
+  };
 }
 
 export function prepareDocument(

@@ -7,6 +7,7 @@ import {
 } from "pdfjs-dist";
 import { createInterface, element } from "./viewer-interface.js";
 import { loadingSource } from "./viewer-source.js";
+import { bindViewerTheme, validateViewerTheme } from "./viewer-theme.js";
 import type {
   ViewerController,
   ViewerMode,
@@ -32,8 +33,10 @@ export function mountViewer(
   source: ViewerSource,
   options: ViewerOptions = {},
 ): ViewerController {
+  validateViewerTheme(options.theme);
   if (options.workerSrc !== undefined) GlobalWorkerOptions.workerSrc = options.workerSrc;
   const elements = createInterface(container);
+  const theme = bindViewerTheme(elements.root, options.theme);
   let documentProxy: PDFDocumentProxy | undefined;
   let loadingTask: PDFDocumentLoadingTask | undefined;
   let destroyed = false;
@@ -248,9 +251,14 @@ export function mountViewer(
     },
     setZoom,
     setMode,
+    setTheme(nextTheme) {
+      if (destroyed) return;
+      theme.set(nextTheme);
+    },
     destroy() {
       if (destroyed) return;
       destroyed = true;
+      theme.destroy();
       cancelRenders();
       void loadingTask?.destroy();
       void documentProxy?.destroy();

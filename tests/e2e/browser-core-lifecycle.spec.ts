@@ -1,6 +1,258 @@
 import { expect, test } from "@playwright/test";
 import { captureBrowserErrors } from "./browser-core-support.js";
 
+test("keeps the committed generation visible while staging an atomic update", async ({
+  page,
+  browserName,
+}) => {
+  const { errors, pageErrors } = captureBrowserErrors(page, browserName);
+
+  await page.goto("/examples/book.html");
+  try {
+    const observation = await page.evaluate(async () => {
+      type PageDocument = {
+        iframe: HTMLIFrameElement;
+        generation: number;
+      };
+      type Controller = {
+        ready: Promise<PageDocument>;
+        update(source: { html: string }, options?: { signal?: AbortSignal }): Promise<PageDocument>;
+        destroy(): Promise<void>;
+      };
+      const core = (await import("/packages/core/dist/index.js")) as {
+        mountPageDocument(
+          container: HTMLElement,
+          source: { html: string },
+          options: {
+            onProgress(progress: { completedPages: number }): void;
+            assetResolver(request: { url: string; signal: AbortSignal }): Promise<{
+              status: "resolved";
+              bytes: Uint8Array;
+              mimeType: string;
+            }>;
+          },
+        ): Controller;
+      };
+      const host = document.body.appendChild(document.createElement("div"));
+      let updateStarted = false;
+      let markerDuringUpdate = "";
+      let releaseAsset: (() => void) | undefined;
+      let assetStarted: (() => void) | undefined;
+      const waitingForAsset = new Promise<void>((resolve) => {
+        assetStarted = resolve;
+      });
+      const image = Uint8Array.from(
+        atob(
+          "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
+        ),
+        (character) => character.charCodeAt(0),
+      );
+      const controller = core.mountPageDocument(
+        host,
+        {
+          html: "<style>body { --imposia-generation-marker: committed; }</style><p>Committed generation</p>",
+        },
+        {
+          onProgress: () => {
+            if (!updateStarted) return;
+            const canonical = host.querySelector<HTMLIFrameElement>(
+              'iframe[data-imposia-frame="page-document"]',
+            );
+            const body = canonical?.contentDocument?.body;
+            markerDuringUpdate =
+              body === undefined
+                ? ""
+                : getComputedStyle(body).getPropertyValue("--imposia-generation-marker").trim();
+          },
+          assetResolver: async ({ url, signal }) => {
+            if (url === "staged.png") {
+              assetStarted?.();
+              await new Promise<void>((resolve, reject) => {
+                releaseAsset = resolve;
+                signal.addEventListener(
+                  "abort",
+                  () => reject(new DOMException("aborted", "AbortError")),
+                  { once: true },
+                );
+              });
+            }
+            return { status: "resolved", bytes: image, mimeType: "image/png" };
+          },
+        },
+      );
+      try {
+        const committed = await controller.ready;
+        committed.iframe.style.width = "640px";
+        committed.iframe.style.height = "480px";
+        committed.iframe.style.transform = "scale(2)";
+        updateStarted = true;
+        const update = controller.update({
+          html: '<style>body { --imposia-generation-marker: staged; }</style><p>Staged generation</p><img src="staged.png" alt="">',
+        });
+        await waitingForAsset;
+        const textDuringUpdate = committed.iframe.contentDocument?.body.textContent ?? "";
+        const frameCountDuringUpdate = host.querySelectorAll(
+          'iframe[data-imposia-frame="page-document"]',
+        ).length;
+        const stagingFrameCountDuringUpdate = host.querySelectorAll(
+          'iframe[data-imposia-frame="page-document-staging"]',
+        ).length;
+        const stagingFrame = host.querySelector<HTMLIFrameElement>(
+          'iframe[data-imposia-frame="page-document-staging"]',
+        );
+        const stagingLayoutWidth = stagingFrame?.clientWidth;
+        releaseAsset?.();
+        const staged = await update;
+        const markerAfterCommit = getComputedStyle(
+          staged.iframe.contentDocument?.body as HTMLElement,
+        )
+          .getPropertyValue("--imposia-generation-marker")
+          .trim();
+        return {
+          textDuringUpdate,
+          textAfterCommit: staged.iframe.contentDocument?.body.textContent ?? "",
+          sameIframe: committed.iframe === staged.iframe,
+          frameCountDuringUpdate,
+          stagingFrameCountDuringUpdate,
+          canonicalLayoutWidth: committed.iframe.clientWidth,
+          stagingLayoutWidth,
+          stagingFrameCountAfterCommit: host.querySelectorAll(
+            'iframe[data-imposia-frame="page-document-staging"]',
+          ).length,
+          markerDuringUpdate,
+          markerAfterCommit,
+          generation: staged.generation,
+        };
+      } finally {
+        releaseAsset?.();
+        await controller.destroy();
+        host.remove();
+      }
+    });
+
+    expect(observation.textDuringUpdate).toContain("Committed generation");
+    expect(observation.textDuringUpdate).not.toContain("Staged generation");
+    expect(observation.textAfterCommit).toContain("Staged generation");
+    expect(observation.textAfterCommit).not.toContain("Committed generation");
+    expect(observation.sameIframe).toBe(true);
+    expect(observation.frameCountDuringUpdate).toBe(1);
+    expect(observation.stagingFrameCountDuringUpdate).toBe(1);
+    expect(observation.stagingLayoutWidth).toBe(observation.canonicalLayoutWidth);
+    expect(observation.stagingFrameCountAfterCommit).toBe(0);
+    expect(observation.markerDuringUpdate).toBe("committed");
+    expect(observation.markerAfterCommit).toBe("staged");
+    expect(observation.generation).toBe(2);
+  } finally {
+    expect(errors).toEqual([]);
+    expect(pageErrors).toEqual([]);
+  }
+});
+
+test("caller abort preserves the commit and removes the staged generation", async ({
+  page,
+  browserName,
+}) => {
+  const { errors, pageErrors } = captureBrowserErrors(page, browserName);
+
+  await page.goto("/examples/book.html");
+  try {
+    const observation = await page.evaluate(async () => {
+      type PageDocument = { iframe: HTMLIFrameElement; generation: number };
+      type Controller = {
+        ready: Promise<PageDocument>;
+        current: PageDocument | undefined;
+        update(source: { html: string }, options?: { signal?: AbortSignal }): Promise<PageDocument>;
+        destroy(): Promise<void>;
+      };
+      const core = (await import("/packages/core/dist/index.js")) as {
+        mountPageDocument(
+          container: HTMLElement,
+          source: { html: string },
+          options: {
+            assetResolver(request: { url: string; signal: AbortSignal }): Promise<{
+              status: "resolved";
+              bytes: Uint8Array;
+              mimeType: string;
+            }>;
+          },
+        ): Controller;
+      };
+      const host = document.body.appendChild(document.createElement("div"));
+      let assetStarted: (() => void) | undefined;
+      const waitingForAsset = new Promise<void>((resolve) => {
+        assetStarted = resolve;
+      });
+      const controller = core.mountPageDocument(
+        host,
+        { html: "<p>Preserved generation</p>" },
+        {
+          assetResolver: async ({ url, signal }) => {
+            if (url === "abort.png") {
+              assetStarted?.();
+              await new Promise<never>((_resolve, reject) => {
+                signal.addEventListener(
+                  "abort",
+                  () => reject(new DOMException("aborted", "AbortError")),
+                  { once: true },
+                );
+              });
+            }
+            return {
+              status: "resolved",
+              bytes: new Uint8Array([0]),
+              mimeType: "image/png",
+            };
+          },
+        },
+      );
+      try {
+        const committed = await controller.ready;
+        const caller = new AbortController();
+        const update = controller.update(
+          { html: '<p>Aborted generation</p><img src="abort.png" alt="">' },
+          { signal: caller.signal },
+        );
+        await waitingForAsset;
+        const stagingCountBeforeAbort = host.querySelectorAll(
+          'iframe[data-imposia-frame="page-document-staging"]',
+        ).length;
+        caller.abort();
+        const result = await update.then(
+          () => ({ status: "fulfilled" as const, name: "" }),
+          (error: unknown) => ({
+            status: "rejected" as const,
+            name: error instanceof DOMException ? error.name : "unknown",
+          }),
+        );
+        return {
+          result,
+          stagingCountBeforeAbort,
+          stagingCountAfterAbort: host.querySelectorAll(
+            'iframe[data-imposia-frame="page-document-staging"]',
+          ).length,
+          sameCurrent: controller.current === committed,
+          generation: controller.current?.generation,
+          text: committed.iframe.contentDocument?.body.textContent ?? "",
+        };
+      } finally {
+        await controller.destroy();
+        host.remove();
+      }
+    });
+
+    expect(observation.result).toEqual({ status: "rejected", name: "AbortError" });
+    expect(observation.stagingCountBeforeAbort).toBe(1);
+    expect(observation.stagingCountAfterAbort).toBe(0);
+    expect(observation.sameCurrent).toBe(true);
+    expect(observation.generation).toBe(1);
+    expect(observation.text).toContain("Preserved generation");
+    expect(observation.text).not.toContain("Aborted generation");
+  } finally {
+    expect(errors).toEqual([]);
+    expect(pageErrors).toEqual([]);
+  }
+});
+
 test("prints the newest canonical iframe and preserves current after a failed update", async ({
   page,
   browserName,

@@ -1,25 +1,27 @@
-import {
-  type EpubExportOptions,
-  mountPageViewer,
-  type PageDocument,
-  type PageDocumentController,
-  type PageDocumentOptions,
-  type PageSource,
-  type PageViewerOptions,
+import type {
+  EpubExportOptions,
+  PageDocument,
+  PageDocumentController,
+  PageDocumentOptions,
+  PageSource,
+  PageViewerMode,
+  PageViewerOptions,
+  PageWarning,
 } from "@imposia/client";
 import {
   type CSSProperties,
   forwardRef,
+  useCallback,
   useEffect,
   useImperativeHandle,
   useRef,
-  useState,
 } from "react";
 import {
   type ImposiaDocumentCallbacks,
   type ImposiaDocumentState,
   useImposiaDocument,
 } from "./use-imposia-document.js";
+import { usePageViewerBinding } from "./use-page-viewer-binding.js";
 
 export type ImposiaPageViewerProps = ImposiaDocumentCallbacks & {
   readonly source: PageSource;
@@ -33,6 +35,12 @@ export type ImposiaPageViewerProps = ImposiaDocumentCallbacks & {
 
 export type ImposiaPageViewerHandle = Readonly<{
   readonly current: PageDocument | undefined;
+  setMode(mode: PageViewerMode): void;
+  setSpreadCover(cover: boolean): void;
+  openInspector(): void;
+  closeInspector(): void;
+  toggleInspector(): void;
+  selectWarning(warning: PageWarning): void;
   print(): Promise<void>;
   exportEpub(options: EpubExportOptions): Promise<Blob>;
 }>;
@@ -45,11 +53,8 @@ function documentUnavailableError(): Error {
   return new Error("ImposiaPageViewer document is not ready.");
 }
 
-function sameViewerOptions(
-  left: PageViewerOptions | undefined,
-  right: PageViewerOptions | undefined,
-): boolean {
-  return left?.mode === right?.mode && left?.zoom === right?.zoom;
+function inspectorUnavailableError(): Error {
+  return new Error("ImposiaPageViewer inspector is not enabled.");
 }
 
 export const ImposiaPageViewer = forwardRef<ImposiaPageViewerHandle, ImposiaPageViewerProps>(
@@ -68,30 +73,97 @@ export const ImposiaPageViewer = forwardRef<ImposiaPageViewerHandle, ImposiaPage
     },
     ref,
   ) {
+    const onReadyRef = useRef(onReady);
+    const onStateChangeRef = useRef(onStateChange);
+    const pendingReadyRef = useRef<PageDocument | undefined>(undefined);
+    const pendingReadyStateRef = useRef<ImposiaDocumentState | undefined>(undefined);
+    onReadyRef.current = onReady;
+    onStateChangeRef.current = onStateChange;
+    const handleDocumentReady = useCallback((pageDocument: PageDocument) => {
+      pendingReadyRef.current = pageDocument;
+    }, []);
+    const handleDocumentStateChange = useCallback((state: ImposiaDocumentState) => {
+      if (state.status === "ready") pendingReadyStateRef.current = state;
+      else {
+        pendingReadyRef.current = undefined;
+        pendingReadyStateRef.current = undefined;
+        onStateChangeRef.current?.(state);
+      }
+    }, []);
     const lifecycle = useImposiaDocument({
       source,
       sourceRevision,
       documentOptions,
       documentOptionsRevision,
-      onReady,
+      onReady: handleDocumentReady,
       onError,
-      onStateChange,
+      onStateChange: handleDocumentStateChange,
     });
     const controllerRef = useRef<PageDocumentController | undefined>(undefined);
     const mountedRef = useRef(false);
-    const viewerRef = useRef<ReturnType<typeof mountPageViewer> | undefined>(undefined);
-    const viewerOptionsRef = useRef(viewerOptions);
-    const onErrorRef = useRef(onError);
-    const [viewerError, setViewerError] = useState<unknown>();
     controllerRef.current = lifecycle.controller;
-    viewerOptionsRef.current = viewerOptions;
-    onErrorRef.current = onError;
+    const viewerBinding = usePageViewerBinding(
+      lifecycle.hostRef,
+      lifecycle.state.document,
+      viewerOptions,
+      onError,
+    );
+
+    useEffect(() => {
+      const pageDocument = pendingReadyRef.current;
+      const viewer = viewerBinding.getViewer();
+      if (pageDocument === undefined || viewer?.state.generation !== pageDocument.generation)
+        return;
+      const readyState = pendingReadyStateRef.current;
+      pendingReadyStateRef.current = undefined;
+      pendingReadyRef.current = undefined;
+      if (readyState !== undefined) {
+        onStateChangeRef.current?.(readyState);
+      }
+      onReadyRef.current?.(pageDocument);
+    }, [viewerBinding]);
 
     useImperativeHandle(ref, () => {
       mountedRef.current = true;
       return {
         get current(): PageDocument | undefined {
           return mountedRef.current ? controllerRef.current?.current : undefined;
+        },
+        setMode(mode: PageViewerMode): void {
+          if (!mountedRef.current) throw handleUnavailableError();
+          const viewer = viewerBinding.getViewer();
+          if (viewer === undefined) throw documentUnavailableError();
+          viewer.setMode(mode);
+        },
+        setSpreadCover(cover: boolean): void {
+          if (!mountedRef.current) throw handleUnavailableError();
+          const viewer = viewerBinding.getViewer();
+          if (viewer === undefined) throw documentUnavailableError();
+          viewer.setSpreadCover(cover);
+        },
+        openInspector(): void {
+          if (!mountedRef.current) throw handleUnavailableError();
+          const inspector = viewerBinding.getViewer()?.inspector;
+          if (inspector === undefined) throw inspectorUnavailableError();
+          inspector.open();
+        },
+        closeInspector(): void {
+          if (!mountedRef.current) throw handleUnavailableError();
+          const inspector = viewerBinding.getViewer()?.inspector;
+          if (inspector === undefined) throw inspectorUnavailableError();
+          inspector.close();
+        },
+        toggleInspector(): void {
+          if (!mountedRef.current) throw handleUnavailableError();
+          const inspector = viewerBinding.getViewer()?.inspector;
+          if (inspector === undefined) throw inspectorUnavailableError();
+          inspector.toggle();
+        },
+        selectWarning(warning: PageWarning): void {
+          if (!mountedRef.current) throw handleUnavailableError();
+          const inspector = viewerBinding.getViewer()?.inspector;
+          if (inspector === undefined) throw inspectorUnavailableError();
+          inspector.select(warning);
         },
         print(): Promise<void> {
           if (!mountedRef.current) return Promise.reject(handleUnavailableError());
@@ -106,54 +178,22 @@ export const ImposiaPageViewer = forwardRef<ImposiaPageViewerHandle, ImposiaPage
           return pageDocument.exportEpub(options);
         },
       };
-    }, []);
+    }, [viewerBinding]);
 
     useEffect(() => {
       mountedRef.current = true;
       return () => {
         mountedRef.current = false;
         controllerRef.current = undefined;
+        pendingReadyRef.current = undefined;
+        pendingReadyStateRef.current = undefined;
       };
     }, []);
 
-    useEffect(() => {
-      const host = lifecycle.hostRef.current;
-      const pageDocument = lifecycle.state.document;
-      if (host === null || pageDocument === undefined) return;
-      try {
-        if (viewerRef.current === undefined) {
-          viewerRef.current = mountPageViewer(host, pageDocument, viewerOptionsRef.current);
-        } else {
-          viewerRef.current.refresh(pageDocument);
-        }
-        setViewerError(undefined);
-      } catch (error: unknown) {
-        setViewerError(error);
-        onErrorRef.current?.(error);
-      }
-    }, [lifecycle.hostRef, lifecycle.state.document]);
-
-    const previousViewerOptionsRef = useRef(viewerOptions);
-    useEffect(() => {
-      const previous = previousViewerOptionsRef.current;
-      previousViewerOptionsRef.current = viewerOptions;
-      if (sameViewerOptions(previous, viewerOptions)) return;
-      const viewer = viewerRef.current;
-      if (viewer === undefined) return;
-      viewer.setMode(viewerOptions?.mode ?? "continuous");
-      viewer.setZoom(viewerOptions?.zoom ?? 1);
-    }, [viewerOptions]);
-
-    useEffect(
-      () => () => {
-        viewerRef.current?.destroy();
-        viewerRef.current = undefined;
-      },
-      [],
-    );
-
     const state: ImposiaDocumentState =
-      viewerError === undefined ? lifecycle.state : { status: "error", error: viewerError };
+      viewerBinding.error === undefined
+        ? lifecycle.state
+        : { status: "error", error: viewerBinding.error };
     const document: PageDocument | undefined = lifecycle.state.document;
     return (
       <div

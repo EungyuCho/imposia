@@ -77,6 +77,7 @@ export function commitGeneration(
   frameDocument: Document,
   body: DocumentFragment,
   css: readonly string[],
+  documentLanguage?: string,
 ): void {
   const styles = css.map((value) => {
     const style = frameDocument.createElement("style");
@@ -84,6 +85,8 @@ export function commitGeneration(
     return style;
   });
   frameDocument.documentElement.setAttribute("data-imposia-document", "v1");
+  if (documentLanguage === undefined) frameDocument.documentElement.removeAttribute("lang");
+  else frameDocument.documentElement.lang = documentLanguage;
   const meta = frameDocument.createElement("meta");
   meta.httpEquiv = "Content-Security-Policy";
   meta.content = FRAME_BLOB_CSP;
