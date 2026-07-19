@@ -23,6 +23,7 @@ import {
 
 export type ImposiaPageViewerProps = ImposiaDocumentCallbacks & {
   readonly source: PageSource;
+  readonly sourceRevision?: string | number;
   readonly documentOptions?: PageDocumentOptions;
   readonly viewerOptions?: PageViewerOptions;
   readonly className?: string;
@@ -52,11 +53,22 @@ function sameViewerOptions(
 
 export const ImposiaPageViewer = forwardRef<ImposiaPageViewerHandle, ImposiaPageViewerProps>(
   function ImposiaPageViewer(
-    { source, documentOptions, viewerOptions, className, style, onReady, onError, onStateChange },
+    {
+      source,
+      sourceRevision,
+      documentOptions,
+      viewerOptions,
+      className,
+      style,
+      onReady,
+      onError,
+      onStateChange,
+    },
     ref,
   ) {
     const lifecycle = useImposiaDocument({
       source,
+      sourceRevision,
       documentOptions,
       onReady,
       onError,

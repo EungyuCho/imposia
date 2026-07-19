@@ -23,6 +23,7 @@ export type ImposiaDocumentCallbacks = Readonly<{
 
 export type UseImposiaDocumentProps = ImposiaDocumentCallbacks & {
   readonly source: PageSource;
+  readonly sourceRevision?: string | number | undefined;
   readonly documentOptions?: PageDocumentOptions | undefined;
 };
 
@@ -63,6 +64,7 @@ function stateForError(current: PageDocument | undefined, error: unknown): Impos
 
 export function useImposiaDocument({
   source,
+  sourceRevision,
   documentOptions,
   onReady,
   onError,
@@ -78,6 +80,7 @@ export function useImposiaDocument({
   const controllerRef = useRef<PageDocumentController | undefined>(undefined);
   const currentRef = useRef<PageDocument | undefined>(undefined);
   const previousSourceRef = useRef(source);
+  const previousSourceRevisionRef = useRef(sourceRevision);
   const operationRef = useRef(0);
   const disposedRef = useRef(false);
   const [state, setState] = useState<ImposiaDocumentState>({ status: "idle" });
@@ -150,9 +153,11 @@ export function useImposiaDocument({
 
   useEffect(() => {
     const previous = previousSourceRef.current;
+    const previousRevision = previousSourceRevisionRef.current;
     const next = source;
-    if (sameSource(previous, next)) return;
     previousSourceRef.current = next;
+    previousSourceRevisionRef.current = sourceRevision;
+    if (sameSource(previous, next) && Object.is(previousRevision, sourceRevision)) return;
 
     const controller = controllerRef.current;
     if (controller === undefined || disposedRef.current) return;
@@ -173,7 +178,7 @@ export function useImposiaDocument({
         reportError(error);
       },
     );
-  }, [reportError, source, transition]);
+  }, [reportError, source, sourceRevision, transition]);
 
   return { hostRef, state, controller: controllerRef.current };
 }
