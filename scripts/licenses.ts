@@ -10,21 +10,61 @@ const allowedLicenses = new Set([
   "Apache-2.0",
   "BSD-2-Clause",
   "BSD-3-Clause",
-  "CC-BY-4.0",
   "ISC",
   "MIT",
   "MIT OR Apache-2.0",
-  "MPL-2.0",
   "Unlicense",
 ]);
 const reviewedPackageLicenses = [
-  { namePrefix: "@img/sharp-libvips-", license: "LGPL-3.0-or-later" },
+  {
+    names: ["caniuse-lite"],
+    version: "1.0.30001806",
+    license: "CC-BY-4.0",
+    repositoryUrl: "browserslist/caniuse-lite",
+  },
+  {
+    names: [
+      "lightningcss",
+      "lightningcss-android-arm64",
+      "lightningcss-darwin-arm64",
+      "lightningcss-darwin-x64",
+      "lightningcss-freebsd-x64",
+      "lightningcss-linux-arm-gnueabihf",
+      "lightningcss-linux-arm64-gnu",
+      "lightningcss-linux-arm64-musl",
+      "lightningcss-linux-x64-gnu",
+      "lightningcss-linux-x64-musl",
+      "lightningcss-win32-arm64-msvc",
+      "lightningcss-win32-x64-msvc",
+    ],
+    version: "1.32.0",
+    license: "MPL-2.0",
+    repositoryUrl: "https://github.com/parcel-bundler/lightningcss.git",
+  },
+  {
+    names: [
+      "@img/sharp-libvips-darwin-arm64",
+      "@img/sharp-libvips-darwin-x64",
+      "@img/sharp-libvips-linux-arm",
+      "@img/sharp-libvips-linux-arm64",
+      "@img/sharp-libvips-linux-ppc64",
+      "@img/sharp-libvips-linux-riscv64",
+      "@img/sharp-libvips-linux-s390x",
+      "@img/sharp-libvips-linux-x64",
+      "@img/sharp-libvips-linuxmusl-arm64",
+      "@img/sharp-libvips-linuxmusl-x64",
+    ],
+    version: "1.2.4",
+    license: "LGPL-3.0-or-later",
+    repositoryUrl: "git+https://github.com/lovell/sharp-libvips.git",
+  },
 ] as const;
 
 interface PackageLicense {
   name: string;
   version: string;
   license: string;
+  repositoryUrl: string | undefined;
 }
 
 interface MissingPackageLicense {
@@ -50,7 +90,11 @@ function repositoryUrl(value: unknown): string | undefined {
 
 function hasReviewedPackageLicense(item: PackageLicense): boolean {
   return reviewedPackageLicenses.some(
-    (review) => item.name.startsWith(review.namePrefix) && item.license === review.license,
+    (review) =>
+      review.names.some((name) => name === item.name) &&
+      item.version === review.version &&
+      item.license === review.license &&
+      item.repositoryUrl === review.repositoryUrl,
   );
 }
 
@@ -123,6 +167,7 @@ async function main(): Promise<void> {
         name: manifest.name,
         version: manifest.version,
         license: manifest.license,
+        repositoryUrl: repositoryUrl(manifest.repository),
       });
     } catch (error) {
       if (error instanceof SyntaxError) throw error;
@@ -142,6 +187,7 @@ async function main(): Promise<void> {
       name: manifest.name,
       version: manifest.version,
       license: parent.license,
+      repositoryUrl: manifest.repositoryUrl,
     });
   }
 
