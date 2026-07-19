@@ -551,6 +551,72 @@ async function limitProbeInPage(): Promise<LimitProbe> {
   };
 }
 
+async function exportLimitPreflightInPage(): Promise<
+  Readonly<{ error: Failure; retainedAssetReads: number }>
+> {
+  const corePath = "/packages/core/dist/index.js";
+  const core = (await import(corePath)) as CoreModule;
+  const host = document.body.appendChild(document.createElement("div"));
+  let controller: Controller | undefined;
+  const originalArrayBuffer = Blob.prototype.arrayBuffer;
+  let retainedAssetReads = 0;
+  const metadata: EpubMetadata = {
+    title: "Imposia EPUB RED fixture",
+    language: "en",
+    identifier: "urn:imposia:red:epub",
+    modified: "2026-07-18T00:00:00Z",
+  };
+  const png = Uint8Array.from(
+    atob(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
+    ),
+    (character) => character.charCodeAt(0),
+  );
+  const errorDetails = (error: unknown): Failure => {
+    const object = typeof error === "object" && error !== null ? error : undefined;
+    const code =
+      object !== undefined && "code" in object && typeof object.code === "string"
+        ? object.code
+        : "";
+    return {
+      name: error instanceof Error ? error.name : "UnknownError",
+      code,
+      message: error instanceof Error ? error.message : String(error),
+    };
+  };
+  try {
+    controller = core.mountPageDocument(
+      host,
+      { html: '<img src="oversized.png">' },
+      {
+        assetResolver: async (request) => ({
+          status: "resolved",
+          bytes: png,
+          mimeType: "image/png",
+          resolvedUrl: request.url,
+        }),
+      },
+    );
+    const pageDocument = await controller.ready;
+    Blob.prototype.arrayBuffer = function arrayBuffer() {
+      retainedAssetReads += 1;
+      return originalArrayBuffer.call(this);
+    };
+    const candidate = Reflect.get(pageDocument, "exportEpub");
+    if (typeof candidate !== "function") throw new TypeError("PageDocument.exportEpub is missing.");
+    try {
+      await candidate.call(pageDocument, { metadata, limits: { maxBytes: 1 } });
+      throw new Error("Expected limited EPUB export to reject.");
+    } catch (error: unknown) {
+      return { error: errorDetails(error), retainedAssetReads };
+    }
+  } finally {
+    Blob.prototype.arrayBuffer = originalArrayBuffer;
+    await controller?.destroy();
+    host.remove();
+  }
+}
+
 function assertNoBrowserErrors(errors: readonly unknown[], pageErrors: readonly string[]): void {
   expect(errors).toEqual([]);
   expect(pageErrors).toEqual([]);
@@ -606,6 +672,21 @@ test("returns a store-mode EPUB Blob with coherent metadata, manifest, spine, na
     expect(nav).toContain('href="content.xhtml"');
     expect(content).toContain("Semantic body");
     expect(entryText(entries, "EPUB/styles.css")).toContain(".chapter");
+  } finally {
+    assertNoBrowserErrors(captured.errors, captured.pageErrors);
+  }
+});
+
+test("applies EPUB limits before materializing retained asset blobs", async ({
+  page,
+  browserName,
+}) => {
+  const captured = captureBrowserErrors(page, browserName);
+  await page.goto("/examples/book.html");
+  try {
+    const result = await page.evaluate(exportLimitPreflightInPage);
+    expect(result.error.code, result.error.message).toBe("EPUB_ARCHIVE_LIMIT");
+    expect(result.retainedAssetReads).toBe(0);
   } finally {
     assertNoBrowserErrors(captured.errors, captured.pageErrors);
   }
