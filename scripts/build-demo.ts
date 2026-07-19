@@ -6,6 +6,8 @@ import { build } from "esbuild";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const demoOutput = "examples/demo/app.js";
 const reactOutput = "examples/react/app.js";
+const viewerStylesInput = "packages/viewer/src/styles.css";
+const viewerStylesOutput = "examples/demo/viewer.css";
 
 const shared = {
   absWorkingDir: root,
@@ -40,4 +42,10 @@ await Promise.all(
   }),
 );
 
-console.log("Built examples/demo/app.js and examples/react/app.js.");
+await writeFile(
+  path.join(root, viewerStylesOutput),
+  await readFile(path.join(root, viewerStylesInput), "utf8"),
+  "utf8",
+);
+
+console.log("Built examples/demo/app.js, examples/demo/viewer.css, and examples/react/app.js.");

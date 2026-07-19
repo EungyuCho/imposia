@@ -1,4 +1,5 @@
 import { hasPageDocumentFrameSandbox, type PageDocument } from "@imposia/core";
+import { IMPOSIA_BRAND_MARK } from "./brand-mark.js";
 import { mountPublicationReader, validatePublicationReaderDocument } from "./publication-reader.js";
 import { createViewerInspector } from "./viewer-inspector.js";
 import { bindViewerTheme, validateViewerTheme } from "./viewer-theme.js";
@@ -92,8 +93,7 @@ function createInterface(container: HTMLElement, iframe: HTMLIFrameElement): Pag
   rail.className = "imposia-rail";
   const identity = document.createElement("div");
   identity.className = "imposia-identity";
-  identity.innerHTML =
-    '<span class="imposia-mark">IM</span><span class="imposia-wordmark">Imposia</span>';
+  identity.innerHTML = `${IMPOSIA_BRAND_MARK}<span class="imposia-wordmark">Imposia</span>`;
   const toolbar = document.createElement("div");
   toolbar.className = "imposia-toolbar";
   toolbar.setAttribute("role", "group");

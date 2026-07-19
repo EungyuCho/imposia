@@ -12,6 +12,7 @@ const demoAssets = new Map<string, string>([
   ["app.js", "text/javascript; charset=utf-8"],
   ["index.html", "text/html; charset=utf-8"],
   ["styles.css", "text/css; charset=utf-8"],
+  ["viewer.css", "text/css; charset=utf-8"],
 ]);
 
 function serveDemo(): Plugin {

@@ -1,3 +1,5 @@
+import { IMPOSIA_BRAND_MARK } from "./brand-mark.js";
+
 export interface ViewerElements {
   root: HTMLElement;
   stage: HTMLElement;
@@ -39,10 +41,7 @@ export function createInterface(container: HTMLElement): ViewerElements {
   root.setAttribute("aria-label", "Imposia PDF viewer");
   const rail = element("header", "imposia-rail");
   const identity = element("div", "imposia-identity");
-  identity.append(
-    element("span", "imposia-mark", "IM"),
-    element("span", "imposia-wordmark", "Imposia"),
-  );
+  identity.innerHTML = `${IMPOSIA_BRAND_MARK}<span class="imposia-wordmark">Imposia</span>`;
   const toolbar = element("div", "imposia-toolbar");
   toolbar.setAttribute("role", "toolbar");
   toolbar.setAttribute("aria-label", "Document controls");

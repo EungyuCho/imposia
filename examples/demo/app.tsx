@@ -357,6 +357,18 @@ const viewer = mountPageViewer(host, pageDocument);
 await controller.print();`,
 };
 
+function ImposiaMark() {
+  return (
+    <svg className="demo-brand-mark" viewBox="0 0 72 72" aria-hidden="true" focusable="false">
+      <path
+        className="demo-brand-mark-outline"
+        d="M36 20 18 9 4 17l18 11v17L4 56l16 9 16-10V20Zm0 0L54 9l14 8-18 11v17l18 11-16 9-16-10V20Z"
+      />
+      <path className="demo-brand-mark-fold" d="m22 28 14-8v16L22 28Zm14 27V39l14 9-14 7Z" />
+    </svg>
+  );
+}
+
 function statusLabel(state: ImposiaDocumentState["status"]): string {
   if (state === "ready") return "Ready";
   if (state === "loading") return "Paginating";
@@ -514,9 +526,7 @@ function App() {
     <div className="demo-shell">
       <aside className="demo-panel" aria-label="Imposia demo controls">
         <header className="demo-brand">
-          <span className="demo-brand-mark" aria-hidden="true">
-            IM
-          </span>
+          <ImposiaMark />
           <div>
             <strong>Imposia</strong>
             <span>Publishing lab / 0.1</span>

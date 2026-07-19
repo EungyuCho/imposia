@@ -7,6 +7,7 @@
   --demo-line-dark: rgb(243 238 227 / 16%);
   --demo-accent: #ef6a3b;
   --demo-accent-text: #a64020;
+  --demo-brand-fold: #4333c9;
   --demo-signal: #9cd4b6;
   --demo-success: #356a4d;
   --demo-danger: #b43b2f;
@@ -80,7 +81,6 @@
   --demo-leading-display: 0.93;
   --demo-size-status-min-height: 1.4em;
   --demo-tracking-brand: -0.035em;
-  --demo-tracking-mark: -0.05em;
   --demo-tracking-label: 0.13em;
   --demo-tracking-eyebrow: 0.16em;
   --demo-tracking-heading: 0.14em;
@@ -93,7 +93,7 @@
   --demo-size-panel-compact: 320px;
   --demo-size-panel-max: 390px;
   --demo-size-panel-pattern: 5px;
-  --demo-size-brand: 34px;
+  --demo-size-brand: 44px;
   --demo-size-brand-min-height: 76px;
   --demo-size-brand-blur: 16px;
   --demo-size-sample-index-column: 32px;
@@ -209,15 +209,27 @@ button {
 }
 
 .demo-brand-mark {
-  display: grid;
+  display: block;
+  flex: 0 0 auto;
   width: var(--demo-size-brand);
   height: var(--demo-size-brand);
-  place-items: center;
-  border: var(--demo-border-hairline) solid var(--demo-accent);
-  color: var(--demo-accent-text);
-  font:
-    var(--demo-weight-heavy) var(--demo-type-caption) / var(--demo-leading-tight) var(--demo-mono);
-  letter-spacing: var(--demo-tracking-mark);
+  overflow: visible;
+  color: var(--demo-ink);
+}
+
+.demo-brand-mark-outline {
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2.8;
+}
+
+.demo-brand-mark-fold {
+  fill: var(--demo-brand-fold);
+  stroke: currentColor;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
 }
 
 .demo-brand div {

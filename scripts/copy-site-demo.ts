@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const sourceDirectory = path.join(root, "examples/demo");
 const outputDirectory = path.join(root, "site/build/client/examples/demo");
-const assets = ["app.js", "index.html", "styles.css"];
+const assets = ["app.js", "index.html", "styles.css", "viewer.css"];
 
 await mkdir(outputDirectory, { recursive: true });
 await Promise.all(
