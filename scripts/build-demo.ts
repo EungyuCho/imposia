@@ -22,6 +22,7 @@ const shared = {
 await Promise.all([
   build({ ...shared, entryPoints: ["examples/demo/app.tsx"], outfile: "examples/demo/app.js" }),
   build({ ...shared, entryPoints: ["examples/react/app.tsx"], outfile: "examples/react/app.js" }),
+  build({ ...shared, entryPoints: ["site/app.tsx"], outfile: "site/app.js" }),
 ]);
 
-console.log("Built examples/demo/app.js and examples/react/app.js.");
+console.log("Built examples/demo/app.js, examples/react/app.js, and site/app.js.");

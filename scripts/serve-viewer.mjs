@@ -41,7 +41,7 @@ const server = createServer((request, response) => {
   }
   const requestUrl = new URL(request.url, `http://127.0.0.1:${port}`);
   if (requestUrl.pathname === "/") {
-    response.writeHead(302, { Location: "/examples/viewer/" }).end();
+    response.writeHead(302, { Location: `/site/${requestUrl.search}` }).end();
     return;
   }
   if (requestUrl.pathname === "/favicon.ico") {

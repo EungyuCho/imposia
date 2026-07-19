@@ -12,5 +12,6 @@ artifacts/
 output/
 benchmarks/latest.json
 benchmarks/latest.md
+site/app.js
 *.tsbuildinfo
 .agents/
