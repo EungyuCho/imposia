@@ -98,6 +98,11 @@ resolver bytes only, and omits page wrappers, margin furniture, generated page
 counters, Blob URLs, and page-only experimental artifacts. It is not a
 fixed-layout EPUB or PDF-byte exporter.
 
+When an update is in flight, both `exportEpub()` and `controller.print()` wait
+for the same latest successful committed generation. A failed update keeps the
+previous committed document available; `destroy()` aborts pending publishing
+work and waits for it to settle before it resolves.
+
 Printing remains native browser printing:
 
 ```ts
