@@ -30,6 +30,26 @@ The staging iframe is never used for preview, presentation, or print.
 
 `PageDocument.exportEpub()` does not rerun extensions or serialize the fixed page layout.
 
+## Why Viewer and native print stay aligned
+
+First, inspect pages 2 and 3 of the committed generation in the Viewer. Then select `Save to PDF` in browser print preview. The same content and page order appear there.
+
+![The same second page displayed inside the Imposia Viewer](/images/publishing-contract/committed-page-viewer.png)
+
+*Viewer page 2 contains table rows 01–22, the repeated table heading, and the `LEFT / 2` page furniture.*
+
+![The next table page and its page furniture inside the Imposia Viewer](/images/publishing-contract/committed-page-continuation.png)
+
+*Viewer page 3 continues with rows 23–36 and the `RIGHT / 3` page furniture.*
+
+![The same document in browser print preview with Save to PDF selected](/images/publishing-contract/native-print-save-pdf.png)
+
+*The Save to PDF preview contains the same page 2 and 3 table content, page order, repeated heading, and page furniture shown above.*
+
+Imposia does not clone Viewer pages or create a separate PDF renderer for print. `print()` calls `Window.print()` on the canonical iframe shown by the Viewer. Within the documented support boundary, orientation, margin boxes, repeated table headings, page numbers, and content order therefore stay aligned between the Viewer and browser print or Save to PDF output.
+
+The Viewer and Save to PDF preview match because both paths observe the same committed generation. This does not mean that Imposia returns PDF bytes. Printer-driver margins, scaling, color correction, and browser-specific font metrics can still affect the final result.
+
 ## Control external resources
 
 The host application's `assetResolver` is the only path for external resources. Core owns any Blob URLs produced through that path and revokes them when a document is replaced, fails, or is destroyed.
