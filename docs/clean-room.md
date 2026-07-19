@@ -87,8 +87,9 @@ the repository's browser tests and package audits.
 
 The repository and first-party packages use Apache-2.0. `pnpm run licenses`
 audits the installed dependency graph against an explicit reviewed permissive
-allowlist and writes `artifacts/evidence/licenses.json`. New third-party code or
-assets must have a compatible license and be recorded in
+allowlist plus exact package, version, license, and repository exceptions for
+compatible tooling components, and writes `artifacts/evidence/licenses.json`.
+New third-party code or assets must have a compatible license and be recorded in
 `THIRD_PARTY_NOTICES.md` and the dependency audit.
 
 This policy and automated audit reduce provenance and redistribution risk, but they

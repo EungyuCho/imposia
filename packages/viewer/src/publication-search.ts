@@ -185,7 +185,7 @@ export function createPublicationSearch(
   }
 
   function onOpenerClick(): void {
-    setOpen(panel.hidden);
+    setOpen(panel.hidden !== false);
   }
 
   function onResultClick(event: MouseEvent): void {
@@ -229,7 +229,7 @@ export function createPublicationSearch(
       setOpen(false, options?.restoreFocus);
     },
     toggle() {
-      const opening = panel.hidden;
+      const opening = panel.hidden !== false;
       setOpen(opening, !opening);
     },
     search,

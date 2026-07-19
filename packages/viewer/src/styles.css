@@ -105,9 +105,9 @@
   --imposia-viewer-error-gap: 7px;
 
   --imposia-viewer-shadow-page:
-    0 1px 0 var(--imposia-viewer-color-page-highlight) inset, 0 20px 55px
-    var(--imposia-viewer-color-page-shadow-strong), 0 2px 8px
-    var(--imposia-viewer-color-page-shadow-soft);
+    0 1px 0 var(--imposia-viewer-color-page-highlight) inset,
+    0 20px 55px var(--imposia-viewer-color-page-shadow-strong),
+    0 2px 8px var(--imposia-viewer-color-page-shadow-soft);
   --imposia-viewer-shadow-state: 0 18px 50px var(--imposia-viewer-color-state-shadow);
   --imposia-viewer-disabled-opacity: 0.34;
   --imposia-viewer-spin-duration: 0.75s;
@@ -379,6 +379,7 @@ body:has(.imposia-viewer) {
 .imposia-thumbnail-panel,
 .imposia-inspector-panel {
   position: absolute;
+  box-sizing: border-box;
   top: var(--imposia-viewer-rail-height);
   left: 0;
   z-index: 3;
