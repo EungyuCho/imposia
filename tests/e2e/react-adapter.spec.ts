@@ -155,6 +155,53 @@ test("React source revisions reprocess identical HTML in the same canonical ifra
   }
 });
 
+test("React document option revisions replace the controller with the new configuration", async ({
+  page,
+  browserName,
+}) => {
+  test.skip(browserName !== "chromium", "Canonical page presentation is Chromium-reference only.");
+  const { errors, pageErrors } = captureBrowserErrors(page, browserName);
+  await page.goto("/examples/react/");
+
+  try {
+    const host = page.locator(".react-adapter-host");
+    await expect(host).toHaveAttribute("data-imposia-react-status", "ready");
+    await page.evaluate(() => {
+      const frame = document.querySelector<HTMLIFrameElement>(".react-adapter-host iframe");
+      if (frame === null) throw new Error("React fixture canonical frame is missing.");
+      Reflect.set(globalThis, "__imposiaOptionsRevisionFrame", frame);
+    });
+
+    await page.evaluate(() => {
+      const observation = (
+        globalThis as {
+          imposiaReactObservation: {
+            bumpDocumentOptionsRevision: (() => void) | undefined;
+          };
+        }
+      ).imposiaReactObservation;
+      if (observation.bumpDocumentOptionsRevision === undefined) {
+        throw new Error("React fixture cannot revise document options.");
+      }
+      observation.bumpDocumentOptionsRevision();
+    });
+
+    await expect(host.locator("iframe").contentFrame().locator("body")).toContainText(
+      "Options revision applied",
+    );
+    expect(
+      await page.evaluate(
+        () =>
+          Reflect.get(globalThis, "__imposiaOptionsRevisionFrame") !==
+          document.querySelector(".react-adapter-host iframe"),
+      ),
+    ).toBe(true);
+  } finally {
+    expect(errors).toEqual([]);
+    expect(pageErrors).toEqual([]);
+  }
+});
+
 test("React imperative handle exposes the current document, print, and EPUB export", async ({
   page,
   browserName,

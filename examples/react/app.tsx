@@ -8,6 +8,7 @@ type Observation = {
   states: string[];
   setSource: ((source: { html: string }) => void) | undefined;
   bumpSourceRevision: (() => void) | undefined;
+  bumpDocumentOptionsRevision: (() => void) | undefined;
   unmount: (() => void) | undefined;
   handle: ImposiaPageViewerHandle | undefined;
   retainedHandle: ImposiaPageViewerHandle | undefined;
@@ -19,6 +20,7 @@ const observation: Observation = {
   states: [],
   setSource: undefined,
   bumpSourceRevision: undefined,
+  bumpDocumentOptionsRevision: undefined,
   unmount: undefined,
   handle: undefined,
   retainedHandle: undefined,
@@ -31,11 +33,26 @@ const pageViewerHandle = React.createRef<ImposiaPageViewerHandle>();
 function App() {
   const [source, setSource] = useState({ html: "<h1>React document</h1><p>Initial page</p>" });
   const [sourceRevision, setSourceRevision] = useState(0);
+  const [documentOptionsRevision, setDocumentOptionsRevision] = useState(0);
   observation.setSource = setSource;
   observation.bumpSourceRevision = () => setSourceRevision((revision) => revision + 1);
+  observation.bumpDocumentOptionsRevision = () =>
+    setDocumentOptionsRevision((revision) => revision + 1);
   return React.createElement(ImposiaPageViewer, {
     source,
     sourceRevision,
+    documentOptions:
+      documentOptionsRevision === 0
+        ? undefined
+        : {
+            extensions: [
+              {
+                name: "fixture/options-revision",
+                transform: ({ html }) => ({ html: `${html}<p>Options revision applied</p>` }),
+              },
+            ],
+          },
+    documentOptionsRevision,
     ref: pageViewerHandle,
     className: "react-adapter-host",
     onReady: () => {

@@ -7,6 +7,7 @@ import {
   FRAME_DOCUMENT,
   frameReady,
   linkSignal,
+  PAGE_DOCUMENT_FRAME_SANDBOX,
 } from "./page-document-frame.js";
 import { bodyText, buildGeneration, snapshotSettings } from "./page-document-generation.js";
 import {
@@ -65,7 +66,7 @@ export function mountPageDocument(
   const settings = snapshotSettings(options);
   const iframe = document.createElement("iframe");
   iframe.setAttribute("data-imposia-frame", "page-document");
-  iframe.setAttribute("sandbox", "allow-same-origin allow-modals");
+  iframe.setAttribute("sandbox", PAGE_DOCUMENT_FRAME_SANDBOX.join(" "));
   iframe.srcdoc = FRAME_DOCUMENT;
   container.append(iframe);
 

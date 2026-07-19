@@ -53,6 +53,7 @@ const reactHandle = React.createRef<ImposiaPageViewerHandle>();
 const reactElement = React.createElement(ImposiaPageViewer, {
   source: { html: "<p>React handle typecheck</p>" },
   sourceRevision: 2,
+  documentOptionsRevision: 3,
   ref: reactHandle,
 });
 const runtimeHandleCandidate = Reflect.get(reactHandle, "current");

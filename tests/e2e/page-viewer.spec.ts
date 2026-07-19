@@ -45,6 +45,7 @@ test("presents the real canonical iframe without taking over its lifecycle", asy
           source: { html: string },
           options: Record<string, never>,
         ): CoreController;
+        hasPageDocumentFrameSandbox(iframe: HTMLIFrameElement): boolean;
       };
       const viewerModule = (await import("/packages/viewer/dist/index.js")) as {
         mountPageViewer(container: HTMLElement, pageDocument: PageDocument): PageViewerController;
@@ -58,6 +59,7 @@ test("presents the real canonical iframe without taking over its lifecycle", asy
         {},
       );
       const first = await controller.ready;
+      const canonicalSandbox = core.hasPageDocumentFrameSandbox(first.iframe);
       const initialPage = first.iframe.contentDocument?.querySelector("[data-imposia-page]");
       const initialDimensions = initialPage?.getBoundingClientRect();
       const viewer = viewerModule.mountPageViewer(host, first);
@@ -92,6 +94,16 @@ test("presents the real canonical iframe without taking over its lifecycle", asy
       viewer.destroy();
       viewer.destroy();
       const restored = host.firstElementChild === first.iframe;
+      const originalSandbox = first.iframe.getAttribute("sandbox");
+      first.iframe.setAttribute("sandbox", "allow-same-origin");
+      let invalidSandboxRejected = false;
+      try {
+        viewerModule.mountPageViewer(host, first);
+      } catch {
+        invalidSandboxRejected = true;
+      }
+      if (originalSandbox === null) first.iframe.removeAttribute("sandbox");
+      else first.iframe.setAttribute("sandbox", originalSandbox);
       await other.destroy();
       await controller.destroy();
       return {
@@ -114,6 +126,8 @@ test("presents the real canonical iframe without taking over its lifecycle", asy
         parentPrints,
         mismatchRejected,
         restored,
+        canonicalSandbox,
+        invalidSandboxRejected,
       };
     });
 
@@ -131,6 +145,8 @@ test("presents the real canonical iframe without taking over its lifecycle", asy
     expect(observation.parentPrints).toBe(0);
     expect(observation.mismatchRejected).toBe(true);
     expect(observation.restored).toBe(true);
+    expect(observation.canonicalSandbox).toBe(true);
+    expect(observation.invalidSandboxRejected).toBe(true);
   } finally {
     expect(errors).toEqual([]);
     expect(pageErrors).toEqual([]);

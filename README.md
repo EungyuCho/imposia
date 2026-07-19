@@ -126,6 +126,11 @@ export function BookPreview() {
 
 The imperative handle always targets the current committed Core generation. It
 does not create a second controller, iframe, layout pass, or asset-fetch path.
+`documentOptions` configure the controller at mount time. When those options
+change (for example, a new extension set or resolver), increment
+`documentOptionsRevision` to replace the controller with a newly configured
+canonical iframe. `source` updates and `sourceRevision` continue to reuse the
+existing iframe.
 
 ### Use Core without React
 
