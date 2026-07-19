@@ -1,3 +1,5 @@
+import { mkdir, writeFile } from "node:fs/promises";
+import path from "node:path";
 import { expect, test } from "@playwright/test";
 import { captureBrowserErrors } from "./browser-core-support.js";
 
@@ -307,6 +309,162 @@ test("applies generated-content cascade winners per pseudo-element slot", async 
         markers: [{ kind: "target-text", text: "Target text", style: "background: yellow" }],
       },
     ]);
+  } finally {
+    expect(errors).toEqual([]);
+    expect(pageErrors).toEqual([]);
+  }
+});
+
+test("cascades target content with authored pseudo content and selector-list specificity", async ({
+  page,
+  browserName,
+}) => {
+  chromiumOnly(browserName);
+  const { errors, pageErrors } = captureBrowserErrors(page, browserName);
+  await page.goto("/examples/book.html");
+  try {
+    const observation = await page.evaluate(async () => {
+      const modulePath = "/packages/core/dist/index.js";
+      const core = (await import(modulePath)) as CoreModuleView;
+      const host = document.createElement("div");
+      document.body.replaceChildren(host);
+      const css = `
+        #target-wins .ref::after { content: target-counter(attr(href), page); }
+        #target-wins a::after { content: "LITERAL"; }
+        #literal-wins a::after { content: target-counter(attr(href), page); }
+        #literal-wins .ref::after { content: "LITERAL"; }
+        #important-literal-wins .ref::after { content: target-counter(attr(href), page); }
+        #important-literal-wins a::after { content: "LITERAL" !important; }
+        #important-target-wins a::after {
+          content: target-counter(attr(href), page) !important;
+        }
+        #important-target-wins .ref::after { content: "LITERAL"; }
+        #same-rule-target-wins::after {
+          content: "LITERAL";
+          content: target-counter(attr(href), page);
+        }
+        #same-rule-literal-wins::after {
+          content: target-counter(attr(href), page);
+          content: "LITERAL";
+        }
+        #nth-child-case a:nth-child(1 of #nth-child-reference)::after {
+          content: target-counter(attr(href), page);
+        }
+        #nth-child-case a.ref::after { content: target-text(attr(href), content); }
+        #nth-last-child-case a:nth-last-child(1 of #nth-last-child-reference)::after {
+          content: target-counter(attr(href), page);
+        }
+        #nth-last-child-case a.ref::after { content: target-text(attr(href), content); }
+        #conditional-content a::after { content: target-counter(attr(href), page); }
+        @media (min-width: 1px) {
+          #conditional-content .ref::after { content: "MEDIA"; }
+        }
+        @media (max-width: 1px) {
+          #media-reference::after { content: target-counter(attr(href), page); }
+        }
+      `;
+      let controller: PageDocumentControllerView | undefined;
+      try {
+        controller = core.mountPageDocument(
+          host,
+          {
+            html: `
+              <article>
+                <p id="target-wins"><a class="ref" href="#target">Target wins</a></p>
+                <p id="literal-wins"><a class="ref" href="#target">Literal wins</a></p>
+                <p id="important-literal-wins">
+                  <a class="ref" href="#target">Important literal wins</a>
+                </p>
+                <p id="important-target-wins">
+                  <a class="ref" href="#target">Important target wins</a>
+                </p>
+                <p><a id="same-rule-target-wins" href="#target">Same rule target wins</a></p>
+                <p><a id="same-rule-literal-wins" href="#target">Same rule literal wins</a></p>
+                <p id="nth-child-case">
+                  <a id="nth-child-reference" class="ref" href="#target">Nth child</a>
+                </p>
+                <p id="nth-last-child-case">
+                  <a id="nth-last-child-reference" class="ref" href="#target">Nth last child</a>
+                </p>
+                <p><a id="media-reference" href="#target">Ineligible media</a></p>
+                <p id="conditional-content">
+                  <a class="ref" href="#target">Conditional ordinary content</a>
+                </p>
+                <h2 id="target">Target text</h2>
+              </article>
+            `,
+          },
+          { css: [css] },
+        );
+        const ready = await controller.ready;
+        const frame = ready.iframe.contentDocument;
+        const frameWindow = ready.iframe.contentWindow;
+        if (frame === null || frameWindow === null) throw new Error("Missing canonical frame.");
+        const inspect = (selector: string) => {
+          const element = frame.querySelector<HTMLElement>(selector);
+          if (element === null) throw new Error(`Missing fixture: ${selector}`);
+          return {
+            markers: [...element.querySelectorAll<HTMLElement>("[data-imposia-generated]")].map(
+              (marker) => ({
+                kind: marker.getAttribute("data-imposia-generated"),
+                text: marker.textContent?.trim() ?? "",
+              }),
+            ),
+            afterContent: frameWindow.getComputedStyle(element, "::after").content,
+          };
+        };
+        return {
+          targetWins: inspect("#target-wins .ref"),
+          literalWins: inspect("#literal-wins .ref"),
+          importantLiteralWins: inspect("#important-literal-wins .ref"),
+          importantTargetWins: inspect("#important-target-wins .ref"),
+          sameRuleTargetWins: inspect("#same-rule-target-wins"),
+          sameRuleLiteralWins: inspect("#same-rule-literal-wins"),
+          nthChild: inspect("#nth-child-reference"),
+          nthLastChild: inspect("#nth-last-child-reference"),
+          ineligibleMedia: inspect("#media-reference"),
+          conditionalContent: inspect("#conditional-content .ref"),
+          warningCodes: ready.warnings.map((warning) => warning.code),
+        };
+      } finally {
+        await controller?.destroy();
+        host.replaceChildren();
+      }
+    });
+    const artifactPath = path.resolve(
+      ".omo/evidence/browser-publishing-coverage/content-cascade-observation.json",
+    );
+    await mkdir(path.dirname(artifactPath), { recursive: true });
+    await writeFile(artifactPath, `${JSON.stringify(observation, null, 2)}\n`, "utf8");
+
+    expect(observation).toEqual({
+      targetWins: {
+        markers: [{ kind: "target-counter", text: "1" }],
+        afterContent: "none",
+      },
+      literalWins: { markers: [], afterContent: '"LITERAL"' },
+      importantLiteralWins: { markers: [], afterContent: '"LITERAL"' },
+      importantTargetWins: {
+        markers: [{ kind: "target-counter", text: "1" }],
+        afterContent: "none",
+      },
+      sameRuleTargetWins: {
+        markers: [{ kind: "target-counter", text: "1" }],
+        afterContent: "none",
+      },
+      sameRuleLiteralWins: { markers: [], afterContent: '"LITERAL"' },
+      nthChild: {
+        markers: [{ kind: "target-counter", text: "1" }],
+        afterContent: "none",
+      },
+      nthLastChild: {
+        markers: [{ kind: "target-counter", text: "1" }],
+        afterContent: "none",
+      },
+      ineligibleMedia: { markers: [], afterContent: "none" },
+      conditionalContent: { markers: [], afterContent: '"MEDIA"' },
+      warningCodes: ["UNSUPPORTED_LAYOUT"],
+    });
   } finally {
     expect(errors).toEqual([]);
     expect(pageErrors).toEqual([]);

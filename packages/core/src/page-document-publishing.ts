@@ -34,6 +34,15 @@ export type PublishingCssRule =
       order: number;
     }>
   | Readonly<{
+      type: "content";
+      selector: string;
+      position: TargetPosition;
+      important: boolean;
+      specificity: SelectorSpecificity;
+      order: number;
+      blocksTarget: boolean;
+    }>
+  | Readonly<{
       type: "string";
       selector: string;
       name: string;
@@ -48,7 +57,7 @@ export type PublishingCssRule =
       order: number;
     }>;
 
-type TargetPublishingCssRule = Extract<PublishingCssRule, { readonly type: "target" }>;
+type ContentPublishingCssRule = Extract<PublishingCssRule, { readonly type: "target" | "content" }>;
 
 export interface ExtractedPublishingCss {
   readonly css: string;
@@ -177,6 +186,50 @@ function maxSpecificity(
   return compareSpecificity(left, right) >= 0 ? left : right;
 }
 
+function nthSelectorList(value: string): string | undefined {
+  let depth = 0;
+  let quote: string | undefined;
+  for (let index = 0; index < value.length; index += 1) {
+    const character = value[index] ?? "";
+    if (quote !== undefined) {
+      if (character === "\\") index += 1;
+      else if (character === quote) quote = undefined;
+      continue;
+    }
+    if (character === "/" && value[index + 1] === "*") {
+      const commentEnd = value.indexOf("*/", index + 2);
+      index = commentEnd === -1 ? value.length : commentEnd + 1;
+      continue;
+    }
+    if (character === '"' || character === "'") {
+      quote = character;
+      continue;
+    }
+    if (character === "\\") {
+      index += 1;
+      continue;
+    }
+    if (character === "(" || character === "[") {
+      depth += 1;
+      continue;
+    }
+    if (character === ")" || character === "]") {
+      depth = Math.max(0, depth - 1);
+      continue;
+    }
+    if (
+      depth === 0 &&
+      value.slice(index, index + 2).toLowerCase() === "of" &&
+      /\s/u.test(value[index - 1] ?? "") &&
+      /\s/u.test(value[index + 2] ?? "")
+    ) {
+      const selectors = value.slice(index + 2).trim();
+      return selectors === "" ? undefined : selectors;
+    }
+  }
+  return undefined;
+}
+
 function selectorSpecificity(selector: string): SelectorSpecificity {
   let ids = 0;
   let classes = 0;
@@ -236,6 +289,19 @@ function selectorSpecificity(selector: string): SelectorSpecificity {
             ids += argumentSpecificity[0];
             classes += argumentSpecificity[1];
             elements += argumentSpecificity[2];
+          } else if (name === "nth-child" || name === "nth-last-child") {
+            classes += 1;
+            const selectorList = nthSelectorList(selector.slice(nameEnd + 1, argumentEnd));
+            let argumentSpecificity: SelectorSpecificity = Object.freeze([0, 0, 0]);
+            for (const argument of splitSelectors(selectorList ?? "")) {
+              argumentSpecificity = maxSpecificity(
+                argumentSpecificity,
+                selectorSpecificity(argument),
+              );
+            }
+            ids += argumentSpecificity[0];
+            classes += argumentSpecificity[1];
+            elements += argumentSpecificity[2];
           } else if (name !== "where") classes += 1;
           index = end;
           continue;
@@ -264,9 +330,9 @@ function compareSpecificity(left: SelectorSpecificity, right: SelectorSpecificit
   return 0;
 }
 
-function targetRuleWins(
-  candidate: Pick<TargetPublishingCssRule, "important" | "specificity" | "order">,
-  current: Pick<TargetPublishingCssRule, "important" | "specificity" | "order">,
+function contentRuleWins(
+  candidate: Pick<ContentPublishingCssRule, "important" | "specificity" | "order">,
+  current: Pick<ContentPublishingCssRule, "important" | "specificity" | "order">,
 ): boolean {
   if (candidate.important !== current.important) return candidate.important;
   const specificity = compareSpecificity(candidate.specificity, current.specificity);
@@ -441,6 +507,26 @@ function unsupportedPublishingDeclaration(
   declaration.remove();
 }
 
+function unsupportedConditionalContent(
+  warnings: WarningCollector,
+  declaration: Declaration,
+  order: number,
+): void {
+  warnings.add(
+    {
+      code: "UNSUPPORTED_CSS_FEATURE",
+      message:
+        "Conditional pseudo-element content cannot be cascaded with generated publishing content.",
+      feature: "css-generated-publishing",
+      property: declaration.prop.toLowerCase(),
+      value: declaration.value.trim(),
+      recovery: "Generated publishing content was suppressed for matching pseudo-elements.",
+      sourceIndex: order,
+    },
+    order,
+  );
+}
+
 export function extractPublishingCss(
   css: string,
   startOrder: number,
@@ -450,10 +536,51 @@ export function extractPublishingCss(
   const rules: PublishingCssRule[] = [];
   let nextOrder = startOrder;
   root.walkRules((rule) => {
-    const declarations = rule.nodes.filter((node): node is Declaration => node.type === "decl");
+    let declarations = rule.nodes.filter((node): node is Declaration => node.type === "decl");
+    if (rule.parent?.type !== "root") {
+      for (const declaration of declarations) {
+        if (
+          declaration.prop.toLowerCase() === "content" &&
+          /\btarget-(?:counter|text)\s*\(/i.test(declaration.value)
+        ) {
+          unsupportedPublishingDeclaration(
+            warnings,
+            declaration,
+            declarationOrder(declaration, startOrder, nextOrder),
+          );
+        }
+      }
+      declarations = rule.nodes.filter((node): node is Declaration => node.type === "decl");
+    }
     const content = winningContentDeclaration(declarations);
     const generated = content === undefined ? undefined : targetKind(content.value);
-    const selectors = generated === undefined ? undefined : targetSelectors(rule.selector);
+    const selectors = content === undefined ? undefined : targetSelectors(rule.selector);
+    if (
+      content !== undefined &&
+      generated === undefined &&
+      selectors !== undefined &&
+      rule.parent?.type !== "root"
+    ) {
+      unsupportedConditionalContent(
+        warnings,
+        content,
+        declarationOrder(content, startOrder, nextOrder),
+      );
+      for (const target of selectors) {
+        rules.push(
+          Object.freeze({
+            type: "content",
+            selector: target.selector,
+            position: target.position,
+            important: content.important === true,
+            specificity: target.specificity,
+            order: declarationOrder(content, startOrder, nextOrder),
+            blocksTarget: true,
+          }),
+        );
+        nextOrder += 1;
+      }
+    }
     if (content !== undefined && generated !== undefined && selectors !== undefined) {
       const markerStyle = targetMarkerStyle(rule, content);
       for (const target of selectors) {
@@ -471,15 +598,37 @@ export function extractPublishingCss(
         );
         nextOrder += 1;
       }
-      rule.remove();
+      for (const node of [...rule.nodes]) {
+        if (node !== content) node.remove();
+      }
+      content.value = "none";
       return;
     }
-    if (content !== undefined && /\btarget-(?:counter|text)\s*\(/i.test(content.value)) {
+    if (
+      content !== undefined &&
+      content.parent !== undefined &&
+      /\btarget-(?:counter|text)\s*\(/i.test(content.value)
+    ) {
       unsupportedPublishingDeclaration(
         warnings,
         content,
         declarationOrder(content, startOrder, nextOrder),
       );
+    } else if (content !== undefined && selectors !== undefined && rule.parent?.type === "root") {
+      for (const target of selectors) {
+        rules.push(
+          Object.freeze({
+            type: "content",
+            selector: target.selector,
+            position: target.position,
+            important: content.important === true,
+            specificity: target.specificity,
+            order: declarationOrder(content, startOrder, nextOrder),
+            blocksTarget: false,
+          }),
+        );
+        nextOrder += 1;
+      }
     }
 
     let authoredFloat: "footnote" | "top" | "bottom" | undefined;
@@ -633,13 +782,14 @@ export function preparePublishingContent(
     element.removeAttribute("id");
   }
 
-  interface TargetCandidate {
-    readonly rule: TargetPublishingCssRule;
+  interface ContentCandidate {
+    readonly rule: ContentPublishingCssRule;
     readonly hostKey: string;
     readonly sourceOrder: number;
     readonly targetId: string | undefined;
   }
-  const targetWinners = new Map<string, TargetCandidate>();
+  const contentWinners = new Map<string, ContentCandidate>();
+  const blockedContentSlots = new Set<string>();
   const stringByElementAndName = new Map<string, StringBinding>();
   type PlacementState = {
     float: "footnote" | "top" | "bottom" | undefined;
@@ -648,20 +798,24 @@ export function preparePublishingContent(
   const placements = new Map<Element, PlacementState>();
   for (const rule of [...rules].sort((left, right) => left.order - right.order)) {
     const matches = matchingElements(root, rule.selector);
-    if (rule.type === "target") {
+    if (rule.type === "target" || rule.type === "content") {
       for (const element of matches) {
         const order = sourceOrder.get(element);
         if (order === undefined) continue;
         const slot = `${order}\u0000${rule.position}`;
+        if (rule.type === "content" && rule.blocksTarget) {
+          blockedContentSlots.add(slot);
+          continue;
+        }
         const candidate = Object.freeze({
           rule,
           hostKey: String(order),
           sourceOrder: order,
           targetId: anchorHref(element),
         });
-        const current = targetWinners.get(slot);
-        if (current === undefined || targetRuleWins(rule, current.rule)) {
-          targetWinners.set(slot, candidate);
+        const current = contentWinners.get(slot);
+        if (current === undefined || contentRuleWins(rule, current.rule)) {
+          contentWinners.set(slot, candidate);
         }
       }
       continue;
@@ -689,17 +843,22 @@ export function preparePublishingContent(
     }
   }
 
-  const targets: TargetBinding[] = [...targetWinners.values()].map((candidate, index) =>
-    Object.freeze({
-      key: `target-${index + 1}`,
-      hostKey: candidate.hostKey,
-      sourceOrder: candidate.sourceOrder,
-      position: candidate.rule.position,
-      kind: candidate.rule.kind,
-      targetId: candidate.targetId,
-      markerStyle: candidate.rule.markerStyle,
-    }),
-  );
+  const targets: TargetBinding[] = [];
+  for (const [slot, candidate] of contentWinners) {
+    if (blockedContentSlots.has(slot)) continue;
+    if (candidate.rule.type !== "target") continue;
+    targets.push(
+      Object.freeze({
+        key: `target-${targets.length + 1}`,
+        hostKey: candidate.hostKey,
+        sourceOrder: candidate.sourceOrder,
+        position: candidate.rule.position,
+        kind: candidate.rule.kind,
+        targetId: candidate.targetId,
+        markerStyle: candidate.rule.markerStyle,
+      }),
+    );
+  }
 
   for (const element of elements) {
     const order = sourceOrder.get(element);
