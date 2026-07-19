@@ -31,11 +31,18 @@ export function BookPreview() {
       <ImposiaPageViewer
         ref={handle}
         source={{ html: "<article><h1>Hello</h1></article>" }}
+        viewerOptions={{ mode: "spread", spread: { cover: true }, inspector: true }}
         onReady={(pageDocument) => console.log(pageDocument.pageCount)}
         onError={(error) => console.error(error)}
       />
       <button type="button" onClick={() => void handle.current?.print()}>
         Print
+      </button>
+      <button type="button" onClick={() => handle.current?.setMode("spread")}>
+        Spread
+      </button>
+      <button type="button" onClick={() => handle.current?.openInspector()}>
+        Diagnostics
       </button>
       <button
         type="button"
@@ -50,11 +57,117 @@ export function BookPreview() {
 
 The handle always delegates to the current Core generation. `current` becomes
 `undefined` after unmount; `print()` and `exportEpub()` reject after disposal.
+`setMode()` switches between continuous, single, and spread presentation, while
+`setSpreadCover()` changes whether page 1 stands alone. Both actions target the
+mounted page Viewer and retain its canonical iframe and Core generation.
 `ImposiaDocumentHandle` is the same public handle type when using
 `ImposiaDocument`.
 `print()` invokes the canonical iframe's native `Window.print()` so the browser
 can offer Save as PDF. `exportEpub()` returns a reflowable `application/epub+zip`
 Blob from semantic source, not a fixed-layout EPUB or PDF bytes.
+
+Set `viewerOptions.inspector` to `true` to mount the diagnostics panel. The
+handle exposes `openInspector()`, `closeInspector()`, `toggleInspector()`, and
+`selectWarning()`. Pass a warning from `handle.current.current.warnings`; a
+warning from a replaced generation is rejected. The same methods are available
+on `ImposiaPublicationViewerHandle`. Changing the `inspector` option remounts
+only the Viewer presentation controls and preserves the current page, requested
+mode, Core generation, and canonical iframe. Replacement options are validated
+before teardown; an invalid combined Inspector/theme or Reader change reports
+through `onError` while the prior Viewer remains usable.
+
+## Ordered Publication component
+
+`ImposiaPublicationViewer` mounts the Core Publication controller and presents
+its canonical iframe through Viewer. Its handle exposes the current committed
+Publication, shared-outline navigation, print, and ordered EPUB export:
+
+```tsx
+import {
+  ImposiaPublicationViewer,
+  type ImposiaPublicationViewerHandle,
+  type PublicationSnapshot,
+} from "@imposia/react";
+import { useRef } from "react";
+
+const snapshot: PublicationSnapshot = {
+  metadata: { title: "Field Notes", language: "en" },
+  entries: [
+    { id: "cover", title: "Cover", html: "<h1>Field Notes</h1>" },
+    { id: "chapter", title: "Chapter", html: "<h1>First chapter</h1>" },
+  ],
+};
+
+export function PublicationPreview() {
+  const handle = useRef<ImposiaPublicationViewerHandle>(null);
+  return (
+    <>
+      <ImposiaPublicationViewer
+        ref={handle}
+        snapshot={snapshot}
+        viewerOptions={{ mode: "spread", spread: { cover: true }, inspector: true }}
+        readerOptions={{
+          initialDeepLink: location.hash.slice(1),
+          onDeepLinkChange: (value) =>
+            history.replaceState(
+              null,
+              "",
+              value === undefined ? `${location.pathname}${location.search}` : `#${value}`,
+            ),
+        }}
+        onReady={(publication) => console.log(publication.outline)}
+      />
+      <button
+        type="button"
+        onClick={() => {
+          const destination = handle.current?.current?.outline[1]?.destination;
+          if (destination !== undefined) handle.current?.navigate(destination);
+        }}
+      >
+        Open chapter
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          const result = handle.current?.search("first chapter")[0];
+          if (result !== undefined) handle.current?.selectSearchResult(result);
+        }}
+      >
+        Find chapter text
+      </button>
+    </>
+  );
+}
+```
+
+For custom presentation, `useImposiaPublication({ snapshot })` returns
+`hostRef`, `state`, and the current Core `controller`. Snapshot reference changes
+call `controller.update()` and keep the previous committed Publication visible
+while the next one stages. Use `snapshotRevision` to intentionally reprocess an
+otherwise identical snapshot. `publicationOptions` are fixed for one controller
+lifetime; increment `publicationOptionsRevision` to replace the controller when
+resolver, limit, page, or progress configuration changes.
+
+The Publication component automatically connects Viewer's Reader to its owned
+Core controller. The handle can call `openTableOfContents()`,
+`closeTableOfContents()`, `toggleTableOfContents()`, and `restoreDeepLink()`.
+Its `navigate()` method follows the same Reader path as a table-of-contents
+selection, keeping the Viewer page and deep-link callback in sync.
+The same handle exposes `openSearch()`, `closeSearch()`, `toggleSearch()`,
+`search()`, `previousSearchResult()`, `nextSearchResult()`, and
+`selectSearchResult()`. Search results always belong to the current controller
+and committed snapshot, and navigate through the owned Reader controller. A
+controller replacement rejects results retained from the previous controller.
+For page previews, the handle exposes `openThumbnails()`, `closeThumbnails()`,
+`toggleThumbnails()`, `getThumbnails()`, and `selectThumbnail()`. The returned
+immutable models describe the current committed pages only. Selection moves the
+existing Viewer to the exact global page without another iframe, raster pass, or
+pagination pass.
+
+Strict Mode cleanup and overlapping snapshot replacements are latest-only: stale
+ready/error callbacks do not publish stale `current` or outline state, and a
+replacement does not add another canonical iframe. Unmount destroys the
+controller and releases both canonical and staging resources.
 
 ## Theme CSS
 
@@ -62,6 +175,20 @@ Load a consumer theme after `@imposia/react/styles.css` and override the public
 `--imposia-viewer-*` properties on `.imposia-viewer`. This makes themes
 independently packageable and instance-scoped without adding a React or Core
 lifecycle. See the [Viewer theme-module contract](../../packages/viewer/README.md#theme-modules).
+
+For a runtime theme, pass custom-property tokens through `viewerOptions`:
+
+```tsx
+<ImposiaPageViewer
+  source={{ html }}
+  viewerOptions={{
+    theme: { "--imposia-viewer-color-accent": "#8b6cff" },
+  }}
+/>
+```
+
+Treat the theme object as immutable. A new object identity updates the mounted
+Viewer without remounting Core or the canonical iframe.
 
 ## Hook for custom React presentation
 

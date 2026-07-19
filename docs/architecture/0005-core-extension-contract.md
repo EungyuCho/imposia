@@ -15,7 +15,7 @@ The runtime exports `PageExtension` and accepts an immutable ordered `extensions
 | Options are snapshotted once when the controller mounts; `update()` accepts only a source and abort signal. | `packages/core/src/page-document.ts` calls `snapshotSettings()` before the first generation; `packages/core/src/page-document-types.ts` defines `update(source, { signal? })`. | The extension list must be immutable for the controller lifetime, rather than silently changing between generations. |
 | Sanitization, decoration extraction, asset resolution, final frame sanitization, fragmentation, and warning assembly are one `buildGeneration()` operation. | `packages/core/src/page-document-generation.ts` performs those steps in that order and only then returns a committed generation. | Every extension phase needs a named position inside this operation and must remain inside its abort/error/rollback boundary. |
 | The asset resolver is the only admitted resource boundary; authored URLs never reach the frame and Core-created blobs are revoked on replacement, failure, and destruction. | `packages/core/src/page-document-assets.ts`, `packages/core/src/page-document-sanitize.ts`, and `packages/core/src/page-document.ts`; browser asset tests assert no authored network requests or frame URLs. | An asset extension may only allow or block a discovered request before the host resolver. It may not fetch, return bytes, rewrite to an arbitrary frame URL, or retain Core blobs. |
-| Page decorations are copied while each page is created, and page-number tokens resolve only after the final page count is known. | `createPage()` and `resolveDecorationTokens()` in `packages/core/src/page-document-generation.ts`. | Decoration output must be supplied while a page is allocated, then be sanitized and token-resolved by Core. A post-pagination DOM hook would invalidate page metadata and layout. |
+| Page decorations are added after Core accepts the generation's final page set, and page-number tokens resolve before the document is committed. | `decoratePage()` and `resolveDecorationTokens()` in `packages/core/src/page-document-generation.ts`. | A decorator can select a page from the immutable current and total page numbers, but it cannot mutate the page DOM or trigger another pagination pass. |
 | Page warnings are a frozen, fixed union assembled from Core and resource results. | `packages/core/src/page-document-types.ts` and `pageWarnings()` in `packages/core/src/page-document-sanitize.ts`. | Extension warnings need an explicit namespaced type and deterministic merge rule; arbitrary mutation of `PageDocument.warnings` is not safe. |
 | `decorateBlankPages` defaults to `true`; setting it to `false` leaves inserted blank-page header and footer wrappers empty. | `packages/core/src/page-document-generation.ts` and `tests/e2e/browser-core-breaks.spec.ts`. | Extension decorators follow the same blank-page policy as base decorations. |
 
@@ -52,6 +52,7 @@ interface PageExtensionAssetRequest {
 
 interface PageExtensionPage {
   readonly number: number;
+  readonly totalPages: number;
   readonly side: "left" | "right";
   readonly blank: boolean;
 }
@@ -64,6 +65,7 @@ interface PageExtensionDecoration {
 interface PageExtensionContext {
   readonly signal: AbortSignal;
   warn(warning: PageExtensionWarning): void;
+  onCleanup(cleanup: () => void): void;
 }
 
 interface PageExtension {
@@ -80,13 +82,42 @@ interface PageExtension {
   ): PageExtensionDecoration | undefined;
 }
 
+interface PublicationExtension {
+  readonly name: string;
+  transformEntry?(
+    input: {
+      readonly html: string;
+      readonly css: readonly string[];
+      readonly publication: {
+        readonly title: string;
+        readonly language: string | undefined;
+        readonly identifier: string | undefined;
+        readonly entryCount: number;
+      };
+      readonly entry: {
+        readonly id: string;
+        readonly title: string;
+        readonly index: number;
+        readonly totalEntries: number;
+        readonly baseUrl: string | undefined;
+      };
+    },
+    context: PageExtensionContext,
+  ): PageExtensionTransformOutput | undefined | Promise<PageExtensionTransformOutput | undefined>;
+  allowAsset?(request: PageExtensionAssetRequest, context: PageExtensionContext): boolean;
+  decoratePage?(
+    page: PageExtensionPage,
+    context: PageExtensionContext,
+  ): PageExtensionDecoration | undefined;
+}
+
 interface PageDocumentOptions {
   // Existing options ...
   extensions?: readonly PageExtension[];
 }
 ```
 
-`PageWarningCode` includes `PageExtensionWarningCode`, and the frozen result warning includes `extension: string` for these extension-originated warnings. Core-originated warning shapes and codes remain unchanged. A warning emitted by an extension is document-level (`sourceIdentity: undefined`); extensions do not receive mutable source nodes or invent Core source identities. The warning code must start with `EXTENSION_`, be nonempty after that prefix, and be unique per extension generation after the `(extension name, code)` pair is deduplicated. Extension order, then call order, determines their position after Core's deterministic warnings.
+`PageWarningCode` includes `PageExtensionWarningCode`, and the frozen result warning includes `extension: string` for these extension-originated warnings. Every committed warning also has the standard frozen `location`; Core supplies its generation. A `transformEntry` warning receives the current entry ID, a `decoratePage` warning receives the current global page, and document or asset-policy warnings keep both fields explicitly `undefined`. Extension warnings remain `sourceIdentity: undefined`; extensions do not receive mutable source nodes or invent Core source identities. The warning code must start with `EXTENSION_`, be nonempty after that prefix, and is deduplicated by extension, code, entry, and page. Extension order, then call order, determines their position after Core's deterministic warnings.
 
 ## Required execution order
 
@@ -94,17 +125,22 @@ For a generation, Core copies and validates the source first, snapshots and vali
 
 Core then performs its existing document preparation and decoration extraction. During asset discovery, every `allowAsset` policy runs serially in declaration order. All policies must return `true` before the existing host `assetResolver` is invoked. A `false` result has the existing blocked-resource outcome: no resolver call, no authored URL in the frame, and the generic `RESOURCE_BLOCKED` warning. Policy reasons are intentionally not exposed, so a host policy cannot leak credentials or sensitive URL information through the result.
 
-During page allocation, Core invokes `decoratePage` in declared order before it measures and fragments that page. Core appends returned header/footer snippets in extension order after the base Core decoration. It runs the same structural and URL sanitizer used for normal decorations; it resolves the existing page-number tokens only after the total page count is final. Decorators run for blank pages only when the completed `decorateBlankPages` behavior says decorations are enabled. No decorator runs after `PageDocument` metadata has been measured.
+Before a transform callback, Core removes executable markup and normalizes CSS in a copied input. For a Publication, Core never passes the composed source to an extension. It invokes `transformEntry` serially for each sanitized copied entry, with frozen Publication metadata and frozen entry metadata. Core then re-limits each output, composes the entries itself, restores its private markers, re-applies the whole-snapshot limit, and runs the ordinary sanitizer and resolver pipeline again. A Publication extension cannot declare PageDocument `transform`; a PageDocument extension cannot declare `transformEntry`.
+
+After pagination accepts the generation's final page set, Core invokes `decoratePage` in declared order for every allocated page. The immutable page snapshot includes `number`, `totalPages`, `side`, and `blank`; `number === totalPages` selects the final physical page. Core appends returned header/footer snippets in extension order after the base Core decoration. It runs the same structural and URL sanitizer used for normal decorations and then resolves the existing page-number tokens. Decorators run for blank pages only when the completed `decorateBlankPages` behavior says decorations are enabled. No decorator runs after `PageDocument` metadata has been measured, and decoration output does not trigger another pagination pass.
 
 Before and after every asynchronous transform, Core checks the generation abort signal. An extension throw, invalid output, duplicate name, or invalid warning rejects that generation exactly like another generation error; it never partially commits a frame. Any assets created by the generation still use the present rollback and URL-revocation path.
+
+`context.onCleanup()` registers synchronous generation-scoped cleanup. Core runs callbacks in reverse registration order after successful work and after failure, abort, supersession, or destroy cancellation. Thrown extension callbacks and cleanup callbacks reject with `ImposiaError.code === "EXTENSION_FAILED"`; abort continues to reject with `AbortError`. Cleanup cannot retain or receive a Core resource.
 
 ## Deliberate exclusions
 
 - No `iframe`, `Document`, `Element`, `PageDocument`, or mutable warning array is handed to an extension.
 - No `resolveAsset`, network, file, worker, timer ownership, custom CSP, direct stylesheet injection, or blob-URL API is exposed.
+- No composed Publication source, private entry marker, resolver result, raw committed content, or mutable lifecycle object is exposed.
 - An extension cannot replace the host `assetResolver`, increase limits, modify warning severity, intercept `print()`, or affect controller update/destroy semantics.
 - There are no arbitrary `before`/`after` hooks, priority sorting, command registry, editor state, or extension storage in v1. Option order is the sole composition rule.
-- Page decorators do not receive `totalPages`; use Core's `{{totalPages}}` token instead. This prevents a speculative first pagination pass or a post-layout mutation that changes layout.
+- Page decorators receive the frozen `totalPages` for the accepted generation, not a live or speculative count. Use `{{totalPages}}` inside returned markup when Core should render the value as text.
 
 ## Verification evidence
 
@@ -112,7 +148,7 @@ The browser-Core extension suites prove all of the following:
 
 1. Transform order is stable, outputs are re-sanitized and re-limited, aborting a transform leaves the previous canonical generation intact, and no extension configuration changes across `update()`.
 2. Asset policies run before the resolver, a denial makes no resolver or browser request, policies cannot introduce authored URLs, and generated blobs are revoked after failed and superseded generations.
-3. Header/footer snippets affect layout only through normal page allocation; page-number and total-page tokens resolve on ordinary and blank pages according to `decorateBlankPages`; a decorator cannot mutate a committed page.
+3. Decorators receive immutable current and total page numbers, can select a last-page-only footer, and resolve page-number tokens on ordinary and blank pages according to `decorateBlankPages`; a decorator cannot mutate a committed page.
 4. Extension warnings are frozen, namespaced, deduplicated, deterministic across identical runs, and cannot reorder or suppress Core warnings.
 5. Duplicate names, invalid output, invalid warning codes, and thrown extension callbacks reject atomically with no console errors, retained blobs, or partially committed pages.
 
