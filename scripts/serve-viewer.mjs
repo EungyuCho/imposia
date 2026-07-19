@@ -1,9 +1,10 @@
-import { createReadStream, statSync } from "node:fs";
+import { createReadStream, realpathSync, statSync } from "node:fs";
 import { createServer } from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const realRoot = realpathSync(root);
 const port = Number(process.env.PORT ?? 4178);
 const contentTypes = new Map([
   [".css", "text/css; charset=utf-8"],
@@ -16,12 +17,21 @@ const contentTypes = new Map([
 ]);
 
 function resolveRequest(requestUrl) {
-  const url = new URL(requestUrl, `http://127.0.0.1:${port}`);
-  const pathname = decodeURIComponent(url.pathname);
-  const requested = pathname.endsWith("/") ? `${pathname}index.html` : pathname;
-  const file = path.resolve(root, `.${requested}`);
-  if (file !== root && !file.startsWith(`${root}${path.sep}`)) return undefined;
-  return { file, delayMs: Math.min(Number(url.searchParams.get("delay") ?? 0), 2_000) };
+  try {
+    const url = new URL(requestUrl, `http://127.0.0.1:${port}`);
+    const pathname = decodeURIComponent(url.pathname);
+    const requested = pathname.endsWith("/") ? `${pathname}index.html` : pathname;
+    const file = path.resolve(root, `.${requested}`);
+    if (file !== root && !file.startsWith(`${root}${path.sep}`)) return undefined;
+    return { file, delayMs: Math.min(Number(url.searchParams.get("delay") ?? 0), 2_000) };
+  } catch {
+    return null;
+  }
+}
+
+function isWithinRoot(file) {
+  const realFile = realpathSync(file);
+  return realFile !== realRoot && realFile.startsWith(`${realRoot}${path.sep}`);
 }
 
 const server = createServer((request, response) => {
@@ -39,6 +49,10 @@ const server = createServer((request, response) => {
     return;
   }
   const resolved = resolveRequest(request.url);
+  if (resolved === null) {
+    response.writeHead(400).end("Bad request");
+    return;
+  }
   if (resolved === undefined) {
     response.writeHead(403).end("Forbidden");
     return;
@@ -46,6 +60,10 @@ const server = createServer((request, response) => {
 
   const send = () => {
     try {
+      if (!isWithinRoot(resolved.file)) {
+        response.writeHead(403).end("Forbidden");
+        return;
+      }
       const stats = statSync(resolved.file);
       if (!stats.isFile()) throw new Error("Not a file");
       response.writeHead(200, {

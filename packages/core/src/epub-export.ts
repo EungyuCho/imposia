@@ -21,6 +21,7 @@ const EPUB_MIME_TYPE = "application/epub+zip";
 const DEFAULT_MODIFIED = "1970-01-01T00:00:00Z";
 const INTERNAL_MAX_ENTRIES = 4096;
 const INTERNAL_MAX_BYTES = 256 * 1024 * 1024;
+const FIXED_EPUB_ENTRY_COUNT = 6;
 const XHTML_NAMESPACE = "http://www.w3.org/1999/xhtml";
 const EPUB_NAMESPACE = "http://www.idpf.org/2007/ops";
 const XML_NAMESPACE = "http://www.w3.org/XML/1998/namespace";
@@ -71,6 +72,10 @@ function invalidLimits(message: string): ImposiaError {
 
 function invalidResource(message: string): ImposiaError {
   return new ImposiaError("INVALID_EPUB_RESOURCE", message);
+}
+
+function archiveLimit(message: string): ImposiaError {
+  return new ImposiaError("EPUB_ARCHIVE_LIMIT", message);
 }
 
 function releasedDocumentError(): Error {
@@ -347,11 +352,17 @@ function equalBytes(left: Uint8Array, right: Uint8Array): boolean {
 async function collectAssets(
   pageDocument: PageDocument,
   snapshot: PageSemanticSnapshot,
+  limits: Required<EpubExportLimits>,
   signal: AbortSignal | undefined,
 ): Promise<Readonly<{ assets: readonly EpubAsset[]; blobHrefs: ReadonlyMap<string, string> }>> {
+  if (limits.maxEntries < FIXED_EPUB_ENTRY_COUNT) {
+    throw archiveLimit("EPUB archive entry limit exceeded.");
+  }
   const assets: EpubAsset[] = [];
   const blobHrefs = new Map<string, string>();
   const dedupe = new Map<string, EpubAsset[]>();
+  let retainedAssetCount = 0;
+  let retainedAssetBytes = 0;
   for (const retained of snapshot.assets) {
     throwIfAborted(signal);
     requireSnapshot(pageDocument, snapshot);
@@ -361,6 +372,17 @@ async function collectAssets(
     if (extension === undefined) {
       throw invalidResource(`Unsupported retained EPUB media type: ${mediaType || "unknown"}`);
     }
+    retainedAssetCount += 1;
+    if (retainedAssetCount + FIXED_EPUB_ENTRY_COUNT > limits.maxEntries) {
+      throw archiveLimit("EPUB archive entry limit exceeded.");
+    }
+    if (
+      !Number.isSafeInteger(retained.bytes.size) ||
+      retained.bytes.size > limits.maxBytes - retainedAssetBytes
+    ) {
+      throw archiveLimit("EPUB archive byte limit exceeded.");
+    }
+    retainedAssetBytes += retained.bytes.size;
     const buffer = await awaitWithAbort(retained.bytes.arrayBuffer(), signal);
     requireSnapshot(pageDocument, snapshot);
     const bytes = new Uint8Array(buffer);
@@ -612,7 +634,7 @@ export async function exportPageDocumentEpub(
   const metadata = validateMetadata(input.metadata as EpubMetadata | undefined);
   const limits = validateLimits(input.limits);
   const snapshot = requireSnapshot(pageDocument);
-  const collected = await collectAssets(pageDocument, snapshot, signal);
+  const collected = await collectAssets(pageDocument, snapshot, limits, signal);
   throwIfAborted(signal);
   requireSnapshot(pageDocument, snapshot);
   const content = sanitizeContentDocument(snapshot, metadata, collected.blobHrefs);
