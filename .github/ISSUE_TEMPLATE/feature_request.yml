@@ -1,0 +1,43 @@
+name: Feature request
+description: Propose a browser publishing capability with a concrete user outcome.
+title: "feature: "
+labels:
+  - needs-triage
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Imposia intentionally distinguishes Stable, Constrained, Experimental,
+        and Unsupported behavior. Describe the publishing outcome rather than a
+        competitor implementation or internal design.
+  - type: dropdown
+    id: package
+    attributes:
+      label: Primary package
+      options:
+        - "@imposia/core"
+        - "@imposia/client"
+        - "@imposia/react"
+        - "@imposia/viewer"
+        - Documentation or examples
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Publishing problem
+      description: What cannot be expressed or observed today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed outcome
+      description: Describe the public behavior, limits, and expected warning or fallback behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Include existing browser APIs, native print, or the documented supported subset when relevant.

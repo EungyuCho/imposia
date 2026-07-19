@@ -1,0 +1,66 @@
+name: Bug report
+description: Report a reproducible behavior that differs from Imposia's documented contract.
+title: "bug: "
+labels:
+  - needs-triage
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please check the compatibility matrix before filing. Chromium is the
+        structural-pagination reference; browser API, isolation, lifecycle,
+        print, cleanup, and EPUB behavior are cross-browser contracts.
+  - type: dropdown
+    id: package
+    attributes:
+      label: Package
+      options:
+        - "@imposia/core"
+        - "@imposia/client"
+        - "@imposia/react"
+        - "@imposia/viewer"
+        - Demo or documentation
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Imposia version
+      placeholder: "0.1.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: browser
+    attributes:
+      label: Browser and version
+      options:
+        - Chromium / Chrome
+        - Firefox
+        - Safari / WebKit
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: Include the smallest HTML/CSS/source and mounting code that shows the behavior. Do not include private content or credentials.
+      placeholder: |
+        import { mountPageDocument } from "@imposia/core";
+        // minimal source, options, and observed result
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: Link or quote the relevant documented contract when possible.
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: Include warnings, errors, or screenshots only after removing sensitive document content.
+    validations:
+      required: true
