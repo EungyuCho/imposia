@@ -1,6 +1,11 @@
 import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { auditPackageArtifact, type PublishableManifest } from "./license-package-audit.ts";
+import {
+  hasReviewedPackageLicense,
+  inheritedLicenseForReviewedPackage,
+  type PackageLicensePolicyItem,
+} from "./license-policy.ts";
 
 const pnpmRoot = path.resolve("node_modules/.pnpm");
 const reportPath = path.resolve("artifacts/evidence/licenses.json");
@@ -15,57 +20,7 @@ const allowedLicenses = new Set([
   "MIT OR Apache-2.0",
   "Unlicense",
 ]);
-const reviewedPackageLicenses = [
-  {
-    names: ["caniuse-lite"],
-    version: "1.0.30001806",
-    license: "CC-BY-4.0",
-    repositoryUrl: "browserslist/caniuse-lite",
-  },
-  {
-    names: [
-      "lightningcss",
-      "lightningcss-android-arm64",
-      "lightningcss-darwin-arm64",
-      "lightningcss-darwin-x64",
-      "lightningcss-freebsd-x64",
-      "lightningcss-linux-arm-gnueabihf",
-      "lightningcss-linux-arm64-gnu",
-      "lightningcss-linux-arm64-musl",
-      "lightningcss-linux-x64-gnu",
-      "lightningcss-linux-x64-musl",
-      "lightningcss-win32-arm64-msvc",
-      "lightningcss-win32-x64-msvc",
-    ],
-    version: "1.32.0",
-    license: "MPL-2.0",
-    repositoryUrl: "https://github.com/parcel-bundler/lightningcss.git",
-  },
-  {
-    names: [
-      "@img/sharp-libvips-darwin-arm64",
-      "@img/sharp-libvips-darwin-x64",
-      "@img/sharp-libvips-linux-arm",
-      "@img/sharp-libvips-linux-arm64",
-      "@img/sharp-libvips-linux-ppc64",
-      "@img/sharp-libvips-linux-riscv64",
-      "@img/sharp-libvips-linux-s390x",
-      "@img/sharp-libvips-linux-x64",
-      "@img/sharp-libvips-linuxmusl-arm64",
-      "@img/sharp-libvips-linuxmusl-x64",
-    ],
-    version: "1.2.4",
-    license: "LGPL-3.0-or-later",
-    repositoryUrl: "git+https://github.com/lovell/sharp-libvips.git",
-  },
-] as const;
-
-interface PackageLicense {
-  name: string;
-  version: string;
-  license: string;
-  repositoryUrl: string | undefined;
-}
+type PackageLicense = PackageLicensePolicyItem;
 
 interface MissingPackageLicense {
   directory: string;
@@ -86,16 +41,6 @@ function repositoryUrl(value: unknown): string | undefined {
   if (typeof value === "string") return value;
   if (!isRecord(value) || typeof value.url !== "string") return undefined;
   return value.url;
-}
-
-function hasReviewedPackageLicense(item: PackageLicense): boolean {
-  return reviewedPackageLicenses.some(
-    (review) =>
-      review.names.some((name) => name === item.name) &&
-      item.version === review.version &&
-      item.license === review.license &&
-      item.repositoryUrl === review.repositoryUrl,
-  );
 }
 
 async function directories(directory: string): Promise<string[]> {
@@ -176,17 +121,14 @@ async function main(): Promise<void> {
   }
   for (const manifest of missingLicenses) {
     const parent = packages.get(`yuku-analyzer@${manifest.version}`);
-    if (
-      !manifest.name.startsWith("@yuku-analyzer/binding-") ||
-      manifest.repositoryUrl !== "https://github.com/yuku-toolchain/yuku" ||
-      parent?.license !== "MIT"
-    ) {
+    const inheritedLicense = inheritedLicenseForReviewedPackage(manifest, parent);
+    if (inheritedLicense === undefined) {
       throw new Error(`Missing name, version, or SPDX license in ${manifest.directory}.`);
     }
     packages.set(`${manifest.name}@${manifest.version}`, {
       name: manifest.name,
       version: manifest.version,
-      license: parent.license,
+      license: inheritedLicense,
       repositoryUrl: manifest.repositoryUrl,
     });
   }
