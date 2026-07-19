@@ -119,6 +119,148 @@ test("prints the newest canonical iframe and preserves current after a failed up
   }
 });
 
+test("waits for one winning update before native print and semantic EPUB export", async ({
+  page,
+  browserName,
+}) => {
+  test.skip(browserName !== "chromium", "Concurrent publishing timing is Chromium-focused.");
+  const { errors, pageErrors } = captureBrowserErrors(page, browserName);
+
+  await page.goto("/examples/book.html");
+  try {
+    const observation = await page.evaluate(async () => {
+      type PageDocument = {
+        iframe: HTMLIFrameElement;
+        generation: number;
+        exportEpub(options: {
+          metadata: { title: string; language: string; identifier: string; modified: string };
+        }): Promise<Blob>;
+      };
+      type Controller = {
+        ready: Promise<PageDocument>;
+        update(source: { html: string }): Promise<PageDocument>;
+        print(): Promise<void>;
+        destroy(): Promise<void>;
+      };
+      const core = (await import("/packages/core/dist/index.js")) as {
+        mountPageDocument(
+          container: HTMLElement,
+          source: { html: string },
+          options: {
+            assetResolver(request: { url: string; signal: AbortSignal }): Promise<{
+              status: "resolved";
+              bytes: Uint8Array;
+              mimeType: string;
+            }>;
+          },
+        ): Controller;
+      };
+      const host = document.body.appendChild(document.createElement("div"));
+      const png = Uint8Array.from(
+        atob(
+          "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
+        ),
+        (character) => character.charCodeAt(0),
+      );
+      let releaseResolver: (() => void) | undefined;
+      let markResolverStarted: (() => void) | undefined;
+      const resolverStarted = new Promise<void>((resolve) => {
+        markResolverStarted = resolve;
+      });
+      let controller: Controller | undefined;
+      try {
+        controller = core.mountPageDocument(
+          host,
+          { html: "<p>OLD simultaneous publishing content</p>" },
+          {
+            assetResolver: async ({ url, signal }) => {
+              if (url === "new.png") {
+                markResolverStarted?.();
+                await new Promise<void>((resolve, reject) => {
+                  releaseResolver = resolve;
+                  signal.addEventListener(
+                    "abort",
+                    () => reject(new DOMException("aborted", "AbortError")),
+                    { once: true },
+                  );
+                });
+              }
+              return { status: "resolved", bytes: png, mimeType: "image/png" };
+            },
+          },
+        );
+        const oldDocument = await controller.ready;
+        const frameWindow = oldDocument.iframe.contentWindow;
+        if (frameWindow === null) throw new Error("Missing canonical iframe window.");
+        const originalPrint = frameWindow.print;
+        const printedTexts: string[] = [];
+        Object.defineProperty(frameWindow, "print", {
+          configurable: true,
+          writable: true,
+          value: () => printedTexts.push(frameWindow.document.body.textContent ?? ""),
+        });
+        try {
+          const update = controller.update({
+            html: '<p>NEW simultaneous publishing content</p><img src="new.png">',
+          });
+          await resolverStarted;
+          let printSettled = false;
+          let exportSettled = false;
+          const print = controller.print().then(() => {
+            printSettled = true;
+          });
+          const exportEpub = oldDocument
+            .exportEpub({
+              metadata: {
+                title: "Concurrent publishing",
+                language: "en",
+                identifier: "urn:imposia:concurrent-publishing",
+                modified: "2026-07-19T00:00:00Z",
+              },
+            })
+            .then(async (blob) => {
+              exportSettled = true;
+              return new TextDecoder().decode(new Uint8Array(await blob.arrayBuffer()));
+            });
+          await new Promise((resolve) => setTimeout(resolve, 20));
+          const pendingBeforeCommit = !printSettled && !exportSettled;
+          releaseResolver?.();
+          const winner = await update;
+          await print;
+          const epubText = await exportEpub;
+          return {
+            pendingBeforeCommit,
+            winnerGeneration: winner.generation,
+            printedTexts,
+            epubText,
+          };
+        } finally {
+          Object.defineProperty(frameWindow, "print", {
+            configurable: true,
+            writable: true,
+            value: originalPrint,
+          });
+        }
+      } finally {
+        releaseResolver?.();
+        await controller?.destroy();
+        host.remove();
+      }
+    });
+
+    expect(observation.pendingBeforeCommit).toBe(true);
+    expect(observation.winnerGeneration).toBe(2);
+    expect(observation.printedTexts).toHaveLength(1);
+    expect(observation.printedTexts[0]).toContain("NEW simultaneous publishing content");
+    expect(observation.printedTexts[0]).not.toContain("OLD simultaneous publishing content");
+    expect(observation.epubText).toContain("NEW simultaneous publishing content");
+    expect(observation.epubText).not.toContain("OLD simultaneous publishing content");
+  } finally {
+    expect(errors).toEqual([]);
+    expect(pageErrors).toEqual([]);
+  }
+});
+
 test("keeps failed initial generations atomic and rejects print without current", async ({
   page,
   browserName,
