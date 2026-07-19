@@ -19,7 +19,6 @@ type DemoSample = Readonly<{
   title: string;
   summary: string;
   html: string;
-  documentOptions?: Pick<PageDocumentOptions, "css" | "page" | "experimental">;
 }>;
 
 const documentStyle = `
@@ -134,10 +133,8 @@ const publishingDocumentCss = `
   .publishing-reference { color: #c9532c; font-weight: 700; }
   .publishing-reference::after { margin-left: 4px; color: #66706c; }
   .publishing-reference-text::before { margin-right: 4px; color: #66706c; }
-  .publishing-footnote { float: footnote; font-size: 9px; }
+  .publishing-footnote { font-size: 9px; }
   .publishing-float {
-    float: top;
-    float-reference: page;
     margin: 18px 0;
     padding: 10px 12px;
     border: 1px solid #cfc5b4;
@@ -161,6 +158,11 @@ const publishingDocumentCss = `
   h1, h2, h3 { string-set: running-head content; }
   .publishing-reference::after { content: target-counter(attr(href), page); }
   .publishing-reference-text::before { content: target-text(attr(href), content); }
+`;
+
+const publishingPlacementCss = `
+  .publishing-footnote { float: footnote; }
+  .publishing-float { float: top; float-reference: page; }
 `;
 
 const publishingRows = [
@@ -301,6 +303,7 @@ const samples: Record<SampleId, DemoSample> = {
     summary:
       "A4 landscape rules, local references, repeated table heads, and opt-in publishing features.",
     html: `
+      <style>${publishingDocumentCss}</style>
       <article class="publishing-document">
         <p class="publishing-kicker">Imposia / publishing lab / contract specimen</p>
         <h1>Pages that carry their own evidence</h1>
@@ -314,7 +317,7 @@ const samples: Record<SampleId, DemoSample> = {
           <strong>Page-float probe.</strong> This bounded callout opts into page-referenced top placement.
         </aside>
         <h2 id="geometry">Geometry is an authored contract</h2>
-        <p>The host options pin A4 landscape with four named margins. The page rules below add first, left, and right furniture while the running head follows the latest named section.</p>
+        <p>The authored page rules pin A4 landscape with four named margins. First, left, and right furniture follow the latest named section.</p>
         <p>Read the <a class="publishing-reference" href="#table-title">table page</a> and <a class="publishing-reference-text" href="#table-title">table heading</a> through safe local fragments.</p>
         <h2 id="table-title">A repeated table head</h2>
         <table class="publishing-table">
@@ -327,30 +330,6 @@ const samples: Record<SampleId, DemoSample> = {
         <p class="publishing-support"><strong>Manual QA cue</strong> Check the Sheet metric, the top and bottom furniture, repeated table headings, the two local references, and the explicit support labels above.</p>
       </article>
     `,
-    documentOptions: {
-      css: [publishingDocumentCss],
-      page: {
-        size: "A4",
-        orientation: "landscape",
-        margin: { top: "15mm", right: "18mm", bottom: "20mm", left: "22mm" },
-      },
-      experimental: { footnotes: true, pageFloats: true },
-    },
-  },
-};
-
-const runningHeadExtension: PageExtension = {
-  name: "demo/running-head",
-  decoratePage(page, context) {
-    context.warn({
-      code: "EXTENSION_DEMO_ACTIVE",
-      message: "The publishing-lab running-head extension is active.",
-    });
-    if (page.blank) return undefined;
-    return {
-      headerHtml:
-        '<span class="demo-running-head">Extension / live · {{pageNumber}} / {{totalPages}}</span>',
-    };
   },
 };
 
@@ -404,21 +383,49 @@ function App() {
   const exportHeadingId = useId();
   const [sampleId, setSampleId] = useState<SampleId>("editorial");
   const [extensionsEnabled, setExtensionsEnabled] = useState(true);
+  const [experimentalPlacementEnabled, setExperimentalPlacementEnabled] = useState(false);
   const [codeMode, setCodeMode] = useState<CodeMode>("react");
   const [state, setState] = useState<ImposiaDocumentState>({ status: "idle" });
   const [pageDocument, setPageDocument] = useState<PageDocument>();
   const [error, setError] = useState<string>();
   const [exportStatus, setExportStatus] = useState<ExportStatus>("idle");
   const [exportMessage, setExportMessage] = useState<string>();
-  const sample = samples[sampleId];
-  const documentOptions = useMemo(
+  const extensionsEnabledRef = useRef(extensionsEnabled);
+  extensionsEnabledRef.current = extensionsEnabled;
+  const runningHeadExtension = useMemo<PageExtension>(
     () => ({
-      ...sample.documentOptions,
-      extensions: extensionsEnabled ? [runningHeadExtension] : [],
+      name: "demo/running-head",
+      decoratePage(page, context) {
+        if (!extensionsEnabledRef.current) return undefined;
+        context.warn({
+          code: "EXTENSION_DEMO_ACTIVE",
+          message: "The publishing-lab running-head extension is active.",
+        });
+        if (page.blank) return undefined;
+        return {
+          headerHtml:
+            '<span class="demo-running-head">Extension / live · {{pageNumber}} / {{totalPages}}</span>',
+        };
+      },
     }),
-    [extensionsEnabled, sample],
+    [],
   );
-  const viewerKey = `${sample.id === "publishing" ? "publishing" : "standard"}-${extensionsEnabled ? "extensions-on" : "extensions-off"}`;
+  const sample = samples[sampleId];
+  const source = useMemo(() => {
+    const html =
+      sample.id === "publishing" && experimentalPlacementEnabled
+        ? sample.html.replace("</style>", `${publishingPlacementCss}</style>`)
+        : sample.html;
+    return { html };
+  }, [experimentalPlacementEnabled, sample]);
+  const sourceRevision = `${extensionsEnabled ? "extensions:on" : "extensions:off"};${experimentalPlacementEnabled ? "placement:on" : "placement:off"}`;
+  const documentOptions = useMemo<PageDocumentOptions>(
+    () => ({
+      extensions: [runningHeadExtension],
+      experimental: { footnotes: true, pageFloats: true },
+    }),
+    [runningHeadExtension],
+  );
 
   const handleReady = (nextDocument: PageDocument) => {
     setPageDocument(nextDocument);
@@ -551,23 +558,42 @@ function App() {
         <section className="demo-control-section" aria-labelledby={runtimeHeadingId}>
           <div className="demo-section-heading">
             <h2 id={runtimeHeadingId}>Runtime boundary</h2>
-            <span>{extensionsEnabled ? "composed" : "core only"}</span>
+            <span>{extensionsEnabled ? "decorated" : "undecorated"}</span>
           </div>
-          <label className="demo-switch">
-            <span>
-              <strong>Running-head extension</strong>
-              <small>Ordered, sanitized, controller-lifetime</small>
-            </span>
-            <input
-              type="checkbox"
-              checked={extensionsEnabled}
-              onChange={(event) => {
-                markDocumentLoading();
-                setExtensionsEnabled(event.currentTarget.checked);
-              }}
-            />
-            <i aria-hidden="true"></i>
-          </label>
+          <div className="demo-runtime-controls">
+            <label className="demo-switch">
+              <span>
+                <strong>Running-head extension</strong>
+                <small>Ordered, sanitized, controller-lifetime</small>
+              </span>
+              <input
+                type="checkbox"
+                checked={extensionsEnabled}
+                onChange={(event) => {
+                  markDocumentLoading();
+                  setExtensionsEnabled(event.currentTarget.checked);
+                }}
+              />
+              <i aria-hidden="true"></i>
+            </label>
+            {sample.id === "publishing" ? (
+              <label className="demo-switch">
+                <span>
+                  <strong>Experimental placement</strong>
+                  <small>Authored footnotes + page floats / opt-in</small>
+                </span>
+                <input
+                  type="checkbox"
+                  checked={experimentalPlacementEnabled}
+                  onChange={(event) => {
+                    markDocumentLoading();
+                    setExperimentalPlacementEnabled(event.currentTarget.checked);
+                  }}
+                />
+                <i aria-hidden="true"></i>
+              </label>
+            ) : null}
+          </div>
         </section>
 
         <section
@@ -696,8 +722,8 @@ function App() {
           <div className="demo-preview-surface" data-testid="demo-preview-surface">
             <ImposiaPageViewer
               ref={viewerRef}
-              key={viewerKey}
-              source={{ html: sample.html }}
+              source={source}
+              sourceRevision={sourceRevision}
               documentOptions={documentOptions}
               viewerOptions={{ mode: "continuous", zoom: 0.9 }}
               className="demo-viewer"

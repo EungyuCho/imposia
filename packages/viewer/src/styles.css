@@ -6,6 +6,8 @@
   --imposia-line: rgb(247 242 232 / 18%);
   --imposia-accent: #ef6a3b;
   --imposia-signal: #9cd4b6;
+  --imposia-space-2: 8px;
+  --imposia-toolbar-gap: 5px;
 }
 
 * {
@@ -223,6 +225,9 @@ body:has(.imposia-viewer) {
 .imposia-page-viewer .imposia-rail {
   position: sticky;
   top: 0;
+  width: 100%;
+  max-width: 100%;
+  justify-self: stretch;
 }
 
 .imposia-page-tag {
@@ -362,6 +367,18 @@ body:has(.imposia-viewer) {
     width: auto;
     max-width: 100%;
     height: auto;
+  }
+}
+
+@media (max-width: 390px) {
+  .imposia-toolbar {
+    width: 100%;
+    max-width: 100%;
+    justify-content: flex-start;
+    gap: var(--imposia-toolbar-gap);
+    padding: var(--imposia-space-2);
+    overflow-x: auto;
+    scroll-padding-inline: var(--imposia-space-2);
   }
 }
 
