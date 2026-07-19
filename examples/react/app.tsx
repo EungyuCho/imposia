@@ -7,6 +7,7 @@ type Observation = {
   errors: string[];
   states: string[];
   setSource: ((source: { html: string }) => void) | undefined;
+  bumpSourceRevision: (() => void) | undefined;
   unmount: (() => void) | undefined;
   handle: ImposiaPageViewerHandle | undefined;
   retainedHandle: ImposiaPageViewerHandle | undefined;
@@ -17,6 +18,7 @@ const observation: Observation = {
   errors: [],
   states: [],
   setSource: undefined,
+  bumpSourceRevision: undefined,
   unmount: undefined,
   handle: undefined,
   retainedHandle: undefined,
@@ -28,9 +30,12 @@ const pageViewerHandle = React.createRef<ImposiaPageViewerHandle>();
 
 function App() {
   const [source, setSource] = useState({ html: "<h1>React document</h1><p>Initial page</p>" });
+  const [sourceRevision, setSourceRevision] = useState(0);
   observation.setSource = setSource;
+  observation.bumpSourceRevision = () => setSourceRevision((revision) => revision + 1);
   return React.createElement(ImposiaPageViewer, {
     source,
+    sourceRevision,
     ref: pageViewerHandle,
     className: "react-adapter-host",
     onReady: () => {

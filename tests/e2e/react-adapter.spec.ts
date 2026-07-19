@@ -109,6 +109,52 @@ test("React adapter updates the canonical iframe, reports failures, and cleans u
   }
 });
 
+test("React source revisions reprocess identical HTML in the same canonical iframe", async ({
+  page,
+  browserName,
+}) => {
+  test.skip(browserName !== "chromium", "Canonical page presentation is Chromium-reference only.");
+  const { errors, pageErrors } = captureBrowserErrors(page, browserName);
+  await page.goto("/examples/react/");
+
+  try {
+    const host = page.locator(".react-adapter-host");
+    await expect(host).toHaveAttribute("data-imposia-react-status", "ready");
+    await page.evaluate(() => {
+      const frame = document.querySelector<HTMLIFrameElement>(".react-adapter-host iframe");
+      if (frame === null) throw new Error("React fixture canonical frame is missing.");
+      Reflect.set(globalThis, "__imposiaRevisionFrame", frame);
+    });
+
+    await page.evaluate(() => {
+      const observation = (
+        globalThis as {
+          imposiaReactObservation: { bumpSourceRevision: (() => void) | undefined };
+        }
+      ).imposiaReactObservation;
+      if (observation.bumpSourceRevision === undefined) {
+        throw new Error("React fixture cannot bump its source revision.");
+      }
+      observation.bumpSourceRevision();
+    });
+
+    await expect(host).toHaveAttribute("data-imposia-generation", "2");
+    expect(
+      await page.evaluate(
+        () =>
+          Reflect.get(globalThis, "__imposiaRevisionFrame") ===
+          document.querySelector(".react-adapter-host iframe"),
+      ),
+    ).toBe(true);
+    await expect(host.locator("iframe").contentFrame().locator("body")).toContainText(
+      "Initial page",
+    );
+  } finally {
+    expect(errors).toEqual([]);
+    expect(pageErrors).toEqual([]);
+  }
+});
+
 test("React imperative handle exposes the current document, print, and EPUB export", async ({
   page,
   browserName,

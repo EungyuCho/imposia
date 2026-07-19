@@ -79,6 +79,8 @@ export function CustomPreview({ html }: { html: string }) {
 state, the current `PageDocument` when available, and the Core controller. Source
 updates reuse the same canonical iframe; failed updates retain the previous
 committed generation, and unmount destroys the controller and releases resources.
+Pass `sourceRevision` when extension state must reprocess otherwise identical
+HTML without remounting the controller or adding revision markers to the document.
 
 The package also re-exports the public `@imposia/client` APIs and types, including
 `PageExtension`, `EpubMetadata`, `EpubExportOptions`, and `EpubExportLimits`.
