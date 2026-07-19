@@ -13,6 +13,9 @@ presentation, native print, and semantic EPUB export.
   independently authored from the cited public standards and project
   requirements; restricted third-party implementation or test material is out
   of scope.
+- Follow the [Code of Conduct](./CODE_OF_CONDUCT.md). Report suspected
+  vulnerabilities through the private route in [SECURITY.md](./SECURITY.md),
+  never through an issue containing exploit details.
 - Keep a change within one public contract. If a decision changes that contract,
   update its documentation and add an observable regression test.
 

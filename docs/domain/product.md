@@ -4,22 +4,63 @@ Imposia is a React-first, browser-only HTML/CSS publishing library. The browser
 packages are ESM libraries: there is no Node runtime, command-line renderer, or
 server-side publishing API.
 
+Competitive development remains client-only. Publication composition, Reader
+navigation, diagnostics, performance, and publishing CSS must strengthen the
+browser surface without moving rendering or export authority to a server or CLI.
+
 ## Integration layers
 
 - `@imposia/core` is the framework-neutral source of truth. `mountPageDocument()`
-  sanitizes the source, resolves admitted assets, paginates one canonical iframe,
-  and returns immutable page metadata, warnings, timings, and the current
-  generation.
+  sanitizes the source, resolves admitted assets, paginates a temporary
+  noncanonical staging iframe, then atomically commits the result into one
+  persistent canonical iframe. It returns immutable page metadata, warnings,
+  timings, and the current generation.
 - `@imposia/client` re-exports Core and the Viewer APIs for applications that want
   one browser-only dependency.
 - `@imposia/react` is the primary application adapter. `ImposiaPageViewer` and
   `ImposiaDocument` mount the same Core controller and iframe through React
-  effects. Its imperative handle exposes the current `PageDocument`, `print()`,
-  and `exportEpub()`. `useImposiaDocument()` exposes the host ref, lifecycle state,
-  current document, and controller for custom React presentation.
+  effects. Its imperative handle exposes the current `PageDocument`, Viewer
+  spread controls, `print()`, and `exportEpub()`. `useImposiaDocument()` exposes
+  the host ref, lifecycle state, current document, and controller for custom
+  React presentation.
 - `@imposia/viewer` presents a canonical Core page document or an independent
   PDF.js document. The page Viewer retains Core's iframe and never clones pages or
-  reruns layout.
+  reruns layout. Its continuous, single, and spread presentation modes keep one
+  global page identity. An optional cover stands alone, and a narrow container
+  temporarily presents the current spread as one page without changing the
+  requested mode or current page. Its opt-in Inspector projects only the current
+  committed warnings into a Viewer-owned panel. Warning selection follows the
+  existing global-page navigation path, resolves entry-only findings to the
+  committed entry start, and applies a temporary, non-layout, screen-only
+  highlight from Core's trusted numeric source bounds. No source marker or DOM
+  node crosses the public boundary. Generation replacement, presentation
+  synchronization, timer expiry, and destroy clear Inspector state and
+  presentation artifacts.
+
+`mountPublication()` composes ordered entries into one committed
+`PublicationDocument`. Its immutable outline is the sole authority for EPUB
+navigation and Viewer's Reader table of contents. Reader destinations move
+through the owning `PublicationController`; saved deep links contain a stable
+destination ID and resolve it against the current generation. The React
+Publication component wires the same controller into Viewer before delivering a
+ready callback, and its imperative navigation never falls back to a second path.
+Publication search builds a client-only index from sanitized visible text in the
+current committed pages. Results expose immutable entry metadata, a global page,
+a plain-text excerpt, and a controller-and-generation-scoped destination. Reader result
+movement uses the same owned `PublicationController` destination path as the
+table of contents; snapshot replacement rebuilds the index and removes stale
+results. Thumbnail navigation projects immutable geometry and a bounded abstract
+text-line count from each committed `PageMetadata`. It never clones authored DOM,
+rasterizes pages, or paginates again. Selection targets the exact global page;
+generation replacement discards old models and destroy clears the panel and its
+listeners. Destroy clears Reader state and rejects later Reader actions. No
+adapter exposes raw markup, reparses authored input, or creates another
+presentation iframe.
+
+Inspector, table-of-contents, Search, and Page thumbnail panels are mutually
+exclusive. Inspector controls stay outside the canonical iframe. Its temporary
+highlight is suppressed in print media, and semantic EPUB projection never
+consumes Viewer UI or highlight state.
 
 ## Browser publishing contract
 
@@ -36,7 +77,24 @@ The public document is structural: page count, dimensions, page-side and named
 context, blank markers, ordered body text, decorations, warnings, timings, and the
 canonical iframe. Extension transforms, asset policies, and decorations stay
 inside Core's sanitizer, resolver, abort, rollback, warning, and cleanup
-boundaries.
+boundaries. A page decorator receives immutable `number`, `totalPages`, `side`,
+and `blank` values for the accepted generation, allowing conditional furniture
+such as a final-page-only footer without DOM access.
+
+Publication extensions receive one sanitized copied entry string at a time
+through `transformEntry`, together with frozen publication and entry metadata.
+Core owns composition markers and re-sanitizes every returned string. Extension
+diagnostics receive only Core-supplied generation, entry, or page provenance.
+Registered cleanup runs when extension work finishes or is cancelled; no
+extension receives the canonical DOM, staging DOM, resolver, Blob URL, or raw
+committed source.
+
+Source updates are prepared in a temporary, noncanonical staging iframe. The
+previous committed generation remains visible in the persistent canonical iframe
+while the candidate resolves and paginates, and one atomic commit makes the
+successful candidate current. Failure, abort, or supersession leaves the previous
+commit untouched and removes the staging iframe. The staging frame is never a
+presentation or print authority.
 
 ## Assets and export
 

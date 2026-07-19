@@ -6,7 +6,7 @@ Imposia source distributions and package artifacts depend on the projects below.
 | --- | --- | --- | --- |
 | parse5 | 8.0.0 | Bundled HTML parsing and serialization in `@imposia/core` | MIT |
 | entities | 6.0.1 | Bundled HTML entity support transitively used by parse5 in `@imposia/core` | BSD-2-Clause |
-| PostCSS | 8.5.6 | Bundled CSS declaration parsing in `@imposia/core` | MIT |
+| PostCSS | 8.5.19 | Bundled CSS declaration parsing in `@imposia/core` | MIT |
 | nanoid | 3.3.16 | Bundled CSS support transitively used by PostCSS in `@imposia/core` | MIT |
 | picocolors | 1.1.1 | Bundled CSS support transitively used by PostCSS in `@imposia/core` | ISC |
 | pdfjs-dist (PDF.js) | 5.4.530 | Browser PDF rendering in `@imposia/viewer` | Apache-2.0 |

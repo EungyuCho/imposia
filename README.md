@@ -37,8 +37,9 @@
 shipping a second rendering runtime.**
 
 Imposia is a React-first, browser-only publishing toolkit. It sanitizes source,
-resolves admitted assets, paginates one canonical iframe, and keeps that exact
-document through preview and native print. The same committed semantic source
+resolves admitted assets, prepares pages in a temporary noncanonical staging
+iframe, then commits them into one persistent canonical iframe for preview and
+native print. The same committed semantic source
 can be exported as a reflowable EPUB 3.3 `Blob`.
 
 Core works without React. There is no Node runtime, command-line renderer,
@@ -99,7 +100,12 @@ export function BookPreview() {
           html: "<article><h1>Hello</h1><p>Browser-native pages.</p></article>",
         }}
         documentOptions={{ page: { size: "A4", margin: "18mm" } }}
+        viewerOptions={{ mode: "spread", spread: { cover: true } }}
       />
+
+      <button type="button" onClick={() => viewer.current?.setMode("single")}>
+        Single page
+      </button>
 
       <button type="button" onClick={() => void viewer.current?.print()}>
         Print
@@ -177,10 +183,13 @@ as the source of truth.
  sanitize + normalize page media
         │
         ▼
- paginate one isolated canonical iframe
+ paginate in one temporary noncanonical staging iframe
+        │
+        ▼
+ atomically commit into the persistent canonical iframe
         │
         ├──► immutable page metadata + warnings + timings
-        ├──► continuous / single-page presentation
+        ├──► continuous / single-page / spread presentation
         └──► native browser print
 
  latest committed semantic source ──► bounded reflowable EPUB 3.3 Blob
@@ -190,12 +199,14 @@ as the source of truth.
 | :--- | :--- |
 | **Resolve** | Imposia discovers HTML and CSS resources and asks the host for admitted bytes. Authored URLs never become frame requests. |
 | **Sanitize** | Markup, CSS, resolver output, and extension output stay inside Core's CSP, limits, and warning boundaries. |
-| **Paginate** | Page geometry, supported `@page` rules, fragmentation, references, and publishing content resolve inside one iframe. |
+| **Paginate** | Page geometry, supported `@page` rules, fragmentation, references, and publishing content resolve in a temporary staging iframe. |
 | **Present** | Viewer and React surfaces retain the canonical iframe instead of cloning pages or running layout again. |
 | **Publish** | Native print targets that iframe; EPUB export projects the latest committed semantic source into a bounded archive. |
 
-Failed source revisions roll back atomically. The previous committed generation
-remains available until a replacement succeeds or the controller is destroyed.
+The previous committed generation stays visible in the canonical iframe while
+its replacement is prepared in a temporary, noncanonical staging iframe.
+Successful source revisions swap atomically and remove that staging frame;
+failed, aborted, or superseded revisions leave the prior commit untouched.
 
 ---
 
@@ -213,6 +224,54 @@ integration layers:
 
 The package split changes integration ergonomics, not document ownership. Core
 remains the single source of truth.
+
+---
+
+## Ordered Publications and Reader navigation
+
+Use `ImposiaPublicationViewer` when several semantic sources must share one
+reading order, page sequence, outline, and EPUB spine:
+
+```tsx
+import {
+  ImposiaPublicationViewer,
+  type ImposiaPublicationViewerHandle,
+  type PublicationSnapshot,
+} from "@imposia/react";
+import { useRef } from "react";
+
+const snapshot: PublicationSnapshot = {
+  metadata: { title: "Field Notes", language: "en" },
+  entries: [
+    { id: "cover", title: "Cover", html: "<h1>Field Notes</h1>" },
+    { id: "chapter", title: "Chapter", html: "<h1>First chapter</h1>" },
+  ],
+};
+
+export function PublicationPreview() {
+  const viewer = useRef<ImposiaPublicationViewerHandle>(null);
+
+  return (
+    <ImposiaPublicationViewer
+      ref={viewer}
+      snapshot={snapshot}
+      viewerOptions={{ mode: "spread", spread: { cover: true }, inspector: true }}
+    />
+  );
+}
+```
+
+The built-in Reader projects the committed outline as a table of contents and
+adds semantic search and bounded page thumbnails. The React handle exposes the
+same current-controller paths through `navigate()`, `search()`,
+`selectSearchResult()`, `getThumbnails()`, and `selectThumbnail()`. Inspector,
+Contents, Search, and Page thumbnails are mutually exclusive, keyboard-operable
+panels outside the canonical iframe.
+
+Search results and thumbnails belong to one controller and committed
+generation. Resolve or query again after replacement; retained stale values are
+rejected. Reader UI never reparses authored input, rasterizes a page, adds an
+iframe, or runs pagination again.
 
 ---
 
@@ -271,18 +330,47 @@ cannot replace the resolver, weaken CSP or limits, or bypass lifecycle rollback.
 ```ts
 import { mountPageDocument, type PageExtension } from "@imposia/core";
 
-const runningHead: PageExtension = {
-  name: "example/running-head",
-  decoratePage: ({ blank }) =>
-    blank
+const lastPageFooter: PageExtension = {
+  name: "example/last-page-footer",
+  decoratePage: ({ blank, number, totalPages }) =>
+    blank || number !== totalPages
       ? undefined
-      : { headerHtml: "Chapter · {{pageNumber}} / {{totalPages}}" },
+      : { footerHtml: "The End · {{pageNumber}} / {{totalPages}}" },
 };
 
 const controller = mountPageDocument(host, source, {
-  extensions: [runningHead],
+  extensions: [lastPageFooter],
 });
 ```
+
+Publication extensions transform each sanitized copied entry independently,
+before Core adds protected composition markers:
+
+```ts
+import { mountPublication, type PublicationExtension } from "@imposia/core";
+
+const entryPolicy: PublicationExtension = {
+  name: "example/entry-policy",
+  transformEntry(input, context) {
+    if (input.entry.id === "appendix") {
+      context.warn({
+        code: "EXTENSION_APPENDIX_POLICY",
+        message: "The appendix policy was applied.",
+      });
+    }
+    return { html: `${input.html}<p>${input.publication.title}</p>` };
+  },
+};
+
+const publication = mountPublication(host, snapshot, {
+  extensions: [entryPolicy],
+});
+```
+
+Both extension forms receive frozen values only. Output is re-limited and
+re-sanitized, failures preserve the committed generation, and abort,
+supersession, or destroy aborts `context.signal` and runs cleanup registered with
+`context.onCleanup()`.
 
 ---
 
@@ -337,8 +425,9 @@ preview. For PDF, call `print()` and use the browser's Save as PDF surface.
 
 ## Viewer Themes
 
-Viewer themes are consumer-owned CSS modules. Load the package stylesheet first,
-then override public variables on an individual `.imposia-viewer` instance:
+Viewer themes are consumer-owned CSS modules or per-instance runtime token maps.
+Load the package stylesheet first, then override public variables on an
+individual `.imposia-viewer` instance:
 
 ```ts
 import "@imposia/react/styles.css";
@@ -352,6 +441,19 @@ import "./viewer-theme.css";
   --imposia-viewer-color-accent: #4338ca;
   --imposia-viewer-font-serif: "Iowan Old Style", Georgia, serif;
 }
+```
+
+For user-selectable themes, pass the same tokens without a global stylesheet:
+
+```ts
+const viewer = mountPageViewer(host, pageDocument, {
+  theme: {
+    "--imposia-viewer-color-ink": "#171522",
+    "--imposia-viewer-color-accent": "#8b6cff",
+  },
+});
+
+viewer.setTheme({ "--imposia-viewer-color-accent": "#ef6a3b" });
 ```
 
 Themes change presentation without adding another React or Core lifecycle. See
@@ -410,7 +512,8 @@ pnpm check
 ```
 
 `pnpm check` runs preflight validation, type checking, lint, unit tests, package
-builds, browser E2E suites, and the dependency-license audit. The full gate and
+builds, browser E2E suites, production vulnerability auditing, and the
+dependency-license audit. The full gate and
 captured artifact map live in [`docs/verification.md`](./docs/verification.md).
 
 Product contracts and architecture decisions are routed from
@@ -423,7 +526,9 @@ Read [CONTRIBUTING.md](./CONTRIBUTING.md) before proposing a change, especially
 the clean-room and browser-observability requirements. Maintainers can follow
 [RELEASING.md](./RELEASING.md) for the checked package order and the final
 registry prerequisites. Versioned public changes are recorded in
-[CHANGELOG.md](./CHANGELOG.md).
+[CHANGELOG.md](./CHANGELOG.md). Report vulnerabilities through the private route
+described in [SECURITY.md](./SECURITY.md), and follow the project
+[Code of Conduct](./CODE_OF_CONDUCT.md) in all community spaces.
 
 ---
 
