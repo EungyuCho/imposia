@@ -25,6 +25,12 @@
 </p>
 
 <p align="center">
+  <a href="https://imposia.pages.dev">文档</a> ·
+  <a href="https://www.npmjs.com/org/imposia">npm 软件包</a> ·
+  <a href="https://github.com/EungyuCho/imposia">GitHub</a>
+</p>
+
+<p align="center">
   <a href="#快速开始">快速开始</a> ·
   <a href="#为什么选择-imposia">为什么选择 Imposia</a> ·
   <a href="#工作原理">工作原理</a> ·
@@ -209,10 +215,10 @@ Imposia 将源处理与展示分离，同时保持一份文档作为唯一事实
 
 | 软件包 | 角色 | 适用场景 |
 | :--- | :--- | :--- |
-| [`@imposia/react`](./packages/react) | 主要 React 适配器 | React 18+ 应用需要组件、Hook 或命令式页面句柄 |
-| [`@imposia/client`](./packages/client) | 统一的框架无关入口 | 希望通过一个浏览器依赖同时使用 Core 与 Viewer API |
-| [`@imposia/core`](./packages/core) | canonical 页面文档运行时 | 不使用 React，直接控制生命周期、分页、resolver、extension、打印与 EPUB |
-| [`@imposia/viewer`](./packages/viewer) | 页面与 PDF 展示 | 展示 Core iframe，或挂载独立的 PDF.js Canvas 查看器 |
+| [`@imposia/react`](https://www.npmjs.com/package/@imposia/react) | 主要 React 适配器 | React 18+ 应用需要组件、Hook 或命令式页面句柄 |
+| [`@imposia/client`](https://www.npmjs.com/package/@imposia/client) | 统一的框架无关入口 | 希望通过一个浏览器依赖同时使用 Core 与 Viewer API |
+| [`@imposia/core`](https://www.npmjs.com/package/@imposia/core) | canonical 页面文档运行时 | 不使用 React，直接控制生命周期、分页、resolver、extension、打印与 EPUB |
+| [`@imposia/viewer`](https://www.npmjs.com/package/@imposia/viewer) | 页面与 PDF 展示 | 展示 Core iframe，或挂载独立的 PDF.js Canvas 查看器 |
 
 软件包拆分只改变集成方式，不改变文档所有权。Core 始终是唯一事实来源。
 

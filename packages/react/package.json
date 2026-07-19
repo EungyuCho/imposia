@@ -2,6 +2,15 @@
   "name": "@imposia/react",
   "version": "0.1.0",
   "description": "React adapter for browser-native HTML/CSS pagination, native print, and EPUB export.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/EungyuCho/imposia.git",
+    "directory": "packages/react"
+  },
+  "homepage": "https://imposia.pages.dev",
+  "bugs": {
+    "url": "https://github.com/EungyuCho/imposia/issues"
+  },
   "keywords": [
     "react",
     "pagination",

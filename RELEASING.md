@@ -6,11 +6,11 @@ reserve a trademark.
 
 ## One-time public metadata
 
-Before the first public publish, configure the final source repository URL in
-the `repository`, `homepage`, and `bugs` fields of every publishable package
-manifest. The current checkout has no Git remote, so those URLs must not be
-invented. Confirm ownership of the `@imposia` npm scope immediately before
-publishing; the naming ADR records only point-in-time availability checks.
+Before a new public release, verify the `repository`, `homepage`, and `bugs`
+fields of every publishable package manifest point to the public GitHub
+repository and documentation site. Confirm ownership of the `@imposia` npm
+scope immediately before publishing; the naming ADR records only point-in-time
+availability checks.
 
 Configure a private security-reporting route before announcing the project.
 Do not ask reporters to disclose vulnerabilities in a public issue.
