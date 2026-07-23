@@ -34,7 +34,7 @@ by the synchronized `0.1.1` package release.
 
 ## Post-release engineering follow-ups
 
-These refinements are useful, but they do not block the first public prerelease:
+These refinements are useful, but they do not block the `0.1.2` patch release:
 
 1. Consolidate the duplicated PDF/Page Viewer toolbar construction behind one
    internal Viewer interface factory while retaining separate document adapters.
