@@ -261,7 +261,7 @@ test("keeps viewer styles scoped and exposes chrome-free presentation controls",
         mountPageViewer(
           container: HTMLElement,
           pageDocument: PageDocument,
-          options: { controls: false },
+          options: { controls: false; inspector: true },
         ): PageViewerController;
       };
 
@@ -283,7 +283,10 @@ test("keeps viewer styles scoped and exposes chrome-free presentation controls",
       );
       const pageDocument = await controller.ready;
       const stateChanges: PageViewerState[] = [];
-      const viewer = viewerModule.mountPageViewer(host, pageDocument, { controls: false });
+      const viewer = viewerModule.mountPageViewer(host, pageDocument, {
+        controls: false,
+        inspector: true,
+      });
       const unsubscribe = viewer.subscribe((state) => stateChanges.push(state));
       viewer.setMode("single");
       viewer.setZoom(1.3);
@@ -295,6 +298,9 @@ test("keeps viewer styles scoped and exposes chrome-free presentation controls",
       const bodyStyle = getComputedStyle(document.body);
       const outsideStyle = getComputedStyle(outside);
       const hostStyle = getComputedStyle(host);
+      const inspectorPanel = host.querySelector<HTMLElement>(".imposia-inspector-panel");
+      if (inspectorPanel === null) throw new Error("Headless Inspector panel is missing.");
+      const inspectorPanelStyle = getComputedStyle(inspectorPanel);
       const result = {
         iframeIdentity: host.querySelector("iframe") === pageDocument.iframe,
         railCount: host.querySelectorAll(".imposia-rail").length,
@@ -311,6 +317,10 @@ test("keeps viewer styles scoped and exposes chrome-free presentation controls",
         hostCanvasToken: hostStyle.getPropertyValue("--imposia-viewer-color-canvas").trim(),
         hostBackgroundImage: hostStyle.backgroundImage,
         hostWatermark: getComputedStyle(host, "::before").content,
+        inspectorPanel: {
+          top: inspectorPanelStyle.top,
+          maxHeight: inspectorPanelStyle.maxHeight,
+        },
         state: viewer.state,
         subscribedCount,
         unsubscribedCount: stateChanges.length,
@@ -333,6 +343,7 @@ test("keeps viewer styles scoped and exposes chrome-free presentation controls",
     expect(observation.hostCanvasToken).toBe("#d8d5cc");
     expect(observation.hostBackgroundImage).toBe("none");
     expect(observation.hostWatermark).toBe("none");
+    expect(observation.inspectorPanel).toEqual({ top: "0px", maxHeight: "100%" });
     expect(observation.state).toMatchObject({
       page: 2,
       zoom: 1.4,

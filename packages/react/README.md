@@ -115,6 +115,9 @@ complement the existing mode and spread-cover methods. Viewer CSS is scoped to
 the Viewer host and descendants; it does not change `body`, `:root`, or
 unrelated elements. The host application owns the preview height, background,
 and surrounding scroll behavior.
+Because `controls: false` omits the built-in mode-status `aria-live` region,
+hosts that need equivalent screen-reader mode announcements must provide their
+own live region and update it from `onViewerStateChange`.
 
 Set `viewerOptions.inspector` to `true` to mount the diagnostics panel. The
 handle exposes `openInspector()`, `closeInspector()`, `toggleInspector()`, and

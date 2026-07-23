@@ -367,14 +367,6 @@
   grid-row: 1;
 }
 
-:where(.imposia-page-viewer--headless) .imposia-toc-panel,
-:where(.imposia-page-viewer--headless) .imposia-search-panel,
-:where(.imposia-page-viewer--headless) .imposia-thumbnail-panel,
-:where(.imposia-page-viewer--headless) .imposia-inspector-panel {
-  top: 0;
-  max-height: 100%;
-}
-
 .imposia-visually-hidden {
   position: absolute;
   width: 1px;
@@ -419,6 +411,14 @@
 
 .imposia-thumbnail-panel {
   width: min(28rem, 100%);
+}
+
+:where(.imposia-page-viewer--headless) .imposia-toc-panel,
+:where(.imposia-page-viewer--headless) .imposia-search-panel,
+:where(.imposia-page-viewer--headless) .imposia-thumbnail-panel,
+:where(.imposia-page-viewer--headless) .imposia-inspector-panel {
+  top: 0;
+  max-height: 100%;
 }
 
 .imposia-inspector-panel:focus-visible {
