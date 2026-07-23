@@ -6,6 +6,7 @@ import type {
   PageSource,
   PageViewerMode,
   PageViewerOptions,
+  PageViewerState,
   PageWarning,
 } from "@imposia/client";
 import {
@@ -29,12 +30,18 @@ export type ImposiaPageViewerProps = ImposiaDocumentCallbacks & {
   readonly documentOptions?: PageDocumentOptions;
   readonly documentOptionsRevision?: string | number;
   readonly viewerOptions?: PageViewerOptions;
+  readonly onViewerStateChange?: ((state: PageViewerState) => void) | undefined;
   readonly className?: string;
   readonly style?: CSSProperties;
 };
 
 export type ImposiaPageViewerHandle = Readonly<{
   readonly current: PageDocument | undefined;
+  readonly viewerState: PageViewerState | undefined;
+  goToPage(page: number): void;
+  nextPage(): void;
+  previousPage(): void;
+  setZoom(zoom: number): void;
   setMode(mode: PageViewerMode): void;
   setSpreadCover(cover: boolean): void;
   openInspector(): void;
@@ -65,6 +72,7 @@ export const ImposiaPageViewer = forwardRef<ImposiaPageViewerHandle, ImposiaPage
       documentOptions,
       documentOptionsRevision,
       viewerOptions,
+      onViewerStateChange,
       className,
       style,
       onReady,
@@ -107,6 +115,7 @@ export const ImposiaPageViewer = forwardRef<ImposiaPageViewerHandle, ImposiaPage
       lifecycle.state.document,
       viewerOptions,
       onError,
+      onViewerStateChange,
     );
 
     useEffect(() => {
@@ -128,6 +137,33 @@ export const ImposiaPageViewer = forwardRef<ImposiaPageViewerHandle, ImposiaPage
       return {
         get current(): PageDocument | undefined {
           return mountedRef.current ? controllerRef.current?.current : undefined;
+        },
+        get viewerState(): PageViewerState | undefined {
+          return mountedRef.current ? viewerBinding.getViewer()?.state : undefined;
+        },
+        goToPage(page: number): void {
+          if (!mountedRef.current) throw handleUnavailableError();
+          const viewer = viewerBinding.getViewer();
+          if (viewer === undefined) throw documentUnavailableError();
+          viewer.goToPage(page);
+        },
+        nextPage(): void {
+          if (!mountedRef.current) throw handleUnavailableError();
+          const viewer = viewerBinding.getViewer();
+          if (viewer === undefined) throw documentUnavailableError();
+          viewer.nextPage();
+        },
+        previousPage(): void {
+          if (!mountedRef.current) throw handleUnavailableError();
+          const viewer = viewerBinding.getViewer();
+          if (viewer === undefined) throw documentUnavailableError();
+          viewer.previousPage();
+        },
+        setZoom(zoom: number): void {
+          if (!mountedRef.current) throw handleUnavailableError();
+          const viewer = viewerBinding.getViewer();
+          if (viewer === undefined) throw documentUnavailableError();
+          viewer.setZoom(zoom);
         },
         setMode(mode: PageViewerMode): void {
           if (!mountedRef.current) throw handleUnavailableError();

@@ -40,6 +40,7 @@ type ImposiaDocumentHandle = ImposiaPageViewerHandle;
 | `documentOptions` | `PageDocumentOptions` | 否 | 创建控制器时使用；单独改变对象不会重建控制器。 |
 | `documentOptionsRevision` | `string \| number` | 否 | 变化时用当前选项重建控制器和规范 iframe。 |
 | `viewerOptions` | `PageViewerOptions` | 否 | 模式、缩放、主题、跨页和 Inspector。这里生成的是普通 `PageDocument`，传 Reader 会校验失败。 |
+| `onViewerStateChange` | `(state: PageViewerState) => void` | 否 | 报告页码、缩放、模式、有效模式和代次变化。 |
 | `className` / `style` | `string` / `CSSProperties` | 否 | 宿主 `<div>` 的展示属性。 |
 | `onReady` | `(document: PageDocument) => void` | 否 | 文档提交并绑定 Viewer 后调用。 |
 | `onError` | `(error: unknown) => void` | 否 | Core 或 Viewer 失败时调用。 |
@@ -48,6 +49,9 @@ type ImposiaDocumentHandle = ImposiaPageViewerHandle;
 | 句柄成员 | 返回值 | 准备状态与错误 |
 | --- | --- | --- |
 | `current` | `PageDocument \| undefined` | 首次提交前和卸载后为 `undefined`。 |
+| `viewerState` | `PageViewerState \| undefined` | Viewer 就绪时的当前展示快照。 |
+| `goToPage(page)` / `nextPage()` / `previousPage()` | `void` | 在当前已提交的全局页序列中移动。 |
+| `setZoom(zoom)` | `void` | 在支持范围内调整展示缩放。 |
 | `setMode(mode)` | `void` | 接受 `continuous \| single \| spread`；文档未就绪时抛出错误。 |
 | `setSpreadCover(cover)` | `void` | 设置第 1 页是否单独显示；文档未就绪时抛出错误。 |
 | `openInspector()` / `closeInspector()` / `toggleInspector()` | `void` | `viewerOptions.inspector` 未启用时抛出错误。 |
@@ -263,18 +267,22 @@ function mountPageViewer(
 ): PageViewerController;
 ```
 
-container 必须是规范 iframe 当前的父元素。函数同步校验 iframe、sandbox、页标记、主题和 Reader 所有权；失败时抛错，不重新分页。选项为 `mode?`、`spread.cover?`、`zoom?`、`theme?`、`inspector?` 和 `reader?`。默认 mode 为 continuous、zoom 为 1、cover 和 Inspector 为 false。zoom 限制到 0.5–2.5。宽度小于 720 px 时，请求的 spread 暂以 single 展示。
+container 必须是规范 iframe 当前的父元素。函数同步校验 iframe、sandbox、页标记、主题和 Reader 所有权；失败时抛错，不重新分页。选项为 `mode?`、`spread.cover?`、`zoom?`、`controls?`、`theme?`、`inspector?` 和 `reader?`。默认 mode 为 continuous、zoom 为 1、controls 为 true、cover 和 Inspector 为 false。`controls: false` 不创建品牌 rail，但保留同一个展示控制器。zoom 限制到 0.5–2.5。宽度小于 720 px 时，请求的 spread 暂以 single 展示。
 
 | 控制器成员 | 返回值 | 行为与约束 |
 | --- | --- | --- |
 | `goToPage(page)` / `nextPage()` / `previousPage()` | `void` | 限制到有效全局页；spread 中前后移动一组。 |
 | `setZoom(zoom)` / `setMode(mode)` / `setSpreadCover(cover)` | `void` | 更新展示，不改变 Core 布局。 |
 | `setTheme(theme?)` | `void` | 主题值必须是 `--imposia-viewer-*` 字符串属性；省略时恢复原值。 |
+| `subscribe(listener)` | `() => void` | 立即发送当前 state，并在展示状态变化时继续发送；返回取消订阅函数。 |
 | `refresh(document)` | `void` | 只接受同一 iframe 的更高代；否则抛错。 |
 | `print()` | `Promise<void>` | 打印当前规范 iframe；已销毁时拒绝。 |
 | `destroy()` | `void` | 移除展示 UI 并恢复 DOM；不会销毁 Core 控制器。 |
 | `state` | `PageViewerState` | `{ page, pageCount, zoom, mode, effectiveMode, status: "ready", generation }`。 |
 | `reader` / `inspector` | 对应控制器或 `undefined` | 只在选项启用时存在。 |
+
+Viewer CSS 只作用于 `.imposia-viewer` 内部，不会修改宿主文档的
+`body`、`:root`、外部元素或滚动。预览尺寸和背景由宿主应用控制。
 
 ```ts
 const viewer = mountPageViewer(host, await controller.ready, { mode: "spread" });

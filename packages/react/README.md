@@ -20,8 +20,9 @@ import {
   ImposiaPageViewer,
   type EpubExportOptions,
   type ImposiaPageViewerHandle,
+  type PageViewerState,
 } from "@imposia/react";
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import "@imposia/react/styles.css";
 
 export function BookPreview() {
@@ -68,6 +69,52 @@ mounted page Viewer and retain its canonical iframe and Core generation.
 `print()` invokes the canonical iframe's native `Window.print()` so the browser
 can offer Save as PDF. `exportEpub()` returns a reflowable `application/epub+zip`
 Blob from semantic source, not a fixed-layout EPUB or PDF bytes.
+
+For a host-designed header, disable the built-in controls and drive the Viewer
+through its handle:
+
+```tsx
+export function HeadlessPreview({ html }: { html: string }) {
+  const handle = useRef<ImposiaPageViewerHandle>(null);
+  const [viewerState, setViewerState] = useState<PageViewerState>();
+
+  return (
+    <section>
+      <header>
+        <button type="button" onClick={() => handle.current?.previousPage()}>
+          Previous
+        </button>
+        <output>{viewerState?.page ?? 0} / {viewerState?.pageCount ?? 0}</output>
+        <button type="button" onClick={() => handle.current?.nextPage()}>
+          Next
+        </button>
+        <button type="button" onClick={() => handle.current?.setMode("spread")}>
+          Spread
+        </button>
+        <button
+          type="button"
+          onClick={() => handle.current?.setZoom((handle.current.viewerState?.zoom ?? 1) + 0.1)}
+        >
+          Zoom in
+        </button>
+      </header>
+      <ImposiaPageViewer
+        ref={handle}
+        source={{ html }}
+        viewerOptions={{ controls: false }}
+        onViewerStateChange={setViewerState}
+        style={{ height: 640 }}
+      />
+    </section>
+  );
+}
+```
+
+`viewerState`, `goToPage()`, `nextPage()`, `previousPage()`, and `setZoom()`
+complement the existing mode and spread-cover methods. Viewer CSS is scoped to
+the Viewer host and descendants; it does not change `body`, `:root`, or
+unrelated elements. The host application owns the preview height, background,
+and surrounding scroll behavior.
 
 Set `viewerOptions.inspector` to `true` to mount the diagnostics panel. The
 handle exposes `openInspector()`, `closeInspector()`, `toggleInspector()`, and

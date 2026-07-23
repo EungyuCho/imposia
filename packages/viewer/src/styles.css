@@ -1,4 +1,4 @@
-:root {
+.imposia-viewer {
   --imposia-viewer-color-ink: #101514;
   --imposia-viewer-color-ink-soft: #25302d;
   --imposia-viewer-color-paper: #f7f2e8;
@@ -114,14 +114,11 @@
   --imposia-viewer-spin-duration-reduced: 1.5s;
 }
 
-* {
+.imposia-viewer,
+.imposia-viewer *,
+.imposia-viewer *::before,
+.imposia-viewer *::after {
   box-sizing: border-box;
-}
-
-body:has(.imposia-viewer) {
-  margin: 0;
-  overflow: hidden;
-  background: var(--imposia-viewer-color-canvas);
 }
 
 .imposia-viewer {
@@ -132,7 +129,7 @@ body:has(.imposia-viewer) {
   grid-template-rows: auto minmax(0, 1fr);
   width: 100%;
   min-width: 0;
-  height: 100dvh;
+  height: 100%;
   overflow: hidden;
   color: var(--imposia-viewer-color-paper);
   background: var(--imposia-viewer-color-ink);
@@ -285,7 +282,7 @@ body:has(.imposia-viewer) {
 }
 
 .imposia-stage::before {
-  position: fixed;
+  position: absolute;
   right: var(--imposia-viewer-stage-label-offset-inline);
   bottom: var(--imposia-viewer-stage-label-offset-block);
   color: var(--imposia-viewer-color-stage-label);
@@ -303,7 +300,7 @@ body:has(.imposia-viewer) {
   align-items: center;
   gap: var(--imposia-viewer-pages-gap);
   padding: var(--imposia-viewer-pages-padding-block-start)
-    max(var(--imposia-viewer-pages-padding-inline-min), calc((100vw - 900px) / 2))
+    max(var(--imposia-viewer-pages-padding-inline-min), calc((100cqw - 900px) / 2))
     var(--imposia-viewer-pages-padding-block-end);
 }
 
@@ -349,6 +346,33 @@ body:has(.imposia-viewer) {
   width: 100%;
   max-width: 100%;
   justify-self: stretch;
+}
+
+.imposia-page-viewer--headless {
+  grid-template-rows: minmax(0, 1fr);
+  color: inherit;
+  background: transparent;
+  font: inherit;
+}
+
+.imposia-page-viewer--headless.imposia-stage {
+  background: transparent;
+}
+
+.imposia-page-viewer--headless.imposia-stage::before {
+  content: none;
+}
+
+.imposia-page-viewer--headless .imposia-canonical-frame {
+  grid-row: 1;
+}
+
+:where(.imposia-page-viewer--headless) .imposia-toc-panel,
+:where(.imposia-page-viewer--headless) .imposia-search-panel,
+:where(.imposia-page-viewer--headless) .imposia-thumbnail-panel,
+:where(.imposia-page-viewer--headless) .imposia-inspector-panel {
+  top: 0;
+  max-height: 100%;
 }
 
 .imposia-visually-hidden {
@@ -717,81 +741,6 @@ button.imposia-inspector-finding[aria-current="true"] {
   }
 }
 
-@media (max-width: 720px) {
-  .imposia-rail {
-    min-height: var(--imposia-viewer-rail-height-mobile);
-    flex-direction: column;
-  }
-
-  .imposia-toc-panel,
-  .imposia-search-panel,
-  .imposia-thumbnail-panel,
-  .imposia-inspector-panel {
-    top: var(--imposia-viewer-rail-height-mobile);
-    max-height: calc(100% - var(--imposia-viewer-rail-height-mobile));
-  }
-
-  .imposia-identity {
-    min-height: var(--imposia-viewer-identity-height-mobile);
-    padding: 0 var(--imposia-viewer-identity-padding-inline-mobile);
-    border-right: 0;
-    border-bottom: var(--imposia-viewer-border-hairline) solid var(--imposia-viewer-color-line);
-  }
-
-  .imposia-mark {
-    width: var(--imposia-viewer-mark-size-mobile);
-    height: var(--imposia-viewer-mark-size-mobile);
-  }
-
-  .imposia-wordmark {
-    font-size: var(--imposia-viewer-type-size-wordmark-mobile);
-  }
-
-  .imposia-toolbar {
-    justify-content: flex-start;
-    overflow-x: auto;
-    padding: var(--imposia-viewer-toolbar-padding-mobile);
-  }
-
-  .imposia-divider {
-    margin: 0 var(--imposia-viewer-divider-margin-inline-mobile);
-  }
-
-  .imposia-control {
-    min-width: var(--imposia-viewer-control-size-mobile);
-    height: var(--imposia-viewer-control-size-mobile);
-    padding: 0 var(--imposia-viewer-control-padding-inline-mobile);
-  }
-
-  .imposia-mode {
-    min-width: var(--imposia-viewer-mode-min-width-mobile);
-    font-size: var(--imposia-viewer-type-size-label);
-  }
-
-  .imposia-readout {
-    min-width: var(--imposia-viewer-readout-min-width-mobile);
-  }
-
-  .imposia-pages {
-    width: 100%;
-    min-width: 100%;
-    gap: var(--imposia-viewer-pages-gap-mobile);
-    padding: var(--imposia-viewer-pages-padding-block-start-mobile)
-      var(--imposia-viewer-pages-padding-inline-mobile)
-      var(--imposia-viewer-pages-padding-block-end-mobile);
-  }
-
-  .imposia-page {
-    max-width: 100%;
-  }
-
-  .imposia-canvas {
-    width: auto;
-    max-width: 100%;
-    height: auto;
-  }
-}
-
 @container imposia-viewer (max-width: 720px) {
   .imposia-rail {
     min-height: var(--imposia-viewer-rail-height-mobile);
@@ -875,7 +824,7 @@ button.imposia-inspector-finding[aria-current="true"] {
   }
 }
 
-@media (max-width: 390px) {
+@container imposia-viewer (max-width: 390px) {
   .imposia-toolbar {
     width: 100%;
     max-width: 100%;

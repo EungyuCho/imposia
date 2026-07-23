@@ -68,6 +68,14 @@ not by a PDF-byte export API.
 temporarily expose `state.effectiveMode === "single"` while preserving the
 requested mode and current global page.
 
+Set `controls: false` to retain navigation, mode, zoom, responsive spread, and
+print behavior without the built-in rail. Compose host controls with
+`goToPage()`, `nextPage()`, `previousPage()`, `setMode()`, and `setZoom()`;
+`subscribe(listener)` immediately emits the current `PageViewerState` and
+returns an unsubscribe function. Client's Viewer stylesheet is scoped to the
+Viewer root and does not mutate the host document's `body`, `:root`, or
+unrelated elements.
+
 `ViewerTheme` is a typed map of `--imposia-viewer-*` custom properties. Themes
 are scoped to one Viewer shell, can be replaced with `setTheme()`, and never
 cross the canonical iframe into authored document styles.

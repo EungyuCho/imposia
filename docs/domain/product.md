@@ -41,17 +41,21 @@ browser surface without moving rendering or export authority to a server or CLI.
   React presentation.
 - `@imposia/viewer` presents a canonical Core page document or an independent
   PDF.js document. The page Viewer retains Core's iframe and never clones pages or
-  reruns layout. Its continuous, single, and spread presentation modes keep one
-  global page identity. An optional cover stands alone, and a narrow container
-  temporarily presents the current spread as one page without changing the
-  requested mode or current page. Its opt-in Inspector projects only the current
-  committed warnings into a Viewer-owned panel. Warning selection follows the
-  existing global-page navigation path, resolves entry-only findings to the
-  committed entry start, and applies a temporary, non-layout, screen-only
-  highlight from Core's trusted numeric source bounds. No source marker or DOM
-  node crosses the public boundary. Generation replacement, presentation
-  synchronization, timer expiry, and destroy clear Inspector state and
-  presentation artifacts.
+  reruns layout. Its optional built-in control rail can be omitted for headless
+  presentation while the same controller exposes page navigation, continuous,
+  single, and spread modes, zoom, immutable state snapshots, and state
+  subscriptions. Viewer CSS is scoped to the Viewer root; the host application
+  retains ownership of document body styles, scrolling, background, and
+  dimensions. Presentation modes keep one global page identity. An optional cover
+  stands alone, and a narrow container temporarily presents the current spread as
+  one page without changing the requested mode or current page. Its opt-in
+  Inspector projects only the current committed warnings into a Viewer-owned
+  panel. Warning selection follows the existing global-page navigation path,
+  resolves entry-only findings to the committed entry start, and applies a
+  temporary, non-layout, screen-only highlight from Core's trusted numeric source
+  bounds. No source marker or DOM node crosses the public boundary. Generation
+  replacement, presentation synchronization, timer expiry, and destroy clear
+  Inspector state and presentation artifacts.
 
 `mountPublication()` composes ordered entries into one committed
 `PublicationDocument`. Its immutable outline is the sole authority for EPUB

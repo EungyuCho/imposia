@@ -36,6 +36,7 @@ import "@imposia/react/styles.css";
 | `documentOptions` | `PageDocumentOptions` | Core 컨트롤러 생성 설정입니다. |
 | `documentOptionsRevision` | `string \| number` | 바뀌면 컨트롤러와 canonical iframe을 새 설정으로 교체합니다. |
 | `viewerOptions` | `PageViewerOptions` | 모드, 배율, 테마, Inspector 설정입니다. |
+| `onViewerStateChange` | `(state: PageViewerState) => void` | 페이지, 배율, 모드, effective mode, generation 변화를 전달합니다. |
 | `className`, `style` | `string`, `CSSProperties` | 호스트 `div`의 표시 속성입니다. |
 | `onReady` | `(document: PageDocument) => void` | Core 문서와 Viewer가 같은 generation을 표시할 준비를 마치면 호출합니다. |
 | `onError` | `(error: unknown) => void` | Core 작업이나 Viewer 바인딩이 실패하면 호출합니다. |
@@ -48,6 +49,9 @@ import "@imposia/react/styles.css";
 | 멤버 | 반환값과 조건 |
 | --- | --- |
 | `current` | `PageDocument \| undefined`. 준비 전이나 unmount 뒤에는 `undefined`입니다. |
+| `viewerState` | `PageViewerState \| undefined`. 준비된 Viewer의 현재 표시 상태입니다. |
+| `goToPage(page)`, `nextPage()`, `previousPage()` | `void`. 현재 commit의 전역 페이지를 이동합니다. |
+| `setZoom(zoom)` | `void`. 표시 배율을 제한 범위 안에서 바꿉니다. |
 | `setMode(mode)` | `void`. `continuous`, `single`, `spread`로 바꿉니다. 문서 준비 전에는 throw합니다. |
 | `setSpreadCover(cover)` | `void`. spread에서 1페이지를 단독 표지로 둘지 정합니다. |
 | `openInspector()` | `void`. Inspector가 없으면 throw합니다. |
@@ -253,7 +257,7 @@ function mountPageViewer(
 ): PageViewerController;
 ```
 
-`pageDocument.iframe.parentElement`는 `container`여야 합니다. 옵션은 `mode?: "continuous" | "single" | "spread"`, `spread?: { cover? }`, `zoom?`, `theme?`, `inspector?`, `reader?`입니다. 기본값은 continuous, cover false, zoom 1, Inspector/Reader 없음입니다. zoom은 0.5–2.5로 제한됩니다. 720px보다 좁은 spread는 요청 모드를 유지하면서 `effectiveMode`만 single이 됩니다.
+`pageDocument.iframe.parentElement`는 `container`여야 합니다. 옵션은 `mode?: "continuous" | "single" | "spread"`, `spread?: { cover? }`, `zoom?`, `controls?`, `theme?`, `inspector?`, `reader?`입니다. 기본값은 continuous, cover false, zoom 1, controls true, Inspector/Reader 없음입니다. `controls: false`는 브랜드 rail을 만들지 않으면서 같은 표시 컨트롤러를 유지합니다. zoom은 0.5–2.5로 제한됩니다. 720px보다 좁은 spread는 요청 모드를 유지하면서 `effectiveMode`만 single이 됩니다.
 
 #### `PageViewerController`
 
@@ -265,11 +269,16 @@ function mountPageViewer(
 | `setMode(mode)` | continuous, single, spread를 선택합니다. |
 | `setSpreadCover(cover)` | spread 표지 배치를 바꿉니다. |
 | `setTheme(theme?)` | `--imposia-viewer-*` 문자열 custom property 맵을 교체하거나 제거합니다. |
+| `subscribe(listener)` | 현재 상태를 즉시 전달하고 이후 표시 상태 변경을 전달합니다. 반환 함수를 호출하면 구독을 해제합니다. |
 | `refresh(pageDocument)` | 같은 iframe의 더 최신 generation으로 갱신합니다. 다른 iframe이나 오래된 generation이면 throw합니다. |
 | `print()` | canonical iframe의 `Window.print()`를 호출합니다. destroy 뒤에는 reject합니다. |
 | `destroy()` | Reader, Inspector, 테마와 이벤트를 정리하고 기존 속성을 복원합니다. |
 | `state` | `{ page, pageCount, zoom, mode, effectiveMode, status: "ready", generation }`입니다. |
 | `reader`, `inspector` | 옵션을 켰을 때 각 컨트롤러, 아니면 `undefined`입니다. |
+
+Viewer CSS는 `.imposia-viewer` 안에만 적용됩니다. 호스트 앱의 `body`,
+`:root`, 외부 요소, 스크롤을 바꾸지 않으며 미리보기의 크기와 배경은
+호스트가 정합니다.
 
 `validatePageViewerOptions(pageDocument, options?)`는 테마, PageDocument 구조, Reader 소유 관계를 검사하고 `void`를 반환합니다. adapter가 기존 Viewer를 해제하기 전에 새 설정을 확인할 때 사용합니다.
 

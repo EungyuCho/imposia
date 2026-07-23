@@ -6,8 +6,10 @@ import type {
   PageExtension,
   PageExtensionContext,
   PageExtensionPage,
+  PageViewerController,
   PageViewerMode,
   PageViewerOptions,
+  PageViewerState,
   PageWarning,
   PageWarningLocation,
   PageWarningTargetBounds,
@@ -92,6 +94,17 @@ const viewerOptions = {
   theme: viewerTheme,
   inspector: true,
 } satisfies PageViewerOptions;
+const headlessViewerOptions = {
+  controls: false,
+  mode: "single",
+  zoom: 1.2,
+} satisfies PageViewerOptions;
+void headlessViewerOptions;
+declare const pageViewerController: PageViewerController;
+const unsubscribeViewerState = pageViewerController.subscribe((state) => {
+  void state.effectiveMode;
+});
+unsubscribeViewerState();
 
 declare const inspector: ViewerInspectorController;
 const inspectorState: ViewerInspectorState = inspector.state;
@@ -130,6 +143,9 @@ const reactElement = React.createElement(ImposiaPageViewer, {
   sourceRevision: 2,
   documentOptionsRevision: 3,
   viewerOptions,
+  onViewerStateChange(state: PageViewerState) {
+    void state.page;
+  },
   ref: reactHandle,
 });
 const runtimeHandleCandidate = Reflect.get(reactHandle, "current");
@@ -150,7 +166,15 @@ if (runtimeHandleCandidate !== null && typeof runtimeHandleCandidate === "object
     });
   }
   (runtimeHandleCandidate as ImposiaPageViewerHandle).setMode("spread");
+  (runtimeHandleCandidate as ImposiaPageViewerHandle).goToPage(2);
+  (runtimeHandleCandidate as ImposiaPageViewerHandle).nextPage();
+  (runtimeHandleCandidate as ImposiaPageViewerHandle).previousPage();
+  (runtimeHandleCandidate as ImposiaPageViewerHandle).setZoom(1.2);
   (runtimeHandleCandidate as ImposiaPageViewerHandle).setSpreadCover(true);
+  const viewerState: PageViewerState | undefined = (
+    runtimeHandleCandidate as ImposiaPageViewerHandle
+  ).viewerState;
+  void viewerState;
   (runtimeHandleCandidate as ImposiaPageViewerHandle).openInspector();
   (runtimeHandleCandidate as ImposiaPageViewerHandle).closeInspector();
   (runtimeHandleCandidate as ImposiaPageViewerHandle).toggleInspector();
