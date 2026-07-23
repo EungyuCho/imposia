@@ -7,7 +7,7 @@ import {
   type PageExtension,
   type PageOrientation,
 } from "@imposia/react";
-import { useId, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { DEFAULT_PAGE_PRESET, type PagePreset, PageSetup } from "./page-setup.js";
 
@@ -547,6 +547,7 @@ function App() {
   const [integrityStatus, setIntegrityStatus] = useState<IntegrityStatus>("idle");
   const [integrityReport, setIntegrityReport] = useState<IntegrityReport>();
   const pendingCsrRevisionRef = useRef<number | undefined>(undefined);
+  const csrBurstTimeoutsRef = useRef<number[]>([]);
   const extensionsEnabledRef = useRef(extensionsEnabled);
   const sampleIdRef = useRef(sampleId);
   const runningHeadExtension = useMemo<PageExtension>(
@@ -589,6 +590,21 @@ function App() {
     [pageOrientation, pagePreset, runningHeadExtension],
   );
 
+  const cancelCsrBurst = () => {
+    for (const timeoutId of csrBurstTimeoutsRef.current) window.clearTimeout(timeoutId);
+    csrBurstTimeoutsRef.current = [];
+    pendingCsrRevisionRef.current = undefined;
+  };
+
+  useEffect(
+    () => () => {
+      for (const timeoutId of csrBurstTimeoutsRef.current) window.clearTimeout(timeoutId);
+      csrBurstTimeoutsRef.current = [];
+      pendingCsrRevisionRef.current = undefined;
+    },
+    [],
+  );
+
   const handleReady = (nextDocument: PageDocument) => {
     setPageDocument(nextDocument);
     setError(undefined);
@@ -611,6 +627,9 @@ function App() {
   };
 
   const handleError = (nextError: unknown) => {
+    cancelCsrBurst();
+    setIntegrityReport(undefined);
+    setIntegrityStatus(sampleIdRef.current === "integrity" ? "failed" : "idle");
     setError(nextError instanceof Error ? nextError.message : String(nextError));
   };
 
@@ -623,6 +642,9 @@ function App() {
   };
 
   const markDocumentLoading = () => {
+    cancelCsrBurst();
+    setIntegrityReport(undefined);
+    setIntegrityStatus("idle");
     setState(
       pageDocument === undefined
         ? { status: "loading" }
@@ -635,7 +657,6 @@ function App() {
   const handleSampleChange = (nextSampleId: SampleId) => {
     if (nextSampleId === sampleId) return;
     markDocumentLoading();
-    pendingCsrRevisionRef.current = undefined;
     sampleIdRef.current = nextSampleId;
     setIntegrityStatus(nextSampleId === "integrity" ? "running" : "idle");
     setSampleId(nextSampleId);
@@ -643,13 +664,18 @@ function App() {
 
   const runCsrBurst = () => {
     if (integrityStatus === "running") return;
+    cancelCsrBurst();
     const targetRevision = csrRevision + 3;
     pendingCsrRevisionRef.current = targetRevision;
     setIntegrityStatus("running");
     for (const delay of [0, 16, 32]) {
-      window.setTimeout(() => {
+      const timeoutId = window.setTimeout(() => {
+        csrBurstTimeoutsRef.current = csrBurstTimeoutsRef.current.filter(
+          (candidate) => candidate !== timeoutId,
+        );
         setCsrRevision((revision) => revision + 1);
       }, delay);
+      csrBurstTimeoutsRef.current.push(timeoutId);
     }
   };
 
