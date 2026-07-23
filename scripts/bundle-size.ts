@@ -146,5 +146,5 @@ async function measureEpubImpact(): Promise<EpubImpactMeasurement> {
 
 const measurements = await Promise.all(SCENARIOS.map(measureScenario));
 console.log(renderBundleSizeReport(measurements));
-assertBundleBudgets(measurements);
 console.log(`\n${renderEpubImpactReport(await measureEpubImpact())}`);
+assertBundleBudgets(measurements);

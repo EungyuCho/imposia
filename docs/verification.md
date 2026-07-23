@@ -15,6 +15,7 @@ CI=true pnpm lint
 CI=true pnpm test
 CI=true pnpm bundle:size
 CI=true pnpm build
+CI=true pnpm test:site
 CI=true pnpm test:e2e
 CI=true pnpm run audit:prod
 CI=true pnpm run licenses
