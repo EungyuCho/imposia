@@ -5,6 +5,14 @@ presented and published without introducing another rendering authority.
 
 ## Language
 
+**Pagination integrity**:
+Within a declared Stable or Constrained input boundary, the committed pages
+preserve the fixture's visible authored content exactly once and in source
+order, while metadata, navigation, diagnostics, and print address the same
+global page sequence. Input outside that boundary uses documented recovery or a
+typed warning.
+_Avoid_: Lossless rendering, pixel-perfect pagination
+
 **Committed generation**:
 The latest successfully paginated page document that presentation, print, and
 export are allowed to observe.
