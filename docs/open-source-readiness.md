@@ -1,7 +1,7 @@
 # Open-source readiness
 
 This list records the current launch boundary for Imposia. The browser library
-is ready for a maintainer-reviewed `0.1.3` patch release. Repository rules, the
+is ready for a maintainer-reviewed `0.2.0` release. Repository rules, the
 protected release environment, private vulnerability reporting, dependency
 alerts, code scanning, secret scanning, and automatic pull-request review are
 enabled. npm trusted publishing and the protected release workflow were proven
@@ -19,6 +19,9 @@ by the synchronized `0.1.1` package release.
   exactly once and in order across every committed content-page boundary, plus
   a rapid three-revision CSR walkthrough on the same canonical iframe.
 - Consumer-owned CSS theme modules and per-instance runtime theme tokens.
+- Viewer styles scoped to each Viewer root, plus optional headless presentation
+  controls that let host applications compose navigation, mode, and zoom UI
+  without inheriting the built-in rail or changing host document styles.
 - Ordered Publication snapshots with one global page sequence, shared outline,
   stable destinations, entry page ranges, atomic updates, and reflowable EPUB
   navigation from the same semantic authority.
@@ -42,12 +45,15 @@ by the synchronized `0.1.1` package release.
 
 ## Post-release engineering follow-ups
 
-These refinements are useful, but they do not block the `0.1.3` patch release:
+These refinements are useful, but they do not block the `0.2.0` release:
 
 1. Isolate the latest-generation scheduler only when the extraction removes the
    current duplicated async bookkeeping; do not add a second rendering authority.
 2. Automate the current localized README structure, identifier, link, and
    lifecycle-fact audit so future documentation changes cannot drift silently.
+3. Make Core's native `print()` temporarily own print-ready canonical iframe
+   sizing so headless `mountPageDocument()` consumers do not need host-specific
+   paint workarounds.
 
 ## Maintainer launch gates
 
@@ -58,4 +64,4 @@ These refinements are useful, but they do not block the `0.1.3` patch release:
   after its verification job passes, and confirm npm provenance for all four
   packages.
 - Install the published tarballs in a clean consumer project and confirm the
-  `v0.1.3` GitHub Release contains matching package assets and checksums.
+  `v0.2.0` GitHub Release contains matching package assets and checksums.
