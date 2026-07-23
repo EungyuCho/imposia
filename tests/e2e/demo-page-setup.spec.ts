@@ -11,6 +11,7 @@ test("React publishing lab offers common page presets with A4 selected", async (
   await page.goto("/examples/demo/");
 
   try {
+    await page.locator("[data-demo-case='compatibility']").click();
     const pageSize = page.getByRole("combobox", { name: "Page size" });
     await expect(
       page.getByTestId("demo-preview-surface").locator("[data-imposia-react-status='ready']"),
@@ -41,6 +42,7 @@ test("React publishing lab switches the page size to A3", async ({ page, browser
 
   try {
     const preview = page.getByTestId("demo-preview-surface");
+    await page.locator("[data-demo-case='compatibility']").click();
     await expect(preview.locator("[data-imposia-react-status='ready']")).toBeVisible();
 
     await page.getByRole("combobox", { name: "Page size" }).selectOption("a3");
@@ -65,6 +67,7 @@ test("React publishing lab combines ISO B1 with landscape orientation", async ({
 
   try {
     const preview = page.getByTestId("demo-preview-surface");
+    await page.locator("[data-demo-case='compatibility']").click();
     await expect(preview.locator("[data-imposia-react-status='ready']")).toBeVisible();
     await page.getByRole("button", { name: "Landscape", exact: true }).click();
     await expect(page.getByTestId("metric-sheet")).toHaveText("1123 × 794 px");

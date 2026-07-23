@@ -31,11 +31,12 @@ test("React publishing lab defaults to A4 portrait and switches orientation", as
 
   try {
     const preview = page.getByTestId("demo-preview-surface");
+    await expect(preview.locator("[data-imposia-react-status='ready']")).toBeVisible();
+    await page.locator("[data-demo-case='compatibility']").click();
+    await expect(preview.locator("[data-imposia-react-status='ready']")).toBeVisible();
     const orientation = page.getByRole("group", { name: "Page orientation" });
     const portrait = orientation.getByRole("button", { name: "Portrait", exact: true });
     const landscape = orientation.getByRole("button", { name: "Landscape", exact: true });
-
-    await expect(preview.locator("[data-imposia-react-status='ready']")).toBeVisible();
     await expect(portrait).toHaveAttribute("aria-pressed", "true");
     await expect(landscape).toHaveAttribute("aria-pressed", "false");
     await expect(page.getByTestId("metric-sheet")).toHaveText("794 × 1123 px");
@@ -60,6 +61,54 @@ test("React publishing lab defaults to A4 portrait and switches orientation", as
   }
 });
 
+test("React publishing lab paginates direct editor input and reports commit latency", async ({
+  page,
+  browserName,
+}) => {
+  test.skip(browserName !== "chromium", "Canonical pagination is Chromium-reference only.");
+  const { errors, pageErrors } = captureBrowserErrors(page, browserName);
+  await page.goto("/examples/demo/");
+
+  try {
+    const preview = page.getByTestId("demo-preview-surface");
+    const editor = page.getByTestId("live-editor");
+    await expect(preview.locator("[data-imposia-react-status='ready']")).toBeVisible();
+    await expect(editor).toBeVisible();
+    await page.evaluate(() => {
+      Object.assign(globalThis, {
+        __imposiaEditorFrame: document.querySelector("[data-testid='demo-preview-surface'] iframe"),
+      });
+    });
+
+    await editor.click();
+    await page.keyboard.press("End");
+    await page.keyboard.type(" Live update proof.");
+
+    await expect(page.getByText("Latest editor revision committed")).toBeVisible({
+      timeout: 10_000,
+    });
+    await expect(page.getByTestId("editor-requested")).toHaveText("1");
+    await expect(page.getByTestId("editor-committed")).toHaveText("1");
+    await expect(page.getByTestId("editor-p50")).toHaveText(/\d+ ms/);
+    expect(
+      await page.evaluate(
+        () =>
+          Reflect.get(globalThis, "__imposiaEditorFrame") ===
+          document.querySelector("[data-testid='demo-preview-surface'] iframe"),
+      ),
+    ).toBe(true);
+    const committedText = await page.evaluate(
+      () =>
+        document.querySelector<HTMLIFrameElement>("[data-testid='demo-preview-surface'] iframe")
+          ?.contentDocument?.body.innerText ?? "",
+    );
+    expect(committedText).toContain("Live update proof.");
+  } finally {
+    expect(errors).toEqual([]);
+    expect(pageErrors).toEqual([]);
+  }
+});
+
 test("React publishing lab proves page-boundary continuity through rapid CSR updates", async ({
   page,
   browserName,
@@ -70,6 +119,8 @@ test("React publishing lab proves page-boundary continuity through rapid CSR upd
 
   try {
     const preview = page.getByTestId("demo-preview-surface");
+    await expect(preview.locator("[data-imposia-react-status='ready']")).toBeVisible();
+    await page.locator("[data-demo-case='stress']").click();
     await expect(preview.locator("[data-imposia-react-status='ready']")).toBeVisible();
     await expect(page.getByTestId("integrity-count")).toHaveText("96 / 96");
     await expect(page.getByTestId("integrity-status")).toContainText(
@@ -170,6 +221,59 @@ test("React publishing lab proves page-boundary continuity through rapid CSR upd
   }
 });
 
+test("React publishing lab measures sustained live HTML commit latency without blank pages", async ({
+  page,
+  browserName,
+}) => {
+  test.skip(browserName !== "chromium", "Canonical pagination is Chromium-reference only.");
+  const { errors, pageErrors } = captureBrowserErrors(page, browserName);
+  await page.goto("/examples/demo/");
+
+  try {
+    const preview = page.getByTestId("demo-preview-surface");
+    await expect(preview.locator("[data-imposia-react-status='ready']")).toBeVisible();
+    await page.locator("[data-demo-case='stress']").click();
+    await expect(preview.locator("[data-imposia-react-status='ready']")).toBeVisible();
+    await page.getByTestId("live-render-preset").selectOption("pressure");
+    await page.getByTestId("run-live-render").click();
+
+    await expect(page.getByTestId("live-render-status")).toHaveText("Latest revision committed", {
+      timeout: 15_000,
+    });
+    await expect(page.getByTestId("live-render-requested")).toHaveText("24");
+    await expect(page.getByTestId("live-render-blank")).toHaveText("0");
+    await expect(page.getByTestId("live-render-p50")).toHaveText(/\d+ ms/);
+    await expect(page.getByTestId("live-render-p95")).toHaveText(/\d+ ms/);
+    await expect(page.getByTestId("integrity-count")).toHaveText("96 / 96");
+    await expect(page.getByTestId("integrity-status")).toContainText(
+      "Exact and ordered · CSR revision 24",
+    );
+    await expect(preview.locator("iframe[data-imposia-frame='page-document']")).toHaveCount(1);
+
+    const metrics = await page.evaluate(() => ({
+      requested: Number(
+        document.querySelector<HTMLElement>("[data-testid='live-render-requested']")?.innerText,
+      ),
+      committed: Number(
+        document.querySelector<HTMLElement>("[data-testid='live-render-committed']")?.innerText,
+      ),
+      superseded: Number(
+        document.querySelector<HTMLElement>("[data-testid='live-render-superseded']")?.innerText,
+      ),
+      exact: Number(
+        document.querySelector<HTMLElement>("[data-testid='live-render-exact']")?.innerText,
+      ),
+    }));
+    expect(metrics.committed).toBeGreaterThan(0);
+    expect(metrics.committed).toBeLessThanOrEqual(metrics.requested);
+    expect(metrics.exact).toBe(metrics.committed);
+    expect(metrics.superseded).toBe(metrics.requested - metrics.committed);
+  } finally {
+    expect(errors).toEqual([]);
+    expect(pageErrors).toEqual([]);
+  }
+});
+
 test("React publishing lab switches sources and extension boundaries", async ({
   page,
   browserName,
@@ -182,8 +286,8 @@ test("React publishing lab switches sources and extension boundaries", async ({
   try {
     const preview = page.getByTestId("demo-preview-surface");
     await expect(preview.locator("[data-imposia-react-status='ready']")).toBeVisible();
-    expect(Number(await page.getByTestId("metric-pages").textContent())).toBeGreaterThan(2);
-    await expect(page.getByTestId("metric-warnings")).toHaveText("0");
+    await page.locator("[data-demo-case='compatibility']").click();
+    await expect(preview.locator("[data-imposia-react-status='ready']")).toBeVisible();
     await expect(preview.locator("iframe[data-imposia-frame='page-document']")).toHaveCount(1);
 
     await page.evaluate(() => {
@@ -192,8 +296,8 @@ test("React publishing lab switches sources and extension boundaries", async ({
       });
     });
     await page.locator("[data-sample-id='brief']").click();
-    await expect(page.getByTestId("metric-generation")).toHaveText("2");
     await expect(page.getByTestId("metric-pages")).toHaveText("2");
+    const briefGeneration = Number(await page.getByTestId("metric-generation").textContent());
     expect(
       await page.evaluate(
         () =>
@@ -206,7 +310,7 @@ test("React publishing lab switches sources and extension boundaries", async ({
     await expect(page.getByTestId("demo-code-snippet")).toContainText("mountPageDocument");
 
     await page.getByRole("checkbox", { name: "Running-head extension" }).uncheck();
-    await expect(page.getByTestId("metric-generation")).toHaveText("3");
+    await expect(page.getByTestId("metric-generation")).toHaveText(String(briefGeneration + 1));
     await expect(page.getByTestId("metric-warnings")).toHaveText("0");
     await expect(preview.locator("iframe[data-imposia-frame='page-document']")).toHaveCount(1);
     expect(
@@ -218,7 +322,7 @@ test("React publishing lab switches sources and extension boundaries", async ({
     ).toBe(true);
 
     await page.getByRole("checkbox", { name: "Running-head extension" }).check();
-    await expect(page.getByTestId("metric-generation")).toHaveText("4");
+    await expect(page.getByTestId("metric-generation")).toHaveText(String(briefGeneration + 2));
     await expect(page.getByTestId("metric-warnings")).toHaveText("2");
     expect(
       await page.evaluate(
@@ -229,7 +333,7 @@ test("React publishing lab switches sources and extension boundaries", async ({
     ).toBe(true);
 
     await page.locator("[data-sample-id='publishing']").click();
-    await expect(page.getByTestId("metric-generation")).toHaveText("5");
+    await expect(page.getByTestId("metric-generation")).toHaveText(String(briefGeneration + 3));
     await expect(page.getByTestId("metric-sheet")).toHaveText("794 × 1123 px");
     expect(
       await page.evaluate(
@@ -258,7 +362,7 @@ test("React publishing lab switches sources and extension boundaries", async ({
     expect(await placementCounts()).toEqual({ footnotes: 0, pageFloats: 0 });
 
     await experimentalPlacement.check();
-    await expect(page.getByTestId("metric-generation")).toHaveText("6");
+    await expect(page.getByTestId("metric-generation")).toHaveText(String(briefGeneration + 4));
     expect(await placementCounts()).toEqual({ footnotes: 1, pageFloats: 1 });
     expect(
       await page.evaluate(
@@ -269,7 +373,7 @@ test("React publishing lab switches sources and extension boundaries", async ({
     ).toBe(true);
 
     await experimentalPlacement.uncheck();
-    await expect(page.getByTestId("metric-generation")).toHaveText("7");
+    await expect(page.getByTestId("metric-generation")).toHaveText(String(briefGeneration + 5));
     expect(await placementCounts()).toEqual({ footnotes: 0, pageFloats: 0 });
     expect(
       await page.evaluate(
@@ -291,39 +395,16 @@ test("React publishing lab downloads a ready EPUB", async ({ page, browserName }
   await page.goto("/examples/demo/");
 
   try {
-    const downloadButton = page.getByRole("button", { name: "Download EPUB", exact: true });
     const preview = page.getByTestId("demo-preview-surface");
     await expect(preview.locator("[data-imposia-react-status='ready']")).toBeVisible();
-    await expect(page.getByTestId("demo-export-status")).toHaveText("EPUB ready");
-
-    await page.evaluate(() => {
-      const button = document.querySelector<HTMLButtonElement>(".demo-export-button");
-      if (button === null) throw new Error("Demo export button is missing.");
-      const trace: boolean[] = [];
-      const observer = new MutationObserver((records) => {
-        for (const record of records) {
-          if (record.attributeName !== "disabled") continue;
-          trace.push(record.oldValue === null);
-        }
-      });
-      observer.observe(button, {
-        attributes: true,
-        attributeFilter: ["disabled"],
-        attributeOldValue: true,
-      });
-      Reflect.set(globalThis, "__imposiaDemoExportTrace", trace);
-      Reflect.set(globalThis, "__imposiaDemoExportObserver", observer);
-    });
-    await page.locator("[data-sample-id='publishing']").click();
+    await page.locator("[data-demo-case='compatibility']").click();
     await expect(preview.locator("[data-imposia-react-status='ready']")).toBeVisible();
-    await expect(page.getByRole("checkbox", { name: "Experimental placement" })).not.toBeChecked();
-    const exportTrace = await page.evaluate(() => {
-      const observer = Reflect.get(globalThis, "__imposiaDemoExportObserver");
-      if (observer instanceof MutationObserver) observer.disconnect();
-      const trace = Reflect.get(globalThis, "__imposiaDemoExportTrace");
-      return Array.isArray(trace) ? (trace as boolean[]) : [];
-    });
-    expect(exportTrace).toContain(true);
+    await page.locator("[data-sample-id='hangul']").click();
+    await expect(preview.locator("[data-imposia-react-status='ready']")).toBeVisible();
+    await page.locator("[data-demo-case='output']").click();
+    await expect(preview.locator("[data-imposia-react-status='ready']")).toBeVisible();
+    const downloadButton = page.getByRole("button", { name: "Download EPUB", exact: true });
+    await expect(page.getByTestId("demo-export-status")).toHaveText("EPUB ready");
     await expect(page.getByTestId("metric-sheet")).toHaveText("794 × 1123 px");
     await expect(downloadButton).toBeEnabled();
 
@@ -331,7 +412,7 @@ test("React publishing lab downloads a ready EPUB", async ({ page, browserName }
     await downloadButton.click();
     const download = await downloadPromise;
     await expect(page.getByTestId("demo-export-status")).toHaveText("EPUB downloaded");
-    expect(download.suggestedFilename()).toMatch(/\.epub$/i);
+    expect(download.suggestedFilename()).toBe("imposia-editor.epub");
 
     const stream = await download.createReadStream();
     if (stream === null) throw new Error("EPUB download stream is missing.");
@@ -349,12 +430,13 @@ test("React publishing lab downloads a ready EPUB", async ({ page, browserName }
     expect(bytes.subarray(dataOffset, dataOffset + dataLength).toString("utf8")).toBe(
       "application/epub+zip",
     );
+    const packageDocument = storedZipEntryText(bytes, "EPUB/package.opf");
     const contentXhtml = storedZipEntryText(bytes, "EPUB/content.xhtml");
     const contentCss = storedZipEntryText(bytes, "EPUB/styles.css");
-    expect(contentXhtml).toContain('class="publishing-float"');
-    expect(contentXhtml).toContain('class="publishing-footnote"');
-    expect(contentXhtml).not.toContain("publishing-float-disabled");
-    expect(contentXhtml).not.toContain("publishing-footnote-disabled");
+    expect(packageDocument).toContain("<dc:language>en</dc:language>");
+    expect(packageDocument).toContain("<dc:identifier>urn:imposia:demo:editor</dc:identifier>");
+    expect(contentXhtml).toContain("Edit this page while it stays paginated.");
+    expect(contentXhtml).toContain("One source, one committed sequence");
     expect(contentCss).not.toContain("float-reference: page");
     expect(contentCss).not.toContain("float: footnote");
     expect(contentXhtml).not.toContain("extensions:on");
@@ -376,8 +458,10 @@ test("React publishing lab prints the canonical frame for browser PDF saving", a
 
   try {
     const preview = page.getByTestId("demo-preview-surface");
-    const printButton = page.getByRole("button", { name: "Print / Save PDF", exact: true });
     await expect(preview.locator("[data-imposia-react-status='ready']")).toBeVisible();
+    await page.locator("[data-demo-case='output']").click();
+    await expect(preview.locator("[data-imposia-react-status='ready']")).toBeVisible();
+    const printButton = page.getByRole("button", { name: "Print / Save PDF", exact: true });
     await expect(printButton).toBeEnabled();
     await expect(preview.locator("iframe[data-imposia-frame='page-document']")).toHaveAttribute(
       "sandbox",
@@ -432,6 +516,9 @@ test("React publishing lab keeps viewer controls inside a 320px viewport", async
   try {
     const preview = page.getByTestId("demo-preview-surface");
     await expect(preview.locator("[data-imposia-react-status='ready']")).toBeVisible();
+    await page.locator("[data-demo-case='compatibility']").click();
+    await expect(preview.locator("[data-imposia-react-status='ready']")).toBeVisible();
+    expect(Number(await page.getByTestId("metric-pages").textContent())).toBeGreaterThan(1);
     const geometry = await page.evaluate(() => {
       const toolbar = document.querySelector<HTMLElement>(".imposia-toolbar");
       if (toolbar === null) throw new Error("Demo viewer toolbar is missing.");

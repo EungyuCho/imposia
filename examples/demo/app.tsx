@@ -7,11 +7,15 @@ import {
   type PageExtension,
   type PageOrientation,
 } from "@imposia/react";
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
+import { initialEditorHtml, LiveEditor, useLiveEditorMetrics } from "./live-editor.js";
+import { useLiveRenderRunner } from "./live-render-runner.js";
+import { LiveRenderRunner } from "./live-render-runner-panel.js";
 import { DEFAULT_PAGE_PRESET, type PagePreset, PageSetup } from "./page-setup.js";
 
 type SampleId = "integrity" | "editorial" | "brief" | "hangul" | "publishing";
+type DemoCase = "editor" | "stress" | "compatibility" | "output";
 type CodeMode = "react" | "core";
 type ExportStatus = "idle" | "exporting" | "success" | "error";
 type IntegrityStatus = "idle" | "running" | "verified" | "failed";
@@ -532,7 +536,8 @@ function App() {
   const codeHeadingId = useId();
   const exportHeadingId = useId();
   const integrityHeadingId = useId();
-  const [sampleId, setSampleId] = useState<SampleId>("integrity");
+  const [demoCase, setDemoCase] = useState<DemoCase>("editor");
+  const [sampleId, setSampleId] = useState<SampleId>("editorial");
   const [pagePreset, setPagePreset] = useState<PagePreset>(DEFAULT_PAGE_PRESET);
   const [pageOrientation, setPageOrientation] = useState<PageOrientation>("portrait");
   const [extensionsEnabled, setExtensionsEnabled] = useState(true);
@@ -544,17 +549,55 @@ function App() {
   const [exportStatus, setExportStatus] = useState<ExportStatus>("idle");
   const [exportMessage, setExportMessage] = useState<string>();
   const [csrRevision, setCsrRevision] = useState(0);
+  const [editorHtml, setEditorHtml] = useState(initialEditorHtml);
+  const [editorRevision, setEditorRevision] = useState(0);
   const [integrityStatus, setIntegrityStatus] = useState<IntegrityStatus>("idle");
   const [integrityReport, setIntegrityReport] = useState<IntegrityReport>();
   const pendingCsrRevisionRef = useRef<number | undefined>(undefined);
   const csrBurstTimeoutsRef = useRef<number[]>([]);
   const extensionsEnabledRef = useRef(extensionsEnabled);
   const sampleIdRef = useRef(sampleId);
+  const demoCaseRef = useRef(demoCase);
+  useEffect(() => {
+    demoCaseRef.current = demoCase;
+  }, [demoCase]);
+  const requestLiveRevision = useCallback((revision: number) => {
+    setCsrRevision(revision);
+  }, []);
+  const editorPagination = useLiveEditorMetrics();
+  const handleEditorChange = useCallback(
+    (html: string, requestedAt: number) => {
+      const revision = editorPagination.requestRevision(requestedAt);
+      setEditorHtml(html);
+      setEditorRevision(revision);
+    },
+    [editorPagination.requestRevision],
+  );
+  const isCanonicalIntegrityIntact = useCallback(() => {
+    const frameDocument = viewerRef.current?.current?.iframe.contentDocument;
+    if (frameDocument === null || frameDocument === undefined) return false;
+    return (
+      frameDocument.querySelectorAll("[data-imposia-page] [data-integrity-token]").length ===
+      integrityTokens.length
+    );
+  }, []);
+  const liveRender = useLiveRenderRunner({
+    currentRevision: csrRevision,
+    enabled: demoCase === "stress" && sampleId === "integrity",
+    onRequestRevision: requestLiveRevision,
+    isCanonicalIntact: isCanonicalIntegrityIntact,
+  });
   const runningHeadExtension = useMemo<PageExtension>(
     () => ({
       name: "demo/running-head",
       decoratePage(page, context) {
-        if (!extensionsEnabledRef.current || sampleIdRef.current === "integrity") return undefined;
+        if (
+          !extensionsEnabledRef.current ||
+          sampleIdRef.current === "integrity" ||
+          demoCaseRef.current === "editor" ||
+          demoCaseRef.current === "output"
+        )
+          return undefined;
         context.warn({
           code: "EXTENSION_DEMO_ACTIVE",
           message: "The publishing-lab running-head extension is active.",
@@ -570,6 +613,11 @@ function App() {
   );
   const sample = samples[sampleId];
   const source = useMemo(() => {
+    if (demoCase === "editor" || demoCase === "output") {
+      return {
+        html: `<style>${documentStyle}</style><article data-editor-revision="${editorRevision}">${editorHtml}</article>`,
+      };
+    }
     const selectedHtml =
       sample.id === "publishing" && experimentalPlacementEnabled
         ? sample.html.replace("</style>", `${publishingPlacementCss}</style>`)
@@ -579,8 +627,10 @@ function App() {
         ? selectedHtml.replace("{{CSR_REVISION}}", String(csrRevision))
         : selectedHtml;
     return { html };
-  }, [csrRevision, experimentalPlacementEnabled, sample]);
-  const sourceRevision = `${extensionsEnabled ? "extensions:on" : "extensions:off"};${experimentalPlacementEnabled ? "placement:on" : "placement:off"};csr:${csrRevision}`;
+  }, [csrRevision, demoCase, editorHtml, editorRevision, experimentalPlacementEnabled, sample]);
+  const sourceRevision = `case:${demoCase};${extensionsEnabled ? "extensions:on" : "extensions:off"};${experimentalPlacementEnabled ? "placement:on" : "placement:off"};csr:${csrRevision};editor:${editorRevision}`;
+  const activeTitle =
+    demoCase === "editor" || demoCase === "output" ? "Live editor document" : sample.title;
   const documentOptions = useMemo<PageDocumentOptions>(
     () => ({
       extensions: [runningHeadExtension],
@@ -608,6 +658,20 @@ function App() {
   const handleReady = (nextDocument: PageDocument) => {
     setPageDocument(nextDocument);
     setError(undefined);
+    if (demoCase === "editor" || demoCase === "output") {
+      const editorRevisionText =
+        nextDocument.iframe.contentDocument?.querySelector<HTMLElement>("[data-editor-revision]")
+          ?.dataset.editorRevision;
+      const committedEditorRevision =
+        editorRevisionText === undefined ? Number.NaN : Number(editorRevisionText);
+      if (Number.isFinite(committedEditorRevision)) {
+        editorPagination.recordCommit(committedEditorRevision);
+      }
+      setIntegrityReport(undefined);
+      setIntegrityStatus("idle");
+      pendingCsrRevisionRef.current = undefined;
+      return;
+    }
     if (sample.id !== "integrity") {
       setIntegrityReport(undefined);
       setIntegrityStatus("idle");
@@ -617,6 +681,19 @@ function App() {
 
     const report = inspectIntegrity(nextDocument);
     setIntegrityReport(report);
+    const committedRevisionText =
+      nextDocument.iframe.contentDocument?.querySelector<HTMLElement>(
+        "[data-csr-revision]",
+      )?.innerText;
+    const committedRevision =
+      committedRevisionText === undefined ? Number.NaN : Number(committedRevisionText);
+    if (Number.isFinite(committedRevision)) {
+      liveRender.recordCommit({
+        revision: committedRevision,
+        generation: nextDocument.generation,
+        exactSequence: report.exactSequence,
+      });
+    }
     const pendingRevision = pendingCsrRevisionRef.current;
     if (pendingRevision !== undefined && csrRevision >= pendingRevision) {
       setIntegrityStatus(report.exactSequence ? "verified" : "failed");
@@ -628,6 +705,7 @@ function App() {
 
   const handleError = (nextError: unknown) => {
     cancelCsrBurst();
+    liveRender.cancel();
     setIntegrityReport(undefined);
     setIntegrityStatus(sampleIdRef.current === "integrity" ? "failed" : "idle");
     setError(nextError instanceof Error ? nextError.message : String(nextError));
@@ -643,6 +721,7 @@ function App() {
 
   const markDocumentLoading = () => {
     cancelCsrBurst();
+    liveRender.cancel();
     setIntegrityReport(undefined);
     setIntegrityStatus("idle");
     setState(
@@ -662,8 +741,22 @@ function App() {
     setSampleId(nextSampleId);
   };
 
+  const handleCaseChange = (nextCase: DemoCase) => {
+    if (nextCase === demoCase) return;
+    markDocumentLoading();
+    setDemoCase(nextCase);
+    if (nextCase === "stress") {
+      sampleIdRef.current = "integrity";
+      setSampleId("integrity");
+    } else if (nextCase === "compatibility") {
+      sampleIdRef.current = "publishing";
+      setSampleId("publishing");
+    }
+  };
+
   const runCsrBurst = () => {
     if (integrityStatus === "running") return;
+    liveRender.cancel();
     cancelCsrBurst();
     const targetRevision = csrRevision + 3;
     pendingCsrRevisionRef.current = targetRevision;
@@ -698,11 +791,12 @@ function App() {
     setExportStatus("exporting");
     setExportMessage(undefined);
     try {
+      const exportSampleId = demoCase === "editor" || demoCase === "output" ? "editor" : sample.id;
       const blob = await nextDocument.exportEpub({
         metadata: {
-          title: sample.title,
-          language: sample.id === "hangul" ? "ko" : "en",
-          identifier: `urn:imposia:demo:${sample.id}`,
+          title: activeTitle,
+          language: exportSampleId === "hangul" ? "ko" : "en",
+          identifier: `urn:imposia:demo:${exportSampleId}`,
           modified: "2026-01-01T00:00:00Z",
         },
       });
@@ -711,7 +805,7 @@ function App() {
         const anchor = document.createElement("a");
         try {
           anchor.href = objectUrl;
-          anchor.download = `imposia-${sample.id}.epub`;
+          anchor.download = `imposia-${exportSampleId}.epub`;
           anchor.hidden = true;
           document.body.append(anchor);
           anchor.click();
@@ -737,7 +831,7 @@ function App() {
       await viewer.print();
       setError(undefined);
     } catch (nextError: unknown) {
-      handleError(nextError);
+      handleError(nextError instanceof Error ? nextError : new Error(String(nextError)));
     }
   };
 
@@ -754,14 +848,43 @@ function App() {
 
         <section className="demo-intro">
           <p className="demo-eyebrow">CSR HTML → complete pages</p>
-          <h1>No gaps in the declared page flow.</h1>
+          <h1>Edit HTML. Keep complete pages.</h1>
           <p>
-            Paginate current client-rendered HTML, verify every source token across the page
-            sequence, and keep the same canonical iframe through rapid updates.
+            Change a client-rendered document directly, then inspect stress, compatibility, and
+            output as focused cases instead of one crowded control surface.
           </p>
         </section>
 
-        {sample.id === "integrity" ? (
+        <nav className="demo-case-nav" aria-label="Demo cases">
+          {(
+            [
+              ["editor", "Live editor"],
+              ["stress", "Stress"],
+              ["compatibility", "Compatibility"],
+              ["output", "Output"],
+            ] as const
+          ).map(([caseId, label]) => (
+            <button
+              type="button"
+              key={caseId}
+              data-demo-case={caseId}
+              aria-pressed={demoCase === caseId}
+              onClick={() => handleCaseChange(caseId)}
+            >
+              {label}
+            </button>
+          ))}
+        </nav>
+
+        {demoCase === "editor" ? (
+          <LiveEditor
+            html={editorHtml}
+            metrics={editorPagination.metrics}
+            onChange={handleEditorChange}
+          />
+        ) : null}
+
+        {demoCase === "stress" && sample.id === "integrity" ? (
           <section
             className="demo-control-section demo-integrity-section"
             aria-labelledby={integrityHeadingId}
@@ -810,160 +933,174 @@ function App() {
               className="demo-output-button"
               data-testid="run-csr-burst"
               onClick={runCsrBurst}
-              disabled={integrityStatus === "running"}
+              disabled={integrityStatus === "running" || liveRender.snapshot.status === "running"}
             >
               Run 3-update CSR burst
             </button>
+            <LiveRenderRunner
+              snapshot={liveRender.snapshot}
+              disabled={integrityStatus === "running"}
+              onStart={liveRender.start}
+              onCancel={liveRender.cancel}
+            />
           </section>
         ) : null}
 
-        <section className="demo-control-section" aria-labelledby={sampleHeadingId}>
-          <div className="demo-section-heading">
-            <h2 id={sampleHeadingId}>Document specimen</h2>
-            <span>{String(Object.keys(samples).length).padStart(2, "0")} sources</span>
-          </div>
-          <div className="demo-sample-list">
-            {Object.values(samples).map((candidate) => (
-              <button
-                type="button"
-                className="demo-sample"
-                data-sample-id={candidate.id}
-                aria-pressed={sampleId === candidate.id}
-                key={candidate.id}
-                onClick={() => handleSampleChange(candidate.id)}
-              >
-                <span>{candidate.index}</span>
-                <strong>{candidate.title}</strong>
-                <small>{candidate.summary}</small>
-              </button>
-            ))}
-          </div>
-        </section>
+        {demoCase === "compatibility" ? (
+          <>
+            <section className="demo-control-section" aria-labelledby={sampleHeadingId}>
+              <div className="demo-section-heading">
+                <h2 id={sampleHeadingId}>Document specimen</h2>
+                <span>{String(Object.keys(samples).length).padStart(2, "0")} sources</span>
+              </div>
+              <div className="demo-sample-list">
+                {Object.values(samples).map((candidate) => (
+                  <button
+                    type="button"
+                    className="demo-sample"
+                    data-sample-id={candidate.id}
+                    aria-pressed={sampleId === candidate.id}
+                    key={candidate.id}
+                    onClick={() => handleSampleChange(candidate.id)}
+                  >
+                    <span>{candidate.index}</span>
+                    <strong>{candidate.title}</strong>
+                    <small>{candidate.summary}</small>
+                  </button>
+                ))}
+              </div>
+            </section>
 
-        <section className="demo-control-section" aria-labelledby={runtimeHeadingId}>
-          <div className="demo-section-heading">
-            <h2 id={runtimeHeadingId}>Runtime boundary</h2>
-            <span>{extensionsEnabled ? "decorated" : "undecorated"}</span>
-          </div>
-          <div className="demo-runtime-controls">
-            <PageSetup
-              preset={pagePreset}
-              orientation={pageOrientation}
-              onPresetChange={handlePagePresetChange}
-              onOrientationChange={handleOrientationChange}
-            />
-            <label className="demo-switch">
-              <span>
-                <strong>Running-head extension</strong>
-                <small>Ordered, sanitized, controller-lifetime</small>
-              </span>
-              <input
-                type="checkbox"
-                checked={extensionsEnabled}
-                onChange={(event) => {
-                  markDocumentLoading();
-                  const nextExtensionsEnabled = event.currentTarget.checked;
-                  extensionsEnabledRef.current = nextExtensionsEnabled;
-                  setExtensionsEnabled(nextExtensionsEnabled);
-                }}
-              />
-              <i aria-hidden="true"></i>
-            </label>
-            {sample.id === "publishing" ? (
-              <label className="demo-switch">
-                <span>
-                  <strong>Experimental placement</strong>
-                  <small>Authored footnotes + page floats / opt-in</small>
-                </span>
-                <input
-                  type="checkbox"
-                  checked={experimentalPlacementEnabled}
-                  onChange={(event) => {
-                    markDocumentLoading();
-                    setExperimentalPlacementEnabled(event.currentTarget.checked);
-                  }}
+            <section className="demo-control-section" aria-labelledby={runtimeHeadingId}>
+              <div className="demo-section-heading">
+                <h2 id={runtimeHeadingId}>Runtime boundary</h2>
+                <span>{extensionsEnabled ? "decorated" : "undecorated"}</span>
+              </div>
+              <div className="demo-runtime-controls">
+                <PageSetup
+                  preset={pagePreset}
+                  orientation={pageOrientation}
+                  onPresetChange={handlePagePresetChange}
+                  onOrientationChange={handleOrientationChange}
                 />
-                <i aria-hidden="true"></i>
-              </label>
-            ) : null}
-          </div>
-        </section>
-
-        <section
-          className="demo-control-section demo-export-section"
-          aria-labelledby={exportHeadingId}
-        >
-          <div className="demo-section-heading">
-            <h2 id={exportHeadingId}>Portable output</h2>
-            <span>PDF / EPUB</span>
-          </div>
-          <div className="demo-output-actions">
-            <div className="demo-export-action">
-              <div className="demo-export-copy">
-                <strong>Print or save the current pages</strong>
-                <small>Native browser dialog / canonical iframe</small>
+                <label className="demo-switch">
+                  <span>
+                    <strong>Running-head extension</strong>
+                    <small>Ordered, sanitized, controller-lifetime</small>
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={extensionsEnabled}
+                    onChange={(event) => {
+                      markDocumentLoading();
+                      const nextExtensionsEnabled = event.currentTarget.checked;
+                      extensionsEnabledRef.current = nextExtensionsEnabled;
+                      setExtensionsEnabled(nextExtensionsEnabled);
+                    }}
+                  />
+                  <i aria-hidden="true"></i>
+                </label>
+                {sample.id === "publishing" ? (
+                  <label className="demo-switch">
+                    <span>
+                      <strong>Experimental placement</strong>
+                      <small>Authored footnotes + page floats / opt-in</small>
+                    </span>
+                    <input
+                      type="checkbox"
+                      checked={experimentalPlacementEnabled}
+                      onChange={(event) => {
+                        markDocumentLoading();
+                        setExperimentalPlacementEnabled(event.currentTarget.checked);
+                      }}
+                    />
+                    <i aria-hidden="true"></i>
+                  </label>
+                ) : null}
               </div>
-              <button
-                type="button"
-                className="demo-output-button demo-print-button"
-                onClick={() => void handlePrint()}
-                disabled={state.status !== "ready"}
-              >
-                Print / Save PDF
-              </button>
-            </div>
-            <div className="demo-export-action">
-              <div className="demo-export-copy">
-                <strong>Download the semantic document</strong>
-                <small>Deterministic EPUB 3 / browser-only</small>
-              </div>
-              <button
-                type="button"
-                className="demo-output-button demo-export-button"
-                onClick={() => void handleExport()}
-                disabled={
-                  state.status !== "ready" ||
-                  pageDocument === undefined ||
-                  exportStatus === "exporting"
-                }
-              >
-                Download EPUB
-              </button>
-              <output
-                className={`demo-export-status demo-export-status-${exportStatus}`}
-                data-testid="demo-export-status"
-                aria-live="polite"
-              >
-                {exportStatusLabel(
-                  exportStatus,
-                  exportMessage,
-                  state.status === "ready" && pageDocument !== undefined,
-                )}
-              </output>
-            </div>
-          </div>
-        </section>
+            </section>
+          </>
+        ) : null}
 
-        <section className="demo-code" aria-labelledby={codeHeadingId}>
-          <div className="demo-code-tabs">
-            <h2 id={codeHeadingId}>Use the surface</h2>
-            <fieldset className="demo-code-mode" aria-label="API example">
-              {(["react", "core"] as const).map((mode) => (
+        {demoCase === "output" ? (
+          <section
+            className="demo-control-section demo-export-section"
+            aria-labelledby={exportHeadingId}
+          >
+            <div className="demo-section-heading">
+              <h2 id={exportHeadingId}>Portable output</h2>
+              <span>PDF / EPUB</span>
+            </div>
+            <div className="demo-output-actions">
+              <div className="demo-export-action">
+                <div className="demo-export-copy">
+                  <strong>Print or save the current pages</strong>
+                  <small>Native browser dialog / canonical iframe</small>
+                </div>
                 <button
                   type="button"
-                  aria-pressed={codeMode === mode}
-                  key={mode}
-                  onClick={() => setCodeMode(mode)}
+                  className="demo-output-button demo-print-button"
+                  onClick={() => void handlePrint()}
+                  disabled={state.status !== "ready"}
                 >
-                  {mode === "react" ? "React" : "Core"}
+                  Print / Save PDF
                 </button>
-              ))}
-            </fieldset>
-          </div>
-          <pre data-testid="demo-code-snippet">
-            <code>{snippets[codeMode]}</code>
-          </pre>
-        </section>
+              </div>
+              <div className="demo-export-action">
+                <div className="demo-export-copy">
+                  <strong>Download the semantic document</strong>
+                  <small>Deterministic EPUB 3 / browser-only</small>
+                </div>
+                <button
+                  type="button"
+                  className="demo-output-button demo-export-button"
+                  onClick={() => void handleExport()}
+                  disabled={
+                    state.status !== "ready" ||
+                    pageDocument === undefined ||
+                    exportStatus === "exporting"
+                  }
+                >
+                  Download EPUB
+                </button>
+                <output
+                  className={`demo-export-status demo-export-status-${exportStatus}`}
+                  data-testid="demo-export-status"
+                  aria-live="polite"
+                >
+                  {exportStatusLabel(
+                    exportStatus,
+                    exportMessage,
+                    state.status === "ready" && pageDocument !== undefined,
+                  )}
+                </output>
+              </div>
+            </div>
+          </section>
+        ) : null}
+
+        {demoCase === "compatibility" || demoCase === "output" ? (
+          <section className="demo-code" aria-labelledby={codeHeadingId}>
+            <div className="demo-code-tabs">
+              <h2 id={codeHeadingId}>Use the surface</h2>
+              <fieldset className="demo-code-mode" aria-label="API example">
+                {(["react", "core"] as const).map((mode) => (
+                  <button
+                    type="button"
+                    aria-pressed={codeMode === mode}
+                    key={mode}
+                    onClick={() => setCodeMode(mode)}
+                  >
+                    {mode === "react" ? "React" : "Core"}
+                  </button>
+                ))}
+              </fieldset>
+            </div>
+            <pre data-testid="demo-code-snippet">
+              <code>{snippets[codeMode]}</code>
+            </pre>
+          </section>
+        ) : null}
       </aside>
 
       <section className="demo-workspace" aria-label="Live document preview">
@@ -973,7 +1110,7 @@ function App() {
               <i aria-hidden="true"></i>
               {statusLabel(state.status)}
             </span>
-            <strong>{sample.title}</strong>
+            <strong>{activeTitle}</strong>
           </div>
           <dl className="demo-metrics" aria-label="Document metrics">
             <div>
