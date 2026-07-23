@@ -1,4 +1,4 @@
 {
   "title": "Imposia 文档",
-  "pages": ["index", "getting-started", "publishing-contract"]
+  "pages": ["index", "getting-started", "api-reference", "publishing-contract"]
 }

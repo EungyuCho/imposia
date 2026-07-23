@@ -13,6 +13,7 @@ export function baseOptions(lang: Locale): BaseLayoutProps {
   const labels = navigationLabels[lang];
 
   return {
+    githubUrl: "https://github.com/EungyuCho/imposia",
     nav: {
       title: "Imposia",
       url: `/${lang}`,

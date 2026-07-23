@@ -1,6 +1,15 @@
 import { RootProvider } from "fumadocs-ui/provider/react-router";
+import type { ComponentProps } from "react";
 import type { LinksFunction, MetaFunction } from "react-router";
-import { Links, Meta, Outlet, Scripts, ScrollRestoration, useLocation } from "react-router";
+import {
+  Links,
+  Meta,
+  Outlet,
+  Link as RouterLink,
+  Scripts,
+  ScrollRestoration,
+  useLocation,
+} from "react-router";
 import { isSupportedLocale } from "../components/marketing-copy";
 import { i18nUI, type Locale } from "../lib/i18n";
 import stylesHref from "../styles.css?url";
@@ -14,6 +23,23 @@ export const meta: MetaFunction = () => [
     name: "description",
   },
 ];
+
+const DEMO_PATH = "/examples/demo/";
+
+function SiteLink({
+  href = "#",
+  prefetch,
+  ...props
+}: ComponentProps<"a"> & { prefetch?: boolean }) {
+  return (
+    <RouterLink
+      {...props}
+      prefetch={prefetch ? "intent" : "none"}
+      reloadDocument={href === DEMO_PATH}
+      to={href}
+    />
+  );
+}
 
 function localeFromPathname(pathname: string): Locale {
   const firstSegment = pathname.split("/").find(Boolean) ?? "";
@@ -55,6 +81,7 @@ export default function App() {
 
   return (
     <RootProvider
+      components={{ Link: SiteLink }}
       i18n={i18nUI.provider(lang)}
       search={{ enabled: false }}
       theme={{ enabled: false }}

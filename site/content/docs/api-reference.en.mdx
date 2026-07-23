@@ -1,0 +1,340 @@
+---
+title: API reference
+description: Public React, Core, Client, and Viewer APIs for paginated HTML, publications, PDF viewing, navigation, diagnostics, print, and EPUB export.
+---
+
+Use this reference after you have rendered a first document. It covers the browser APIs application code calls directly, including every controller and React handle method. Core and Viewer require DOM APIs and do not run during server-side rendering.
+
+## Package map
+
+| Package | Purpose | Primary APIs |
+| --- | --- | --- |
+| `@imposia/react` | React integration | `ImposiaPageViewer`, `ImposiaDocument`, `ImposiaPublicationViewer`, both lifecycle hooks |
+| `@imposia/core` | Framework-neutral pagination and publications | `mountPageDocument`, `mountPublication`, `prepareDocument` |
+| `@imposia/viewer` | Present committed pages or load a PDF | `mountPageViewer`, `mountViewer`, deep-link helpers |
+| `@imposia/client` | Combined framework-neutral entry point | Re-exports the primary Core and Viewer integration APIs |
+
+Import `@imposia/react/styles.css` once when you use the React package.
+
+## React components and hooks
+
+### `ImposiaPageViewer` and `ImposiaDocument`
+
+`ImposiaPageViewer` mounts a Core page document, then binds the page Viewer after the first commit. `ImposiaDocument` is a compatibility wrapper with the same public props and handle types: `ImposiaDocumentProps = ImposiaPageViewerProps` and `ImposiaDocumentHandle = ImposiaPageViewerHandle`.
+
+```tsx
+const viewer = useRef<ImposiaPageViewerHandle>(null);
+
+<ImposiaPageViewer
+  ref={viewer}
+  source={{ html: "<main><h1>Report</h1></main>" }}
+  documentOptions={{ page: { size: "A4", margin: "18mm" } }}
+  viewerOptions={{ mode: "single", inspector: true }}
+  onError={console.error}
+/>;
+```
+
+| Prop | Type | Required | Purpose |
+| --- | --- | --- | --- |
+| `source` | `PageSource` | Yes | HTML or light DOM to paginate. |
+| `sourceRevision` | `string \| number` | No | Forces an update when source identity/content comparison is otherwise unchanged. |
+| `documentOptions` | `PageDocumentOptions` | No | Core pagination options. |
+| `documentOptionsRevision` | `string \| number` | No | Remounts Core with new document options. |
+| `viewerOptions` | `PageViewerOptions` | No | Page presentation, reader, and inspector options. |
+| `className`, `style` | `string`, `CSSProperties` | No | Host `div` presentation. |
+| `onReady` | `(document: PageDocument) => void` | No | Runs after the document and Viewer binding are ready. |
+| `onError` | `(error: unknown) => void` | No | Receives Core or Viewer binding failures. |
+| `onStateChange` | `(state: ImposiaDocumentState) => void` | No | Receives `idle`, `loading`, `ready`, and `error`. |
+
+#### `ImposiaPageViewerHandle`
+
+| Member | Returns | Constraint |
+| --- | --- | --- |
+| `current` | `PageDocument \| undefined` | Current commit while mounted. |
+| `setMode(mode)` | `void` | Accepts `continuous`, `single`, or `spread`; throws before ready/after unmount. |
+| `setSpreadCover(cover)` | `void` | Throws before ready/after unmount. |
+| `openInspector()`, `closeInspector()`, `toggleInspector()` | `void` | Require `viewerOptions.inspector: true`. |
+| `selectWarning(warning)` | `void` | Requires the inspector and a warning from its current generation. |
+| `print()` | `Promise<void>` | Rejects before ready/after unmount. |
+| `exportEpub(options)` | `Promise<Blob>` | Rejects before ready/after unmount. |
+
+### `ImposiaPublicationViewer`
+
+```tsx
+const publication = useRef<ImposiaPublicationViewerHandle>(null);
+
+<ImposiaPublicationViewer
+  ref={publication}
+  snapshot={{
+    metadata: { title: "Guide", language: "en" },
+    entries: [{ id: "intro", title: "Introduction", html: "<h1>Introduction</h1>" }],
+  }}
+/>;
+```
+
+Its required `snapshot` prop accepts `PublicationSnapshot`. Optional props are `snapshotRevision`, `publicationOptions`, `publicationOptionsRevision`, `viewerOptions` (without `reader`), `readerOptions` (without `controller`), `className`, `style`, `onReady`, `onError`, and `onStateChange`. Revision props force updates/remounts as their names indicate. The component supplies the reader/controller binding.
+
+#### `ImposiaPublicationViewerHandle`
+
+All actions except `current` and `resolveDestination` throw after unmount. Reader actions also throw before the Publication reader is ready.
+
+| Member | Returns | Effect or constraint |
+| --- | --- | --- |
+| `current` | `PublicationDocument \| undefined` | Current commit while mounted. |
+| `resolveDestination(id)` | `PublicationDestination \| undefined` | `undefined` before commit, after unmount, or for an unknown ID. |
+| `navigate(destination)` | `void` | A stale destination throws. |
+| `openTableOfContents()`, `closeTableOfContents()`, `toggleTableOfContents()` | `void` | Control the outline panel. |
+| `openThumbnails()`, `closeThumbnails()`, `toggleThumbnails()` | `void` | Control the thumbnail panel. |
+| `getThumbnails()` | `readonly PublicationThumbnail[]` | Current-generation thumbnails. |
+| `selectThumbnail(thumbnail)` | `void` | A thumbnail from another generation throws. |
+| `restoreDeepLink(value)` | `PublicationDestination \| undefined` | Resolves and navigates a valid current link. |
+| `openSearch()`, `closeSearch()`, `toggleSearch()` | `void` | Control the search panel. |
+| `search(query)` | `readonly PublicationSearchResult[]` | Searches the current commit. |
+| `nextSearchResult()`, `previousSearchResult()` | `PublicationSearchResult \| undefined` | Move through results. |
+| `selectSearchResult(result)` | `void` | Navigates to a result. |
+| `setMode(mode)`, `setSpreadCover(cover)` | `void` | Control page presentation. |
+| `openInspector()`, `closeInspector()`, `toggleInspector()` | `void` | Require `viewerOptions.inspector: true`. |
+| `selectWarning(warning)` | `void` | Requires an inspector warning from the current generation. |
+| `print()` | `Promise<void>` | Rejects before ready/after unmount. |
+| `exportEpub(options)` | `Promise<Blob>` | Exports the latest commit; rejects before ready/after unmount. |
+
+### `useImposiaDocument` and `useImposiaPublication`
+
+```ts
+useImposiaDocument(props: UseImposiaDocumentProps): UseImposiaDocumentResult;
+useImposiaPublication(props: UseImposiaPublicationProps): UseImposiaPublicationResult;
+```
+
+Both hooks return a `hostRef`, lifecycle `state`, and a controller that is `undefined` until the mount effect creates it. Attach `hostRef` to one `div`. A `loading` or `error` state can retain the last committed document/publication.
+
+`useImposiaDocument` accepts the page component's source, revision, options, and callbacks. HTML sources update when HTML/base URL changes; light-DOM sources update when node identity changes. `sourceRevision` forces an update, and `documentOptionsRevision` remounts the controller.
+
+`useImposiaPublication` accepts the publication component's snapshot, revision, options, and callbacks. It updates when the snapshot reference or `snapshotRevision` changes; `publicationOptionsRevision` remounts the controller. Both hooks destroy their controller on cleanup and treat `AbortError` as lifecycle cancellation.
+
+```tsx
+function Article({ html }: { html: string }) {
+  const { hostRef, state } = useImposiaDocument({ source: { html } });
+  return <div ref={hostRef} aria-busy={state.status === "loading"} />;
+}
+```
+
+## Core page document
+
+### `mountPageDocument`
+
+```ts
+mountPageDocument(
+  container: HTMLElement,
+  source: PageSource,
+  options?: PageDocumentOptions,
+): PageDocumentController;
+```
+
+The function appends one canonical iframe immediately, starts a staged generation, and returns synchronously. Await `ready` before reading the first document.
+
+```ts
+const controller = mountPageDocument(host, { html: "<article><h1>Hello</h1></article>" });
+const pageDocument = await controller.ready;
+```
+
+`PageSource` is `{ html: string; baseUrl?: string }` or `{ lightDom: Element | DocumentFragment; baseUrl?: string }`.
+
+| `PageDocumentOptions` field | Type / purpose |
+| --- | --- |
+| `css` | `readonly string[]`; additional authored CSS. |
+| `assetResolver` | Async resolver for font, image, media, and stylesheet requests. |
+| `page` | `{ size?, orientation?, margin? }`; size accepts `A4`, `Letter`, or custom width/height. |
+| `limits` | Optional input, node, asset, deadline, page, layout-pass, and generated-output limits. |
+| `headerTemplate`, `footerTemplate` | Decoration markup. |
+| `decorateBlankPages` | Whether blank pages receive decorations. |
+| `experimental` | `{ footnotes?: boolean; pageFloats?: boolean }`. |
+| `extensions` | Ordered `PageExtension` or `PublicationExtension` values. |
+| `signal` | Cancels the initial generation. |
+| `onProgress` | Receives `{ completedPages }` during commit. |
+
+An `AssetResolver` receives `{ url, kind, baseUrl, signal }` and resolves to `{ status: "resolved", bytes, mimeType, resolvedUrl? }` or `{ status: "blocked", reason? }`.
+
+#### `PageDocumentController`
+
+| Member | Returns | Readiness and errors |
+| --- | --- | --- |
+| `ready` | `Promise<PageDocument>` | First commit, or rejection if it cannot commit. |
+| `current` | `PageDocument \| undefined` | Previous commit remains during/after a failed update; cleared by destruction. |
+| `update(source, options?)` | `Promise<PageDocument>` | Starts a generation; a newer update aborts the active one. Supports `options.signal`. |
+| `print()` | `Promise<void>` | Waits for latest work, then prints the latest successful commit. Rejects with no commit/after destruction. |
+| `destroy()` | `Promise<void>` | Aborts generation/export work, removes the iframe, releases resources, and waits for tracked work. Idempotent. |
+
+### `PageDocument`
+
+| Member | Type / return | Meaning |
+| --- | --- | --- |
+| `iframe` | `HTMLIFrameElement` | Core-owned canonical frame. |
+| `generation`, `pageCount` | `number` | Commit number and page count. |
+| `pages` | `readonly PageMetadata[]` | Page number, side, name, blank state, geometry, dimensions, and body text. |
+| `warnings` | `readonly PageWarning[]` | Current-generation diagnostics. |
+| `timings` | `{ totalMs; resourceMs; paginationMs }` | Generation timings in milliseconds. |
+| `exportEpub(options)` | `Promise<Blob>` | Waits for latest active work and exports the latest committed semantic source. |
+
+EPUB options require `metadata: { title, language, identifier, modified? }` and optionally accept `signal` and `{ maxEntries?, maxBytes? }` limits.
+
+### Core utilities
+
+```ts
+prepareDocument(html: string, options?: PrepareDocumentOptions): PreparedDocument;
+pageWarningTargetBounds(document: PageDocument, warning: PageWarning): PageWarningTargetBounds | undefined;
+hasPageDocumentFrameSandbox(iframe: HTMLIFrameElement): boolean;
+selectBlankMarkers(markers: PageSideConstraint[], pages: Map<number, number>): number[];
+```
+
+- `prepareDocument` synchronously normalizes/sanitizes HTML and returns `{ html, headerTemplate?, footerTemplate?, warnings }`. Its options are `headerTemplate`, `footerTemplate`, and `allowRemoteResources`. API decoration options override embedded templates.
+- `pageWarningTargetBounds` returns live `{ left, top, width, height }` in iframe viewport coordinates. It returns `undefined` for a foreign/unlocated warning.
+- `hasPageDocumentFrameSandbox` is true only for the exact public sandbox token set (`allow-same-origin` and `allow-modals`).
+- `selectBlankMarkers` returns marker IDs needing a blank to satisfy left/right parity, accounting for prior selections. It throws when a marker has no page mapping.
+
+## Core publication
+
+### `mountPublication`
+
+```ts
+mountPublication(
+  container: HTMLElement,
+  snapshot: PublicationSnapshot,
+  options?: PublicationOptions,
+): PublicationController;
+```
+
+It composes ordered entries into one page sequence and returns synchronously. Invalid snapshots or Publication extensions can throw during mounting.
+
+```ts
+const controller = mountPublication(host, {
+  metadata: { title: "Handbook", language: "en" },
+  entries: [
+    { id: "cover", title: "Cover", html: "<h1>Handbook</h1>" },
+    { id: "start", title: "Start", html: "<h1>Start</h1><p>First step.</p>" },
+  ],
+});
+const publication = await controller.ready;
+```
+
+`PublicationSnapshot` contains `metadata: { title, language?, identifier? }` and ordered entries. Each entry requires `id`, `title`, optional `baseUrl`, and exactly one of `html` or `lightDom`. `PublicationOptions` contains `PageDocumentOptions` except that `extensions` accepts only `PublicationExtension[]`.
+
+#### `PublicationController`
+
+| Member | Returns | Readiness and errors |
+| --- | --- | --- |
+| `ready` | `Promise<PublicationDocument>` | First committed Publication. |
+| `current` | `PublicationDocument \| undefined` | Current commit. |
+| `resolveDestination(id)` | `PublicationDestination \| undefined` | Resolves an outline/search ID in the current generation. |
+| `search(query)` | `readonly PublicationSearchResult[]` | Empty before commit; otherwise searches the current index. |
+| `navigate(destination)` | `void` | Throws unless the complete destination matches and exists in the current generation. |
+| `update(snapshot, options?)` | `Promise<PublicationDocument>` | Validates/stages a complete snapshot; supports `options.signal`. |
+| `print()` | `Promise<void>` | Uses the page controller's latest-successful-commit behavior. |
+| `destroy()` | `Promise<void>` | Destroys underlying page and Publication resources. |
+
+`PublicationDocument` extends `PageDocument` with committed `metadata`, `entries`, and nested `outline`. Each entry has an inclusive global `pageRange`. A `PublicationDestination` is `{ id, entryId, page, generation }`; it is generation-bound. A search result is `{ entry, page, excerpt, destination }`.
+
+## Viewer page documents, PDF, reader, and inspector
+
+### `mountPageViewer`
+
+```ts
+mountPageViewer(container: HTMLElement, document: PageDocument, options?: PageViewerOptions): PageViewerController;
+validatePageViewerOptions(document: PageDocument, options?: PageViewerOptions): void;
+```
+
+Mount only after Core commits. `container` must be the canonical iframe's current parent. Validation checks the document, sandbox, theme, and optional reader synchronously.
+
+`PageViewerOptions` accepts `mode?: "continuous" | "single" | "spread"`, `spread?: { cover? }`, `zoom?`, `theme?`, `inspector?`, and `reader?`. A theme is a map of CSS properties whose names begin `--imposia-viewer-`.
+
+#### `PageViewerController`
+
+| Member | Returns | Effect or constraint |
+| --- | --- | --- |
+| `goToPage(page)`, `nextPage()`, `previousPage()` | `void` | Clamp/advance within current pages or effective spreads. |
+| `setZoom(zoom)` | `void` | Rounds/clamps finite input. |
+| `setMode(mode)`, `setSpreadCover(cover)` | `void` | Change requested mode/cover layout. |
+| `setTheme(theme?)` | `void` | Replace or clear Viewer variables. |
+| `refresh(document)` | `void` | Requires the same iframe and a newer generation; throws after destruction/invalid input. |
+| `print()` | `Promise<void>` | Rejects after destruction or when the iframe is unavailable. |
+| `destroy()` | `void` | Removes Viewer bindings/UI and restores the Core iframe container. Idempotent. |
+| `state` | `PageViewerState` | Page, count, zoom, requested/effective mode, `ready`, and generation. |
+| `reader` | `PublicationReaderController \| undefined` | Present when reader options were supplied. |
+| `inspector` | `ViewerInspectorController \| undefined` | Present when `inspector: true`. |
+
+Narrow containers can report `mode: "spread"` with `effectiveMode: "single"`.
+
+### Publication reader and deep links
+
+Reader options require the `PublicationController` that owns the exact displayed `PublicationDocument`; they may include `initialDeepLink` and `onDeepLinkChange`.
+
+| `PublicationReaderController` member | Returns / effect |
+| --- | --- |
+| `openTableOfContents()`, `closeTableOfContents()`, `toggleTableOfContents()` | Control the outline panel. |
+| `openThumbnails()`, `closeThumbnails()`, `toggleThumbnails()` | Control thumbnails. |
+| `selectThumbnail(thumbnail)` | Goes to a current-generation thumbnail; foreign thumbnails throw. |
+| `openSearch()`, `closeSearch()`, `toggleSearch()` | Control search. |
+| `search(query)` | `readonly PublicationSearchResult[]`. |
+| `nextSearchResult()`, `previousSearchResult()` | `PublicationSearchResult \| undefined`. |
+| `selectSearchResult(result)` | Selects/navigates to a result. |
+| `navigate(destination)` | Validates, navigates, and emits a deep link. |
+| `restoreDeepLink(value)` | `PublicationDestination \| undefined`; resolves and navigates. |
+| `state` | Panel state, thumbnails, destination/deep link, query, results, and active result index. |
+
+All reader methods throw after destruction. Opening one auxiliary panel closes the others. `PublicationThumbnail` exposes page, generation, dimensions, and `previewLineCount`.
+
+```ts
+serializePublicationDeepLink(destination: PublicationDestination): string;
+restorePublicationDeepLink(value: string, controller: PublicationController): PublicationDestination | undefined;
+```
+
+Serialization produces a versioned value from the destination ID. The standalone restore helper accepts only canonical encoding and resolves against the current generation; unlike the reader method, it does not navigate.
+
+### Viewer inspector
+
+| `ViewerInspectorController` member | Returns / effect |
+| --- | --- |
+| `open()`, `close()`, `toggle()` | Control diagnostics; throw after destruction. |
+| `select(warning)` | Goes to/highlights a located warning; foreign-generation warnings throw. |
+| `state` | `{ open, warnings, selected }`. |
+
+### `mountViewer` for PDF
+
+```ts
+mountViewer(container: HTMLElement, source: ViewerSource, options?: ViewerOptions): ViewerController;
+type ViewerSource = Uint8Array | ArrayBuffer | string | { pdf: Uint8Array };
+```
+
+This separate Viewer loads/rasterizes PDF pages with PDF.js. Options are `mode?: "continuous" | "single"`, `zoom?`, `workerSrc?`, and `theme?`. It returns immediately in `loading`; failures set `state.status` to `error` and populate `state.error`.
+
+| `ViewerController` member | Returns / effect |
+| --- | --- |
+| `goToPage(page)`, `nextPage()`, `previousPage()` | Navigate only while ready. |
+| `setZoom(zoom)`, `setMode(mode)` | Update rendering only while ready. |
+| `setTheme(theme?)` | Replace/clear Viewer variables; ignored after destruction. |
+| `destroy()` | Cancels work, destroys PDF.js resources, and empties the container. |
+| `state` | Page, count, zoom, mode, loading/ready/error status, and optional error text. |
+
+## Lifecycle and errors
+
+| Situation | Result |
+| --- | --- |
+| First generation pending | `current` is `undefined`; React state is `loading`. |
+| Update pending after commit | The previous commit stays visible and in React state. |
+| Newer update starts | Older active generation rejects with `AbortError`. |
+| Caller aborts | Related generation/export rejects with DOM `AbortError`. |
+| Update fails after commit | Promise rejects; previous commit remains current. |
+| Controller destroys | Work aborts, resources/frame are released, and `current` clears. |
+
+`ImposiaError` extends `Error` with `readonly code: string`. Handle cancellation separately from reportable failures:
+
+```ts
+try {
+  await controller.update(nextSource, { signal });
+} catch (error) {
+  if (error instanceof DOMException && error.name === "AbortError") return;
+  if (error instanceof ImposiaError) console.error(error.code, error.message);
+  throw error;
+}
+```
+
+Viewer methods generally ignore calls that cannot operate in their current state. Ownership-sensitive calls throw: page Viewer mount/refresh validate the canonical iframe, Publication navigation rejects stale destinations, reader selection rejects foreign thumbnails, and inspector selection rejects foreign warnings.

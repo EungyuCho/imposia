@@ -1,0 +1,345 @@
+---
+title: API 레퍼런스
+description: React, Core, Viewer의 컴포넌트, 함수, 컨트롤러와 핸들 메서드를 확인합니다.
+---
+
+기본 사용법을 익힌 개발자가 정확한 시그니처와 준비 조건을 찾을 때 사용하는 문서입니다. 모든 API는 브라우저 ESM 환경에서 동작합니다. React API는 React와 React DOM 18 이상이 필요합니다.
+
+## 패키지 맵
+
+| 패키지 | 선택할 때 | 대표 API |
+| --- | --- | --- |
+| `@imposia/react` | React 컴포넌트나 훅이 필요할 때. `@imposia/client`의 공개 API도 다시 내보냅니다. | `ImposiaPageViewer`, `ImposiaPublicationViewer` |
+| `@imposia/client` | Core와 Viewer를 프레임워크 없이 한 패키지에서 쓸 때 | `mountPageDocument`, `mountPageViewer` |
+| `@imposia/core` | 페이지 생성과 Publication 수명 주기를 직접 제어할 때 | `mountPageDocument`, `mountPublication` |
+| `@imposia/viewer` | Core iframe이나 기존 PDF를 표시할 때 | `mountPageViewer`, `mountViewer` |
+
+스타일은 사용하는 진입점에서 한 번 불러옵니다.
+
+```ts
+import "@imposia/react/styles.css";
+// 또는 import "@imposia/client/styles.css";
+```
+
+## React 컴포넌트와 훅
+
+### `ImposiaPageViewer`
+
+```tsx
+<ImposiaPageViewer ref={ref} source={source} />
+```
+
+| Prop | 타입 | 설명 |
+| --- | --- | --- |
+| `source` | `PageSource` | 필수. 페이지로 만들 HTML 또는 light DOM입니다. |
+| `sourceRevision` | `string \| number` | 같은 내용으로 판단되는 source를 다시 처리할 때 바꿉니다. |
+| `documentOptions` | `PageDocumentOptions` | Core 컨트롤러 생성 설정입니다. |
+| `documentOptionsRevision` | `string \| number` | 바뀌면 컨트롤러와 canonical iframe을 새 설정으로 교체합니다. |
+| `viewerOptions` | `PageViewerOptions` | 모드, 배율, 테마, Inspector 설정입니다. |
+| `className`, `style` | `string`, `CSSProperties` | 호스트 `div`의 표시 속성입니다. |
+| `onReady` | `(document: PageDocument) => void` | Core 문서와 Viewer가 같은 generation을 표시할 준비를 마치면 호출합니다. |
+| `onError` | `(error: unknown) => void` | Core 작업이나 Viewer 바인딩이 실패하면 호출합니다. |
+| `onStateChange` | `(state: ImposiaDocumentState) => void` | `idle`, `loading`, `ready`, `error` 전환을 전달합니다. |
+
+`documentOptions`의 identity만 바뀌어서는 설정이 달라지지 않습니다. 새 resolver, extension, 용지 설정을 적용하려면 `documentOptionsRevision`도 바꾸세요.
+
+#### `ImposiaPageViewerHandle`
+
+| 멤버 | 반환값과 조건 |
+| --- | --- |
+| `current` | `PageDocument \| undefined`. 준비 전이나 unmount 뒤에는 `undefined`입니다. |
+| `setMode(mode)` | `void`. `continuous`, `single`, `spread`로 바꿉니다. 문서 준비 전에는 throw합니다. |
+| `setSpreadCover(cover)` | `void`. spread에서 1페이지를 단독 표지로 둘지 정합니다. |
+| `openInspector()` | `void`. Inspector가 없으면 throw합니다. |
+| `closeInspector()` | `void`. Inspector가 없으면 throw합니다. |
+| `toggleInspector()` | `void`. Inspector가 없으면 throw합니다. |
+| `selectWarning(warning)` | `void`. 현재 generation의 경고만 받습니다. Inspector가 없거나 경고가 오래됐으면 throw합니다. |
+| `print()` | `Promise<void>`. 준비 전이나 unmount 뒤에는 reject합니다. |
+| `exportEpub(options)` | `Promise<Blob>`. 준비 전이나 unmount 뒤에는 reject합니다. |
+
+`ImposiaDocument`는 `ImposiaPageViewer`의 별칭입니다. `ImposiaDocumentProps`와 `ImposiaDocumentHandle`도 각각 Page Viewer의 props와 handle 타입과 같습니다.
+
+```tsx
+const ref = useRef<ImposiaPageViewerHandle>(null);
+<ImposiaPageViewer
+  ref={ref}
+  source={{ html: "<main><h1>문서</h1></main>" }}
+  viewerOptions={{ inspector: true }}
+/>;
+await ref.current?.print();
+```
+
+### `ImposiaPublicationViewer`
+
+```tsx
+<ImposiaPublicationViewer ref={ref} snapshot={snapshot} />
+```
+
+| Prop | 타입 | 설명 |
+| --- | --- | --- |
+| `snapshot` | `PublicationSnapshot` | 필수. 메타데이터와 순서가 있는 entry 목록입니다. |
+| `snapshotRevision` | `string \| number` | 같은 snapshot을 다시 처리할 때 바꿉니다. |
+| `publicationOptions` | `PublicationOptions` | Publication 컨트롤러 생성 설정입니다. |
+| `publicationOptionsRevision` | `string \| number` | 바뀌면 컨트롤러와 canonical iframe을 교체합니다. |
+| `viewerOptions` | `Omit<PageViewerOptions, "reader">` | Reader를 제외한 페이지 표시 옵션입니다. |
+| `readerOptions` | `Omit<PublicationReaderOptions, "controller">` | 초기 deep link와 변경 콜백입니다. |
+| `className`, `style` | `string`, `CSSProperties` | 호스트 `div`의 표시 속성입니다. |
+| `onReady`, `onError`, `onStateChange` | callbacks | Publication 준비, 오류, 상태 전환을 전달합니다. |
+
+#### `ImposiaPublicationViewerHandle`
+
+| 멤버 | 반환값과 조건 |
+| --- | --- |
+| `current` | `PublicationDocument \| undefined`. 준비 전이나 unmount 뒤에는 `undefined`입니다. |
+| `resolveDestination(id)` | 현재 목적지 또는 `undefined`입니다. 준비 전에도 `undefined`입니다. |
+| `navigate(destination)` | 목적지로 이동하고 deep link를 갱신합니다. Reader 준비 전이나 오래된 목적지이면 throw합니다. |
+| `openTableOfContents()` | 목차를 엽니다. Reader 준비 전에는 throw합니다. |
+| `closeTableOfContents()` | 목차를 닫습니다. Reader 준비 전에는 throw합니다. |
+| `toggleTableOfContents()` | 목차 상태를 바꿉니다. Reader 준비 전에는 throw합니다. |
+| `openThumbnails()` | 썸네일을 엽니다. Reader 준비 전에는 throw합니다. |
+| `closeThumbnails()` | 썸네일을 닫습니다. Reader 준비 전에는 throw합니다. |
+| `toggleThumbnails()` | 썸네일 상태를 바꿉니다. Reader 준비 전에는 throw합니다. |
+| `getThumbnails()` | `readonly PublicationThumbnail[]`. 현재 generation의 모델입니다. |
+| `selectThumbnail(thumbnail)` | 페이지로 이동합니다. 오래된 모델이면 throw합니다. |
+| `restoreDeepLink(value)` | 복원한 목적지 또는 `undefined`. 성공하면 이동합니다. |
+| `openSearch()` | 검색을 엽니다. Reader 준비 전에는 throw합니다. |
+| `closeSearch()` | 검색을 닫습니다. Reader 준비 전에는 throw합니다. |
+| `toggleSearch()` | 검색 상태를 바꿉니다. Reader 준비 전에는 throw합니다. |
+| `search(query)` | `readonly PublicationSearchResult[]`. 현재 commit을 검색합니다. |
+| `nextSearchResult()` | 다음 결과 또는 `undefined`. 결과가 있으면 이동합니다. |
+| `previousSearchResult()` | 이전 결과 또는 `undefined`. 결과가 있으면 이동합니다. |
+| `selectSearchResult(result)` | 결과를 선택해 이동합니다. 오래된 결과이면 throw할 수 있습니다. |
+| `setMode(mode)` | 페이지 표시 모드를 바꿉니다. Viewer 준비 전에는 throw합니다. |
+| `setSpreadCover(cover)` | spread 표지 배치를 바꿉니다. Viewer 준비 전에는 throw합니다. |
+| `openInspector()` | Inspector를 엽니다. Inspector가 없으면 throw합니다. |
+| `closeInspector()` | Inspector를 닫습니다. Inspector가 없으면 throw합니다. |
+| `toggleInspector()` | Inspector 상태를 바꿉니다. Inspector가 없으면 throw합니다. |
+| `selectWarning(warning)` | 현재 경고를 선택합니다. Inspector가 없거나 경고가 오래됐으면 throw합니다. |
+| `print()` | `Promise<void>`. 준비 전에는 reject합니다. |
+| `exportEpub(options)` | `Promise<Blob>`. 준비 전에는 reject합니다. |
+
+### `useImposiaDocument`와 `useImposiaPublication`
+
+```ts
+useImposiaDocument(props: UseImposiaDocumentProps): {
+  hostRef: RefObject<HTMLDivElement | null>;
+  state: { status: "idle" | "loading" | "ready" | "error"; document?: PageDocument; error?: unknown };
+  controller: PageDocumentController | undefined;
+};
+
+useImposiaPublication(props: UseImposiaPublicationProps): {
+  hostRef: RefObject<HTMLDivElement | null>;
+  state: { status: "idle" | "loading" | "ready" | "error"; publication?: PublicationDocument; error?: unknown };
+  controller: PublicationController | undefined;
+};
+```
+
+문서 훅은 컴포넌트와 같은 source, revision, document options, callback을 받습니다. Publication 훅은 같은 방식으로 snapshot, revision, publication options, callback을 받습니다. 각 `hostRef`를 `div`에 연결하세요. source나 snapshot이 바뀌면 기존 컨트롤러를 갱신하고, 옵션 revision이 바뀌면 컨트롤러를 교체합니다. 갱신 중에는 이전 commit이 state에 남을 수 있으며 unmount하면 컨트롤러를 destroy합니다.
+
+## Core 페이지 문서
+
+### `mountPageDocument`
+
+```ts
+function mountPageDocument(
+  container: HTMLElement,
+  source: { html: string; baseUrl?: string } | { lightDom: Element | DocumentFragment; baseUrl?: string },
+  options?: PageDocumentOptions,
+): PageDocumentController;
+```
+
+canonical iframe을 붙이고 컨트롤러를 즉시 반환합니다. 첫 결과는 `await controller.ready`로 받습니다. `baseUrl`은 상대 에셋 URL을 resolver에 넘기기 전 해석하는 기준이며 Core는 작성된 URL을 직접 fetch하지 않습니다.
+
+#### `PageDocumentOptions`
+
+| 옵션 | 기본값 | 설명 |
+| --- | --- | --- |
+| `css?: readonly string[]` | `[]` | 함께 적용할 CSS입니다. |
+| `assetResolver?: AssetResolver` | 없음 | font, image, media, stylesheet 요청을 `resolved` 또는 `blocked`로 응답합니다. |
+| `page?: PageOptions` | A4, 세로, 20mm | `size`, `orientation`, `margin`을 정합니다. 사용자 크기와 여백은 양의 절대 CSS 길이여야 합니다. |
+| `limits?: PageLimits` | 내장 상한 | 입력, 노드, 에셋, 페이지, layout 작업의 상한을 더 낮춥니다. |
+| `headerTemplate`, `footerTemplate` | 없음 | 페이지 머리말과 꼬리말 HTML입니다. |
+| `decorateBlankPages?: boolean` | `true` | 의도적으로 삽입한 빈 페이지에 장식을 적용합니다. |
+| `experimental?: { footnotes?: boolean; pageFloats?: boolean }` | 꺼짐 | 실험 기능을 명시적으로 켭니다. |
+| `extensions?: readonly (PageExtension \| PublicationExtension)[]` | `[]` | 선언 순서대로 transform, asset 정책, 장식을 적용합니다. |
+| `signal?: AbortSignal` | 없음 | 최초 작업을 취소합니다. |
+| `onProgress?: ({ completedPages }) => void` | 없음 | commit 직전에 완료 페이지 수를 전달합니다. |
+
+```ts
+type AssetResolver = (request: {
+  url: string;
+  kind: "font" | "image" | "media" | "stylesheet";
+  baseUrl?: string;
+  signal: AbortSignal;
+}) => Promise<
+  | { status: "resolved"; bytes: Uint8Array; mimeType: string; resolvedUrl?: string }
+  | { status: "blocked"; reason?: string }
+>;
+```
+
+`PageLimits` 필드는 `maxInputBytes`, `maxNodes`, `maxAssetBytes`, `maxAssetDepth`, `maxAssetReferences`, `resourceDeadlineMs`, `maxPages`, `maxLayoutPasses`, `maxGeneratedFragments`, `maxGeneratedRecords`입니다. 모두 양의 정수이며 내장 상한보다 클 수 없습니다.
+
+#### `PageDocumentController`와 `PageDocument`
+
+| 컨트롤러 멤버 | 반환값과 동작 |
+| --- | --- |
+| `ready` | `Promise<PageDocument>`. 최초 commit입니다. |
+| `current` | 마지막 성공 문서 또는 `undefined`입니다. |
+| `update(source, { signal? })` | 새 문서를 준비해 같은 iframe에 원자적으로 commit합니다. |
+| `print()` | 최신 작업을 기다린 뒤 마지막 성공 iframe에서 브라우저 인쇄를 시작합니다. |
+| `destroy()` | 작업과 export를 취소하고 iframe과 Core 소유 리소스를 정리합니다. |
+
+`PageDocument`는 `iframe`, `generation`, `pageCount`, `pages`, `warnings`, `timings`와 `exportEpub(options): Promise<Blob>`을 제공하는 불변 commit입니다. 각 `PageMetadata`에는 번호, 좌우 면, page name, blank 여부, sheet/content geometry와 `bodyText`가 있습니다.
+
+```ts
+const controller = mountPageDocument(host, { html: "<h1>안녕하세요</h1>" });
+const pageDocument = await controller.ready;
+const epub = await pageDocument.exportEpub({
+  metadata: { title: "문서", language: "ko", identifier: "urn:example:doc" },
+});
+```
+
+EPUB metadata의 `title`, `language`, `identifier`는 필수입니다. `modified?`는 `Z`로 끝나는 UTC 타임스탬프이며 기본값은 `1970-01-01T00:00:00Z`입니다. `signal?`과 `limits?: { maxEntries?, maxBytes? }`도 받을 수 있습니다. 반환 Blob의 type은 `application/epub+zip`입니다.
+
+### Core 유틸리티
+
+| API | 반환값과 제한 |
+| --- | --- |
+| `prepareDocument(html, options?)` | `{ html, headerTemplate?, footerTemplate?, warnings }`. 동기적으로 정리하며 페이지나 iframe은 만들지 않습니다. 옵션은 `headerTemplate`, `footerTemplate`, `allowRemoteResources`입니다. |
+| `pageWarningTargetBounds(pageDocument, warning)` | `{ left, top, width, height } \| undefined`. 현재 문서의 추적 가능한 경고만 좌표를 반환합니다. |
+| `hasPageDocumentFrameSandbox(iframe)` | `boolean`. sandbox 토큰이 공개 상수 `PAGE_DOCUMENT_FRAME_SANDBOX`의 `allow-same-origin`, `allow-modals`와 정확히 같은지 확인합니다. |
+| `selectBlankMarkers(markers, pages)` | 빈 페이지가 필요한 marker ID 배열입니다. `markers`는 `{ id, side: "left" \| "right" }[]`이고 ID를 찾을 수 없으면 throw합니다. |
+
+## Core Publication
+
+### `mountPublication`
+
+```ts
+function mountPublication(
+  container: HTMLElement,
+  snapshot: PublicationSnapshot,
+  options?: PublicationOptions,
+): PublicationController;
+```
+
+`PublicationSnapshot`은 `metadata: { title, language?, identifier? }`와 `entries`를 가집니다. 각 entry는 `id`, `title`, `baseUrl?`와 `html` 또는 `lightDom` 중 하나를 제공합니다. title과 entry ID/title은 비어 있지 않아야 하며, 하나 이상의 entry가 필요합니다. ID는 고유하고 공백이나 제어 문자를 포함하지 않아야 합니다.
+
+`PublicationOptions`는 `PageDocumentOptions`와 같지만 `extensions`가 `readonly PublicationExtension[]`입니다. Publication extension은 `transformEntry`, `allowAsset`, `decoratePage`를 제공할 수 있으며 일반 페이지의 `transform`은 허용되지 않습니다.
+
+#### `PublicationController`
+
+| 멤버 | 반환값과 동작 |
+| --- | --- |
+| `ready` | `Promise<PublicationDocument>`. 최초 commit입니다. |
+| `current` | 마지막 성공 Publication 또는 `undefined`입니다. |
+| `resolveDestination(id)` | 현재 outline이나 검색 목적지 또는 `undefined`입니다. |
+| `search(query)` | `readonly PublicationSearchResult[]`. 빈 쿼리는 빈 배열입니다. |
+| `navigate(destination)` | canonical iframe을 이동합니다. 목적지가 현재 컨트롤러와 generation에 속하지 않으면 throw합니다. |
+| `update(snapshot, { signal? })` | snapshot 전체를 새 commit으로 교체합니다. |
+| `print()` | 현재 canonical iframe으로 브라우저 인쇄를 시작합니다. |
+| `destroy()` | 진행 작업과 iframe, Core 소유 리소스를 정리합니다. |
+
+`PublicationDocument`는 `PageDocument`에 `metadata`, `entries`, `outline`을 더합니다. entry의 `pageRange`는 전역 페이지 범위이며 인접 entry가 한 페이지를 공유할 수 있습니다. outline item은 `kind`, `title`, `level`, `destination`, `children`을 가집니다. destination은 `id`, `entryId`, `page`, `generation`을 가집니다. 검색 결과는 `entry`, `page`, `excerpt`, `destination`을 제공합니다.
+
+## Viewer 페이지/PDF, Reader, Inspector
+
+### `mountPageViewer`
+
+```ts
+function mountPageViewer(
+  container: HTMLElement,
+  pageDocument: PageDocument,
+  options?: PageViewerOptions,
+): PageViewerController;
+```
+
+`pageDocument.iframe.parentElement`는 `container`여야 합니다. 옵션은 `mode?: "continuous" | "single" | "spread"`, `spread?: { cover? }`, `zoom?`, `theme?`, `inspector?`, `reader?`입니다. 기본값은 continuous, cover false, zoom 1, Inspector/Reader 없음입니다. zoom은 0.5–2.5로 제한됩니다. 720px보다 좁은 spread는 요청 모드를 유지하면서 `effectiveMode`만 single이 됩니다.
+
+#### `PageViewerController`
+
+| 멤버 | 반환값과 동작 |
+| --- | --- |
+| `goToPage(page)` | 번호를 유효 범위로 제한해 이동합니다. 유한하지 않은 값은 무시합니다. |
+| `nextPage()`, `previousPage()` | 다음 또는 이전 페이지/spread로 이동합니다. |
+| `setZoom(zoom)` | 0.5–2.5, 0.1 단위로 배율을 바꿉니다. |
+| `setMode(mode)` | continuous, single, spread를 선택합니다. |
+| `setSpreadCover(cover)` | spread 표지 배치를 바꿉니다. |
+| `setTheme(theme?)` | `--imposia-viewer-*` 문자열 custom property 맵을 교체하거나 제거합니다. |
+| `refresh(pageDocument)` | 같은 iframe의 더 최신 generation으로 갱신합니다. 다른 iframe이나 오래된 generation이면 throw합니다. |
+| `print()` | canonical iframe의 `Window.print()`를 호출합니다. destroy 뒤에는 reject합니다. |
+| `destroy()` | Reader, Inspector, 테마와 이벤트를 정리하고 기존 속성을 복원합니다. |
+| `state` | `{ page, pageCount, zoom, mode, effectiveMode, status: "ready", generation }`입니다. |
+| `reader`, `inspector` | 옵션을 켰을 때 각 컨트롤러, 아니면 `undefined`입니다. |
+
+`validatePageViewerOptions(pageDocument, options?)`는 테마, PageDocument 구조, Reader 소유 관계를 검사하고 `void`를 반환합니다. adapter가 기존 Viewer를 해제하기 전에 새 설정을 확인할 때 사용합니다.
+
+### Reader와 Inspector
+
+Reader 옵션은 현재 `PublicationDocument`를 소유한 `controller`, `initialDeepLink?`, `onDeepLinkChange?`입니다.
+
+| `PublicationReaderController` 메서드 | 반환값과 동작 |
+| --- | --- |
+| `openTableOfContents()`, `closeTableOfContents()`, `toggleTableOfContents()` | 목차 상태를 제어합니다. |
+| `openThumbnails()`, `closeThumbnails()`, `toggleThumbnails()` | 썸네일 상태를 제어합니다. |
+| `selectThumbnail(thumbnail)` | 현재 generation의 전역 페이지로 이동합니다. 오래된 모델이면 throw합니다. |
+| `openSearch()`, `closeSearch()`, `toggleSearch()` | 검색 상태를 제어합니다. |
+| `search(query)` | 현재 commit의 검색 결과 배열입니다. |
+| `nextSearchResult()`, `previousSearchResult()` | 결과를 선택해 이동하거나 결과가 없으면 `undefined`입니다. |
+| `selectSearchResult(result)` | 결과 목적지로 이동합니다. |
+| `navigate(destination)` | Core 목적지와 Viewer 페이지를 함께 이동하고 deep link를 갱신합니다. |
+| `restoreDeepLink(value)` | 현재 목적지로 복원해 이동하거나 `undefined`를 반환합니다. |
+| `state` | 목차/썸네일/검색 상태, 현재 destination과 deep link의 snapshot입니다. |
+
+`serializePublicationDeepLink(destination)`은 `v1.`과 URL 인코딩된 ID를 반환합니다. `restorePublicationDeepLink(value, controller)`는 현재 목적지를 반환하며 이동하지 않습니다. 형식이나 ID가 유효하지 않으면 `undefined`입니다.
+
+| `ViewerInspectorController` 멤버 | 반환값과 동작 |
+| --- | --- |
+| `open()`, `close()`, `toggle()` | 경고 패널 상태를 제어합니다. |
+| `select(warning)` | 현재 문서의 경고를 선택하고 위치가 있으면 이동해 강조합니다. 오래된 경고이면 throw합니다. |
+| `state` | `{ open, warnings, selected }`입니다. |
+
+### `mountViewer`로 PDF 표시
+
+```ts
+function mountViewer(
+  container: HTMLElement,
+  source: Uint8Array | ArrayBuffer | string | { pdf: Uint8Array },
+  options?: ViewerOptions,
+): ViewerController;
+```
+
+옵션은 `mode?: "continuous" | "single"`, `zoom?`, `workerSrc?`, `theme?`입니다. 컨트롤러를 즉시 반환하며 `ready` Promise는 없습니다. `state.status`가 `loading`, `ready`, `error` 중 무엇인지 확인하세요. 오류 문자열은 `state.error`에 들어갑니다.
+
+| `ViewerController` 멤버 | 반환값과 동작 |
+| --- | --- |
+| `goToPage(page)`, `nextPage()`, `previousPage()` | PDF 페이지를 이동합니다. |
+| `setZoom(zoom)` | 배율을 0.5–2.5로 제한하고 다시 렌더링합니다. |
+| `setMode(mode)` | continuous 또는 single로 바꿉니다. |
+| `setTheme(theme?)` | 인스턴스 테마를 교체하거나 제거합니다. |
+| `destroy()` | 로딩과 렌더링을 취소하고 컨테이너를 비웁니다. |
+| `state` | `{ page, pageCount, zoom, mode, status, error? }`의 복사본입니다. |
+
+## 수명 주기와 오류
+
+Core는 `ready`와 `current`, React는 `state.status`와 `onReady`, ref의 `current`로 준비 상태를 알립니다. PDF Viewer만 `ready`가 없으므로 `state.status`를 확인합니다. update 중에는 이전 commit을 유지하고, 실패·취소·더 새 작업으로 대체된 update는 `current`를 바꾸지 않습니다. destroy나 unmount 뒤에는 `current`가 `undefined`입니다.
+
+취소는 이름이 `AbortError`인 오류로 reject됩니다. React 훅은 취소되거나 대체된 이전 작업의 ready/error callback을 전달하지 않습니다.
+
+```ts
+class ImposiaError extends Error {
+  readonly code: string;
+  constructor(code: string, message: string);
+}
+```
+
+Core가 분류한 오류는 `code`를 가집니다. 예를 들어 잘못된 page geometry는 `INVALID_PAGE_GEOMETRY`, 오래된 Publication 목적지는 `STALE_PUBLICATION_DESTINATION`, 리소스 시간 초과는 `RESOURCE_TIMEOUT`입니다. 공개 타입의 code는 문자열이므로 목록 전체가 고정된 union이라고 가정하지 마세요. 잘못된 구조나 호출 순서는 일반 `Error`나 `TypeError`를 사용할 수 있습니다.
+
+```ts
+try {
+  await controller.update(nextSource);
+} catch (error) {
+  if (error instanceof ImposiaError) console.error(error.code, error.message);
+}
+```
+
+이전 generation의 destination, 검색 결과, 썸네일, 경고는 새 commit에서 다시 사용하지 마세요. `resolveDestination()`, `search()`, Reader state, 새 문서의 `warnings`에서 다시 가져옵니다.
