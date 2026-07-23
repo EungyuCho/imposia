@@ -25,10 +25,11 @@
     "test:e2e": "playwright test",
     "test:site": "playwright test -c playwright.site.config.ts",
     "test:parity": "playwright test tests/e2e/browser-core-fragmentation.spec.ts tests/e2e/browser-core-breaks.spec.ts",
+    "bundle:size": "node --import tsx scripts/bundle-size.ts",
     "audit:prod": "pnpm audit --prod --audit-level moderate",
     "licenses": "node --import tsx scripts/licenses.ts",
     "verify": "node --import tsx scripts/capture-check.ts",
-    "check": "pnpm preflight && pnpm typecheck && pnpm lint && pnpm test && pnpm build && pnpm test:site && pnpm test:e2e && pnpm run audit:prod && pnpm run licenses"
+    "check": "pnpm preflight && pnpm typecheck && pnpm lint && pnpm test && pnpm bundle:size && pnpm build && pnpm test:site && pnpm test:e2e && pnpm run audit:prod && pnpm run licenses"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.4",

@@ -1,7 +1,7 @@
 import { hasPageDocumentFrameSandbox, type PageDocument } from "@imposia/core";
-import { IMPOSIA_BRAND_MARK } from "./brand-mark.js";
 import { mountPublicationReader, validatePublicationReaderDocument } from "./publication-reader.js";
 import { createViewerInspector } from "./viewer-inspector.js";
+import { createPageViewerInterface } from "./viewer-interface.js";
 import { bindViewerTheme, validateViewerTheme } from "./viewer-theme.js";
 import type {
   PageViewerController,
@@ -15,24 +15,6 @@ interface FrameGeometry {
   height: number;
   pageTops: readonly number[];
   pageHeights: readonly number[];
-}
-
-interface PageViewerElements {
-  root: HTMLElement;
-  stage: HTMLElement;
-  rail: HTMLElement;
-  toolbar: HTMLElement;
-  iframe: HTMLIFrameElement;
-  pageIndicator: HTMLOutputElement;
-  zoomIndicator: HTMLOutputElement;
-  modeStatus: HTMLOutputElement;
-  previous: HTMLButtonElement;
-  next: HTMLButtonElement;
-  zoomOut: HTMLButtonElement;
-  zoomIn: HTMLButtonElement;
-  continuous: HTMLButtonElement;
-  single: HTMLButtonElement;
-  spread: HTMLButtonElement;
 }
 
 const MIN_ZOOM = 0.5;
@@ -69,96 +51,6 @@ const FRAME_PRESENTATION_STYLE = `@media screen {
 
 function clamp(value: number, minimum: number, maximum: number): number {
   return Math.min(Math.max(value, minimum), maximum);
-}
-
-function button(label: string, text: string, className = "imposia-control"): HTMLButtonElement {
-  const node = document.createElement("button");
-  node.className = className;
-  node.type = "button";
-  node.textContent = text;
-  node.setAttribute("aria-label", label);
-  return node;
-}
-
-function createInterface(container: HTMLElement, iframe: HTMLIFrameElement): PageViewerElements {
-  const root = container;
-  root.classList.add("imposia-viewer", "imposia-page-viewer");
-  root.tabIndex = 0;
-  root.dataset.status = "ready";
-  root.dataset.mode = "continuous";
-  root.setAttribute("role", "region");
-  root.setAttribute("aria-label", "Imposia document viewer");
-
-  const rail = document.createElement("header");
-  rail.className = "imposia-rail";
-  const identity = document.createElement("div");
-  identity.className = "imposia-identity";
-  identity.innerHTML = `${IMPOSIA_BRAND_MARK}<span class="imposia-wordmark">Imposia</span>`;
-  const toolbar = document.createElement("div");
-  toolbar.className = "imposia-toolbar";
-  toolbar.setAttribute("role", "group");
-  toolbar.setAttribute("aria-label", "Document controls");
-
-  const previous = button("Previous page", "←");
-  const pageIndicator = document.createElement("output");
-  pageIndicator.className = "imposia-readout";
-  pageIndicator.dataset.testid = "page-indicator";
-  pageIndicator.setAttribute("aria-live", "polite");
-  const next = button("Next page", "→");
-  const zoomOut = button("Zoom out", "−");
-  const zoomIndicator = document.createElement("output");
-  zoomIndicator.className = "imposia-readout imposia-zoom";
-  zoomIndicator.dataset.testid = "zoom-indicator";
-  const zoomIn = button("Zoom in", "+");
-  const continuous = button("Continuous pages", "CONT", "imposia-control imposia-mode");
-  const single = button("Single page", "SINGLE", "imposia-control imposia-mode");
-  const spread = button("Spread pages", "SPREAD", "imposia-control imposia-mode");
-  const modeStatus = document.createElement("output");
-  modeStatus.className = "imposia-visually-hidden";
-  modeStatus.setAttribute("role", "status");
-  modeStatus.setAttribute("aria-live", "polite");
-  modeStatus.setAttribute("aria-atomic", "true");
-  const divider = () => {
-    const node = document.createElement("span");
-    node.className = "imposia-divider";
-    return node;
-  };
-  toolbar.append(
-    previous,
-    pageIndicator,
-    next,
-    divider(),
-    zoomOut,
-    zoomIndicator,
-    zoomIn,
-    divider(),
-    continuous,
-    single,
-    spread,
-    modeStatus,
-  );
-  rail.append(identity, toolbar);
-
-  iframe.classList.add("imposia-canonical-frame");
-  iframe.title = "Imposia document";
-  root.insertBefore(rail, iframe);
-  return {
-    root,
-    stage: root,
-    rail,
-    toolbar,
-    iframe,
-    pageIndicator,
-    zoomIndicator,
-    modeStatus,
-    previous,
-    next,
-    zoomOut,
-    zoomIn,
-    continuous,
-    single,
-    spread,
-  };
 }
 
 function invalidPageDocument(message: string): never {
@@ -251,7 +143,7 @@ export function mountPageViewer(
   const iframeAttributes = new Map(
     ["class", "title", "style"].map((name) => [name, pageDocument.iframe.getAttribute(name)]),
   );
-  const elements = createInterface(container, pageDocument.iframe);
+  const elements = createPageViewerInterface(container, pageDocument.iframe);
   const theme = bindViewerTheme(elements.root, options.theme);
 
   let destroyed = false;

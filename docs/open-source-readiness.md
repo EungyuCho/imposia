@@ -22,6 +22,9 @@ by the synchronized `0.1.1` package release.
 - A framework-neutral Reader and React adapter with table of contents, deep
   links, semantic search, bounded thumbnails, single/continuous/spread modes,
   cover pairing, and an opt-in diagnostics Inspector.
+- One internal Viewer interface factory for shared brand, toolbar, navigation,
+  zoom, mode, and accessibility construction, with separate PDF and
+  PageDocument adapters.
 - Explicit supported subsets for flex, grid, complex tables, multi-column flow,
   and CJK typography. Unsupported cases retain typed, source-aware recovery
   warnings instead of silently approximating output.
@@ -31,16 +34,16 @@ by the synchronized `0.1.1` package release.
   consumers, and a Chromium/Firefox/WebKit release matrix.
 - English, Korean, Japanese, and Simplified Chinese onboarding guides and
   homepage copy audited for the same public identifiers and lifecycle facts.
+- Reproducible minified and gzip reports for six consumer bundle routes, with
+  checked budgets and an evidence-backed Core EPUB package boundary.
 
 ## Post-release engineering follow-ups
 
 These refinements are useful, but they do not block the `0.1.2` patch release:
 
-1. Consolidate the duplicated PDF/Page Viewer toolbar construction behind one
-   internal Viewer interface factory while retaining separate document adapters.
-2. Isolate the latest-generation scheduler only when the extraction removes the
+1. Isolate the latest-generation scheduler only when the extraction removes the
    current duplicated async bookkeeping; do not add a second rendering authority.
-3. Automate the current localized README structure, identifier, link, and
+2. Automate the current localized README structure, identifier, link, and
    lifecycle-fact audit so future documentation changes cannot drift silently.
 
 ## Maintainer launch gates
