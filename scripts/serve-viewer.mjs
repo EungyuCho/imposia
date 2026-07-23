@@ -1,4 +1,4 @@
-import { createReadStream, realpathSync, statSync } from "node:fs";
+import { closeSync, createReadStream, fstatSync, openSync, realpathSync } from "node:fs";
 import { createServer } from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -16,6 +16,7 @@ const contentTypes = new Map([
   [".map", "application/json; charset=utf-8"],
 ]);
 
+/** Resolve a request URL to a workspace path without admitting path traversal. */
 function resolveRequest(requestUrl) {
   try {
     const url = new URL(requestUrl, `http://127.0.0.1:${port}`);
@@ -29,6 +30,7 @@ function resolveRequest(requestUrl) {
   }
 }
 
+/** Confirm that an existing path resolves inside the workspace root. */
 function isWithinRoot(file) {
   const realFile = realpathSync(file);
   return realFile !== realRoot && realFile.startsWith(`${realRoot}${path.sep}`);
@@ -58,20 +60,26 @@ const server = createServer((request, response) => {
     return;
   }
 
+  let descriptor;
   try {
     if (!isWithinRoot(resolved)) {
       response.writeHead(403).end("Forbidden");
       return;
     }
-    const stats = statSync(resolved);
+    descriptor = openSync(resolved, "r");
+    const stats = fstatSync(descriptor);
     if (!stats.isFile()) throw new Error("Not a file");
+    const stream = createReadStream(resolved, { fd: descriptor, autoClose: true });
+    descriptor = undefined;
+    stream.on("error", () => response.destroy());
     response.writeHead(200, {
       "Content-Type": contentTypes.get(path.extname(resolved)) ?? "application/octet-stream",
       "Content-Length": stats.size,
       "Cache-Control": "no-store",
     });
-    createReadStream(resolved).pipe(response);
+    stream.pipe(response);
   } catch {
+    if (descriptor !== undefined) closeSync(descriptor);
     response.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" }).end("Not found");
   }
 });
