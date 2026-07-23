@@ -6,7 +6,7 @@ export default defineConfig({
   testDir: "tests/e2e",
   testIgnore: /homepage\.spec\.ts/,
   timeout: 30_000,
-  workers: process.env.CI ? 1 : undefined,
+  workers: process.env.CI ? 2 : undefined,
   fullyParallel: false,
   reporter: [["list"], ["html", { open: "never" }]],
   use: {
