@@ -1,6 +1,6 @@
 {
   "name": "@imposia/core",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Browser-native HTML/CSS pagination, publishing diagnostics, and reflowable EPUB export.",
   "repository": {
     "type": "git",
