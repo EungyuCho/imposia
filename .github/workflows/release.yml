@@ -1,0 +1,139 @@
+name: Release
+
+run-name: Release v${{ inputs.version }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Exact package version without the v prefix
+        required: true
+        type: string
+
+concurrency:
+  group: release-${{ inputs.version }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  VERSION: ${{ inputs.version }}
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Require the default branch
+        run: test "$GITHUB_REF" = "refs/heads/main"
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22.14.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium firefox webkit
+      - name: Verify release version and notes
+        run: |
+          node --input-type=module <<'NODE'
+          import { readFileSync } from "node:fs";
+
+          const version = process.env.VERSION;
+          if (version === undefined || !/^\d+\.\d+\.\d+$/.test(version)) {
+            throw new Error(`Invalid release version: ${version ?? "missing"}`);
+          }
+
+          for (const name of ["core", "viewer", "client", "react"]) {
+            const manifest = JSON.parse(readFileSync(`packages/${name}/package.json`, "utf8"));
+            if (manifest.version !== version) {
+              throw new Error(`${manifest.name} is ${manifest.version}, expected ${version}.`);
+            }
+          }
+
+          readFileSync(`.github/release-notes/v${version}.md`, "utf8");
+          NODE
+      - run: CI=true pnpm check
+      - run: git diff --exit-code
+
+  publish:
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: release
+    permissions:
+      contents: write
+      id-token: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22.14.0
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+      - run: npm install --global npm@11.5.1
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - name: Pack release artifacts
+        run: |
+          package_dir="$RUNNER_TEMP/release-packages"
+          mkdir -p "$package_dir"
+          for name in core viewer client react; do
+            pnpm --dir "packages/$name" pack --pack-destination "$package_dir"
+          done
+          (cd "$package_dir" && sha256sum -- *.tgz > SHA256SUMS)
+          echo "PACKAGE_DIR=$package_dir" >> "$GITHUB_ENV"
+      - name: Publish exact npm artifacts
+        run: |
+          for name in core viewer client react; do
+            package="@imposia/$name"
+            tarball="$PACKAGE_DIR/imposia-$name-$VERSION.tgz"
+            test -f "$tarball"
+            local_integrity="sha512-$(openssl dgst -sha512 -binary "$tarball" | openssl base64 -A)"
+
+            if published_integrity=$(npm view "$package@$VERSION" dist.integrity 2>/dev/null); then
+              if [ "$published_integrity" != "$local_integrity" ]; then
+                echo "::error::$package@$VERSION already exists with different contents."
+                exit 1
+              fi
+              echo "$package@$VERSION already matches the release artifact; skipping."
+            else
+              npm publish "$tarball" --access public
+            fi
+          done
+      - name: Create immutable release tag
+        run: |
+          tag="v$VERSION"
+          git fetch --tags origin
+          if git rev-parse --verify "refs/tags/$tag" >/dev/null 2>&1; then
+            tag_commit=$(git rev-list -n 1 "$tag")
+            if [ "$tag_commit" != "$GITHUB_SHA" ]; then
+              echo "::error::$tag points to $tag_commit instead of $GITHUB_SHA."
+              exit 1
+            fi
+            echo "$tag already points to this release commit; skipping."
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git tag -a "$tag" -m "Imposia $VERSION"
+            git push origin "$tag"
+          fi
+      - name: Create GitHub Release
+        run: |
+          tag="v$VERSION"
+          notes=".github/release-notes/$tag.md"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "$tag GitHub Release already exists; skipping."
+          else
+            gh release create "$tag" "$PACKAGE_DIR"/*.tgz "$PACKAGE_DIR/SHA256SUMS" \
+              --verify-tag \
+              --title "Imposia $VERSION" \
+              --notes-file "$notes"
+          fi
+          gh release view "$tag" --json url --jq .url
