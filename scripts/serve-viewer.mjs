@@ -23,7 +23,7 @@ function resolveRequest(requestUrl) {
     const requested = pathname.endsWith("/") ? `${pathname}index.html` : pathname;
     const file = path.resolve(root, `.${requested}`);
     if (file !== root && !file.startsWith(`${root}${path.sep}`)) return undefined;
-    return { file, delayMs: Math.min(Number(url.searchParams.get("delay") ?? 0), 2_000) };
+    return file;
   } catch {
     return null;
   }
@@ -58,27 +58,22 @@ const server = createServer((request, response) => {
     return;
   }
 
-  const send = () => {
-    try {
-      if (!isWithinRoot(resolved.file)) {
-        response.writeHead(403).end("Forbidden");
-        return;
-      }
-      const stats = statSync(resolved.file);
-      if (!stats.isFile()) throw new Error("Not a file");
-      response.writeHead(200, {
-        "Content-Type": contentTypes.get(path.extname(resolved.file)) ?? "application/octet-stream",
-        "Content-Length": stats.size,
-        "Cache-Control": "no-store",
-      });
-      createReadStream(resolved.file).pipe(response);
-    } catch {
-      response.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" }).end("Not found");
+  try {
+    if (!isWithinRoot(resolved)) {
+      response.writeHead(403).end("Forbidden");
+      return;
     }
-  };
-
-  if (resolved.delayMs > 0) setTimeout(send, resolved.delayMs);
-  else send();
+    const stats = statSync(resolved);
+    if (!stats.isFile()) throw new Error("Not a file");
+    response.writeHead(200, {
+      "Content-Type": contentTypes.get(path.extname(resolved)) ?? "application/octet-stream",
+      "Content-Length": stats.size,
+      "Cache-Control": "no-store",
+    });
+    createReadStream(resolved).pipe(response);
+  } catch {
+    response.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" }).end("Not found");
+  }
 });
 
 server.listen(port, "127.0.0.1", () => {
