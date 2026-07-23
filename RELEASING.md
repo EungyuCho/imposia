@@ -15,6 +15,21 @@ availability checks.
 Configure a private security-reporting route before announcing the project.
 Do not ask reporters to disclose vulnerabilities in a public issue.
 
+Configure npm trusted publishing separately for each public package with these
+exact values:
+
+- Provider: GitHub Actions
+- Organization or user: `EungyuCho`
+- Repository: `imposia`
+- Workflow filename: `release.yml`
+- Environment: `release`
+- Allowed action: `npm publish`
+
+The workflow uses npm OIDC authentication from a GitHub-hosted runner. Do not
+add an npm write token to GitHub secrets. After the trusted publishers have
+completed one successful release, restrict or revoke obsolete automation
+tokens in npm.
+
 ## Release gate
 
 From a clean checkout with Node 22 or newer:
@@ -46,6 +61,12 @@ The package audit run by `pnpm check` verifies declared exports, legal files,
 and packed contents. `pnpm pack` resolves internal `workspace:` dependencies to
 the release version in the generated tarball.
 
+For a GitHub-managed release, update all four package versions, `CHANGELOG.md`,
+and `.github/release-notes/v<version>.md` in the same commit. Merge that commit
+to `main`, open the repository's `Release` workflow, enter the exact manifest
+version without a `v` prefix, and review the verification job. The publish job
+waits for approval from the protected `release` environment.
+
 ## Publish order
 
 Publish dependencies before dependents:
@@ -67,3 +88,11 @@ pnpm --dir packages/react publish --access public --dry-run
 After the dry run, repeat the commands without `--dry-run` only from an
 authenticated maintainer account that owns the scope. Verify the installed
 tarballs in a clean browser application before announcing the release.
+
+The automated workflow packs and publishes in the same dependency order. A
+retry checks every existing npm version against the local tarball's SHA-512
+integrity and skips only an exact match. It fails on a version collision. After
+all four publishes succeed, it creates the annotated `v<version>` tag and the
+GitHub Release, attaching the four package tarballs and `SHA256SUMS`. An
+existing tag must resolve to the workflow commit; the workflow never moves or
+replaces a release tag.

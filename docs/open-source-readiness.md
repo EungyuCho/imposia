@@ -1,8 +1,11 @@
 # Open-source readiness
 
 This list records the current launch boundary for Imposia. The browser library
-is ready for a maintainer-reviewed prerelease; repository settings, signing,
-and publication still require maintainer action on the exact release commit.
+is ready for a maintainer-reviewed patch release. Repository rules, the
+protected release environment, private vulnerability reporting, dependency
+alerts, code scanning, and secret scanning are enabled. npm trusted publisher
+approval and publication still require maintainer action on the exact release
+commit.
 
 ## Implemented client release gate
 
@@ -44,9 +47,12 @@ These refinements are useful, but they do not block the first public prerelease:
 
 - Run `CI=true pnpm check` on the exact public commit with all three Playwright
   browser projects and the production registry audit available.
-- Enable GitHub private vulnerability reporting and verify the `SECURITY.md`
-  route from a non-maintainer account.
-- Configure repository description, topics, homepage, issue templates, Discussions
-  policy, branch protection, required checks, and release permissions.
-- Publish a signed or provenance-backed prerelease, install it in a clean consumer
-  project, and only then create the first stable tag.
+- Verify the `SECURITY.md` private-reporting route from a non-maintainer account.
+- Configure each npm package to trust `release.yml` in the `release` GitHub
+  environment for `npm publish`; do not configure GitHub Packages as a second
+  registry.
+- Run the protected `Release` workflow from `main`, approve the environment only
+  after its verification job passes, and confirm npm provenance for all four
+  packages.
+- Install the published tarballs in a clean consumer project and confirm the
+  `v0.1.1` GitHub Release contains matching package assets and checksums.
