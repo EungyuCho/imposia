@@ -42,6 +42,6 @@
   },
   "dependencies": {
     "parse5": "8.0.0",
-    "postcss": "8.5.20"
+    "postcss": "8.5.21"
   }
 }
