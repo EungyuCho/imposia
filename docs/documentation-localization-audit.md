@@ -1,8 +1,9 @@
 # Documentation and localization release audit
 
-This audit identifies the documentation a consumer can rely on for the 0.1.0
+This audit began with the documentation a consumer could rely on for the 0.1.0
 browser release. It checks current public identifiers and lifecycle claims
-against the package source, then records which surfaces are localized.
+against the package source, then records which surfaces are localized. The
+verification section includes a 0.1.3 release-gate addendum.
 
 ## Language evidence matrix
 
@@ -69,6 +70,8 @@ repeating this identifier, link, and naturalness review; partial translations
 should not be labeled as release documentation.
 
 ## Verification
+
+### 0.1.3 release-gate addendum
 
 The release audit uses source-only checks so it does not mutate package
 distribution directories:
