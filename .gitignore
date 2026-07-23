@@ -9,6 +9,7 @@ playwright-report/
 .omo/
 .ouroboros/
 .scratch/
+/.private/marketing/
 artifacts/
 output/
 benchmarks/latest.json
