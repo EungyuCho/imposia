@@ -20,6 +20,46 @@ function storedZipEntryText(bytes: Buffer, entryName: string): string {
   throw new Error(`${entryName} is missing from the EPUB archive.`);
 }
 
+test("React publishing lab defaults to A4 portrait and switches orientation", async ({
+  page,
+  browserName,
+}) => {
+  test.skip(browserName !== "chromium", "Canonical pagination is Chromium-reference only.");
+  const { errors, pageErrors } = captureBrowserErrors(page, browserName);
+
+  await page.goto("/examples/demo/");
+
+  try {
+    const preview = page.getByTestId("demo-preview-surface");
+    const orientation = page.getByRole("group", { name: "Page orientation" });
+    const portrait = orientation.getByRole("button", { name: "Portrait", exact: true });
+    const landscape = orientation.getByRole("button", { name: "Landscape", exact: true });
+
+    await expect(preview.locator("[data-imposia-react-status='ready']")).toBeVisible();
+    await expect(portrait).toHaveAttribute("aria-pressed", "true");
+    await expect(landscape).toHaveAttribute("aria-pressed", "false");
+    await expect(page.getByTestId("metric-sheet")).toHaveText("794 × 1123 px");
+
+    await landscape.click();
+
+    await expect(preview.locator("[data-imposia-react-status='ready']")).toBeVisible();
+    await expect(portrait).toHaveAttribute("aria-pressed", "false");
+    await expect(landscape).toHaveAttribute("aria-pressed", "true");
+    await expect(page.getByTestId("metric-sheet")).toHaveText("1123 × 794 px");
+    await expect(preview.locator("iframe[data-imposia-frame='page-document']")).toHaveCount(1);
+
+    await portrait.click();
+
+    await expect(preview.locator("[data-imposia-react-status='ready']")).toBeVisible();
+    await expect(portrait).toHaveAttribute("aria-pressed", "true");
+    await expect(landscape).toHaveAttribute("aria-pressed", "false");
+    await expect(page.getByTestId("metric-sheet")).toHaveText("794 × 1123 px");
+  } finally {
+    expect(errors).toEqual([]);
+    expect(pageErrors).toEqual([]);
+  }
+});
+
 test("React publishing lab switches sources and extension boundaries", async ({
   page,
   browserName,
@@ -80,7 +120,7 @@ test("React publishing lab switches sources and extension boundaries", async ({
 
     await page.locator("[data-sample-id='publishing']").click();
     await expect(page.getByTestId("metric-generation")).toHaveText("5");
-    await expect(page.getByTestId("metric-sheet")).toHaveText("1123 × 794 px");
+    await expect(page.getByTestId("metric-sheet")).toHaveText("794 × 1123 px");
     expect(
       await page.evaluate(
         () =>
@@ -174,7 +214,7 @@ test("React publishing lab downloads a ready EPUB", async ({ page, browserName }
       return Array.isArray(trace) ? (trace as boolean[]) : [];
     });
     expect(exportTrace).toContain(true);
-    await expect(page.getByTestId("metric-sheet")).toHaveText("1123 × 794 px");
+    await expect(page.getByTestId("metric-sheet")).toHaveText("794 × 1123 px");
     await expect(downloadButton).toBeEnabled();
 
     const downloadPromise = page.waitForEvent("download");

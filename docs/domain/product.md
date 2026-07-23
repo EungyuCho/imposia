@@ -73,6 +73,10 @@ present. Structural pagination is a Chromium-reference behavior; the
 cross-browser contract is API, isolation, lifecycle, print invocation, and
 resource cleanup.
 
+The public React publishing lab demonstrates those host page options with A4
+portrait as its initial sheet, common A/ISO B/Letter size presets, and explicit
+portrait/landscape controls.
+
 The public document is structural: page count, dimensions, page-side and named
 context, blank markers, ordered body text, decorations, warnings, timings, and the
 canonical iframe. Extension transforms, asset policies, and decorations stay
