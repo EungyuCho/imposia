@@ -72,7 +72,7 @@ test("localized landing pages expose docs and demo calls to action", async ({
 
       const demoCta = landing.getByRole("link", { name: locale.demoCta }).first();
       await expect(demoCta).toBeVisible();
-      await expect(demoCta).toHaveAttribute("href", /\/examples\/demo\/?$/);
+      await expect(demoCta).toHaveAttribute("href", "/examples/demo/index.html");
     }
   } finally {
     assertNoBrowserErrors(captured);
@@ -87,10 +87,10 @@ test("the GNB demo link loads the standalone demo document", async ({ page, brow
 
   try {
     const demoLink = page.locator("#nd-nav").getByRole("link", { name: "Demo", exact: true });
-    await expect(demoLink).toHaveAttribute("href", "/examples/demo/");
+    await expect(demoLink).toHaveAttribute("href", "/examples/demo/index.html");
     await demoLink.click();
 
-    await expect(page).toHaveURL(/\/examples\/demo\/$/);
+    await expect(page).toHaveURL(/\/examples\/demo\/index\.html$/);
     await expect(page).toHaveTitle("Imposia Publishing Lab");
     await expect(
       page.getByRole("heading", { name: "Documents that stay documents.", exact: true }),
