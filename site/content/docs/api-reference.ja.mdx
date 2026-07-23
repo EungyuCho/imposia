@@ -1,0 +1,465 @@
+---
+title: API リファレンス
+description: Imposia の React、Core、Viewer パッケージが公開するコンポーネント、関数、コントローラーのシグネチャと利用条件です。
+---
+
+このページは、Imposia の基本的な使い方を理解した開発者が、統合に必要な公開 API をすばやく確認するためのリファレンスです。まず React API を選ぶとライフサイクル管理まで任せられます。DOM を直接制御する場合は Core と Viewer API を組み合わせてください。
+
+## パッケージ構成
+
+| パッケージ | 主な用途 | スタイル |
+| --- | --- | --- |
+| `@imposia/react` | React コンポーネントと Hooks。`@imposia/client` の API も再エクスポートします。 | `@imposia/react/styles.css` |
+| `@imposia/client` | ブラウザー統合用の入口。Core と Viewer の主要 API を再エクスポートします。 | `@imposia/client/styles.css` |
+| `@imposia/core` | HTML/CSS のページ分割、Publication、印刷、EPUB 書き出し。 | 不要 |
+| `@imposia/viewer` | Core の `PageDocument` と PDF の表示 UI。Reader と Inspector を含みます。 | `@imposia/viewer/styles.css` |
+
+すべてのマウント API はブラウザー DOM を必要とします。
+
+## React コンポーネントと Hooks
+
+### `ImposiaPageViewer`
+
+単一の `PageSource` をページ分割し、その結果を Viewer に接続します。`ImposiaDocument` は同じ props とハンドルを持つ互換エイリアスです。シグネチャは `forwardRef<ImposiaPageViewerHandle, ImposiaPageViewerProps>` です。
+
+#### Props
+
+| prop | 型 | 必須 | 説明 |
+| --- | --- | --- | --- |
+| `source` | `PageSource` | はい | HTML 文字列、または light DOM を渡します。 |
+| `sourceRevision` | `string \| number` | いいえ | 同じソース値でも再ページ分割したいときに変更します。 |
+| `documentOptions` | `PageDocumentOptions` | いいえ | CSS、ページ寸法、アセット解決、上限などを指定します。 |
+| `documentOptionsRevision` | `string \| number` | いいえ | 変更すると Core コントローラーを作り直します。 |
+| `viewerOptions` | `PageViewerOptions` | いいえ | 表示モード、ズーム、テーマ、Inspector を指定します。 |
+| `className` | `string` | いいえ | ルート `div` のクラスです。 |
+| `style` | `CSSProperties` | いいえ | ルート `div` のインラインスタイルです。 |
+| `onReady` | `(document: PageDocument) => void` | いいえ | 文書と Viewer が同じ generation を表示できた後に呼ばれます。 |
+| `onError` | `(error: unknown) => void` | いいえ | ページ分割または Viewer のエラーを受け取ります。 |
+| `onStateChange` | `(state: ImposiaDocumentState) => void` | いいえ | `idle`、`loading`、`ready`、`error` の遷移を受け取ります。 |
+
+#### ハンドル
+
+| メンバー | 戻り値 | 利用条件と動作 |
+| --- | --- | --- |
+| `current` | `PageDocument \| undefined` | 未マウントまたは準備前は `undefined` です。 |
+| `setMode(mode)` | `void` | `continuous`、`single`、`spread` を設定します。文書の準備前は throw します。 |
+| `setSpreadCover(cover)` | `void` | 見開きの先頭ページを表紙として単独表示するか切り替えます。準備前は throw します。 |
+| `openInspector()` | `void` | Inspector を開きます。`viewerOptions.inspector` が `true` でない場合は throw します。 |
+| `closeInspector()` | `void` | Inspector を閉じます。同じ利用条件です。 |
+| `toggleInspector()` | `void` | Inspector を切り替えます。同じ利用条件です。 |
+| `selectWarning(warning)` | `void` | 現在の generation の警告へ移動して強調します。Inspector が無効、または警告が現 generation に属さない場合は throw します。 |
+| `print()` | `Promise<void>` | 最新のページ分割処理を待って印刷を開きます。未マウントまたは文書準備前は reject します。 |
+| `exportEpub(options)` | `Promise<Blob>` | 最新の確定済みセマンティックソースから EPUB を返します。未マウントまたは文書準備前は reject します。 |
+
+```tsx
+const ref = useRef<ImposiaPageViewerHandle>(null);
+
+<ImposiaPageViewer
+  ref={ref}
+  source={{ html: "<article><h1>見出し</h1></article>" }}
+  viewerOptions={{ mode: "spread", inspector: true }}
+/>;
+
+ref.current?.setSpreadCover(true);
+```
+
+### `ImposiaPublicationViewer`
+
+複数エントリーの `PublicationSnapshot` をページ分割し、目次、サムネイル、検索、ディープリンクを備えた Reader に接続します。
+
+シグネチャは `forwardRef<ImposiaPublicationViewerHandle, ImposiaPublicationViewerProps>` です。
+
+#### Props
+
+| prop | 型 | 必須 | 説明 |
+| --- | --- | --- | --- |
+| `snapshot` | `PublicationSnapshot` | はい | メタデータと順序付きエントリーです。 |
+| `snapshotRevision` | `string \| number` | いいえ | 同じオブジェクトでも更新させたいときに変更します。 |
+| `publicationOptions` | `PublicationOptions` | いいえ | Publication のページ分割設定です。 |
+| `publicationOptionsRevision` | `string \| number` | いいえ | 変更すると Core コントローラーを作り直します。 |
+| `viewerOptions` | `Omit<PageViewerOptions, "reader">` | いいえ | Reader 以外の Viewer 設定です。 |
+| `readerOptions` | `Omit<PublicationReaderOptions, "controller">` | いいえ | 初期ディープリンクと変更通知を指定します。 |
+| `className` / `style` | `string` / `CSSProperties` | いいえ | ルート `div` の表示を設定します。 |
+| `onReady` | `(publication: PublicationDocument) => void` | いいえ | Publication と Reader の接続完了後に呼ばれます。 |
+| `onError` | `(error: unknown) => void` | いいえ | ページ分割または Viewer のエラーを受け取ります。 |
+| `onStateChange` | `(state: ImposiaPublicationState) => void` | いいえ | `idle`、`loading`、`ready`、`error` の遷移を受け取ります。 |
+
+#### ハンドル
+
+| メンバー | 戻り値 | 動作 |
+| --- | --- | --- |
+| `current` | `PublicationDocument \| undefined` | 未マウントまたは準備前は `undefined` です。 |
+| `resolveDestination(id)` | `PublicationDestination \| undefined` | 現在の目次または検索インデックスから ID を解決します。未マウント時も `undefined` です。 |
+| `navigate(destination)` | `void` | 現 generation の移動先へ移動します。 |
+| `openTableOfContents()` / `closeTableOfContents()` / `toggleTableOfContents()` | `void` | 目次パネルを操作します。 |
+| `openThumbnails()` / `closeThumbnails()` / `toggleThumbnails()` | `void` | サムネイルパネルを操作します。 |
+| `getThumbnails()` | `readonly PublicationThumbnail[]` | 現在のサムネイル一覧を返します。 |
+| `selectThumbnail(thumbnail)` | `void` | 現 generation のサムネイルへ移動します。 |
+| `restoreDeepLink(value)` | `PublicationDestination \| undefined` | 有効な値なら復元して移動し、無効なら `undefined` を返します。 |
+| `openSearch()` / `closeSearch()` / `toggleSearch()` | `void` | 検索パネルを操作します。 |
+| `search(query)` | `readonly PublicationSearchResult[]` | 検索結果を更新して返します。 |
+| `nextSearchResult()` / `previousSearchResult()` | `PublicationSearchResult \| undefined` | 次または前の結果へ移動し、その結果を返します。 |
+| `selectSearchResult(result)` | `void` | 指定した検索結果へ移動します。 |
+| `setMode(mode)` / `setSpreadCover(cover)` | `void` | ページ表示を変更します。 |
+| `openInspector()` / `closeInspector()` / `toggleInspector()` | `void` | Inspector を操作します。有効化していない場合は throw します。 |
+| `selectWarning(warning)` | `void` | 現 generation の警告へ移動して強調します。 |
+| `print()` | `Promise<void>` | 最新の確定済み Publication を印刷します。 |
+| `exportEpub(options)` | `Promise<Blob>` | Publication のエントリーと目次を含む EPUB を返します。 |
+
+`current` と `resolveDestination` を除くハンドル操作は、未マウント時または Publication/Reader の準備前に throw するか Promise を reject します。サムネイル、検索結果、警告、移動先は現在の確定済み generation に属する値を渡してください。
+
+```tsx
+const ref = useRef<ImposiaPublicationViewerHandle>(null);
+
+<ImposiaPublicationViewer
+  ref={ref}
+  snapshot={{
+    metadata: { title: "短編集", language: "ja" },
+    entries: [{ id: "chapter-1", title: "第一章", html: "<h1>第一章</h1>" }],
+  }}
+  readerOptions={{ onDeepLinkChange: (value) => history.replaceState(null, "", `#${value ?? ""}`) }}
+/>;
+```
+
+### `useImposiaDocument`
+
+Core のマウント、更新、破棄だけを React のライフサイクルに接続する Hook です。表示 UI は作らないため、返された `hostRef` を空の `div` に付けます。
+
+シグネチャは `useImposiaDocument(props: UseImposiaDocumentProps): UseImposiaDocumentResult` です。戻り値は `hostRef`、`state`、準備前には `undefined` となる `controller` です。
+
+props は `ImposiaPageViewer` の `source`、revision、`documentOptions`、コールバックと同じです。`state.document` は `loading` や `error` 中でも、直前の確定済み文書があれば保持されます。`documentOptionsRevision` が変わると再マウントし、`source` または `sourceRevision` が変わると `controller.update()` を呼びます。アンマウント時は `destroy()` を呼びます。
+
+```tsx
+function BareDocument() {
+  const { hostRef, state } = useImposiaDocument({ source: { html: "<p>本文</p>" } });
+  return <div ref={hostRef} aria-busy={state.status === "loading"} />;
+}
+```
+
+### `useImposiaPublication`
+
+Publication のマウント、更新、破棄だけを React に接続します。
+
+シグネチャは `useImposiaPublication(props: UseImposiaPublicationProps): UseImposiaPublicationResult` です。戻り値は `hostRef`、`state`、準備前には `undefined` となる `controller` です。
+
+props は `ImposiaPublicationViewer` の `snapshot`、revision、`publicationOptions`、コールバックと同じです。`publicationOptionsRevision` が変わると再マウントし、`snapshot` の参照または `snapshotRevision` が変わると更新します。`state.publication` は新しい処理の `loading` や `error` 中も直前の確定済み値を保持できます。
+
+```tsx
+const { hostRef, state } = useImposiaPublication({ snapshot });
+return <div ref={hostRef} aria-busy={state.status === "loading"} />;
+```
+
+## Core のページ文書
+
+### `mountPageDocument`
+
+```ts
+function mountPageDocument(container: HTMLElement, source: PageSource, options?: PageDocumentOptions): PageDocumentController;
+type PageSource =
+  | { html: string; baseUrl?: string }
+  | { lightDom: Element | DocumentFragment; baseUrl?: string };
+```
+
+マウント時に正規 iframe を `container` へ追加し、最初のページ分割を開始します。戻り値は直ちに返り、結果は `ready` で待ちます。新しい更新が始まると進行中の古い更新は `AbortError` で中止されます。更新が失敗しても、以前の確定済み `current` は残ります。
+
+```ts
+const controller = mountPageDocument(host, { html: "<h1>Hello</h1>" });
+const document = await controller.ready;
+console.log(document.pageCount);
+```
+
+### `PageDocumentController`
+
+| メンバー | 戻り値 | 動作と制約 |
+| --- | --- | --- |
+| `ready` | `Promise<PageDocument>` | 最初の generation を返します。 |
+| `current` | `PageDocument \| undefined` | 直近の確定済み generation。初回完了前と破棄後は `undefined` です。 |
+| `update(source, { signal? })` | `Promise<PageDocument>` | 次の generation をステージングし、完成後に一括置換します。新しい update は古い処理を中止します。 |
+| `print()` | `Promise<void>` | 最新処理の完了を待って正規 iframe の印刷を開きます。確定済み文書がなければ reject します。 |
+| `destroy()` | `Promise<void>` | 処理と EPUB 書き出しを中止し、Blob URL と iframe を解放します。複数回呼べます。 |
+
+破棄後の `update()`、`print()` は reject します。
+
+### `PageDocument`
+
+| メンバー | 型 | 説明 |
+| --- | --- | --- |
+| `iframe` | `HTMLIFrameElement` | 確定済みページを保持する正規 iframe です。 |
+| `generation` | `number` | 確定ごとに増える世代番号です。 |
+| `pageCount` | `number` | ページ数です。 |
+| `pages` | `readonly PageMetadata[]` | ページ番号、左右、空白、寸法、本文テキストを含みます。 |
+| `warnings` | `readonly PageWarning[]` | ページ分割中に収集した警告です。 |
+| `timings` | `PageTimings` | `totalMs`、`resourceMs`、`paginationMs` です。 |
+| `exportEpub(options)` | `Promise<Blob>` | 最新の確定済みソースを EPUB 3.3 の Blob にします。 |
+
+`exportEpub()` の options は `metadata: { title, language, identifier, modified? }` が必須です。`signal` で中止でき、`limits: { maxEntries?, maxBytes? }` で出力上限を指定できます。コントローラーを破棄すると進行中の書き出しも中止されます。
+
+### `PageDocumentOptions`
+
+| option | 型 | 既定値 / 説明 |
+| --- | --- | --- |
+| `css` | `readonly string[]` | `[]`。ソースへ追加する CSS です。 |
+| `assetResolver` | `AssetResolver` | なし。font、image、media、stylesheet を `resolved` または `blocked` として返します。 |
+| `page` | `PageOptions` | A4、portrait 相当、各辺 20 mm。`size`、`orientation`、`margin` を上書きします。 |
+| `limits` | `PageLimits` | 各安全上限の既定値を必要な範囲で引き下げます。0 以下、整数でない値、既定上限を超える値はエラーです。 |
+| `headerTemplate` / `footerTemplate` | `string` | なし。`{{pageNumber}}` と `{{totalPages}}` を使用できます。 |
+| `decorateBlankPages` | `boolean` | `true`。空白ページにも装飾を出すか指定します。 |
+| `experimental` | `{ footnotes?: boolean; pageFloats?: boolean }` | `{}`。実験機能を個別に有効化します。 |
+| `extensions` | `readonly (PageExtension \| PublicationExtension)[]` | `[]`。変換、アセット許可、ページ装飾のフックです。 |
+| `signal` | `AbortSignal` | なし。初回処理を中止します。 |
+| `onProgress` | `(progress: { completedPages: number }) => void` | なし。コミット前に完成ページ数を通知します。 |
+
+`PageOptions.size` は `"A4"`、`"Letter"`、または `{ width, height }` です。寸法と余白には `px`、`mm`、`cm`、`in`、`pt`、`pc` の正の絶対長を使います。`margin` は単一文字列、または `{ top, right, bottom, left }` です。余白を引いた内容領域が正でなければ `ImposiaError` を throw します。
+
+`PageLimits` は `maxInputBytes`、`maxNodes`、`maxAssetBytes`、`maxAssetDepth`、`maxAssetReferences`、`resourceDeadlineMs`、`maxPages`、`maxLayoutPasses`、`maxGeneratedFragments`、`maxGeneratedRecords` を個別に指定できます。
+
+`AssetResolver` は次の形です。呼び出し側の `signal` を尊重してください。
+
+```ts
+type AssetResolver = (request: {
+  url: string;
+  kind: "font" | "image" | "media" | "stylesheet";
+  baseUrl?: string;
+  signal: AbortSignal;
+}) => Promise<
+  | { status: "resolved"; bytes: Uint8Array; mimeType: string; resolvedUrl?: string }
+  | { status: "blocked"; reason?: string }
+>;
+```
+
+### Core ユーティリティ
+
+#### `prepareDocument`
+
+```ts
+function prepareDocument(html: string, options?: PrepareDocumentOptions): PreparedDocument;
+```
+
+HTML を解析して危険なマークアップとリソースを処理し、CSS を正規化します。`data-page-header` / `data-page-footer` の template を抽出し、options の `headerTemplate` / `footerTemplate` があればそちらを優先します。`allowRemoteResources` の既定値は false 相当です。戻り値は `{ html, headerTemplate?, footerTemplate?, warnings }` です。
+
+```ts
+const prepared = prepareDocument("<main>Hello</main>");
+```
+
+#### `pageWarningTargetBounds`
+
+```ts
+function pageWarningTargetBounds(
+  pageDocument: PageDocument,
+  warning: PageWarning,
+): PageWarningTargetBounds | undefined;
+```
+
+警告元の要素が現在も正規 iframe に存在するとき、その iframe 内の `{ left, top, width, height }` を返します。警告が文書に属さない、元要素を特定できない、または要素が接続されていない場合は `undefined` です。
+
+#### `hasPageDocumentFrameSandbox`
+
+```ts
+function hasPageDocumentFrameSandbox(iframe: HTMLIFrameElement): boolean;
+```
+
+iframe の sandbox token が公開定数 `PAGE_DOCUMENT_FRAME_SANDBOX` と完全に一致するか確認します。現在の定数は `allow-same-origin` と `allow-modals` です。
+
+#### `selectBlankMarkers`
+
+```ts
+function selectBlankMarkers(
+  markers: PageSideConstraint[],
+  pages: Map<number, number>,
+): number[];
+```
+
+`{ id, side: "left" | "right" }` の制約と marker ID からページ番号への map を受け取り、左右を合わせるため空白ページを挿入する marker ID を返します。map に marker がない場合は throw します。
+
+## Core の Publication
+
+### `mountPublication`
+
+```ts
+function mountPublication(container: HTMLElement, snapshot: PublicationSnapshot, options?: PublicationOptions): PublicationController;
+```
+
+複数のエントリーを1つの確定済みページ文書にまとめ、目次、検索、移動先を作ります。`PublicationOptions` は `PageDocumentOptions` から `extensions` だけを置き換え、`readonly PublicationExtension[]` を受け取ります。
+
+```ts
+const controller = mountPublication(host, {
+  metadata: { title: "短編集", language: "ja", identifier: "urn:book:1" },
+  entries: [{ id: "one", title: "第一章", html: "<h1 id='start'>第一章</h1>" }],
+});
+const publication = await controller.ready;
+```
+
+`PublicationSnapshot.metadata` は `title` が必須で、`language` と `identifier` は任意です。各 entry は `id`、`title` と、`html` または `lightDom` のどちらか一方を持ちます。`baseUrl` は任意です。
+
+### `PublicationController`
+
+| メンバー | 戻り値 | 動作と制約 |
+| --- | --- | --- |
+| `ready` | `Promise<PublicationDocument>` | 最初の確定済み Publication を返します。 |
+| `current` | `PublicationDocument \| undefined` | 初回完了前と破棄後は `undefined` です。 |
+| `resolveDestination(id)` | `PublicationDestination \| undefined` | 現 generation の目次または検索対象 ID を解決します。 |
+| `search(query)` | `readonly PublicationSearchResult[]` | 準備前は空配列、準備後は現 generation の結果を返します。 |
+| `navigate(destination)` | `void` | 正規 iframe 内の移動先へ移動します。ID、entry、page、generation が現文書と一致しない場合は `STALE_PUBLICATION_DESTINATION` を throw します。 |
+| `update(snapshot, { signal? })` | `Promise<PublicationDocument>` | 新しい snapshot をステージングして確定します。 |
+| `print()` | `Promise<void>` | 最新処理を待って印刷します。 |
+| `destroy()` | `Promise<void>` | Core コントローラーとリソースを破棄します。 |
+
+### `PublicationDocument`
+
+`PublicationDocument` は `PageDocument` の全フィールドと `exportEpub()` を継承し、次を追加します。
+
+| フィールド | 型 | 説明 |
+| --- | --- | --- |
+| `metadata` | `PublicationMetadata` | 確定済み title、language、identifier です。 |
+| `entries` | `readonly CommittedPublicationEntry[]` | 各 entry の `id`、`title`、`pageRange: { start, end }` です。 |
+| `outline` | `readonly PublicationOutlineItem[]` | `entry` または `heading` の階層です。各項目は title、level、destination、children を持ちます。 |
+
+`PublicationDestination` は `{ id, entryId, page, generation }` です。`PublicationSearchResult` は `{ entry, page, excerpt, destination }` です。更新後は古い destination を再利用せず、`resolveDestination(id)` で解決し直してください。
+
+## Viewer のページ文書、PDF、Reader、Inspector
+
+### `mountPageViewer`
+
+```ts
+function mountPageViewer(container: HTMLElement, pageDocument: PageDocument, options?: PageViewerOptions): PageViewerController;
+```
+
+Core の正規 iframe に表示ツールバーを追加します。`pageDocument.iframe.parentElement` は `container` と一致する必要があります。文書の iframe、sandbox、ページ metadata と DOM marker が正しくなければ同期的に throw します。`validatePageViewerOptions(pageDocument, options?)` だけを呼ぶと、マウントせず同じ検証を実行できます。
+
+| option | 型 | 既定値 / 説明 |
+| --- | --- | --- |
+| `mode` | `"continuous" \| "single" \| "spread"` | `"continuous"` |
+| `spread.cover` | `boolean` | `false` |
+| `zoom` | `number` | `1`。0.5〜2.5 に丸めて制限します。 |
+| `theme` | `ViewerTheme` | なし。`--imposia-viewer-*` 形式の CSS custom property だけを受け取ります。 |
+| `inspector` | `boolean` | false 相当。`true` で警告 Inspector を作ります。 |
+| `reader` | `PublicationReaderOptions` | なし。Publication Reader を作ります。 |
+
+```ts
+const viewer = mountPageViewer(host, await documentController.ready, {
+  mode: "spread",
+  inspector: true,
+});
+```
+
+### `PageViewerController`
+
+| メンバー | 戻り値 | 動作と制約 |
+| --- | --- | --- |
+| `goToPage(page)` | `void` | 整数へ丸め、1〜pageCount に制限して移動します。有限値でなければ無視します。 |
+| `nextPage()` / `previousPage()` | `void` | 現在の effective mode に応じて隣のページまたは見開きへ移動します。 |
+| `setZoom(zoom)` | `void` | 0.5〜2.5、0.1 刻みに丸めます。有限値でなければ無視します。 |
+| `setMode(mode)` | `void` | requested mode を変更します。幅が 720 px 未満の spread は effective mode が single になります。 |
+| `setSpreadCover(cover)` | `void` | spread の先頭を単独の表紙として扱うか設定します。 |
+| `setTheme(theme?)` | `void` | Viewer 用 CSS custom property を差し替え、未指定で元の値へ戻します。 |
+| `refresh(pageDocument)` | `void` | 同じ正規 iframe の、より新しい generation を反映します。別 iframe、同世代、古い世代は throw します。 |
+| `print()` | `Promise<void>` | 現在の正規 iframe を印刷します。破棄後、または iframe の window がない場合は reject します。 |
+| `destroy()` | `void` | UI とイベントを外し、元の container/iframe 属性を復元します。複数回呼べます。 |
+| `state` | `PageViewerState` | page、pageCount、zoom、mode、effectiveMode、status、generation の snapshot です。 |
+| `reader` | `PublicationReaderController \| undefined` | `options.reader` を渡した場合だけ存在します。 |
+| `inspector` | `ViewerInspectorController \| undefined` | `options.inspector === true` の場合だけ存在します。 |
+
+### Publication Reader
+
+`PageViewerOptions.reader` は `{ controller, initialDeepLink?, onDeepLinkChange? }` です。`pageDocument` は `PublicationDocument` で、`controller.current` と同一でなければマウントまたは refresh が throw します。
+
+| メソッド / state | 戻り値 | 動作 |
+| --- | --- | --- |
+| `openTableOfContents()` / `closeTableOfContents()` / `toggleTableOfContents()` | `void` | 目次を操作します。開くと他の補助パネルを閉じます。 |
+| `openThumbnails()` / `closeThumbnails()` / `toggleThumbnails()` | `void` | サムネイルを操作します。 |
+| `selectThumbnail(thumbnail)` | `void` | 現 generation のサムネイルへ移動し、ディープリンクを解除します。 |
+| `openSearch()` / `closeSearch()` / `toggleSearch()` | `void` | 検索を操作します。 |
+| `search(query)` | `readonly PublicationSearchResult[]` | query を設定し結果を返します。 |
+| `nextSearchResult()` / `previousSearchResult()` | `PublicationSearchResult \| undefined` | 結果間を移動します。 |
+| `selectSearchResult(result)` | `void` | 指定結果の destination へ移動します。 |
+| `navigate(destination)` | `void` | Core で検証して移動し、ディープリンクを通知します。 |
+| `restoreDeepLink(value)` | `PublicationDestination \| undefined` | 復元できれば移動します。 |
+| `state` | `PublicationReaderState` | toc/thumbnails/search の開閉、サムネイル、destination、deepLink、query、結果、選択 index です。 |
+
+Reader の公開メソッドは破棄後に throw します。`initialDeepLink` が有効ならマウント中に移動し、`onDeepLinkChange` は Reader が destination を設定または解除したときに呼ばれます。
+
+### Viewer Inspector
+
+| メソッド / state | 戻り値 | 動作 |
+| --- | --- | --- |
+| `open()` / `close()` / `toggle()` | `void` | 警告パネルを操作します。 |
+| `select(warning)` | `void` | 警告のページへ移動し、対象要素またはページを強調します。現 generation に属さない警告は throw します。 |
+| `state` | `ViewerInspectorState` | `{ open, warnings, selected }` の snapshot です。 |
+
+Inspector の公開メソッドは破棄後に throw します。
+
+### `mountViewer`（PDF）
+
+```ts
+function mountViewer(container: HTMLElement, source: ViewerSource, options?: ViewerOptions): ViewerController;
+type ViewerSource = Uint8Array | ArrayBuffer | string | { pdf: Uint8Array };
+```
+
+PDF.js を使う独立した PDF Viewer です。文字列は PDF.js の source URL として渡し、byte source は内部でコピーします。`workerSrc` を指定すると PDF.js の global worker URL を設定します。戻り値に ready Promise はなく、`state.status` が `loading` から `ready` または `error` へ変わります。
+
+| option | 型 | 既定値 |
+| --- | --- | --- |
+| `mode` | `"continuous" \| "single"` | `"continuous"` |
+| `zoom` | `number` | `1`。0.5〜2.5 に制限します。 |
+| `workerSrc` | `string` | PDF.js の現在値を使用します。 |
+| `theme` | `ViewerTheme` | なし。 |
+
+| コントローラーメンバー | 戻り値 | 動作 |
+| --- | --- | --- |
+| `goToPage(page)` | `void` | ready 後だけ、整数へ丸めて範囲内へ移動します。 |
+| `nextPage()` / `previousPage()` | `void` | 隣のページへ移動します。 |
+| `setZoom(zoom)` | `void` | ready 後だけ有限値を 0.5〜2.5、0.1 刻みに丸めます。 |
+| `setMode(mode)` | `void` | ready 後に表示モードを変えます。 |
+| `setTheme(theme?)` | `void` | Viewer テーマを更新します。破棄後は何もしません。 |
+| `destroy()` | `void` | render/load を中止し、PDF と container を破棄します。 |
+| `state` | `ViewerState` | page、pageCount、zoom、mode、status と任意の error message の snapshot です。 |
+
+```ts
+const pdfViewer = mountViewer(host, pdfBytes, { mode: "single" });
+```
+
+### Publication ディープリンク
+
+```ts
+function serializePublicationDeepLink(destination: PublicationDestination): string;
+function restorePublicationDeepLink(
+  value: string,
+  controller: PublicationController,
+): PublicationDestination | undefined;
+```
+
+`serializePublicationDeepLink()` は destination の ID を `v1.` prefix と URI encoding で文字列化します。`restorePublicationDeepLink()` は prefix と encoding を検証し、現在の controller で ID を解決します。不正な値、空 ID、現 generation に存在しない ID は `undefined` です。復元関数そのものは移動しないため、必要なら戻り値を `controller.navigate()` に渡します。
+
+```ts
+const restored = restorePublicationDeepLink(location.hash.slice(1), publicationController);
+if (restored) publicationController.navigate(restored);
+```
+
+## ライフサイクルとエラー
+
+Core の更新は staging iframe で完了してから正規 iframe を置き換えます。更新中と更新失敗時は直前の確定済み文書を引き続き利用できます。`PageDocument`、`PublicationDocument`、destination、warning、thumbnail、search result は generation に結び付くため、更新後は `controller.current` と各解決 API から取得し直してください。
+
+`ImposiaError` は `Error` を継承し、`code: string` を持ちます。
+
+```ts
+try {
+  await controller.update(nextSource);
+} catch (error) {
+  if (error instanceof ImposiaError) console.error(error.code, error.message);
+  else if (error instanceof DOMException && error.name === "AbortError") console.info("中止");
+}
+```
+
+代表的な失敗条件は次のとおりです。
+
+| 条件 | 結果 |
+| --- | --- |
+| 新しい update が開始された、または `AbortSignal` が中止された | 進行中の処理が `AbortError` で reject します。 |
+| リソース期限を超えた | `ImposiaError` の `RESOURCE_TIMEOUT` で reject します。 |
+| ページ寸法や余白が不正 | `INVALID_PAGE_GEOMETRY` を throw します。 |
+| Publication の構造または extension が不正 | `INVALID_PUBLICATION` を throw または reject します。 |
+| 古い Publication destination を渡した | `STALE_PUBLICATION_DESTINATION` を throw します。 |
+| destination の DOM を見つけられない | `PUBLICATION_DESTINATION_NOT_FOUND` を throw します。 |
+| destroy 後に Core 操作を呼んだ | Promise が reject します。Reader/Inspector の操作は throw します。 |
+
+処理を終えたら、低レベル API では必ず `destroy()` を呼んでください。React コンポーネントと Hooks はアンマウント時に自動で破棄します。

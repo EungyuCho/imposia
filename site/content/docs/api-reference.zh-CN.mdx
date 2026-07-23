@@ -1,0 +1,387 @@
+---
+title: API 参考
+description: 查询 Imposia 的 React 组件与 Hook、Core 文档和出版物控制器，以及 Viewer、Reader 和 Inspector API。
+---
+
+这份参考面向已经完成基础接入、需要确认公开 API 精确行为的开发者。所有 API 都只在浏览器中运行，并以 ESM 形式发布。
+
+## 软件包映射
+
+| 软件包 | 公开入口 | 适用场景 |
+| --- | --- | --- |
+| `@imposia/react` | React 组件、Hook，以及 `@imposia/client` 的公开导出 | React 18+ 应用 |
+| `@imposia/client` | Core 和 Viewer 的主要集成 API | 希望从一个依赖使用框架无关 API |
+| `@imposia/core` | 分页、Publication、打印、EPUB、资源和 Core 辅助函数 | 直接管理规范 iframe 与生命周期 |
+| `@imposia/viewer` | 页面 Viewer、Reader、Inspector 和独立 PDF.js Viewer | 展示已有 `PageDocument` 或 PDF |
+
+React Viewer 需导入 `@imposia/react/styles.css`；直接使用 Viewer 时导入 `@imposia/viewer/styles.css`。
+
+## React 组件与 Hook
+
+### `ImposiaPageViewer` 与 `ImposiaDocument`
+
+```tsx
+function ImposiaPageViewer(
+  props: ImposiaPageViewerProps & React.RefAttributes<ImposiaPageViewerHandle>,
+): React.ReactElement;
+```
+
+组件创建 Core 控制器，并把同一个规范 iframe 交给 Page Viewer。`ImposiaDocument` 是它的兼容别名，props 和句柄完全相同：
+
+```ts
+type ImposiaDocumentProps = ImposiaPageViewerProps;
+type ImposiaDocumentHandle = ImposiaPageViewerHandle;
+```
+
+| prop | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `source` | `PageSource` | 是 | `{ html, baseUrl? }` 或 `{ lightDom, baseUrl? }`。变化时复用控制器并调用 `update()`。 |
+| `sourceRevision` | `string \| number` | 否 | 即使源相同也强制重新处理，不更换控制器。 |
+| `documentOptions` | `PageDocumentOptions` | 否 | 创建控制器时使用；单独改变对象不会重建控制器。 |
+| `documentOptionsRevision` | `string \| number` | 否 | 变化时用当前选项重建控制器和规范 iframe。 |
+| `viewerOptions` | `PageViewerOptions` | 否 | 模式、缩放、主题、跨页和 Inspector。这里生成的是普通 `PageDocument`，传 Reader 会校验失败。 |
+| `className` / `style` | `string` / `CSSProperties` | 否 | 宿主 `<div>` 的展示属性。 |
+| `onReady` | `(document: PageDocument) => void` | 否 | 文档提交并绑定 Viewer 后调用。 |
+| `onError` | `(error: unknown) => void` | 否 | Core 或 Viewer 失败时调用。 |
+| `onStateChange` | `(state: ImposiaDocumentState) => void` | 否 | 报告 `idle \| loading \| ready \| error`。 |
+
+| 句柄成员 | 返回值 | 准备状态与错误 |
+| --- | --- | --- |
+| `current` | `PageDocument \| undefined` | 首次提交前和卸载后为 `undefined`。 |
+| `setMode(mode)` | `void` | 接受 `continuous \| single \| spread`；文档未就绪时抛出错误。 |
+| `setSpreadCover(cover)` | `void` | 设置第 1 页是否单独显示；文档未就绪时抛出错误。 |
+| `openInspector()` / `closeInspector()` / `toggleInspector()` | `void` | `viewerOptions.inspector` 未启用时抛出错误。 |
+| `selectWarning(warning)` | `void` | 只接受当前代警告；旧代警告会被拒绝。 |
+| `print()` | `Promise<void>` | 打印最新规范 iframe；未就绪或卸载后拒绝。 |
+| `exportEpub(options)` | `Promise<Blob>` | 返回最新语义源的 EPUB Blob；未就绪或卸载后拒绝。 |
+
+```tsx
+const viewer = useRef<ImposiaPageViewerHandle>(null);
+<ImposiaPageViewer
+  ref={viewer}
+  source={{ html: "<article><h1>标题</h1></article>" }}
+  viewerOptions={{ mode: "spread", spread: { cover: true }, inspector: true }}
+/>;
+await viewer.current?.print();
+```
+
+### `ImposiaPublicationViewer`
+
+```tsx
+function ImposiaPublicationViewer(
+  props: ImposiaPublicationViewerProps & React.RefAttributes<ImposiaPublicationViewerHandle>,
+): React.ReactElement;
+```
+
+它组合有序条目，并自动把 Viewer Reader 连接到拥有该文档的 `PublicationController`。
+
+| prop | 类型 | 说明 |
+| --- | --- | --- |
+| `snapshot` | `PublicationSnapshot` | 必填；对象引用或 revision 变化时调用 `update()`。 |
+| `snapshotRevision` | `string \| number` | 强制重新处理当前 snapshot。 |
+| `publicationOptions` / `publicationOptionsRevision` | `PublicationOptions` / `string \| number` | 选项在一个控制器生命周期内固定；revision 变化时重建。 |
+| `viewerOptions` | `Omit<PageViewerOptions, "reader">` | Reader 由组件连接，不能在这里替换。 |
+| `readerOptions` | `Omit<PublicationReaderOptions, "controller">` | 可传 `initialDeepLink` 和 `onDeepLinkChange`。 |
+| `className` / `style` | `string` / `CSSProperties` | 宿主展示属性。 |
+| `onReady` / `onError` / `onStateChange` | Publication 回调 | `onReady` 在 Publication、Viewer 和 Reader 都就绪后调用。 |
+
+| 句柄成员 | 返回值 | 行为与约束 |
+| --- | --- | --- |
+| `current` | `PublicationDocument \| undefined` | 当前已提交 Publication。 |
+| `resolveDestination(id)` | `PublicationDestination \| undefined` | 从当前目录或搜索索引解析稳定 ID。 |
+| `navigate(destination)` | `void` | 经 Reader 导航；旧代或字段不匹配的目标会抛出错误。 |
+| `openTableOfContents()` / `closeTableOfContents()` / `toggleTableOfContents()` | `void` | 控制目录面板。 |
+| `openThumbnails()` / `closeThumbnails()` / `toggleThumbnails()` | `void` | 控制页面缩略图面板。 |
+| `getThumbnails()` | `readonly PublicationThumbnail[]` | 返回当前代的不可变模型。 |
+| `selectThumbnail(thumbnail)` | `void` | 精确跳页；旧代模型会抛出错误。 |
+| `restoreDeepLink(value)` | `PublicationDestination \| undefined` | 有效时解析并导航；无效或已移除时返回 `undefined`。 |
+| `openSearch()` / `closeSearch()` / `toggleSearch()` | `void` | 控制搜索面板。 |
+| `search(query)` | `readonly PublicationSearchResult[]` | 查询当前已提交的净化可见文本。 |
+| `nextSearchResult()` / `previousSearchResult()` | `PublicationSearchResult \| undefined` | 选择并导航相邻结果。 |
+| `selectSearchResult(result)` | `void` | 选择当前代结果并导航。 |
+| `setMode(mode)` / `setSpreadCover(cover)` | `void` | 控制页面展示。 |
+| `openInspector()` / `closeInspector()` / `toggleInspector()` | `void` | Inspector 未启用时抛出错误。 |
+| `selectWarning(warning)` | `void` | 只接受当前代警告。 |
+| `print()` / `exportEpub(options)` | `Promise<void>` / `Promise<Blob>` | 未就绪或卸载后拒绝。 |
+
+```tsx
+<ImposiaPublicationViewer
+  snapshot={{
+    metadata: { title: "札记", language: "zh-CN" },
+    entries: [{ id: "chapter-1", title: "第一章", html: "<h1>开始</h1>" }],
+  }}
+  readerOptions={{ initialDeepLink: location.hash.slice(1) }}
+/>;
+```
+
+### `useImposiaDocument` 与 `useImposiaPublication`
+
+```ts
+function useImposiaDocument(props: UseImposiaDocumentProps): UseImposiaDocumentResult;
+function useImposiaPublication(props: UseImposiaPublicationProps): UseImposiaPublicationResult;
+```
+
+| Hook | 输入 | 返回值 |
+| --- | --- | --- |
+| `useImposiaDocument` | 组件的 source、revision、文档选项和回调 | `hostRef`、`state: { status, document?, error? }`、`controller` |
+| `useImposiaPublication` | 组件的 snapshot、revision、Publication 选项和回调 | `hostRef`、`state: { status, publication?, error? }`、`controller` |
+
+把 `hostRef` 绑定到空 `<div>`。更新期间 state 会保留上一份已提交文档；AbortError 不触发 `onError`。选项只在创建控制器时读取，要应用新选项需改变对应 options revision。卸载会销毁控制器。
+
+```tsx
+const { hostRef, state, controller } = useImposiaDocument({ source: { html } });
+return <><div ref={hostRef} /><button onClick={() => void controller?.print()}>打印</button></>;
+```
+
+## Core 页面文档
+
+### `mountPageDocument`
+
+```ts
+function mountPageDocument(
+  container: HTMLElement,
+  source: PageSource,
+  options?: PageDocumentOptions,
+): PageDocumentController;
+
+type PageSource =
+  | { html: string; baseUrl?: string }
+  | { lightDom: Element | DocumentFragment; baseUrl?: string };
+```
+
+函数立即创建持久的规范 iframe 并返回控制器；首个版本在临时 staging iframe 中准备。`baseUrl` 只提供解析基准，不会绕过 `assetResolver`。
+
+| `PageDocumentOptions` | 类型 / 默认值 | 说明 |
+| --- | --- | --- |
+| `css` | `readonly string[]` / `[]` | 与源一起分页的 CSS 文本。 |
+| `assetResolver` | `AssetResolver` / 无 | 唯一资源入口；接收 `{ url, kind, baseUrl?, signal }`，返回 resolved 字节或 blocked 原因。 |
+| `page` | `PageOptions` / A4、纵向、20 mm | `size` 为 A4、Letter 或自定义宽高；可设 orientation 和统一/四边 margin。 |
+| `limits` | `PageLimits` / 内置上限 | 输入、节点、资源、页数、轮次和生成记录限制；只能设为不超过内置上限的正整数。 |
+| `headerTemplate` / `footerTemplate` | `string` / 无 | 支持 `{{pageNumber}}` 与 `{{totalPages}}`。 |
+| `decorateBlankPages` | `boolean` / `true` | 是否装饰因左右页约束插入的空白页。 |
+| `experimental` | `{ footnotes?: boolean; pageFloats?: boolean }` / `{}` | 启用实验性脚注和页浮动。 |
+| `extensions` | `readonly (PageExtension \| PublicationExtension)[]` / `[]` | 按顺序执行转换、资源过滤和页面装饰。 |
+| `signal` | `AbortSignal` / 无 | 只连接首次生成。 |
+| `onProgress` | `({ completedPages }) => void` / 无 | 已接受版本提交页时报告进度。 |
+
+```ts
+const controller = mountPageDocument(host, { html }, {
+  page: { size: "A4", margin: "18mm" },
+});
+const pageDocument = await controller.ready;
+```
+
+`PageExtension` 公开 `transform(input, context)`、`allowAsset(request, context)` 和 `decoratePage(page, context)` 三个可选方法。异步 `transform` 返回 `{ html?, css? }`；`context` 提供 `signal`、`warn()` 和 `onCleanup()`。
+
+### `PageDocumentController` 与 `PageDocument`
+
+| 控制器成员 | 返回值 | 行为与约束 |
+| --- | --- | --- |
+| `ready` | `Promise<PageDocument>` | 首次提交后兑现；失败、取消或超时会拒绝。 |
+| `current` | `PageDocument \| undefined` | 首次提交前和销毁后为 `undefined`。 |
+| `update(source, { signal? }?)` | `Promise<PageDocument>` | 新 update 中止旧候选；失败时保留上一代。 |
+| `print()` | `Promise<void>` | 等待最新 update 稳定后原生打印；无提交或已销毁时拒绝。 |
+| `destroy()` | `Promise<void>` | 中止工作、移除 iframe、撤销 Blob URL；重复调用返回同一 Promise。 |
+
+| `PageDocument` 成员 | 类型 / 返回值 | 说明 |
+| --- | --- | --- |
+| `iframe` | `HTMLIFrameElement` | 后续成功提交复用的规范 iframe。 |
+| `generation` / `pageCount` | `number` | 从 1 开始的提交代号和页数。 |
+| `pages` | `readonly PageMetadata[]` | 页号、左右页、命名上下文、空白、几何和正文文本。 |
+| `warnings` | `readonly PageWarning[]` | 带代、条目和页位置的警告。 |
+| `timings` | `{ totalMs, resourceMs, paginationMs }` | 本次提交耗时。 |
+| `exportEpub(options)` | `Promise<Blob>` | 从控制器最新已提交语义源导出可重排 EPUB。 |
+
+`exportEpub` 要求 `metadata: { title, language, identifier, modified? }`，可传 `signal` 和 `{ maxEntries?, maxBytes? }`。无效元数据、取消、文档释放或超过上限时拒绝。
+
+### Core 辅助函数
+
+| 函数签名 | 返回值与约束 | 最小示例 |
+| --- | --- | --- |
+| `prepareDocument(html, { headerTemplate?, footerTemplate?, allowRemoteResources? }?)` | 同步返回 `{ html, headerTemplate?, footerTemplate?, warnings }`；只净化和规范化，不分页。 | `const prepared = prepareDocument(html);` |
+| `pageWarningTargetBounds(document, warning)` | 返回 `{ left, top, width, height }`；警告不属于文档或无法定位时为 `undefined`。 | `const bounds = pageWarningTargetBounds(doc, doc.warnings[0]);` |
+| `hasPageDocumentFrameSandbox(iframe)` | sandbox token 恰好为公开常量中的 `allow-same-origin` 和 `allow-modals` 时为 `true`。 | `hasPageDocumentFrameSandbox(doc.iframe);` |
+| `selectBlankMarkers(markers, pages)` | 返回需在前方插入空白页的 marker ID；缺少 marker 映射时同步抛错。 | `selectBlankMarkers([{ id: 1, side: "left" }], new Map([[1, 1]]));` |
+
+## Core 出版物
+
+### `mountPublication`
+
+```ts
+function mountPublication(
+  container: HTMLElement,
+  snapshot: PublicationSnapshot,
+  options?: PublicationOptions,
+): PublicationController;
+```
+
+`snapshot` 包含 `metadata: { title, language?, identifier? }` 和有序 `entries`。每个条目要求非空且唯一的 `id`、非空 `title`，并且只能提供 `html` 或 `lightDom`；ID 不能含空白或控制字符。无效 snapshot 会同步抛出 `INVALID_PUBLICATION`。
+
+`PublicationOptions` 继承页面选项，但 `extensions` 只能是 `PublicationExtension[]`。扩展使用 `transformEntry(input, context)`，也可实现 `allowAsset()` 和 `decoratePage()`；包含普通 `transform()` 会同步抛错。
+
+```ts
+const controller = mountPublication(host, {
+  metadata: { title: "札记", language: "zh-CN" },
+  entries: [{ id: "chapter-1", title: "第一章", html: "<h1>开始</h1>" }],
+});
+const publication = await controller.ready;
+```
+
+### `PublicationController` 与 `PublicationDocument`
+
+| 控制器成员 | 返回值 | 行为与约束 |
+| --- | --- | --- |
+| `ready` / `current` | `Promise<PublicationDocument>` / `PublicationDocument \| undefined` | 首次提交后就绪。 |
+| `resolveDestination(id)` | `PublicationDestination \| undefined` | 从当前目录或搜索索引解析。 |
+| `search(query)` | `readonly PublicationSearchResult[]` | 未就绪时返回空数组。 |
+| `navigate(destination)` | `void` | 旧代目标抛 `STALE_PUBLICATION_DESTINATION`；无法定位抛 `PUBLICATION_DESTINATION_NOT_FOUND`。 |
+| `update(snapshot, { signal? }?)` | `Promise<PublicationDocument>` | 无效 snapshot 以拒绝 Promise 返回；失败保留上一代。 |
+| `print()` / `destroy()` | `Promise<void>` | 委托给底层页面控制器。 |
+
+`PublicationDocument` 继承 `PageDocument`，增加 `metadata`、带 `{ start, end }` 全局页范围的 `entries`，以及分层 `outline`。目录与搜索结果中的目标为：
+
+```ts
+interface PublicationDestination {
+  readonly id: string;
+  readonly entryId: string;
+  readonly page: number;
+  readonly generation: number;
+}
+```
+
+目标和搜索结果属于一次提交；更新后应通过 ID 重新解析。
+
+## Viewer 页面、PDF、Reader 与 Inspector
+
+### `mountPageViewer` 与 `PageViewerController`
+
+```ts
+function mountPageViewer(
+  container: HTMLElement,
+  pageDocument: PageDocument,
+  options?: PageViewerOptions,
+): PageViewerController;
+```
+
+container 必须是规范 iframe 当前的父元素。函数同步校验 iframe、sandbox、页标记、主题和 Reader 所有权；失败时抛错，不重新分页。选项为 `mode?`、`spread.cover?`、`zoom?`、`theme?`、`inspector?` 和 `reader?`。默认 mode 为 continuous、zoom 为 1、cover 和 Inspector 为 false。zoom 限制到 0.5–2.5。宽度小于 720 px 时，请求的 spread 暂以 single 展示。
+
+| 控制器成员 | 返回值 | 行为与约束 |
+| --- | --- | --- |
+| `goToPage(page)` / `nextPage()` / `previousPage()` | `void` | 限制到有效全局页；spread 中前后移动一组。 |
+| `setZoom(zoom)` / `setMode(mode)` / `setSpreadCover(cover)` | `void` | 更新展示，不改变 Core 布局。 |
+| `setTheme(theme?)` | `void` | 主题值必须是 `--imposia-viewer-*` 字符串属性；省略时恢复原值。 |
+| `refresh(document)` | `void` | 只接受同一 iframe 的更高代；否则抛错。 |
+| `print()` | `Promise<void>` | 打印当前规范 iframe；已销毁时拒绝。 |
+| `destroy()` | `void` | 移除展示 UI 并恢复 DOM；不会销毁 Core 控制器。 |
+| `state` | `PageViewerState` | `{ page, pageCount, zoom, mode, effectiveMode, status: "ready", generation }`。 |
+| `reader` / `inspector` | 对应控制器或 `undefined` | 只在选项启用时存在。 |
+
+```ts
+const viewer = mountPageViewer(host, await controller.ready, { mode: "spread" });
+viewer.goToPage(3);
+```
+
+`validatePageViewerOptions(document, options?)` 执行相同校验，但不改变 DOM，返回 `void`。
+
+### `PublicationReaderController`
+
+Reader 选项为 `{ controller, initialDeepLink?, onDeepLinkChange? }`。controller 必须拥有传给 Viewer 的当前 `PublicationDocument`。
+
+| 成员 | 返回值与约束 |
+| --- | --- |
+| `openTableOfContents()` / `closeTableOfContents()` / `toggleTableOfContents()` | 控制目录。 |
+| `openThumbnails()` / `closeThumbnails()` / `toggleThumbnails()` | 控制缩略图；`selectThumbnail(model)` 只接受当前代模型。 |
+| `openSearch()` / `closeSearch()` / `toggleSearch()` | 控制搜索。 |
+| `search(query)` | 返回当前代 `readonly PublicationSearchResult[]`。 |
+| `nextSearchResult()` / `previousSearchResult()` | 选择、导航并返回结果；无结果时 `undefined`。 |
+| `selectSearchResult(result)` | 选择当前结果并导航。 |
+| `navigate(destination)` | 经所属 Publication 控制器导航，并更新 Viewer 页和深链接。 |
+| `restoreDeepLink(value)` | 解析并导航，返回目标或 `undefined`。 |
+| `state` | 面板、缩略图、目标、深链接、查询与结果状态。 |
+
+打开目录、缩略图、搜索或 Inspector 会关闭其他面板。Viewer 销毁后所有 Reader 动作都会抛错。`PublicationThumbnail` 仅含 `page`、`generation`、页面宽高和 `previewLineCount`，不含位图或作者 DOM。
+
+### `ViewerInspectorController`
+
+| 成员 | 返回值与约束 |
+| --- | --- |
+| `open()` / `close()` / `toggle()` | 控制诊断；Viewer 销毁后抛错。 |
+| `select(warning)` | 只接受 `state.warnings` 中的对象；可定位时跳页并短暂高亮。 |
+| `state` | `{ open, warnings, selected }`；销毁后为关闭、空列表、无选中项。 |
+
+### 深链接辅助函数
+
+```ts
+function serializePublicationDeepLink(destination: PublicationDestination): string;
+function restorePublicationDeepLink(
+  value: string,
+  controller: PublicationController,
+): PublicationDestination | undefined;
+```
+
+序列化结果是 `v1.` 加 URL 编码后的稳定目标 ID。恢复只接受规范编码，并通过控制器当前代重新解析；它不会自动导航。
+
+```ts
+const saved = serializePublicationDeepLink(destination);
+const restored = restorePublicationDeepLink(saved, controller);
+if (restored) controller.navigate(restored);
+```
+
+### `mountViewer`（独立 PDF）
+
+```ts
+function mountViewer(
+  container: HTMLElement,
+  source: Uint8Array | ArrayBuffer | string | { pdf: Uint8Array },
+  options?: ViewerOptions,
+): ViewerController;
+```
+
+它使用 PDF.js canvas，不接受 Core 文档，也不导出 PDF。选项为 `mode?: continuous | single`、`zoom?`、`workerSrc?` 和 `theme?`。函数立即返回，state 从 loading 变为 ready；异步失败写入 `state.error` 并设为 error。
+
+| 控制器成员 | 返回值与约束 |
+| --- | --- |
+| `goToPage()` / `nextPage()` / `previousPage()` | 只在 ready 时移动。 |
+| `setZoom()` / `setMode()` | 只在 ready 时更新并重新渲染。 |
+| `setTheme(theme?)` | 应用或恢复运行时主题。 |
+| `destroy()` | 取消任务、销毁 PDF.js 文档并清空 container；重复调用不执行。 |
+| `state` | `{ page, pageCount, zoom, mode, status, error? }` 的副本。 |
+
+```ts
+const pdf = mountViewer(host, "/book.pdf", {
+  mode: "single",
+  workerSrc: "/pdf.worker.min.mjs",
+});
+```
+
+## 生命周期与错误
+
+```ts
+class ImposiaError extends Error {
+  readonly code: string;
+  constructor(code: string, message: string);
+}
+```
+
+Core 对可分类的配置、资源、Publication、分页和 EPUB 失败使用 `ImposiaError`。取消使用名称为 `AbortError` 的 `DOMException`。Viewer 的所有权、代号、已销毁状态和无效对象约束通常抛出普通 `Error` 或 `TypeError`。
+
+```ts
+try {
+  await controller.update(nextSource, { signal });
+} catch (error) {
+  if (error instanceof DOMException && error.name === "AbortError") return;
+  if (error instanceof ImposiaError) console.error(error.code, error.message);
+}
+```
+
+手动组合时，先等待 Core `ready`，再挂载 Viewer；update 成功后用新文档调用 `refresh()`。销毁时先拆 Viewer，再销毁 Core：
+
+```ts
+const first = await controller.ready;
+const viewer = mountPageViewer(host, first);
+viewer.refresh(await controller.update(nextSource));
+viewer.destroy();
+await controller.destroy();
+```
+
+React 组件和 Hook 会自动清理。`print()` 调用浏览器原生打印；Imposia 不返回 PDF 字节。`exportEpub()` 返回可重排 EPUB，不是页面预览的固定版快照。

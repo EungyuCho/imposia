@@ -79,6 +79,60 @@ test("localized landing pages expose docs and demo calls to action", async ({
   }
 });
 
+test("the GNB demo link loads the standalone demo document", async ({ page, browserName }) => {
+  test.skip(browserName !== "chromium", "Landing-page navigation is Chromium-reference only.");
+  const captured = captureBrowserErrors(page, browserName);
+
+  await page.goto("/en");
+
+  try {
+    const demoLink = page.locator("#nd-nav").getByRole("link", { name: "Demo", exact: true });
+    await expect(demoLink).toHaveAttribute("href", "/examples/demo/");
+    await demoLink.click();
+
+    await expect(page).toHaveURL(/\/examples\/demo\/$/);
+    await expect(page).toHaveTitle("Imposia Publishing Lab");
+    await expect(
+      page.getByRole("heading", { name: "Documents that stay documents.", exact: true }),
+    ).toBeVisible({ timeout: 15_000 });
+  } finally {
+    assertNoBrowserErrors(captured);
+  }
+});
+
+test("the GNB exposes the GitHub repository next to the locale control", async ({
+  page,
+  browserName,
+}) => {
+  test.skip(browserName !== "chromium", "Landing-page navigation is Chromium-reference only.");
+  const captured = captureBrowserErrors(page, browserName);
+
+  await page.goto("/en");
+
+  try {
+    const navigation = page.locator("#nd-nav");
+    const languageTrigger = navigation
+      .getByRole("button", { name: /choose a language|language|locale/i })
+      .first();
+    const githubLink = navigation.getByRole("link", { name: "GitHub", exact: true });
+
+    await expect(languageTrigger).toBeVisible();
+    await expect(githubLink).toBeVisible();
+    await expect(githubLink).toHaveAttribute("href", "https://github.com/EungyuCho/imposia");
+    await expect(githubLink).toHaveAttribute("target", "_blank");
+
+    const [languageBox, githubBox] = await Promise.all([
+      languageTrigger.boundingBox(),
+      githubLink.boundingBox(),
+    ]);
+    expect(languageBox).not.toBeNull();
+    expect(githubBox).not.toBeNull();
+    expect(githubBox?.x).toBeGreaterThan(languageBox?.x ?? Number.POSITIVE_INFINITY);
+  } finally {
+    assertNoBrowserErrors(captured);
+  }
+});
+
 test("documentation layout exposes the Fumadocs sidebar and locale controls", async ({
   page,
   browserName,
@@ -131,6 +185,28 @@ test("localized getting-started docs render through the public route", async ({
       await expect(page.locator("html")).toHaveAttribute("lang", locale.locale);
       await expect(page.getByRole("heading", { level: 1 })).toHaveText(locale.gettingStarted);
       await expect(page.getByText("@imposia/react", { exact: true })).toBeVisible();
+    }
+  } finally {
+    assertNoBrowserErrors(captured);
+  }
+});
+
+test("localized API references expose the public React, Core, and Viewer surfaces", async ({
+  page,
+  browserName,
+}) => {
+  test.skip(browserName !== "chromium", "Documentation rendering is Chromium-reference only.");
+  const captured = captureBrowserErrors(page, browserName);
+
+  try {
+    for (const locale of locales) {
+      await page.goto(`/${locale.locale}/docs/api-reference`);
+      await expect(page).toHaveURL(new RegExp(`/${locale.locale}/docs/api-reference/?$`));
+      await expect(page.locator("html")).toHaveAttribute("lang", locale.locale);
+      await expect(page.getByRole("heading", { level: 1 })).toContainText("API");
+      await expect(page.getByText("ImposiaPageViewer", { exact: true }).first()).toBeVisible();
+      await expect(page.getByText("mountPageDocument", { exact: true }).first()).toBeVisible();
+      await expect(page.getByText("mountPageViewer", { exact: true }).first()).toBeVisible();
     }
   } finally {
     assertNoBrowserErrors(captured);
