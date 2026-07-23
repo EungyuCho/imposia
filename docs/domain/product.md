@@ -1,8 +1,24 @@
 # Product contract
 
-Imposia is a React-first, browser-only HTML/CSS publishing library. The browser
-packages are ESM libraries: there is no Node runtime, command-line renderer, or
-server-side publishing API.
+Imposia is a React-first, browser-only HTML/CSS pagination and publishing
+library. Its primary contract is pagination integrity: within the declared
+compatibility boundary, a committed generation preserves the fixture's visible
+authored content exactly once and in source order, while page metadata,
+navigation, diagnostics, Viewer presentation, and native print address the same
+global page sequence.
+
+In a client-side rendering (CSR) integration, the host application produces and
+updates complete HTML, light-DOM, or Publication source values. Core paginates
+those values. It does not execute authored scripts, capture an arbitrary running
+application DOM, or take ownership of application state.
+
+The browser packages are ESM libraries: there is no Node runtime, command-line
+renderer, or server-side publishing API. Pagination integrity does not mean
+complete CSS support, fixed physical page numbers across edits, exact
+cross-browser page parity, or a guarantee that arbitrary input cannot overflow.
+The authoritative support and recovery boundaries are in the
+[compatibility matrix](../compatibility.md), and the accepted product decision is
+[ADR 0011](../architecture/0011-html-csr-pagination-integrity.md).
 
 Competitive development remains client-only. Publication composition, Reader
 navigation, diagnostics, performance, and publishing CSS must strengthen the
@@ -72,6 +88,13 @@ page rules; authored rules override the A4/20 mm defaults when no host override 
 present. Structural pagination is a Chromium-reference behavior; the
 cross-browser contract is API, isolation, lifecycle, print invocation, and
 resource cleanup.
+
+For Stable behavior and documented Constrained subsets, public conformance
+fixtures must preserve their visible source markers or ranges exactly once and
+in order across the committed page sequence. Page membership must be monotonic,
+and navigation, warnings, page metadata, Viewer presentation, and native print
+must refer to that same generation. These fixture-scoped observations do not
+authorize an unqualified claim about arbitrary HTML/CSS.
 
 The public React publishing lab demonstrates those host page options with A4
 portrait as its initial sheet, common A/ISO B/Letter size presets, and explicit
