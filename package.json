@@ -11,7 +11,7 @@
     "build": "node --import tsx scripts/clean-package-dists.ts && tsc -b && node --import tsx scripts/build-core-browser.ts && node --import tsx scripts/build-demo.ts && pnpm site:build && node --import tsx scripts/check-core-package-boundary.ts",
     "build:demo": "node --import tsx scripts/build-demo.ts",
     "site:dev": "cd site && react-router dev",
-    "site:build": "cd site && react-router build && cd .. && node --import tsx scripts/copy-site-demo.ts",
+    "site:build": "cd site && react-router build && cd .. && node --import tsx scripts/check-site-prerender.ts && node --import tsx scripts/copy-site-demo.ts",
     "site:start": "cd site && vite preview",
     "site:typecheck": "cd site && react-router typegen && tsc --noEmit --pretty false -p tsconfig.json",
     "check:core-boundary": "node --import tsx scripts/check-core-package-boundary.ts",
