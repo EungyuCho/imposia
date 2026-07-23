@@ -558,7 +558,9 @@ function App() {
   const extensionsEnabledRef = useRef(extensionsEnabled);
   const sampleIdRef = useRef(sampleId);
   const demoCaseRef = useRef(demoCase);
-  demoCaseRef.current = demoCase;
+  useEffect(() => {
+    demoCaseRef.current = demoCase;
+  }, [demoCase]);
   const requestLiveRevision = useCallback((revision: number) => {
     setCsrRevision(revision);
   }, []);
@@ -789,11 +791,12 @@ function App() {
     setExportStatus("exporting");
     setExportMessage(undefined);
     try {
+      const exportSampleId = demoCase === "editor" || demoCase === "output" ? "editor" : sample.id;
       const blob = await nextDocument.exportEpub({
         metadata: {
           title: activeTitle,
-          language: sample.id === "hangul" ? "ko" : "en",
-          identifier: `urn:imposia:demo:${sample.id}`,
+          language: exportSampleId === "hangul" ? "ko" : "en",
+          identifier: `urn:imposia:demo:${exportSampleId}`,
           modified: "2026-01-01T00:00:00Z",
         },
       });
@@ -802,7 +805,7 @@ function App() {
         const anchor = document.createElement("a");
         try {
           anchor.href = objectUrl;
-          anchor.download = `imposia-${sample.id}.epub`;
+          anchor.download = `imposia-${exportSampleId}.epub`;
           anchor.hidden = true;
           document.body.append(anchor);
           anchor.click();

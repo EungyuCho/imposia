@@ -397,6 +397,10 @@ test("React publishing lab downloads a ready EPUB", async ({ page, browserName }
   try {
     const preview = page.getByTestId("demo-preview-surface");
     await expect(preview.locator("[data-imposia-react-status='ready']")).toBeVisible();
+    await page.locator("[data-demo-case='compatibility']").click();
+    await expect(preview.locator("[data-imposia-react-status='ready']")).toBeVisible();
+    await page.locator("[data-sample-id='hangul']").click();
+    await expect(preview.locator("[data-imposia-react-status='ready']")).toBeVisible();
     await page.locator("[data-demo-case='output']").click();
     await expect(preview.locator("[data-imposia-react-status='ready']")).toBeVisible();
     const downloadButton = page.getByRole("button", { name: "Download EPUB", exact: true });
@@ -408,7 +412,7 @@ test("React publishing lab downloads a ready EPUB", async ({ page, browserName }
     await downloadButton.click();
     const download = await downloadPromise;
     await expect(page.getByTestId("demo-export-status")).toHaveText("EPUB downloaded");
-    expect(download.suggestedFilename()).toMatch(/\.epub$/i);
+    expect(download.suggestedFilename()).toBe("imposia-editor.epub");
 
     const stream = await download.createReadStream();
     if (stream === null) throw new Error("EPUB download stream is missing.");
@@ -426,8 +430,11 @@ test("React publishing lab downloads a ready EPUB", async ({ page, browserName }
     expect(bytes.subarray(dataOffset, dataOffset + dataLength).toString("utf8")).toBe(
       "application/epub+zip",
     );
+    const packageDocument = storedZipEntryText(bytes, "EPUB/package.opf");
     const contentXhtml = storedZipEntryText(bytes, "EPUB/content.xhtml");
     const contentCss = storedZipEntryText(bytes, "EPUB/styles.css");
+    expect(packageDocument).toContain("<dc:language>en</dc:language>");
+    expect(packageDocument).toContain("<dc:identifier>urn:imposia:demo:editor</dc:identifier>");
     expect(contentXhtml).toContain("Edit this page while it stays paginated.");
     expect(contentXhtml).toContain("One source, one committed sequence");
     expect(contentCss).not.toContain("float-reference: page");

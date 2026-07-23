@@ -120,7 +120,10 @@ export function useLiveRenderRunner({
   const runSequenceRef = useRef(0);
   const activeRef = useRef<ActiveRun | undefined>(undefined);
   const timeoutIdsRef = useRef<number[]>([]);
-  revisionRef.current = currentRevision;
+
+  useEffect(() => {
+    revisionRef.current = currentRevision;
+  }, [currentRevision]);
 
   const clearSchedule = useCallback(() => {
     for (const timeoutId of timeoutIdsRef.current) window.clearTimeout(timeoutId);
