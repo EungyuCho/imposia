@@ -4,6 +4,9 @@
 Viewer APIs. It requires React and React DOM 18 or newer and does not create a
 second controller, iframe, layout pass, or asset-fetch path.
 
+Prop-driven HTML/CSR updates are staged atomically. The component keeps the
+previous committed pages visible until a complete winning generation is ready.
+
 ## Install
 
 ```bash

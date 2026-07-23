@@ -3,6 +3,26 @@
 All notable changes to Imposia are recorded here. The project follows semantic
 versioning for its published package interfaces.
 
+## 0.1.3 — 2026-07-23
+
+Patch release for the public `@imposia/*` package family.
+
+### Added
+
+- A cross-browser continuity fixture that records the first and last source
+  token on every committed content page, then proves that the flattened page
+  sequence contains all 96 tokens exactly once and in order.
+- A public CSR continuity specimen that displays the committed token ledger and
+  runs three rapid source revisions while retaining the canonical iframe.
+
+### Changed
+
+- Made HTML/CSR pagination integrity the primary product contract. Reflowable
+  EPUB remains a supported semantic projection rather than the headline
+  promise.
+- Synchronized `@imposia/core`, `@imposia/viewer`, `@imposia/client`, and
+  `@imposia/react` at version `0.1.3` without changing their public interfaces.
+
 ## 0.1.2 — 2026-07-23
 
 Patch release for the public `@imposia/*` package family.

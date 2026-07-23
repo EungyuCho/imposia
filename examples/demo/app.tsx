@@ -11,9 +11,10 @@ import { useId, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { DEFAULT_PAGE_PRESET, type PagePreset, PageSetup } from "./page-setup.js";
 
-type SampleId = "editorial" | "brief" | "hangul" | "publishing";
+type SampleId = "integrity" | "editorial" | "brief" | "hangul" | "publishing";
 type CodeMode = "react" | "core";
 type ExportStatus = "idle" | "exporting" | "success" | "error";
+type IntegrityStatus = "idle" | "running" | "verified" | "failed";
 
 type DemoSample = Readonly<{
   id: SampleId;
@@ -21,6 +22,20 @@ type DemoSample = Readonly<{
   title: string;
   summary: string;
   html: string;
+}>;
+
+type IntegrityPageRange = Readonly<{
+  page: number;
+  first: string;
+  last: string;
+  count: number;
+}>;
+
+type IntegrityReport = Readonly<{
+  sourceTokenCount: number;
+  committedTokenCount: number;
+  exactSequence: boolean;
+  pageRanges: readonly IntegrityPageRange[];
 }>;
 
 const documentStyle = `
@@ -167,6 +182,60 @@ const publishingPlacementCss = `
   .publishing-float { float: top; float-reference: page; }
 `;
 
+const integrityTokens = Array.from(
+  { length: 96 },
+  (_, index) => `FLOW-${String(index + 1).padStart(3, "0")}`,
+);
+
+const integrityRows = integrityTokens
+  .map(
+    (token) => `
+      <p class="integrity-row">
+        <span data-integrity-token="${token}">${token}</span>
+        <span>Browser-owned HTML remains in source order across the committed page boundary.</span>
+      </p>
+    `,
+  )
+  .join("");
+
+const integrityDocumentCss = `
+  :root {
+    color: #17201d;
+    background: #f6f1e7;
+    font-family: "SFMono-Regular", "Cascadia Code", Consolas, monospace;
+  }
+  body { color: #17201d; background: #f6f1e7; }
+  article { font-size: 11px; line-height: 1.45; }
+  h1 { max-width: 14ch; margin: 0; font: 500 42px/0.98 "Iowan Old Style", Georgia, serif; letter-spacing: -0.05em; }
+  .integrity-kicker {
+    margin: 0 0 20px;
+    color: #a64020;
+    font-weight: 800;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+  }
+  .integrity-deck { max-width: 60ch; margin: 20px 0 28px; font-size: 14px; }
+  .integrity-revision {
+    margin: 0 0 22px;
+    padding: 10px 12px;
+    border-left: 3px solid #ef6a3b;
+    background: #e8e0d1;
+    font-weight: 700;
+  }
+  .integrity-flow { border-bottom: 1px solid #c9c1b3; }
+  .integrity-row {
+    display: grid;
+    min-height: 31px;
+    grid-template-columns: 76px minmax(0, 1fr);
+    align-items: center;
+    gap: 12px;
+    margin: 0;
+    border-top: 1px solid #c9c1b3;
+    break-inside: avoid;
+  }
+  [data-integrity-token] { color: #a64020; font-weight: 800; }
+`;
+
 const publishingRows = [
   ["01", "Geometry", "A4 portrait default", "Stable / four authored margins"],
   ["02", "Page rules", "first · left · right", "Stable / margin-box furniture"],
@@ -212,9 +281,25 @@ const publishingRows = [
   .join("");
 
 const samples: Record<SampleId, DemoSample> = {
+  integrity: {
+    id: "integrity",
+    index: "01",
+    title: "CSR continuity proof",
+    summary: "Ninety-six source tokens, checked once and in order across every committed page.",
+    html: `
+      <style>${integrityDocumentCss}</style>
+      <article>
+        <p class="integrity-kicker">Imposia / pagination integrity</p>
+        <h1>No gaps at the fold.</h1>
+        <p class="integrity-deck">This specimen records a unique source token in every row. The host reads the committed page DOM back and proves that all ninety-six tokens still occur exactly once and in source order.</p>
+        <p class="integrity-revision">CSR source revision <span data-csr-revision>{{CSR_REVISION}}</span></p>
+        <div class="integrity-flow">${integrityRows}</div>
+      </article>
+    `,
+  },
   editorial: {
     id: "editorial",
-    index: "01",
+    index: "02",
     title: "Editorial essay",
     summary: "Three composed pages with running furniture and explicit page breaks.",
     html: `
@@ -249,7 +334,7 @@ const samples: Record<SampleId, DemoSample> = {
   },
   brief: {
     id: "brief",
-    index: "02",
+    index: "03",
     title: "Product brief",
     summary: "A compact two-page product document with structured facts.",
     html: `
@@ -276,7 +361,7 @@ const samples: Record<SampleId, DemoSample> = {
   },
   hangul: {
     id: "hangul",
-    index: "03",
+    index: "04",
     title: "한국어 필드노트",
     summary: "한글 조판과 명시적 페이지 나눔을 확인하는 두 페이지 샘플입니다.",
     html: `
@@ -300,7 +385,7 @@ const samples: Record<SampleId, DemoSample> = {
   },
   publishing: {
     id: "publishing",
-    index: "04",
+    index: "05",
     title: "Publishing contract",
     summary:
       "A4 page rules, local references, repeated table heads, and opt-in publishing features.",
@@ -392,13 +477,62 @@ function exportStatusLabel(
   return ready ? "EPUB ready" : "Awaiting document";
 }
 
+function inspectIntegrity(pageDocument: PageDocument): IntegrityReport {
+  const frameDocument = pageDocument.iframe.contentDocument;
+  if (frameDocument === null) {
+    return {
+      sourceTokenCount: integrityTokens.length,
+      committedTokenCount: 0,
+      exactSequence: false,
+      pageRanges: [],
+    };
+  }
+
+  const pageRanges = [...frameDocument.querySelectorAll<HTMLElement>("[data-imposia-page]")]
+    .map((pageElement, index): IntegrityPageRange | undefined => {
+      const tokens = [
+        ...pageElement.querySelectorAll<HTMLElement>("[data-integrity-token]"),
+      ].flatMap((element) => {
+        const token = element.dataset.integrityToken;
+        return token === undefined ? [] : [token];
+      });
+      const first = tokens[0];
+      const last = tokens.at(-1);
+      if (first === undefined || last === undefined) return undefined;
+      return { page: index + 1, first, last, count: tokens.length };
+    })
+    .filter((range): range is IntegrityPageRange => range !== undefined);
+  const committedTokens = pageRanges.flatMap((range) => {
+    const first = integrityTokens.indexOf(range.first);
+    return first < 0 ? [] : integrityTokens.slice(first, first + range.count);
+  });
+  const domTokens = [
+    ...frameDocument.querySelectorAll<HTMLElement>("[data-imposia-page] [data-integrity-token]"),
+  ].flatMap((element) => {
+    const token = element.dataset.integrityToken;
+    return token === undefined ? [] : [token];
+  });
+  const exactSequence =
+    domTokens.length === integrityTokens.length &&
+    domTokens.every((token, index) => token === integrityTokens[index]) &&
+    committedTokens.every((token, index) => token === domTokens[index]);
+
+  return {
+    sourceTokenCount: integrityTokens.length,
+    committedTokenCount: domTokens.length,
+    exactSequence,
+    pageRanges,
+  };
+}
+
 function App() {
   const viewerRef = useRef<ImposiaPageViewerHandle>(null);
   const sampleHeadingId = useId();
   const runtimeHeadingId = useId();
   const codeHeadingId = useId();
   const exportHeadingId = useId();
-  const [sampleId, setSampleId] = useState<SampleId>("editorial");
+  const integrityHeadingId = useId();
+  const [sampleId, setSampleId] = useState<SampleId>("integrity");
   const [pagePreset, setPagePreset] = useState<PagePreset>(DEFAULT_PAGE_PRESET);
   const [pageOrientation, setPageOrientation] = useState<PageOrientation>("portrait");
   const [extensionsEnabled, setExtensionsEnabled] = useState(true);
@@ -409,13 +543,19 @@ function App() {
   const [error, setError] = useState<string>();
   const [exportStatus, setExportStatus] = useState<ExportStatus>("idle");
   const [exportMessage, setExportMessage] = useState<string>();
+  const [csrRevision, setCsrRevision] = useState(0);
+  const [integrityStatus, setIntegrityStatus] = useState<IntegrityStatus>("idle");
+  const [integrityReport, setIntegrityReport] = useState<IntegrityReport>();
+  const pendingCsrRevisionRef = useRef<number | undefined>(undefined);
   const extensionsEnabledRef = useRef(extensionsEnabled);
   extensionsEnabledRef.current = extensionsEnabled;
+  const sampleIdRef = useRef(sampleId);
+  sampleIdRef.current = sampleId;
   const runningHeadExtension = useMemo<PageExtension>(
     () => ({
       name: "demo/running-head",
       decoratePage(page, context) {
-        if (!extensionsEnabledRef.current) return undefined;
+        if (!extensionsEnabledRef.current || sampleIdRef.current === "integrity") return undefined;
         context.warn({
           code: "EXTENSION_DEMO_ACTIVE",
           message: "The publishing-lab running-head extension is active.",
@@ -431,13 +571,17 @@ function App() {
   );
   const sample = samples[sampleId];
   const source = useMemo(() => {
-    const html =
+    const selectedHtml =
       sample.id === "publishing" && experimentalPlacementEnabled
         ? sample.html.replace("</style>", `${publishingPlacementCss}</style>`)
         : sample.html;
+    const html =
+      sample.id === "integrity"
+        ? selectedHtml.replace("{{CSR_REVISION}}", String(csrRevision))
+        : selectedHtml;
     return { html };
-  }, [experimentalPlacementEnabled, sample]);
-  const sourceRevision = `${extensionsEnabled ? "extensions:on" : "extensions:off"};${experimentalPlacementEnabled ? "placement:on" : "placement:off"}`;
+  }, [csrRevision, experimentalPlacementEnabled, sample]);
+  const sourceRevision = `${extensionsEnabled ? "extensions:on" : "extensions:off"};${experimentalPlacementEnabled ? "placement:on" : "placement:off"};csr:${csrRevision}`;
   const documentOptions = useMemo<PageDocumentOptions>(
     () => ({
       extensions: [runningHeadExtension],
@@ -450,6 +594,22 @@ function App() {
   const handleReady = (nextDocument: PageDocument) => {
     setPageDocument(nextDocument);
     setError(undefined);
+    if (sample.id !== "integrity") {
+      setIntegrityReport(undefined);
+      setIntegrityStatus("idle");
+      pendingCsrRevisionRef.current = undefined;
+      return;
+    }
+
+    const report = inspectIntegrity(nextDocument);
+    setIntegrityReport(report);
+    const pendingRevision = pendingCsrRevisionRef.current;
+    if (pendingRevision !== undefined && csrRevision >= pendingRevision) {
+      setIntegrityStatus(report.exactSequence ? "verified" : "failed");
+      pendingCsrRevisionRef.current = undefined;
+    } else if (pendingRevision === undefined) {
+      setIntegrityStatus(report.exactSequence ? "verified" : "failed");
+    }
   };
 
   const handleError = (nextError: unknown) => {
@@ -477,7 +637,21 @@ function App() {
   const handleSampleChange = (nextSampleId: SampleId) => {
     if (nextSampleId === sampleId) return;
     markDocumentLoading();
+    pendingCsrRevisionRef.current = undefined;
+    setIntegrityStatus(nextSampleId === "integrity" ? "running" : "idle");
     setSampleId(nextSampleId);
+  };
+
+  const runCsrBurst = () => {
+    if (integrityStatus === "running") return;
+    const targetRevision = csrRevision + 3;
+    pendingCsrRevisionRef.current = targetRevision;
+    setIntegrityStatus("running");
+    for (const delay of [0, 16, 32]) {
+      window.setTimeout(() => {
+        setCsrRevision((revision) => revision + 1);
+      }, delay);
+    }
   };
 
   const handleOrientationChange = (nextOrientation: PageOrientation) => {
@@ -549,23 +723,79 @@ function App() {
           <ImposiaMark />
           <div>
             <strong>Imposia</strong>
-            <span>Publishing lab / 0.1</span>
+            <span>Integrity lab / 0.1.3</span>
           </div>
         </header>
 
         <section className="demo-intro">
-          <p className="demo-eyebrow">HTML → canonical pages</p>
-          <h1>Documents that stay documents.</h1>
+          <p className="demo-eyebrow">CSR HTML → complete pages</p>
+          <h1>No gaps in the declared page flow.</h1>
           <p>
-            A React-first, browser-only showcase. Switch the source and watch the same canonical
-            iframe update in place.
+            Paginate current client-rendered HTML, verify every source token across the page
+            sequence, and keep the same canonical iframe through rapid updates.
           </p>
         </section>
+
+        {sample.id === "integrity" ? (
+          <section
+            className="demo-control-section demo-integrity-section"
+            aria-labelledby={integrityHeadingId}
+          >
+            <div className="demo-section-heading">
+              <h2 id={integrityHeadingId}>Pagination integrity</h2>
+              <span>
+                {integrityStatus === "running"
+                  ? "checking"
+                  : integrityReport?.exactSequence
+                    ? "exact sequence"
+                    : "not verified"}
+              </span>
+            </div>
+            <output
+              className={`demo-integrity-status demo-integrity-status-${integrityStatus}`}
+              data-testid="integrity-status"
+              aria-live="polite"
+            >
+              <strong data-testid="integrity-count">
+                {integrityReport === undefined
+                  ? "— / 96"
+                  : `${integrityReport.committedTokenCount} / ${integrityReport.sourceTokenCount}`}
+              </strong>
+              <span>
+                {integrityStatus === "running"
+                  ? "Checking the next committed generation…"
+                  : integrityReport?.exactSequence
+                    ? `Exact and ordered · CSR revision ${csrRevision}`
+                    : "The committed sequence does not match the source."}
+              </span>
+            </output>
+            <ol className="demo-integrity-ranges" data-testid="integrity-page-ranges">
+              {integrityReport?.pageRanges.map((range) => (
+                <li key={range.page}>
+                  <span>Page {range.page}</span>
+                  <code>
+                    {range.first} → {range.last}
+                  </code>
+                  <small>{range.count} tokens</small>
+                </li>
+              ))}
+            </ol>
+            <button
+              type="button"
+              className="demo-output-button"
+              data-testid="run-csr-burst"
+              onClick={runCsrBurst}
+              disabled={integrityStatus === "running"}
+            >
+              Run 3-update CSR burst
+            </button>
+          </section>
+        ) : null}
 
         <section className="demo-control-section" aria-labelledby={sampleHeadingId}>
           <div className="demo-section-heading">
             <h2 id={sampleHeadingId}>Document specimen</h2>
-            <span>04 sources</span>
+            <span>{String(Object.keys(samples).length).padStart(2, "0")} sources</span>
           </div>
           <div className="demo-sample-list">
             {Object.values(samples).map((candidate) => (

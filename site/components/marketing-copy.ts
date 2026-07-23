@@ -36,11 +36,11 @@ export const marketingCopy: Record<Locale, MarketingCopy> = {
   en: {
     metadataTitle: "Imposia — HTML in. Pages out.",
     metadataDescription:
-      "Browser-native HTML and CSS publishing for React, native print, and reflowable EPUB.",
-    eyebrow: "Browser-native publishing",
+      "Atomic browser-native HTML/CSR pagination for React preview, native print, and semantic export.",
+    eyebrow: "HTML/CSR pagination integrity",
     title: "HTML in. Pages out.",
     description:
-      "Turn HTML and CSS into committed browser pages for preview and native print, then export reflowable EPUB from the same source.",
+      "Turn current HTML and CSS into committed pages without losing or duplicating declared-flow content at page boundaries. Rapid CSR updates replace only complete generations.",
     codeLabel: "React quick start",
     copyLabel: "Copy code",
     copiedLabel: "Copied",
@@ -49,16 +49,16 @@ export const marketingCopy: Record<Locale, MarketingCopy> = {
     docsCta: "Read the docs",
     publishingContractLabel: "Publishing contract",
     skipLink: "Skip to content",
-    featureEyebrow: "One source, explicit outputs",
-    featureTitle: "Preview, print, and EPUB stay in sync.",
+    featureEyebrow: "One source, one committed sequence",
+    featureTitle: "Page breaks and rapid updates stay internally consistent.",
     featureDescription:
-      "Preview and print share the committed pages. EPUB comes from the semantic source committed with them.",
+      "Public fixtures flatten every page back to the exact source order. Preview and print share that committed document; EPUB remains a semantic projection.",
     features: [
       {
-        title: "One canonical iframe",
+        title: "Exact committed sequence",
         description:
-          "Preview, Viewer, and print share the exact committed page document. A new generation appears only after pagination succeeds.",
-        proof: "ONE COMMITTED DOCUMENT",
+          "Every source token in the declared continuity fixture appears exactly once and in order across the committed page boundaries.",
+        proof: "NO GAPS · NO DUPLICATES",
       },
       {
         title: "Browser-native pagination",
@@ -96,11 +96,11 @@ export const marketingCopy: Record<Locale, MarketingCopy> = {
   ko: {
     metadataTitle: "Imposia — HTML을 넣으면, 페이지가 됩니다.",
     metadataDescription:
-      "React, 브라우저 기본 인쇄, 리플로우형 EPUB을 위한 브라우저 네이티브 HTML/CSS 퍼블리싱.",
-    eyebrow: "브라우저 네이티브 퍼블리싱",
+      "React 미리보기, 브라우저 기본 인쇄, 의미 기반 내보내기를 위한 원자적 HTML/CSR 페이지네이션.",
+    eyebrow: "HTML/CSR 페이지네이션 정합성",
     title: "HTML을 넣으면, 페이지가 됩니다.",
     description:
-      "HTML과 CSS를 브라우저에서 페이지로 만들어 미리보기와 인쇄에 사용하고, 같은 원본에서 리플로우형 EPUB을 내보냅니다.",
+      "선언된 흐름의 내용이 페이지 경계에서 빠지거나 중복되지 않도록 현재 HTML과 CSS를 커밋된 페이지로 만듭니다. 빠른 CSR 갱신도 완전한 세대만 교체합니다.",
     codeLabel: "React 빠른 시작",
     copyLabel: "코드 복사",
     copiedLabel: "복사됨",
@@ -109,16 +109,16 @@ export const marketingCopy: Record<Locale, MarketingCopy> = {
     docsCta: "문서 읽기",
     publishingContractLabel: "퍼블리싱 계약",
     skipLink: "본문으로 바로가기",
-    featureEyebrow: "하나의 원본, 목적에 맞는 출력",
-    featureTitle: "미리보기와 출력이 같은 내용을 담습니다.",
+    featureEyebrow: "하나의 원본, 하나의 커밋된 순서",
+    featureTitle: "페이지 경계와 빠른 갱신에서도 내용 순서가 유지됩니다.",
     featureDescription:
-      "미리보기와 인쇄는 확정된 페이지를 공유하고, EPUB은 함께 확정된 의미 구조에서 만듭니다.",
+      "공개 검증 픽스처의 모든 페이지를 이으면 원문 순서와 정확히 일치합니다. 미리보기와 인쇄는 이 문서를 공유하고, EPUB은 의미 구조를 투영합니다.",
     features: [
       {
-        title: "하나의 기준 iframe",
+        title: "정확한 커밋 순서",
         description:
-          "미리보기, Viewer, 인쇄가 동일하게 커밋된 페이지 문서를 사용합니다. 페이지네이션이 성공한 뒤에만 새 세대가 나타납니다.",
-        proof: "하나의 커밋된 문서",
+          "선언된 연속성 픽스처의 모든 원문 토큰이 페이지 경계를 지나 정확히 한 번, 원문 순서대로 나타납니다.",
+        proof: "누락 없음 · 중복 없음",
       },
       {
         title: "브라우저 네이티브 페이지네이션",
@@ -156,11 +156,11 @@ export const marketingCopy: Record<Locale, MarketingCopy> = {
   },
   "zh-CN": {
     metadataTitle: "Imposia — 输入 HTML，输出页面。",
-    metadataDescription: "面向 React、浏览器原生打印与可重排 EPUB 的浏览器原生 HTML/CSS 出版工具。",
-    eyebrow: "浏览器原生出版",
+    metadataDescription: "面向 React 预览、原生打印与语义导出的原子化浏览器 HTML/CSR 分页。",
+    eyebrow: "HTML/CSR 分页完整性",
     title: "输入 HTML，输出页面。",
     description:
-      "在浏览器中将 HTML 和 CSS 转换为可预览、可打印的页面，并从同一份源内容导出可重排 EPUB。",
+      "把当前 HTML 与 CSS 转换为已提交页面，避免声明流内容在分页边界丢失或重复；快速 CSR 更新只替换完整版本。",
     codeLabel: "React 快速开始",
     copyLabel: "复制代码",
     copiedLabel: "已复制",
@@ -169,15 +169,15 @@ export const marketingCopy: Record<Locale, MarketingCopy> = {
     docsCta: "阅读文档",
     publishingContractLabel: "出版契约",
     skipLink: "跳到正文",
-    featureEyebrow: "一份源内容，明确的输出",
-    featureTitle: "预览、打印与 EPUB 始终同步。",
-    featureDescription: "预览与打印共用已提交页面，EPUB 则根据同时提交的语义源生成。",
+    featureEyebrow: "一份源内容，一条已提交序列",
+    featureTitle: "分页边界与快速更新保持内容顺序一致。",
+    featureDescription:
+      "公开验证样例拼接所有页面后与源顺序完全一致。预览和打印共用该文档，EPUB 保留为语义投影。",
     features: [
       {
-        title: "一个规范 iframe",
-        description:
-          "预览、Viewer 与打印共用完全相同的已提交页面文档。只有分页成功后，新版本才会出现。",
-        proof: "一个已提交文档",
+        title: "精确的已提交序列",
+        description: "声明的连续性样例中，每个源标记跨越分页边界后仍仅出现一次，并保持原始顺序。",
+        proof: "无缺失 · 无重复",
       },
       {
         title: "浏览器原生分页",
@@ -211,11 +211,11 @@ export const marketingCopy: Record<Locale, MarketingCopy> = {
   ja: {
     metadataTitle: "Imposia — HTMLから、ページへ。",
     metadataDescription:
-      "React、ブラウザー標準印刷、リフロー型EPUBのためのブラウザーネイティブHTML/CSS出版。",
-    eyebrow: "ブラウザーネイティブ出版",
+      "Reactプレビュー、ブラウザー標準印刷、セマンティック出力のためのアトミックなHTML/CSRページネーション。",
+    eyebrow: "HTML/CSRページネーション整合性",
     title: "HTMLから、ページへ。",
     description:
-      "HTMLとCSSをブラウザー内でプレビュー・印刷用のページに変換し、同じソースからリフロー型EPUBを書き出します。",
+      "宣言済みフローの内容をページ境界で欠落・重複させず、現在のHTMLとCSSを確定済みページへ変換します。高速なCSR更新も完全な世代だけを置き換えます。",
     codeLabel: "Reactクイックスタート",
     copyLabel: "コードをコピー",
     copiedLabel: "コピーしました",
@@ -224,16 +224,16 @@ export const marketingCopy: Record<Locale, MarketingCopy> = {
     docsCta: "ドキュメントを読む",
     publishingContractLabel: "出版契約",
     skipLink: "本文へ移動",
-    featureEyebrow: "ひとつのソース、明確な出力",
-    featureTitle: "プレビュー、印刷、EPUBの内容を揃えます。",
+    featureEyebrow: "ひとつのソース、ひとつの確定済み順序",
+    featureTitle: "ページ境界と高速更新でも内容の順序を維持します。",
     featureDescription:
-      "プレビューと印刷は確定済みページを共有し、EPUBは同時に確定したセマンティックソースから作成します。",
+      "公開検証フィクスチャの全ページを連結するとソース順序と完全に一致します。プレビューと印刷はその文書を共有し、EPUBはセマンティック投影として残ります。",
     features: [
       {
-        title: "ひとつの基準iframe",
+        title: "正確な確定済み順序",
         description:
-          "プレビュー、Viewer、印刷は同じ確定済みページ文書を共有します。ページネーション成功後にだけ新しい世代が現れます。",
-        proof: "ひとつの確定済み文書",
+          "宣言済みの連続性フィクスチャでは、すべてのソーストークンがページ境界を越えても一度だけ元の順序で現れます。",
+        proof: "欠落なし · 重複なし",
       },
       {
         title: "ブラウザーネイティブのページネーション",

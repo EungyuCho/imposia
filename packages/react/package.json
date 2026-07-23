@@ -1,7 +1,7 @@
 {
   "name": "@imposia/react",
-  "version": "0.1.2",
-  "description": "React adapter for browser-native HTML/CSS pagination, native print, and EPUB export.",
+  "version": "0.1.3",
+  "description": "React adapter for atomic browser-native HTML/CSR pagination, preview, and print.",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/EungyuCho/imposia.git",

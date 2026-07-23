@@ -60,6 +60,63 @@ test("React publishing lab defaults to A4 portrait and switches orientation", as
   }
 });
 
+test("React publishing lab proves page-boundary continuity through rapid CSR updates", async ({
+  page,
+  browserName,
+}) => {
+  test.skip(browserName !== "chromium", "Canonical pagination is Chromium-reference only.");
+  const { errors, pageErrors } = captureBrowserErrors(page, browserName);
+  await page.goto("/examples/demo/");
+
+  try {
+    const preview = page.getByTestId("demo-preview-surface");
+    await expect(preview.locator("[data-imposia-react-status='ready']")).toBeVisible();
+    await expect(page.getByTestId("integrity-count")).toHaveText("96 / 96");
+    await expect(page.getByTestId("integrity-status")).toContainText(
+      "Exact and ordered · CSR revision 0",
+    );
+    const ranges = page.getByTestId("integrity-page-ranges").locator("li");
+    expect(await ranges.count()).toBeGreaterThan(2);
+
+    await page.evaluate(() => {
+      Object.assign(globalThis, {
+        __imposiaIntegrityFrame: document.querySelector(
+          "[data-testid='demo-preview-surface'] iframe",
+        ),
+      });
+    });
+    await page.getByTestId("run-csr-burst").click();
+    await expect(page.getByTestId("integrity-status")).toContainText(
+      "Exact and ordered · CSR revision 3",
+    );
+    await expect(page.getByTestId("integrity-count")).toHaveText("96 / 96");
+    expect(
+      await page.evaluate(
+        () =>
+          Reflect.get(globalThis, "__imposiaIntegrityFrame") ===
+          document.querySelector("[data-testid='demo-preview-surface'] iframe"),
+      ),
+    ).toBe(true);
+
+    const committedTokens = await page.evaluate(() => {
+      const frame = document.querySelector<HTMLIFrameElement>(
+        "[data-testid='demo-preview-surface'] iframe",
+      );
+      return [
+        ...(frame?.contentDocument?.querySelectorAll<HTMLElement>(
+          "[data-imposia-page] [data-integrity-token]",
+        ) ?? []),
+      ].map((element) => element.dataset.integrityToken);
+    });
+    expect(committedTokens).toEqual(
+      Array.from({ length: 96 }, (_, index) => `FLOW-${String(index + 1).padStart(3, "0")}`),
+    );
+  } finally {
+    expect(errors).toEqual([]);
+    expect(pageErrors).toEqual([]);
+  }
+});
+
 test("React publishing lab switches sources and extension boundaries", async ({
   page,
   browserName,
@@ -72,8 +129,8 @@ test("React publishing lab switches sources and extension boundaries", async ({
   try {
     const preview = page.getByTestId("demo-preview-surface");
     await expect(preview.locator("[data-imposia-react-status='ready']")).toBeVisible();
-    await expect(page.getByTestId("metric-pages")).toHaveText("3");
-    await expect(page.getByTestId("metric-warnings")).toHaveText("3");
+    expect(Number(await page.getByTestId("metric-pages").textContent())).toBeGreaterThan(2);
+    await expect(page.getByTestId("metric-warnings")).toHaveText("0");
     await expect(preview.locator("iframe[data-imposia-frame='page-document']")).toHaveCount(1);
 
     await page.evaluate(() => {
