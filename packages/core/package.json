@@ -1,6 +1,6 @@
 {
   "name": "@imposia/core",
-  "version": "0.1.3",
+  "version": "0.2.0",
   "description": "Browser-native HTML/CSS pagination with atomic CSR updates, diagnostics, and semantic export.",
   "repository": {
     "type": "git",

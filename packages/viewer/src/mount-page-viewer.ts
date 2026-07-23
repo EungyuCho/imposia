@@ -143,7 +143,11 @@ export function mountPageViewer(
   const iframeAttributes = new Map(
     ["class", "title", "style"].map((name) => [name, pageDocument.iframe.getAttribute(name)]),
   );
-  const elements = createPageViewerInterface(container, pageDocument.iframe);
+  const elements = createPageViewerInterface(
+    container,
+    pageDocument.iframe,
+    options.controls ?? true,
+  );
   const theme = bindViewerTheme(elements.root, options.theme);
 
   let destroyed = false;
@@ -161,6 +165,8 @@ export function mountPageViewer(
   };
   let announcedMode = "";
   let inspectorPresentationKey = "";
+  const stateListeners = new Set<(state: PageViewerState) => void>();
+  let notifiedStateKey = "";
 
   const frameDocument = elements.iframe.contentDocument;
   if (frameDocument === null) invalidPageDocument("iframe content document is unavailable.");
@@ -307,6 +313,20 @@ export function mountPageViewer(
     if (nextInspectorPresentationKey !== inspectorPresentationKey) {
       inspectorPresentationKey = nextInspectorPresentationKey;
       inspector?.syncPresentation();
+    }
+    const nextStateKey = [
+      mutableState.page,
+      mutableState.pageCount,
+      mutableState.zoom,
+      mutableState.mode,
+      mutableState.effectiveMode,
+      mutableState.status,
+      mutableState.generation,
+    ].join(":");
+    if (nextStateKey !== notifiedStateKey) {
+      notifiedStateKey = nextStateKey;
+      const nextState = { ...mutableState };
+      for (const listener of stateListeners) listener(nextState);
     }
   }
 
@@ -466,6 +486,14 @@ export function mountPageViewer(
       if (destroyed) return;
       theme.set(nextTheme);
     },
+    subscribe(listener) {
+      if (destroyed) throw new Error("Page viewer has been destroyed.");
+      stateListeners.add(listener);
+      listener({ ...mutableState });
+      return () => {
+        stateListeners.delete(listener);
+      };
+    },
     refresh(nextDocument) {
       if (destroyed) throw new Error("Page viewer has been destroyed.");
       validatePageDocument(nextDocument);
@@ -498,6 +526,7 @@ export function mountPageViewer(
     destroy() {
       if (destroyed) return;
       destroyed = true;
+      stateListeners.clear();
       reader?.destroy();
       inspector?.destroy();
       theme.destroy();

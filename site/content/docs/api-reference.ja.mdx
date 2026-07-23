@@ -31,6 +31,7 @@ description: Imposia の React、Core、Viewer パッケージが公開するコ
 | `documentOptions` | `PageDocumentOptions` | いいえ | CSS、ページ寸法、アセット解決、上限などを指定します。 |
 | `documentOptionsRevision` | `string \| number` | いいえ | 変更すると Core コントローラーを作り直します。 |
 | `viewerOptions` | `PageViewerOptions` | いいえ | 表示モード、ズーム、テーマ、Inspector を指定します。 |
+| `onViewerStateChange` | `(state: PageViewerState) => void` | いいえ | ページ、ズーム、モード、effective mode、generation の変更を受け取ります。 |
 | `className` | `string` | いいえ | ルート `div` のクラスです。 |
 | `style` | `CSSProperties` | いいえ | ルート `div` のインラインスタイルです。 |
 | `onReady` | `(document: PageDocument) => void` | いいえ | 文書と Viewer が同じ generation を表示できた後に呼ばれます。 |
@@ -42,6 +43,9 @@ description: Imposia の React、Core、Viewer パッケージが公開するコ
 | メンバー | 戻り値 | 利用条件と動作 |
 | --- | --- | --- |
 | `current` | `PageDocument \| undefined` | 未マウントまたは準備前は `undefined` です。 |
+| `viewerState` | `PageViewerState \| undefined` | 準備済み Viewer の現在の表示状態です。 |
+| `goToPage(page)` / `nextPage()` / `previousPage()` | `void` | 現在の確定済みグローバルページ列を移動します。 |
+| `setZoom(zoom)` | `void` | 表示倍率を対応範囲内で変更します。 |
 | `setMode(mode)` | `void` | `continuous`、`single`、`spread` を設定します。文書の準備前は throw します。 |
 | `setSpreadCover(cover)` | `void` | 見開きの先頭ページを表紙として単独表示するか切り替えます。準備前は throw します。 |
 | `openInspector()` | `void` | Inspector を開きます。`viewerOptions.inspector` が `true` でない場合は throw します。 |
@@ -331,6 +335,7 @@ Core の正規 iframe に表示ツールバーを追加します。`pageDocument
 | `mode` | `"continuous" \| "single" \| "spread"` | `"continuous"` |
 | `spread.cover` | `boolean` | `false` |
 | `zoom` | `number` | `1`。0.5〜2.5 に丸めて制限します。 |
+| `controls` | `boolean` | `true`。`false` ではブランド rail を作らず、同じ表示コントローラーを維持します。 |
 | `theme` | `ViewerTheme` | なし。`--imposia-viewer-*` 形式の CSS custom property だけを受け取ります。 |
 | `inspector` | `boolean` | false 相当。`true` で警告 Inspector を作ります。 |
 | `reader` | `PublicationReaderOptions` | なし。Publication Reader を作ります。 |
@@ -352,12 +357,16 @@ const viewer = mountPageViewer(host, await documentController.ready, {
 | `setMode(mode)` | `void` | requested mode を変更します。幅が 720 px 未満の spread は effective mode が single になります。 |
 | `setSpreadCover(cover)` | `void` | spread の先頭を単独の表紙として扱うか設定します。 |
 | `setTheme(theme?)` | `void` | Viewer 用 CSS custom property を差し替え、未指定で元の値へ戻します。 |
+| `subscribe(listener)` | `() => void` | 現在の state を即時通知し、以後の表示変更も通知します。戻り値で購読解除します。 |
 | `refresh(pageDocument)` | `void` | 同じ正規 iframe の、より新しい generation を反映します。別 iframe、同世代、古い世代は throw します。 |
 | `print()` | `Promise<void>` | 現在の正規 iframe を印刷します。破棄後、または iframe の window がない場合は reject します。 |
 | `destroy()` | `void` | UI とイベントを外し、元の container/iframe 属性を復元します。複数回呼べます。 |
 | `state` | `PageViewerState` | page、pageCount、zoom、mode、effectiveMode、status、generation の snapshot です。 |
 | `reader` | `PublicationReaderController \| undefined` | `options.reader` を渡した場合だけ存在します。 |
 | `inspector` | `ViewerInspectorController \| undefined` | `options.inspector === true` の場合だけ存在します。 |
+
+Viewer CSS は `.imposia-viewer` 内だけに適用され、ホスト文書の
+`body`、`:root`、外部要素、スクロールを変更しません。
 
 ### Publication Reader
 

@@ -42,6 +42,7 @@ export interface PageViewerOptions {
   mode?: PageViewerMode;
   spread?: Readonly<{ cover?: boolean }>;
   zoom?: number;
+  controls?: boolean;
   theme?: ViewerTheme;
   inspector?: boolean;
   reader?: PublicationReaderOptions;
@@ -125,6 +126,7 @@ export interface PageViewerController {
   setMode(mode: PageViewerMode): void;
   setSpreadCover(cover: boolean): void;
   setTheme(theme?: ViewerTheme): void;
+  subscribe(listener: (state: PageViewerState) => void): () => void;
   refresh(pageDocument: import("@imposia/core").PageDocument): void;
   print(): Promise<void>;
   destroy(): void;

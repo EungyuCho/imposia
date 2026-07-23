@@ -137,8 +137,10 @@ export function createPdfViewerInterface(container: HTMLElement): ViewerElements
 export function createPageViewerInterface(
   container: HTMLElement,
   iframe: HTMLIFrameElement,
+  controls: boolean,
 ): PageViewerElements {
   container.classList.add("imposia-viewer", "imposia-page-viewer");
+  container.classList.toggle("imposia-page-viewer--headless", !controls);
   container.setAttribute("role", "region");
   const shared = createViewerInterface({
     root: container,
@@ -157,7 +159,7 @@ export function createPageViewerInterface(
   shared.toolbar.append(spread, modeStatus);
   iframe.classList.add("imposia-canonical-frame");
   iframe.title = "Imposia document";
-  container.insertBefore(shared.rail, iframe);
+  if (controls) container.insertBefore(shared.rail, iframe);
   return {
     ...shared,
     stage: container,

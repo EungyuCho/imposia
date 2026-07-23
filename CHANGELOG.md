@@ -3,6 +3,27 @@
 All notable changes to Imposia are recorded here. The project follows semantic
 versioning for its published package interfaces.
 
+## 0.2.0 — 2026-07-24
+
+Minor release for the public `@imposia/*` package family.
+
+### Added
+
+- Added `controls: false` to the canonical page Viewer so host applications can
+  compose their own navigation, single/continuous/spread mode, and zoom UI
+  without mounting the built-in rail.
+- Added immediate Viewer state subscriptions and React state callbacks, plus
+  imperative page navigation and zoom controls on `ImposiaPageViewer`.
+
+### Changed
+
+- Scoped Viewer tokens, box sizing, canvas presentation, and responsive rules
+  to each Viewer root. Importing Viewer styles no longer changes the host
+  document's `body`, `:root`, scroll behavior, background, or unrelated
+  elements.
+- Synchronized `@imposia/core`, `@imposia/viewer`, `@imposia/client`, and
+  `@imposia/react` at version `0.2.0`.
+
 ## 0.1.3 — 2026-07-23
 
 Patch release for the public `@imposia/*` package family.

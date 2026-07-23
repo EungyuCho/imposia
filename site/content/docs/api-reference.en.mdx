@@ -41,6 +41,7 @@ const viewer = useRef<ImposiaPageViewerHandle>(null);
 | `documentOptions` | `PageDocumentOptions` | No | Core pagination options. |
 | `documentOptionsRevision` | `string \| number` | No | Remounts Core with new document options. |
 | `viewerOptions` | `PageViewerOptions` | No | Page presentation, reader, and inspector options. |
+| `onViewerStateChange` | `(state: PageViewerState) => void` | No | Receives page, zoom, mode, effective-mode, and generation changes. |
 | `className`, `style` | `string`, `CSSProperties` | No | Host `div` presentation. |
 | `onReady` | `(document: PageDocument) => void` | No | Runs after the document and Viewer binding are ready. |
 | `onError` | `(error: unknown) => void` | No | Receives Core or Viewer binding failures. |
@@ -51,6 +52,9 @@ const viewer = useRef<ImposiaPageViewerHandle>(null);
 | Member | Returns | Constraint |
 | --- | --- | --- |
 | `current` | `PageDocument \| undefined` | Current commit while mounted. |
+| `viewerState` | `PageViewerState \| undefined` | Current presentation snapshot while ready. |
+| `goToPage(page)`, `nextPage()`, `previousPage()` | `void` | Move through the committed global page sequence. |
+| `setZoom(zoom)` | `void` | Rounds and clamps the presentation zoom. |
 | `setMode(mode)` | `void` | Accepts `continuous`, `single`, or `spread`; throws before ready/after unmount. |
 | `setSpreadCover(cover)` | `void` | Throws before ready/after unmount. |
 | `openInspector()`, `closeInspector()`, `toggleInspector()` | `void` | Require `viewerOptions.inspector: true`. |
@@ -244,7 +248,7 @@ validatePageViewerOptions(document: PageDocument, options?: PageViewerOptions): 
 
 Mount only after Core commits. `container` must be the canonical iframe's current parent. Validation checks the document, sandbox, theme, and optional reader synchronously.
 
-`PageViewerOptions` accepts `mode?: "continuous" | "single" | "spread"`, `spread?: { cover? }`, `zoom?`, `theme?`, `inspector?`, and `reader?`. A theme is a map of CSS properties whose names begin `--imposia-viewer-`.
+`PageViewerOptions` accepts `mode?: "continuous" | "single" | "spread"`, `spread?: { cover? }`, `zoom?`, `controls?`, `theme?`, `inspector?`, and `reader?`. `controls` defaults to `true`; set it to `false` to keep the presentation controller without the built-in brand rail. A theme is a map of CSS properties whose names begin `--imposia-viewer-`.
 
 #### `PageViewerController`
 
@@ -254,6 +258,7 @@ Mount only after Core commits. `container` must be the canonical iframe's curren
 | `setZoom(zoom)` | `void` | Rounds/clamps finite input. |
 | `setMode(mode)`, `setSpreadCover(cover)` | `void` | Change requested mode/cover layout. |
 | `setTheme(theme?)` | `void` | Replace or clear Viewer variables. |
+| `subscribe(listener)` | `() => void` | Immediately emits state, then emits presentation changes; returns an unsubscribe function. |
 | `refresh(document)` | `void` | Requires the same iframe and a newer generation; throws after destruction/invalid input. |
 | `print()` | `Promise<void>` | Rejects after destruction or when the iframe is unavailable. |
 | `destroy()` | `void` | Removes Viewer bindings/UI and restores the Core iframe container. Idempotent. |
@@ -262,6 +267,8 @@ Mount only after Core commits. `container` must be the canonical iframe's curren
 | `inspector` | `ViewerInspectorController \| undefined` | Present when `inspector: true`. |
 
 Narrow containers can report `mode: "spread"` with `effectiveMode: "single"`.
+Viewer CSS is scoped to `.imposia-viewer`; the host owns body styles, preview
+dimensions, background, and surrounding scrolling.
 
 ### Publication reader and deep links
 

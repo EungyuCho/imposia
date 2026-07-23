@@ -112,6 +112,40 @@ presentation is active; `goToPage()` still targets an exact global page. The
 control group remains ordinarily tabbable, and a live status announces the
 requested view and any responsive single-page fallback.
 
+### Headless presentation
+
+Set `controls: false` when the host application owns the header and controls:
+
+```ts
+const pageViewer = mountPageViewer(host, pageDocument, {
+  controls: false,
+  mode: "single",
+});
+
+const unsubscribe = pageViewer.subscribe((state) => {
+  pageOutput.value = `${state.page} / ${state.pageCount}`;
+  zoomOutput.value = `${Math.round(state.zoom * 100)}%`;
+});
+
+previousButton.addEventListener("click", () => pageViewer.previousPage());
+nextButton.addEventListener("click", () => pageViewer.nextPage());
+spreadButton.addEventListener("click", () => pageViewer.setMode("spread"));
+zoomInButton.addEventListener("click", () =>
+  pageViewer.setZoom(pageViewer.state.zoom + 0.1),
+);
+```
+
+`subscribe()` immediately receives the current immutable state snapshot and
+then receives page, page-count, zoom, mode, effective-mode, or generation
+changes. Its return value removes the listener. Headless presentation retains
+the canonical iframe and all presentation behavior but adds no brand rail or
+built-in controls.
+
+Viewer CSS applies only inside `.imposia-viewer`. It does not set styles on
+`body`, `:root`, or unrelated elements. The host owns the Viewer's dimensions,
+background, and surrounding scroll container; the Viewer fills the host's
+height instead of claiming the viewport.
+
 ## Inspect the current generation
 
 Enable the Inspector only in authoring or preview surfaces that need to explain

@@ -842,7 +842,7 @@ function App() {
           <ImposiaMark />
           <div>
             <strong>Imposia</strong>
-            <span>Integrity lab / 0.1.3</span>
+            <span>Integrity lab / 0.2.0</span>
           </div>
         </header>
 
