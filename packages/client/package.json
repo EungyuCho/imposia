@@ -1,6 +1,6 @@
 {
   "name": "@imposia/client",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Browser-native paginated document and viewer APIs for HTML/CSS publishing.",
   "repository": {
     "type": "git",

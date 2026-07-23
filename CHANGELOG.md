@@ -3,6 +3,26 @@
 All notable changes to Imposia are recorded here. The project follows semantic
 versioning for its published package interfaces.
 
+## 0.1.1 — 2026-07-23
+
+Patch release for the public `@imposia/*` package family.
+
+### Added
+
+- Page setup controls in the publishing demo with portrait-first A4 defaults,
+  orientation switching, and A3, A4, and B1 paper presets.
+- Expanded multilingual documentation navigation for package APIs and public
+  publishing workflows.
+- A protected GitHub Actions release path that validates the exact release
+  commit, publishes through npm trusted publishing, and creates the matching
+  Git tag and GitHub Release with package tarballs.
+
+### Changed
+
+- Synchronized `@imposia/core`, `@imposia/viewer`, `@imposia/client`, and
+  `@imposia/react` at version `0.1.1` while preserving their existing public
+  interfaces.
+
 ## 0.1.0 — 2026-07-19
 
 Initial browser-only release of the `@imposia/*` package family.
