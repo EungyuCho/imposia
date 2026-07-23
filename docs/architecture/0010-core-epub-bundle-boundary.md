@@ -13,17 +13,18 @@ The exporter occupies 855 lines in `epub-export.ts` and 180 lines in
 `epub-zip.ts`. File length alone does not show its consumer cost, so the decision
 uses a minified browser bundle measurement.
 
-On 2026-07-23, a diagnostic `esbuild` build replaced the two EPUB export
-functions with stubs while preserving the surrounding Core entry path:
+On 2026-07-23, the committed `pnpm bundle:size` diagnostic replaced the two EPUB
+export functions with throwing stubs while preserving their names and async
+contract in the surrounding Core entry path:
 
 | Measurement | Full Core | EPUB stubs | Difference |
 | --- | ---: | ---: | ---: |
-| Minified | 379,989 B | 362,442 B | 17,547 B |
-| Gzip | 111,364 B | 105,836 B | 5,528 B |
-| Brotli | 93,949 B | 89,299 B | 4,650 B |
+| Minified | 371.1 KiB | 354.0 KiB | 17.1 KiB |
+| Gzip | 108.3 KiB | 103.0 KiB | 5.4 KiB |
+| Brotli | 91.7 KiB | 87.3 KiB | 4.5 KiB |
 
-The committed bundle report uses named consumer routes and gzip budgets rather
-than this diagnostic stub. See
+The committed bundle command prints both the named consumer-route budgets and
+this diagnostic. See
 [`docs/bundle-size.md`](../bundle-size.md).
 
 ## Decision
@@ -82,8 +83,8 @@ its packaging.
 
 ## Verification notes
 
-- **Verified:** the byte table comes from two minified browser ESM builds using
-  repository-pinned `esbuild` 0.28.1; gzip used level 9.
+- **Verified:** the byte table is reproduced by `pnpm bundle:size` using
+  repository-pinned `esbuild` 0.28.1; gzip uses level 9.
 - **Verified:** `epub-export.ts` imports the retained semantic snapshot and
   resolver-asset helpers, while `page-document.ts`, `publication.ts`, and the
   React Viewer handles expose EPUB through their existing lifecycle.
