@@ -1,0 +1,111 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+
+language: en-US
+tone_instructions: >-
+  Be concise. Report actionable correctness, security, compatibility, and
+  regression risks. Avoid style-only or speculative comments.
+early_access: false
+
+reviews:
+  profile: chill
+  request_changes_workflow: false
+  high_level_summary: true
+  high_level_summary_in_walkthrough: true
+  review_status: true
+  review_details: false
+  in_progress_fortune: false
+  poem: false
+  enable_prompt_for_ai_agents: true
+
+  auto_review:
+    enabled: true
+    auto_incremental_review: true
+    drafts: false
+    base_branches: []
+    ignore_title_keywords:
+      - WIP
+      - "[skip review]"
+    ignore_usernames:
+      - "dependabot[bot]"
+      - "github-actions[bot]"
+
+  path_filters:
+    - "!**/dist/**"
+    - "!site/build/**"
+    - "!site/.react-router/**"
+    - "!site/.source/**"
+    - "!.source/**"
+    - "!.pnpm-store/**"
+    - "!.playwright-mcp/**"
+    - "!.omo/**"
+    - "!.ouroboros/**"
+    - "!.scratch/**"
+    - "!artifacts/**"
+    - "!output/**"
+    - "!tmp/**"
+    - "!test-results/**"
+    - "!playwright-report/**"
+    - "!benchmarks/latest.*"
+
+  path_instructions:
+    - path: "packages/**"
+      instructions: |
+        - Flag public API or package export compatibility regressions.
+        - Verify browser-only contracts and avoid unsupported Node or SSR assumptions.
+        - Public behavior changes must include documentation and regression tests.
+        - Check workspace dependency direction and package boundaries.
+
+    - path: "tests/**"
+      instructions: |
+        - Tests should exercise the same public interface used by consumers.
+        - Browser behavior must be verified in a real browser where applicable.
+        - Flag missing edge cases for pagination, printing, and export behavior.
+        - Avoid brittle tests coupled only to implementation details.
+
+    - path: "docs/**"
+      instructions: |
+        - Check that documentation matches implemented and tested behavior.
+        - Flag unsupported claims of complete CSS or browser compatibility.
+        - Public API and compatibility changes must be reflected consistently.
+
+    - path: ".github/workflows/**"
+      instructions: |
+        - Review permissions, secrets exposure, untrusted input, and release integrity.
+        - Flag workflows that can publish from unprotected or unintended branches.
+        - Check that npm publishing preserves trusted-publishing provenance.
+
+  tools:
+    biome:
+      enabled: true
+    eslint:
+      enabled: false
+    markdownlint:
+      enabled: true
+    actionlint:
+      enabled: true
+    zizmor:
+      enabled: true
+    gitleaks:
+      enabled: true
+    github-checks:
+      enabled: true
+      timeout_ms: 900000
+
+chat:
+  auto_reply: false
+
+knowledge_base:
+  code_guidelines:
+    enabled: true
+    filePatterns:
+      - "CONTRIBUTING.md"
+      - "docs/domain/**/*.md"
+      - "docs/compatibility.md"
+      - "docs/verification.md"
+  learnings:
+    scope: local
+    approval_delay: 3
+  issues:
+    scope: local
+  pull_requests:
+    scope: local
