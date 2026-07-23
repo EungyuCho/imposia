@@ -20,7 +20,7 @@ export function baseOptions(lang: Locale): BaseLayoutProps {
     },
     links: [
       { text: labels.docs, url: `/${lang}/docs` },
-      { text: labels.demo, url: "/examples/demo/" },
+      { text: labels.demo, url: "/examples/demo/index.html" },
     ],
     i18n: i18nConfig,
   };
