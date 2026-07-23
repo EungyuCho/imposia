@@ -5,9 +5,11 @@ import {
   type PageDocument,
   type PageDocumentOptions,
   type PageExtension,
+  type PageOrientation,
 } from "@imposia/react";
 import { useId, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
+import { DEFAULT_PAGE_PRESET, type PagePreset, PageSetup } from "./page-setup.js";
 
 type SampleId = "editorial" | "brief" | "hangul" | "publishing";
 type CodeMode = "react" | "core";
@@ -141,7 +143,7 @@ const publishingDocumentCss = `
     background: #fffaf0;
   }
   @page {
-    size: A4 landscape;
+    size: A4;
     margin: 15mm 18mm 20mm 22mm;
     @top-center { content: string(running-head, last) " · " counter(page) "/" counter(pages); }
   }
@@ -166,7 +168,7 @@ const publishingPlacementCss = `
 `;
 
 const publishingRows = [
-  ["01", "Geometry", "A4 landscape", "Stable / four authored margins"],
+  ["01", "Geometry", "A4 portrait default", "Stable / four authored margins"],
   ["02", "Page rules", "first · left · right", "Stable / margin-box furniture"],
   ["03", "References", "target-counter", "Stable / local fragment"],
   ["04", "References", "target-text", "Stable / local fragment"],
@@ -301,7 +303,7 @@ const samples: Record<SampleId, DemoSample> = {
     index: "04",
     title: "Publishing contract",
     summary:
-      "A4 landscape rules, local references, repeated table heads, and opt-in publishing features.",
+      "A4 page rules, local references, repeated table heads, and opt-in publishing features.",
     html: `
       <style>${publishingDocumentCss}</style>
       <article class="publishing-document">
@@ -309,7 +311,7 @@ const samples: Record<SampleId, DemoSample> = {
         <h1>Pages that carry their own evidence</h1>
         <p class="publishing-deck">A deliberately dense document surface for checking geometry, running furniture, safe local references, and bounded experimental placement.</p>
         <div class="publishing-support">
-          <span><strong>Stable</strong> A4 landscape geometry, authored page selectors, named strings, and deterministic EPUB export.</span>
+          <span><strong>Stable</strong> A4 geometry, authored page selectors, named strings, and deterministic EPUB export.</span>
           <span><strong>Constrained</strong> local target references, table continuation, and Chromium-reference pagination.</span>
           <span><strong>Experimental</strong> footnote and page-float markers are opt-in and remain bounded.</span>
         </div>
@@ -317,7 +319,7 @@ const samples: Record<SampleId, DemoSample> = {
           <strong>Page-float probe.</strong> This bounded callout opts into page-referenced top placement.
         </aside>
         <h2 id="geometry">Geometry is an authored contract</h2>
-        <p>The authored page rules pin A4 landscape with four named margins. First, left, and right furniture follow the latest named section.</p>
+        <p>The authored page rules pin A4 with four named margins. First, left, and right furniture follow the latest named section.</p>
         <p>Read the <a class="publishing-reference" href="#table-title">table page</a> and <a class="publishing-reference-text" href="#table-title">table heading</a> through safe local fragments.</p>
         <h2 id="table-title">A repeated table head</h2>
         <table class="publishing-table">
@@ -343,14 +345,17 @@ const viewer = useRef<ImposiaPageViewerHandle>(null);
 <ImposiaPageViewer
   ref={viewer}
   source={{ html }}
-  documentOptions={{ extensions }}
+  documentOptions={{ page: { size: "A4", orientation: "portrait" }, extensions }}
   onReady={({ pageCount }) => setPages(pageCount)}
 />
 
 await viewer.current?.print();`,
   core: `import { mountPageDocument, mountPageViewer } from "@imposia/client";
 
-const controller = mountPageDocument(host, { html }, { extensions });
+const controller = mountPageDocument(host, { html }, {
+  page: { size: "A4", orientation: "portrait" },
+  extensions,
+});
 const pageDocument = await controller.ready;
 const viewer = mountPageViewer(host, pageDocument);
 
@@ -394,6 +399,8 @@ function App() {
   const codeHeadingId = useId();
   const exportHeadingId = useId();
   const [sampleId, setSampleId] = useState<SampleId>("editorial");
+  const [pagePreset, setPagePreset] = useState<PagePreset>(DEFAULT_PAGE_PRESET);
+  const [pageOrientation, setPageOrientation] = useState<PageOrientation>("portrait");
   const [extensionsEnabled, setExtensionsEnabled] = useState(true);
   const [experimentalPlacementEnabled, setExperimentalPlacementEnabled] = useState(false);
   const [codeMode, setCodeMode] = useState<CodeMode>("react");
@@ -435,8 +442,9 @@ function App() {
     () => ({
       extensions: [runningHeadExtension],
       experimental: { footnotes: true, pageFloats: true },
+      page: { size: pagePreset.size, orientation: pageOrientation },
     }),
-    [runningHeadExtension],
+    [pageOrientation, pagePreset, runningHeadExtension],
   );
 
   const handleReady = (nextDocument: PageDocument) => {
@@ -470,6 +478,18 @@ function App() {
     if (nextSampleId === sampleId) return;
     markDocumentLoading();
     setSampleId(nextSampleId);
+  };
+
+  const handleOrientationChange = (nextOrientation: PageOrientation) => {
+    if (nextOrientation === pageOrientation) return;
+    markDocumentLoading();
+    setPageOrientation(nextOrientation);
+  };
+
+  const handlePagePresetChange = (nextPreset: PagePreset) => {
+    if (nextPreset.id === pagePreset.id) return;
+    markDocumentLoading();
+    setPagePreset(nextPreset);
   };
 
   const handleExport = async () => {
@@ -571,6 +591,12 @@ function App() {
             <span>{extensionsEnabled ? "decorated" : "undecorated"}</span>
           </div>
           <div className="demo-runtime-controls">
+            <PageSetup
+              preset={pagePreset}
+              orientation={pageOrientation}
+              onPresetChange={handlePagePresetChange}
+              onOrientationChange={handleOrientationChange}
+            />
             <label className="demo-switch">
               <span>
                 <strong>Running-head extension</strong>
@@ -735,6 +761,7 @@ function App() {
               source={source}
               sourceRevision={sourceRevision}
               documentOptions={documentOptions}
+              documentOptionsRevision={`${pagePreset.id}:${pageOrientation}`}
               viewerOptions={{ mode: "continuous", zoom: 0.9 }}
               className="demo-viewer"
               onReady={handleReady}
