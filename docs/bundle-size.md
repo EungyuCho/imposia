@@ -14,8 +14,11 @@ pnpm bundle:size
 ```
 
 The command builds six minified browser ESM scenarios in memory, compresses each
-output with gzip level 9, prints the report, and exits nonzero when a route
-exceeds its gzip budget. A successful run ends with:
+output with gzip level 9, prints the budget report, and exits nonzero when a
+route exceeds its gzip budget. It then prints a reproducible EPUB diagnostic
+that compares a complete Core export against the same export with the EPUB
+module replaced by API-compatible throwing stubs. A successful budget section
+ends with:
 
 ```text
 All 6 consumer routes are within their gzip budgets.
@@ -64,11 +67,12 @@ smaller.
 
 ## EPUB decision
 
-EPUB remains part of `@imposia/core`. A diagnostic build replaced the two EPUB
-export functions with empty stubs while retaining the surrounding Core API. The
-measured implementation contribution was 17,547 minified bytes and 5,528 gzip
-bytes. The source implementation is large, but the compressed consumer cost is
-about five percent of the `Core · PageDocument` route.
+EPUB remains part of `@imposia/core`. The report's diagnostic build replaces the
+two EPUB export functions with throwing stubs while retaining their names and
+async contract. The current report measures a 17.1 KiB minified, 5.4 KiB gzip,
+and 4.5 KiB Brotli difference. The source implementation is large, but the
+compressed consumer cost is about five percent of the
+`Core · PageDocument` route.
 
 Moving EPUB into an optional package would require a new trusted interface to
 Core's retained semantic snapshot and resolver-owned asset bytes. It would also
@@ -81,9 +85,9 @@ records the decision and the conditions for revisiting it.
 
 - **Verified:** `node --import tsx scripts/bundle-size.ts` produced the baseline
   table and exited `0` on 2026-07-23.
-- **Verified:** an `esbuild` metafile attributed 15,271 minified output bytes to
-  `epub-export.ts` and 2,360 bytes to `epub-zip.ts`; the stub diagnostic measured
-  the combined compressed difference.
+- **Verified:** the same command's EPUB diagnostic measured the minified, gzip,
+  and Brotli difference between the complete Core export and its EPUB-stubbed
+  equivalent.
 - **Inferred:** a separate EPUB package would increase lifecycle and security
   interface complexity because the required semantic snapshot and retained
   assets are currently private Core state.

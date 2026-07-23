@@ -1,8 +1,17 @@
 export interface BundleMeasurement {
   readonly name: string;
-  readonly rawBytes: number;
+  readonly minifiedBytes: number;
   readonly gzipBytes: number;
   readonly gzipBudgetBytes: number;
+}
+
+export interface EpubImpactMeasurement {
+  readonly fullMinifiedBytes: number;
+  readonly stubMinifiedBytes: number;
+  readonly fullGzipBytes: number;
+  readonly stubGzipBytes: number;
+  readonly fullBrotliBytes: number;
+  readonly stubBrotliBytes: number;
 }
 
 export interface BundleBudgetViolation {
@@ -47,9 +56,9 @@ export function assertBundleBudgets(measurements: readonly BundleMeasurement[]):
 
 export function renderBundleSizeReport(measurements: readonly BundleMeasurement[]): string {
   const violationCount = bundleBudgetViolations(measurements).length;
-  const rows = measurements.map(({ name, rawBytes, gzipBytes, gzipBudgetBytes }) => {
+  const rows = measurements.map(({ name, minifiedBytes, gzipBytes, gzipBudgetBytes }) => {
     const headroomBytes = gzipBudgetBytes - gzipBytes;
-    return `| ${name} | ${formatBytes(rawBytes)} | ${formatBytes(gzipBytes)} | ${formatBytes(gzipBudgetBytes)} | ${formatBytes(headroomBytes)} |`;
+    return `| ${name} | ${formatBytes(minifiedBytes)} | ${formatBytes(gzipBytes)} | ${formatBytes(gzipBudgetBytes)} | ${formatBytes(headroomBytes)} |`;
   });
   return [
     "Bundle size report",
@@ -63,5 +72,26 @@ export function renderBundleSizeReport(measurements: readonly BundleMeasurement[
       : `${violationCount} of ${measurements.length} consumer routes ${
           violationCount === 1 ? "exceeds its gzip budget" : "exceed their gzip budgets"
         }.`,
+  ].join("\n");
+}
+
+export function renderEpubImpactReport(measurement: EpubImpactMeasurement): string {
+  const measurements: readonly (readonly [string, number, number])[] = [
+    ["Minified", measurement.fullMinifiedBytes, measurement.stubMinifiedBytes],
+    ["Gzip", measurement.fullGzipBytes, measurement.stubGzipBytes],
+    ["Brotli", measurement.fullBrotliBytes, measurement.stubBrotliBytes],
+  ];
+  const rows = measurements.map(
+    ([name, fullBytes, stubBytes]) =>
+      `| ${name} | ${formatBytes(fullBytes)} | ${formatBytes(stubBytes)} | ${formatBytes(
+        fullBytes - stubBytes,
+      )} |`,
+  );
+  return [
+    "EPUB implementation impact",
+    "",
+    "| Measurement | Full Core | EPUB stubs | Difference |",
+    "| --- | ---: | ---: | ---: |",
+    ...rows,
   ].join("\n");
 }

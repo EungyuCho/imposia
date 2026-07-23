@@ -3,19 +3,21 @@ import {
   assertBundleBudgets,
   BundleBudgetError,
   type BundleMeasurement,
+  type EpubImpactMeasurement,
   renderBundleSizeReport,
+  renderEpubImpactReport,
 } from "../../scripts/bundle-size-report.js";
 
 const WITHIN_BUDGET = Object.freeze([
   Object.freeze({
     name: "Core · PageDocument",
-    rawBytes: 204_800,
+    minifiedBytes: 204_800,
     gzipBytes: 81_920,
     gzipBudgetBytes: 92_160,
   }),
   Object.freeze({
     name: "Viewer · PageDocument",
-    rawBytes: 71_680,
+    minifiedBytes: 71_680,
     gzipBytes: 25_600,
     gzipBudgetBytes: 30_720,
   }),
@@ -38,7 +40,7 @@ All 2 consumer routes are within their gzip budgets.`);
       ...WITHIN_BUDGET,
       Object.freeze({
         name: "React · PageViewer",
-        rawBytes: 307_200,
+        minifiedBytes: 307_200,
         gzipBytes: 123_905,
         gzipBudgetBytes: 122_880,
       }),
@@ -61,5 +63,24 @@ All 2 consumer routes are within their gzip budgets.`);
     expect(renderBundleSizeReport(measurements)).not.toContain(
       "All 3 consumer routes are within their gzip budgets.",
     );
+  });
+
+  it("renders the reproducible EPUB implementation delta", () => {
+    const measurement = Object.freeze({
+      fullMinifiedBytes: 379_989,
+      stubMinifiedBytes: 362_442,
+      fullGzipBytes: 111_364,
+      stubGzipBytes: 105_836,
+      fullBrotliBytes: 93_949,
+      stubBrotliBytes: 89_299,
+    }) satisfies EpubImpactMeasurement;
+
+    expect(renderEpubImpactReport(measurement)).toBe(`EPUB implementation impact
+
+| Measurement | Full Core | EPUB stubs | Difference |
+| --- | ---: | ---: | ---: |
+| Minified | 371.1 KiB | 353.9 KiB | 17.1 KiB |
+| Gzip | 108.8 KiB | 103.4 KiB | 5.4 KiB |
+| Brotli | 91.7 KiB | 87.2 KiB | 4.5 KiB |`);
   });
 });
