@@ -3,6 +3,25 @@
 All notable changes to Imposia are recorded here. The project follows semantic
 versioning for its published package interfaces.
 
+## 0.1.2 — 2026-07-23
+
+Patch release for the public `@imposia/*` package family.
+
+### Changed
+
+- Synchronized `@imposia/core`, `@imposia/viewer`, `@imposia/client`, and
+  `@imposia/react` at version `0.1.2` without changing their public interfaces.
+- Added automatic CodeRabbit review alongside the existing verification and
+  code-scanning checks for pull requests.
+
+### Security
+
+- Removed the unused request-delay behavior from the loopback-only demo server,
+  eliminating the corresponding CodeQL resource-exhaustion finding.
+- Reviewed the structural-selector CodeQL finding and confirmed that the value
+  is used only by `Element.matches()` with conservative fallback behavior, not
+  as an HTML or attribute injection sink.
+
 ## 0.1.1 — 2026-07-23
 
 Patch release for the public `@imposia/*` package family.
