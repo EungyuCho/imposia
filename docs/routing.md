@@ -11,4 +11,5 @@
 - Ordered Core extension runtime and its security boundaries: [ADR 0005](architecture/0005-core-extension-contract.md)
 - Verification evidence: [verification.md](verification.md)
 - Documentation and localization release audit: [documentation-localization-audit.md](documentation-localization-audit.md)
+
 - Public website: `site/` is a Vite-powered React Router SPA (`ssr: false`) using Fumadocs layouts and localized MDX at `/en`, `/ko`, `/zh-CN`, and `/ja`.

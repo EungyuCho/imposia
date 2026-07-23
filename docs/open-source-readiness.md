@@ -1,7 +1,7 @@
 # Open-source readiness
 
 This list records the current launch boundary for Imposia. The browser library
-is ready for a maintainer-reviewed `0.1.2` patch release. Repository rules, the
+is ready for a maintainer-reviewed `0.1.3` patch release. Repository rules, the
 protected release environment, private vulnerability reporting, dependency
 alerts, code scanning, secret scanning, and automatic pull-request review are
 enabled. npm trusted publishing and the protected release workflow were proven
@@ -15,6 +15,9 @@ by the synchronized `0.1.1` package release.
   dependency audit gate, and CSS serialization regression coverage.
 - One persistent canonical iframe plus a temporary noncanonical staging iframe,
   with atomic commit, failed-update rollback, and deterministic resource cleanup.
+- A public continuity ledger that proves all 96 declared source tokens appear
+  exactly once and in order across every committed content-page boundary, plus
+  a rapid three-revision CSR walkthrough on the same canonical iframe.
 - Consumer-owned CSS theme modules and per-instance runtime theme tokens.
 - Ordered Publication snapshots with one global page sequence, shared outline,
   stable destinations, entry page ranges, atomic updates, and reflowable EPUB
@@ -39,7 +42,7 @@ by the synchronized `0.1.1` package release.
 
 ## Post-release engineering follow-ups
 
-These refinements are useful, but they do not block the `0.1.2` patch release:
+These refinements are useful, but they do not block the `0.1.3` patch release:
 
 1. Isolate the latest-generation scheduler only when the extraction removes the
    current duplicated async bookkeeping; do not add a second rendering authority.
@@ -55,4 +58,4 @@ These refinements are useful, but they do not block the `0.1.2` patch release:
   after its verification job passes, and confirm npm provenance for all four
   packages.
 - Install the published tarballs in a clean consumer project and confirm the
-  `v0.1.2` GitHub Release contains matching package assets and checksums.
+  `v0.1.3` GitHub Release contains matching package assets and checksums.

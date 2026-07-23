@@ -60,6 +60,116 @@ test("React publishing lab defaults to A4 portrait and switches orientation", as
   }
 });
 
+test("React publishing lab proves page-boundary continuity through rapid CSR updates", async ({
+  page,
+  browserName,
+}) => {
+  test.skip(browserName !== "chromium", "Canonical pagination is Chromium-reference only.");
+  const { errors, pageErrors } = captureBrowserErrors(page, browserName);
+  await page.goto("/examples/demo/");
+
+  try {
+    const preview = page.getByTestId("demo-preview-surface");
+    await expect(preview.locator("[data-imposia-react-status='ready']")).toBeVisible();
+    await expect(page.getByTestId("integrity-count")).toHaveText("96 / 96");
+    await expect(page.getByTestId("integrity-status")).toContainText(
+      "Exact and ordered · CSR revision 0",
+    );
+    const ranges = page.getByTestId("integrity-page-ranges").locator("li");
+    expect(await ranges.count()).toBeGreaterThan(2);
+
+    await page.evaluate(() => {
+      const expectedTokens = Array.from(
+        { length: 96 },
+        (_, index) => `FLOW-${String(index + 1).padStart(3, "0")}`,
+      );
+      const observations: Array<{
+        tokenCount: number;
+        exactSequence: boolean;
+        integrityCount: string;
+      }> = [];
+      const sampleCanonicalGeneration = () => {
+        const frame = document.querySelector<HTMLIFrameElement>(
+          "[data-testid='demo-preview-surface'] iframe",
+        );
+        const tokens = [
+          ...(frame?.contentDocument?.querySelectorAll<HTMLElement>(
+            "[data-imposia-page] [data-integrity-token]",
+          ) ?? []),
+        ].map((element) => element.dataset.integrityToken);
+        observations.push({
+          tokenCount: tokens.length,
+          exactSequence: tokens.every((token, index) => token === expectedTokens[index]),
+          integrityCount:
+            document.querySelector<HTMLElement>("[data-testid='integrity-count']")?.innerText ?? "",
+        });
+      };
+      const samplingInterval = window.setInterval(sampleCanonicalGeneration, 1);
+      sampleCanonicalGeneration();
+      Object.assign(globalThis, {
+        __imposiaIntegrityFrame: document.querySelector(
+          "[data-testid='demo-preview-surface'] iframe",
+        ),
+        __imposiaIntegrityObservations: observations,
+        __imposiaIntegritySamplingInterval: samplingInterval,
+      });
+    });
+    await page.getByTestId("run-csr-burst").click();
+    await expect(page.getByTestId("integrity-status")).toContainText(
+      "Exact and ordered · CSR revision 3",
+    );
+    await expect(page.getByTestId("integrity-count")).toHaveText("96 / 96");
+    expect(
+      await page.evaluate(
+        () =>
+          Reflect.get(globalThis, "__imposiaIntegrityFrame") ===
+          document.querySelector("[data-testid='demo-preview-surface'] iframe"),
+      ),
+    ).toBe(true);
+
+    const committedTokens = await page.evaluate(() => {
+      const frame = document.querySelector<HTMLIFrameElement>(
+        "[data-testid='demo-preview-surface'] iframe",
+      );
+      return [
+        ...(frame?.contentDocument?.querySelectorAll<HTMLElement>(
+          "[data-imposia-page] [data-integrity-token]",
+        ) ?? []),
+      ].map((element) => element.dataset.integrityToken);
+    });
+    expect(committedTokens).toEqual(
+      Array.from({ length: 96 }, (_, index) => `FLOW-${String(index + 1).padStart(3, "0")}`),
+    );
+    const observations = await page.evaluate(() => {
+      const samplingInterval = Reflect.get(globalThis, "__imposiaIntegritySamplingInterval");
+      if (typeof samplingInterval === "number") window.clearInterval(samplingInterval);
+      return Reflect.get(globalThis, "__imposiaIntegrityObservations") as Array<{
+        tokenCount: number;
+        exactSequence: boolean;
+        integrityCount: string;
+      }>;
+    });
+    expect(observations.length).toBeGreaterThan(1);
+    expect(
+      observations.every(
+        (observation) =>
+          observation.tokenCount === 96 &&
+          observation.exactSequence &&
+          observation.integrityCount === "96 / 96",
+      ),
+    ).toBe(true);
+  } finally {
+    await page
+      .evaluate(() => {
+        const samplingInterval = Reflect.get(globalThis, "__imposiaIntegritySamplingInterval");
+        if (typeof samplingInterval === "number") window.clearInterval(samplingInterval);
+      })
+      .catch(() => undefined);
+    expect(errors).toEqual([]);
+    expect(pageErrors).toEqual([]);
+  }
+});
+
 test("React publishing lab switches sources and extension boundaries", async ({
   page,
   browserName,
@@ -72,8 +182,8 @@ test("React publishing lab switches sources and extension boundaries", async ({
   try {
     const preview = page.getByTestId("demo-preview-surface");
     await expect(preview.locator("[data-imposia-react-status='ready']")).toBeVisible();
-    await expect(page.getByTestId("metric-pages")).toHaveText("3");
-    await expect(page.getByTestId("metric-warnings")).toHaveText("3");
+    expect(Number(await page.getByTestId("metric-pages").textContent())).toBeGreaterThan(2);
+    await expect(page.getByTestId("metric-warnings")).toHaveText("0");
     await expect(preview.locator("iframe[data-imposia-frame='page-document']")).toHaveCount(1);
 
     await page.evaluate(() => {

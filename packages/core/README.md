@@ -4,6 +4,10 @@
 document in one isolated canonical iframe. It is the framework-neutral source of
 truth and can be used directly without React, Node, or a CLI.
 
+Source updates paginate in a temporary noncanonical iframe. The previous
+generation remains visible until a complete replacement commits, so hosts never
+need to present a partially paginated CSR state.
+
 ## Install
 
 ```bash

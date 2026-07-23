@@ -42,6 +42,37 @@ const attachJson = async (testInfo: TestInfo, name: string, value: unknown): Pro
   });
 };
 
+const continuityTokens = Array.from(
+  { length: 96 },
+  (_, index) => `FLOW-${String(index + 1).padStart(3, "0")}`,
+);
+
+const continuityHtml = `
+  <style>
+    @page { size: 360px 420px; margin: 28px; }
+    body { margin: 0; font: 12px/1.4 sans-serif; }
+    main { border-bottom: 1px solid #888; }
+    p {
+      display: grid;
+      min-height: 31px;
+      grid-template-columns: 72px 1fr;
+      align-items: center;
+      gap: 10px;
+      margin: 0;
+      border-top: 1px solid #888;
+      break-inside: avoid;
+    }
+  </style>
+  <main>
+    ${continuityTokens
+      .map(
+        (token) =>
+          `<p><span data-continuity-token="${token}">${token}</span><span>source continuity</span></p>`,
+      )
+      .join("")}
+  </main>
+`;
+
 test.describe("public browser conformance corpus", () => {
   for (const fixture of CONFORMANCE_FIXTURES) {
     test(`${fixture.id}: ${fixture.description}`, async ({ page, browserName }, testInfo) => {
@@ -245,6 +276,98 @@ test.describe("public browser conformance corpus", () => {
         expect(pageErrors).toEqual([]);
       }
     });
+  }
+});
+
+test("records exact source continuity at every committed page boundary", async ({
+  page,
+  browserName,
+}, testInfo) => {
+  const { errors, pageErrors } = captureBrowserErrors(page, browserName);
+  await page.goto("/examples/book.html");
+
+  try {
+    const observation = await page.evaluate(
+      async ({ html, sourceTokens }) => {
+        const modulePath = "/packages/core/dist/index.js";
+        const core = (await import(modulePath)) as CoreModule;
+        const host = document.createElement("div");
+        document.body.replaceChildren(host);
+        const controller = core.mountPageDocument(host, { html });
+        try {
+          const ready = await controller.ready;
+          const frameDocument = ready.iframe.contentDocument;
+          if (frameDocument === null) throw new Error("Missing canonical frame document.");
+          const pageRanges = [
+            ...frameDocument.querySelectorAll<HTMLElement>("[data-imposia-page]"),
+          ].flatMap((pageElement, pageIndex) => {
+            const tokens = [
+              ...pageElement.querySelectorAll<HTMLElement>("[data-continuity-token]"),
+            ].flatMap((element) => {
+              const token = element.dataset.continuityToken;
+              return token === undefined ? [] : [token];
+            });
+            const first = tokens[0];
+            const last = tokens.at(-1);
+            return first === undefined || last === undefined
+              ? []
+              : [{ page: pageIndex + 1, first, last, count: tokens.length, tokens }];
+          });
+          const committedTokens = pageRanges.flatMap((range) => range.tokens);
+          return {
+            generation: ready.generation,
+            pageCount: ready.pageCount,
+            warningCodes: ready.warnings.map((warning) => warning.code),
+            canonicalFrameCount: host.querySelectorAll('iframe[data-imposia-frame="page-document"]')
+              .length,
+            stagingFrameCount: host.querySelectorAll(
+              'iframe[data-imposia-frame="page-document-staging"]',
+            ).length,
+            pageRanges: pageRanges.map(({ tokens: _tokens, ...range }) => range),
+            committedTokens,
+            exactSequence:
+              committedTokens.length === sourceTokens.length &&
+              committedTokens.every((token, index) => token === sourceTokens[index]),
+          };
+        } finally {
+          await controller.destroy();
+          host.remove();
+        }
+      },
+      { html: continuityHtml, sourceTokens: continuityTokens },
+    );
+
+    await attachJson(testInfo, `continuity-${browserName}-conformance`, {
+      browser: browserName,
+      sourceTokenCount: continuityTokens.length,
+      ...observation,
+    });
+    testInfo.annotations.push({
+      type: "continuity",
+      description: `${browserName}: ${observation.committedTokens.length}/${continuityTokens.length} tokens across ${observation.pageRanges.length} content pages`,
+    });
+
+    expect(observation.generation).toBe(1);
+    expect(observation.pageCount).toBeGreaterThan(2);
+    expect(observation.warningCodes).toEqual([]);
+    expect(observation.canonicalFrameCount).toBe(1);
+    expect(observation.stagingFrameCount).toBe(0);
+    expect(observation.pageRanges.length).toBeGreaterThan(2);
+    expect(observation.committedTokens).toEqual(continuityTokens);
+    expect(observation.exactSequence).toBe(true);
+    for (let index = 1; index < observation.pageRanges.length; index += 1) {
+      const previous = observation.pageRanges[index - 1];
+      const current = observation.pageRanges[index];
+      if (previous === undefined || current === undefined) {
+        throw new Error("Continuity page range is missing.");
+      }
+      expect(continuityTokens.indexOf(current.first)).toBe(
+        continuityTokens.indexOf(previous.last) + 1,
+      );
+    }
+  } finally {
+    expect(errors).toEqual([]);
+    expect(pageErrors).toEqual([]);
   }
 });
 

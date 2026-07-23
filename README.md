@@ -14,7 +14,7 @@
 <p align="center">
   <strong>HTML in. Pages out.</strong>
   <br/>
-  <sub>The browser-native publishing toolkit for paginated HTML/CSS, React preview, native print, and reflowable EPUB.</sub>
+  <sub>Atomic HTML/CSR pagination in the browser, with React preview, native print, and semantic EPUB export.</sub>
 </p>
 
 <p align="center">
@@ -39,14 +39,15 @@
   <a href="#interactive-demo">Demo</a>
 </p>
 
-**Turn HTML and CSS into a paginated, inspectable browser document without
-shipping a second rendering runtime.**
+**Turn current HTML and CSS into complete, inspectable browser pages without
+losing or duplicating declared-flow content at page boundaries.**
 
 Imposia is a React-first, browser-only publishing toolkit. It sanitizes source,
 resolves admitted assets, prepares pages in a temporary noncanonical staging
 iframe, then commits them into one persistent canonical iframe for preview and
-native print. The same committed semantic source
-can be exported as a reflowable EPUB 3.3 `Blob`.
+native print. During rapid CSR updates, the previous committed generation stays
+visible until one complete replacement is ready. The same committed semantic
+source can also be exported as a reflowable EPUB 3.3 `Blob`.
 
 Core works without React. There is no Node runtime, command-line renderer,
 server export, fixed-layout EPUB, PDF-byte API, or promise of complete CSS
@@ -69,6 +70,8 @@ Imposia keeps one page document at the center of the workflow:
 
 | Publishing problem | What usually happens | Imposia's contract |
 | :--- | :--- | :--- |
+| Content crosses a page boundary | Fragments disappear, duplicate, or resume out of order | Declared conformance fixtures flatten back to the exact source sequence; unsupported cases warn instead of claiming success |
+| CSR state changes during pagination | Preview flashes a partial or stale generation | The previous commit remains visible while staging; only a complete winning generation replaces it |
 | Preview and print diverge | Each surface reruns layout | One canonical iframe survives pagination, presentation, and native print |
 | Authored URLs fetch implicitly | Rendering gains an uncontrolled network path | Every admitted HTML/CSS asset crosses the host `assetResolver` boundary |
 | Unsupported layout looks "close enough" | Silent approximation hides broken output | Constrained and unsupported cases remain atomic or emit typed warnings |
