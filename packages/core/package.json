@@ -1,7 +1,7 @@
 {
   "name": "@imposia/core",
-  "version": "0.1.2",
-  "description": "Browser-native HTML/CSS pagination, publishing diagnostics, and reflowable EPUB export.",
+  "version": "0.1.3",
+  "description": "Browser-native HTML/CSS pagination with atomic CSR updates, diagnostics, and semantic export.",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/EungyuCho/imposia.git",

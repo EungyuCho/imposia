@@ -101,7 +101,7 @@ Recorded on 2026-07-19:
 - `pnpm site:build` generated a client-only React Router SPA at
   `site/build/client/index.html`; runtime routes do not depend on Next.js or a
   server-side MDX loader;
-- `pnpm test:site` passed 5/5 Chromium scenarios covering the root redirect,
+- `pnpm test:site` passed 8/8 Chromium scenarios covering the root redirect,
   four localized landing pages, localized documentation, Fumadocs navigation
   and language controls, browser errors, and 320px horizontal overflow;
 - the focused constrained-layout invocation names the current seven suites and
@@ -110,8 +110,8 @@ Recorded on 2026-07-19:
   WebKit, its React handle/toggle is 3/3 across the same engines, and unit tests
   are 18/18 including 4/4 packed consumers;
 - the authoritative serial browser matrix
-  (`PORT=4180 pnpm exec playwright test --workers=1`) exited `0` with 353 passed,
-  112 intentional skips, no failures, and 465 total scenarios.
+  (`CI=true pnpm check`) exited `0` with 354 passed, 120 intentional skips, no
+  failures, and 474 total scenarios.
 - an independent exact-current English/Korean/Japanese/Simplified Chinese
   naturalness and fact-consistency review returned terminal `PASS` after checking
   the generated site bundle, localized README routes, lifecycle language,

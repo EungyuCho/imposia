@@ -4,6 +4,10 @@
 page-document and Viewer APIs. It is framework-neutral and does not add a second
 layout engine, iframe, or network boundary.
 
+Rapid source updates retain the previous committed page sequence while Core
+stages a replacement. Viewer navigation and print continue to target the one
+current canonical iframe.
+
 ## Install
 
 ```bash
