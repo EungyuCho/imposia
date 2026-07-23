@@ -13,7 +13,9 @@ CI=true pnpm preflight
 CI=true pnpm typecheck
 CI=true pnpm lint
 CI=true pnpm test
+CI=true pnpm bundle:size
 CI=true pnpm build
+CI=true pnpm test:site
 CI=true pnpm test:e2e
 CI=true pnpm run audit:prod
 CI=true pnpm run licenses
@@ -33,6 +35,7 @@ failed, and the command exited `0` (465 total scenarios, 3.6 minutes).
 
 | Scenario | Exact invocation | Binary observable | Captured artifact |
 | --- | --- | --- | --- |
+| Minified browser consumer routes and gzip budgets | `CI=true pnpm bundle:size` | Exit `0`; six source-level ESM routes report minified and gzip bytes, and every gzip result remains within its named budget | [bundle-size.md](bundle-size.md) and repository terminal output |
 | Normalized page media, `@page` selectors, margin boxes, unsupported diagnostics, and print CSS | `CI=true ./node_modules/.bin/playwright test tests/e2e/browser-core-page-media.spec.ts tests/e2e/browser-core-print.spec.ts tests/e2e/browser-core-breaks.spec.ts --project=chromium --workers=1 --reporter=line` | Exit `0`; 8 scenarios passed; native print probe targets the canonical iframe | [page-media-green.md](../.omo/evidence/browser-publishing-coverage/page-media-green.md), [browser-core-canonical-print.pdf](../.omo/evidence/browser-core-canonical-print.pdf) |
 | Recursive breaks, widows/orphans, table headers, constrained flex/grid/multicol | `CI=true ./node_modules/.bin/playwright test tests/e2e/browser-core-layout-quality.spec.ts tests/e2e/browser-core-fragmentation.spec.ts tests/e2e/browser-core-breaks.spec.ts tests/e2e/browser-core-complex-table-fragmentation.spec.ts tests/e2e/browser-core-flex-fragmentation.spec.ts tests/e2e/browser-core-grid-fragmentation.spec.ts tests/e2e/browser-core-multicol-fragmentation.spec.ts --project=chromium --workers=1 --reporter=line` | Exit `0`; 22 scenarios passed; unsupported layouts warn rather than silently approximate | [fragmentation-green.md](../.omo/evidence/browser-publishing-coverage/fragmentation-green.md) |
 | Horizontal CJK rendered-line fragmentation, language-aware hyphenation fallback, long-token recovery, and vertical overflow fallback | `CI=true ./node_modules/.bin/playwright test tests/e2e/browser-core-cjk-typography.spec.ts` | Exit `0`; Chromium, Firefox, and WebKit preserve Korean/Japanese/Chinese source text and deterministic page membership, retain tagged auto hyphenation, diagnose untagged fallback, recover or surface horizontal inline overflow, and keep overflowing vertical text atomic with typed diagnostics | Repository terminal output |

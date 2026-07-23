@@ -5,7 +5,7 @@ import {
   type PDFDocumentProxy,
   type RenderTask,
 } from "pdfjs-dist";
-import { createInterface, element } from "./viewer-interface.js";
+import { createPdfViewerInterface, element } from "./viewer-interface.js";
 import { loadingSource } from "./viewer-source.js";
 import { bindViewerTheme, validateViewerTheme } from "./viewer-theme.js";
 import type {
@@ -35,7 +35,7 @@ export function mountViewer(
 ): ViewerController {
   validateViewerTheme(options.theme);
   if (options.workerSrc !== undefined) GlobalWorkerOptions.workerSrc = options.workerSrc;
-  const elements = createInterface(container);
+  const elements = createPdfViewerInterface(container);
   const theme = bindViewerTheme(elements.root, options.theme);
   let documentProxy: PDFDocumentProxy | undefined;
   let loadingTask: PDFDocumentLoadingTask | undefined;
