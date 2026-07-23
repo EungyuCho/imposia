@@ -65,7 +65,7 @@ export default function HomeRoute() {
           </figure>
 
           <div className="hero-actions">
-            <a className="button button-primary" href="/examples/demo/">
+            <a className="button button-primary" href="/examples/demo/index.html">
               {copy.primaryCta}
               <span aria-hidden="true">→</span>
             </a>
@@ -117,7 +117,7 @@ export default function HomeRoute() {
           <p>{copy.footerDescription}</p>
           <div className="footer-links">
             <Link to={`/${lang}/docs`}>{copy.docsCta}</Link>
-            <a href="/examples/demo/">{copy.primaryCta}</a>
+            <a href="/examples/demo/index.html">{copy.primaryCta}</a>
             <Link to={`/${lang}/docs/publishing-contract`}>{copy.publishingContractLabel}</Link>
           </div>
         </footer>

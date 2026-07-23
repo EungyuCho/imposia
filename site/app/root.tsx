@@ -24,7 +24,7 @@ export const meta: MetaFunction = () => [
   },
 ];
 
-const DEMO_PATH = "/examples/demo/";
+const DEMO_PATH = "/examples/demo/index.html";
 
 function SiteLink({
   href = "#",
