@@ -548,9 +548,7 @@ function App() {
   const [integrityReport, setIntegrityReport] = useState<IntegrityReport>();
   const pendingCsrRevisionRef = useRef<number | undefined>(undefined);
   const extensionsEnabledRef = useRef(extensionsEnabled);
-  extensionsEnabledRef.current = extensionsEnabled;
   const sampleIdRef = useRef(sampleId);
-  sampleIdRef.current = sampleId;
   const runningHeadExtension = useMemo<PageExtension>(
     () => ({
       name: "demo/running-head",
@@ -638,6 +636,7 @@ function App() {
     if (nextSampleId === sampleId) return;
     markDocumentLoading();
     pendingCsrRevisionRef.current = undefined;
+    sampleIdRef.current = nextSampleId;
     setIntegrityStatus(nextSampleId === "integrity" ? "running" : "idle");
     setSampleId(nextSampleId);
   };
@@ -837,7 +836,9 @@ function App() {
                 checked={extensionsEnabled}
                 onChange={(event) => {
                   markDocumentLoading();
-                  setExtensionsEnabled(event.currentTarget.checked);
+                  const nextExtensionsEnabled = event.currentTarget.checked;
+                  extensionsEnabledRef.current = nextExtensionsEnabled;
+                  setExtensionsEnabled(nextExtensionsEnabled);
                 }}
               />
               <i aria-hidden="true"></i>
