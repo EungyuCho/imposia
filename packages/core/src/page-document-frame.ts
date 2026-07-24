@@ -50,7 +50,7 @@ export function frameStyle(geometries: readonly PageGeometry[]): string {
     ":root{color-scheme:light}",
     "html,body{margin:0;padding:0}",
     "body[data-imposia-pages]{display:grid;gap:16px;justify-content:start;background:#f3f3f3;padding:16px}",
-    "[data-imposia-page]{box-sizing:border-box;position:relative;display:grid;grid-template-rows:auto minmax(0,1fr) auto;overflow:hidden;background:#fff;color:#111}",
+    "[data-imposia-page]{box-sizing:border-box;position:relative;display:grid;grid-template-rows:auto minmax(0,1fr) auto;overflow:hidden;background:#fff;color:#111;contain:layout}",
     "[data-imposia-page-header],[data-imposia-page-footer]{min-height:0}",
     "[data-imposia-page-content],[data-imposia-page-flow]{min-height:0}",
     "[data-imposia-margin-box]{position:absolute;box-sizing:border-box;display:flex;align-items:center;overflow:hidden;pointer-events:none;white-space:nowrap}",

@@ -22,6 +22,8 @@ export type {
   EpubMetadata,
   ExperimentalPageFeatures,
   ExtensionPageWarning,
+  PageComposeOptions,
+  PageComposeProgress,
   PageContext,
   PageDocument,
   PageDocumentController,

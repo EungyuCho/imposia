@@ -2,6 +2,7 @@ import { normalizeCss } from "./css-contracts.js";
 import { prepareDecoration, prepareDocument, prepareExtensionInput } from "./document.js";
 import { ImposiaError } from "./errors.js";
 import { type ResolvedPageAssets, resolvePageAssets } from "./page-document-assets.js";
+import { settlePaginationAssets } from "./page-document-assets-ready.js";
 import {
   allowExtensionAsset,
   applyExtensionEntryTransforms,
@@ -38,11 +39,17 @@ import {
   sanitizeFrameContent,
   sourceHtml,
 } from "./page-document-sanitize.js";
+import {
+  createComposeScheduler,
+  normalizeComposeOptions,
+  type PageComposeSettings,
+} from "./page-document-scheduler.js";
 import { createPageSemanticSnapshot, type PageSemanticSnapshot } from "./page-document-semantic.js";
 import type {
   AssetResolver,
   EffectivePageLimits,
   ExperimentalPageFeatures,
+  PageComposeProgress,
   PageContext,
   PageDocumentOptions,
   PageExtensionFinalizePageInput,
@@ -82,7 +89,8 @@ export interface PageGenerationSettings {
   extensions: PageExtensionSnapshots;
   page: HostPageOverrides;
   limits: EffectivePageLimits;
-  onProgress?: (progress: { completedPages: number }) => void;
+  compose: PageComposeSettings;
+  onProgress?: (progress: PageComposeProgress) => void;
 }
 
 export interface BuiltGeneration {
@@ -167,6 +175,7 @@ interface FragmentCursor {
 }
 
 type ContinueFragment = (name: string | undefined) => FragmentCursor;
+type PaginationCheckpoint = () => Promise<void> | undefined;
 
 const ATOMIC_ELEMENT_NAMES = new Set([
   "audio",
@@ -253,6 +262,7 @@ export function snapshotSettings(options: PageDocumentOptions): PageGenerationSe
     extensions: snapshotExtensions(options.extensions),
     page: normalizeHostPageOptions(options.page),
     limits: normalizePageLimits(options.limits),
+    compose: normalizeComposeOptions(options.compose),
     ...(options.onProgress === undefined ? {} : { onProgress: options.onProgress }),
   };
 }
@@ -995,17 +1005,18 @@ function elementSourceIdentity(element: Element): string | undefined {
   return `source-${authoredOrder}:${authoredElement.localName.toLowerCase()}`;
 }
 
-function captureBreakConstraints(
+async function captureBreakConstraints(
   root: HTMLElement,
-  check: () => void,
-): ReadonlyMap<Element, BreakConstraint> {
+  checkpoint: PaginationCheckpoint,
+): Promise<ReadonlyMap<Element, BreakConstraint>> {
   const constraints = new Map<Element, BreakConstraint>();
   const view = root.ownerDocument.defaultView;
   if (view === null) return constraints;
 
   const elements = [...root.querySelectorAll<Element>("*")];
   for (const element of elements) {
-    check();
+    const scheduled = checkpoint();
+    if (scheduled !== undefined) await scheduled;
     const localName = element.localName.toLowerCase();
     const sourceIdentity = elementSourceIdentity(element);
     if (NON_FLOW_ELEMENT_NAMES.has(localName)) {
@@ -1056,7 +1067,8 @@ function captureBreakConstraints(
   }
 
   for (const element of [...elements].reverse()) {
-    check();
+    const scheduled = checkpoint();
+    if (scheduled !== undefined) await scheduled;
     const constraint = constraints.get(element);
     if (constraint === undefined) continue;
     const parent = element.parentElement;
@@ -1195,28 +1207,36 @@ function collectWarningSourceLocations(
   return locations;
 }
 
-function graphemeEnds(value: string): readonly number[] {
+async function graphemeEnds(
+  value: string,
+  checkpoint: PaginationCheckpoint,
+): Promise<readonly number[]> {
   const ends: number[] = [];
   const segmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" });
-  for (const segment of segmenter.segment(value)) ends.push(segment.index + segment.segment.length);
+  for (const segment of segmenter.segment(value)) {
+    const scheduled = checkpoint();
+    if (scheduled !== undefined) await scheduled;
+    ends.push(segment.index + segment.segment.length);
+  }
   return ends;
 }
 
-function splitTextToFit(
+async function splitTextToFit(
   text: Text,
   overflows: () => boolean,
-  check: () => void,
+  checkpoint: PaginationCheckpoint,
   preferWhitespace = true,
-): Text | undefined {
+): Promise<Text | undefined> {
   const value = text.data;
-  const ends = graphemeEnds(value);
+  const ends = await graphemeEnds(value, checkpoint);
   if (ends.length === 0) return undefined;
 
   let low = 1;
   let high = ends.length;
   let fitting = 0;
   while (low <= high) {
-    check();
+    const scheduled = checkpoint();
+    if (scheduled !== undefined) await scheduled;
     const middle = Math.floor((low + high) / 2);
     const end = ends[middle - 1];
     if (end === undefined) break;
@@ -1420,13 +1440,17 @@ function htmlElement(element: Element): HTMLElement | undefined {
     : undefined;
 }
 
-function renderedLineEnds(text: Text, check: () => void): readonly number[] {
+async function renderedLineEnds(
+  text: Text,
+  checkpoint: PaginationCheckpoint,
+): Promise<readonly number[]> {
   const ends: number[] = [];
   let previousEnd = 0;
   let previousTop: number | undefined;
   const range = text.ownerDocument.createRange();
-  for (const end of graphemeEnds(text.data)) {
-    check();
+  for (const end of await graphemeEnds(text.data, checkpoint)) {
+    const scheduled = checkpoint();
+    if (scheduled !== undefined) await scheduled;
     range.setStart(text, previousEnd);
     range.setEnd(text, end);
     const rects = range.getClientRects();
@@ -1448,6 +1472,7 @@ function renderedLineEnds(text: Text, check: () => void): readonly number[] {
 
 interface RecursiveFragmenterOptions {
   readonly constraints: ReadonlyMap<Element, BreakConstraint>;
+  readonly checkpoint: PaginationCheckpoint;
   readonly signal: AbortSignal;
   readonly deadlineAt: number;
   readonly limits: EffectivePageLimits;
@@ -1460,6 +1485,7 @@ interface RecursiveFragmenterOptions {
 
 class RecursiveFragmenter {
   readonly #constraints: ReadonlyMap<Element, BreakConstraint>;
+  readonly #checkpoint: PaginationCheckpoint;
   readonly #signal: AbortSignal;
   readonly #deadlineAt: number;
   readonly #limits: EffectivePageLimits;
@@ -1475,6 +1501,7 @@ class RecursiveFragmenter {
 
   constructor(options: RecursiveFragmenterOptions) {
     this.#constraints = options.constraints;
+    this.#checkpoint = options.checkpoint;
     this.#signal = options.signal;
     this.#deadlineAt = options.deadlineAt;
     this.#limits = options.limits;
@@ -1483,7 +1510,12 @@ class RecursiveFragmenter {
     this.#reportOverflow = options.reportOverflow;
     this.#warnings = options.warnings;
     this.#tableSplits = options.tableSplits;
+  }
+
+  async prepare(): Promise<void> {
     for (const [element, constraint] of this.#constraints) {
+      const scheduled = this.#checkpoint();
+      if (scheduled !== undefined) await scheduled;
       this.#prepareTypography(element, constraint);
       if (constraint.widowOrphanFallback) {
         this.#warnOnce(
@@ -1734,18 +1766,18 @@ class RecursiveFragmenter {
     return current;
   }
 
-  placeNode(
+  async placeNode(
     node: Node,
     initialCursor: FragmentCursor,
     continueParent: ContinueFragment,
-  ): FragmentCursor {
+  ): Promise<FragmentCursor> {
     this.check();
     if (isNonFlowNode(node)) {
       initialCursor.container.append(node);
       return initialCursor;
     }
     if (node.nodeType === Node.TEXT_NODE) {
-      return this.#placeText(node as Text, initialCursor, continueParent);
+      return await this.#placeText(node as Text, initialCursor, continueParent);
     }
     if (node.nodeType !== Node.ELEMENT_NODE) {
       initialCursor.container.append(node);
@@ -1844,18 +1876,18 @@ class RecursiveFragmenter {
       return cursor;
     }
     if (constraint.layout === "table") {
-      return this.#fragmentTable(element, cursor, continueParent);
+      return await this.#fragmentTable(element, cursor, continueParent);
     }
     if (constraint.layout === "safe-grid") {
-      return this.#fragmentGrid(element, cursor, continueParent, constraint);
+      return await this.#fragmentGrid(element, cursor, continueParent, constraint);
     }
     const lines = overflows ? directLineGroups(element) : undefined;
     if (lines !== undefined) {
-      return this.#fragmentLineBlock(element, lines, cursor, continueParent, constraint);
+      return await this.#fragmentLineBlock(element, lines, cursor, continueParent, constraint);
     }
     const onlyChild = element.childNodes.length === 1 ? element.firstChild : null;
     if (overflows && onlyChild?.nodeType === Node.TEXT_NODE) {
-      return this.#fragmentPlainTextBlock(
+      return await this.#fragmentPlainTextBlock(
         element,
         onlyChild as Text,
         cursor,
@@ -1863,14 +1895,14 @@ class RecursiveFragmenter {
         constraint,
       );
     }
-    return this.#fragmentElement(element, cursor, continueParent, constraint);
+    return await this.#fragmentElement(element, cursor, continueParent, constraint);
   }
 
-  #placeText(
+  async #placeText(
     text: Text,
     initialCursor: FragmentCursor,
     continueParent: ContinueFragment,
-  ): FragmentCursor {
+  ): Promise<FragmentCursor> {
     let cursor = initialCursor;
     const pageHadContent = this.#hasPageContent(cursor.page);
     cursor.container.append(text);
@@ -1882,11 +1914,13 @@ class RecursiveFragmenter {
 
     let currentText = text;
     while (this.#cursorOverflows(cursor)) {
+      const scheduled = this.#checkpoint();
+      if (scheduled !== undefined) await scheduled;
       this.check();
-      const remainder = splitTextToFit(
+      const remainder = await splitTextToFit(
         currentText,
         () => this.#cursorOverflows(cursor),
-        () => this.check(),
+        this.#checkpoint,
       );
       if (remainder === undefined) {
         this.#reportOverflow();
@@ -1903,12 +1937,12 @@ class RecursiveFragmenter {
     return cursor;
   }
 
-  #fragmentGrid(
+  async #fragmentGrid(
     element: Element,
     parentCursor: FragmentCursor,
     continueParent: ContinueFragment,
     constraint: BreakConstraint,
-  ): FragmentCursor {
+  ): Promise<FragmentCursor> {
     this.#beginRecord();
     const view = element.ownerDocument.defaultView;
     const tracks =
@@ -1949,6 +1983,8 @@ class RecursiveFragmenter {
     let pendingBreakAfter: PageBreak = "auto";
     let placedRow = false;
     for (const [rowIndex, row] of rows.entries()) {
+      const scheduled = this.#checkpoint();
+      if (scheduled !== undefined) await scheduled;
       this.check();
       if (row.items.length === 0) {
         shellCursor.container.append(...row.nodes);
@@ -1989,12 +2025,12 @@ class RecursiveFragmenter {
     return parentAtFragment;
   }
 
-  #fragmentElement(
+  async #fragmentElement(
     element: Element,
     parentCursor: FragmentCursor,
     continueParent: ContinueFragment,
     constraint: BreakConstraint,
-  ): FragmentCursor {
+  ): Promise<FragmentCursor> {
     this.#beginRecord();
     const children = [...element.childNodes];
     if (children.length === 0) {
@@ -2020,6 +2056,8 @@ class RecursiveFragmenter {
     let pendingBreakAfter: PageBreak = "auto";
     let placedChild = false;
     for (const child of children) {
+      const scheduled = this.#checkpoint();
+      if (scheduled !== undefined) await scheduled;
       this.check();
       const childContributes = nodeContributesToFlow(child, this.#constraints);
       const childConstraint = breakConstraintFor(child, this.#constraints);
@@ -2036,20 +2074,20 @@ class RecursiveFragmenter {
         );
         placedChild = true;
       }
-      shellCursor = this.placeNode(child, shellCursor, continueShell);
+      shellCursor = await this.placeNode(child, shellCursor, continueShell);
       if (childContributes) pendingBreakAfter = childConstraint.after;
     }
     if (!placedChild) this.#markPageContent(shellCursor.page);
     return parentAtFragment;
   }
 
-  #fragmentLineBlock(
+  async #fragmentLineBlock(
     element: Element,
     lines: readonly (readonly Node[])[],
     parentCursor: FragmentCursor,
     continueParent: ContinueFragment,
     constraint: BreakConstraint,
-  ): FragmentCursor {
+  ): Promise<FragmentCursor> {
     this.#beginRecord();
     element.replaceChildren();
     let parentAtFragment = parentCursor;
@@ -2065,9 +2103,13 @@ class RecursiveFragmenter {
 
     let lineIndex = 0;
     while (lineIndex < lines.length) {
+      const scheduled = this.#checkpoint();
+      if (scheduled !== undefined) await scheduled;
       this.check();
       let fittingLines = 0;
       while (lineIndex + fittingLines < lines.length) {
+        const lineScheduled = this.#checkpoint();
+        if (lineScheduled !== undefined) await lineScheduled;
         this.check();
         const line = lines[lineIndex + fittingLines];
         if (line === undefined) break;
@@ -2117,13 +2159,13 @@ class RecursiveFragmenter {
     return parentAtFragment;
   }
 
-  #fragmentPlainTextBlock(
+  async #fragmentPlainTextBlock(
     element: Element,
     text: Text,
     parentCursor: FragmentCursor,
     continueParent: ContinueFragment,
     constraint: BreakConstraint,
-  ): FragmentCursor {
+  ): Promise<FragmentCursor> {
     this.#beginRecord();
     let parentAtFragment = parentCursor;
     let shell = element;
@@ -2138,13 +2180,15 @@ class RecursiveFragmenter {
 
     let currentText = text;
     while (this.#cursorOverflows(shellCursor)) {
+      const scheduled = this.#checkpoint();
+      if (scheduled !== undefined) await scheduled;
       this.check();
       const value = currentText.data;
-      const lineEnds = renderedLineEnds(currentText, () => this.check());
-      const fittingRemainder = splitTextToFit(
+      const lineEnds = await renderedLineEnds(currentText, this.#checkpoint);
+      const fittingRemainder = await splitTextToFit(
         currentText,
         () => this.#cursorOverflows(shellCursor),
-        () => this.check(),
+        this.#checkpoint,
         false,
       );
       if (fittingRemainder === undefined) {
@@ -2194,11 +2238,11 @@ class RecursiveFragmenter {
     return parentAtFragment;
   }
 
-  #fragmentTable(
+  async #fragmentTable(
     element: Element,
     parentCursor: FragmentCursor,
     continueParent: ContinueFragment,
-  ): FragmentCursor {
+  ): Promise<FragmentCursor> {
     this.#beginRecord();
     const structuralChildren = [...element.children];
     const captions = structuralChildren.filter((child) => child.localName === "caption");
@@ -2287,6 +2331,8 @@ class RecursiveFragmenter {
 
     let pendingBreakAfter: PageBreak = "auto";
     for (const { group, template, clusters } of groups) {
+      const scheduled = this.#checkpoint();
+      if (scheduled !== undefined) await scheduled;
       this.check();
       groupShell = group;
       appendGroup(tableShell, groupShell);
@@ -2300,6 +2346,8 @@ class RecursiveFragmenter {
       const groupConstraint = this.#constraints.get(group);
       let firstCluster = true;
       for (const cluster of clusters) {
+        const clusterScheduled = this.#checkpoint();
+        if (clusterScheduled !== undefined) await clusterScheduled;
         this.check();
         const before = combinedBreak(
           firstCluster && groupConstraint !== undefined
@@ -2554,7 +2602,8 @@ export async function buildGeneration(
     let overflowWarning: PageWarning | undefined;
     let warningSourceLocations: ReadonlyMap<string, BuiltWarningSourceLocation> = new Map();
     try {
-      const paginate = (generatedValues: ReadonlyMap<string, string>) => {
+      const composeScheduler = createComposeScheduler(settings.compose);
+      const paginate = async (generatedValues: ReadonlyMap<string, string>, passNumber: number) => {
         probe.replaceChildren();
         const passSource = sourceFlow.cloneNode(true) as HTMLElement;
         preparePublishingPass(
@@ -2565,6 +2614,13 @@ export async function buildGeneration(
           settings.limits,
         );
         probe.append(passSource);
+        await settlePaginationAssets(
+          frameDocument,
+          Object.freeze({
+            images: Object.freeze([...passSource.querySelectorAll<HTMLImageElement>("img")]),
+          }),
+          signal,
+        );
         const passPages: PageParts[] = [];
         const passFragmentationWarnings: PageWarning[] = [];
         const passTableSplits: TableSplitRecord[] = [];
@@ -2577,13 +2633,21 @@ export async function buildGeneration(
             location: UNLOCATED_PAGE_WARNING_LOCATION,
           });
         };
-        const checkPagination = () => {
+        const checkPagination: PaginationCheckpoint = () => {
           throwIfAborted(signal);
           if (performance.now() > deadlineAt) {
             throw new ImposiaError("RESOURCE_TIMEOUT", "Page generation timed out.");
           }
+          const scheduled = composeScheduler.checkpoint(signal);
+          if (scheduled === undefined) return undefined;
+          return scheduled.then(() => {
+            throwIfAborted(signal);
+            if (performance.now() > deadlineAt) {
+              throw new ImposiaError("RESOURCE_TIMEOUT", "Page generation timed out.");
+            }
+          });
         };
-        const breakConstraints = captureBreakConstraints(passSource, checkPagination);
+        const breakConstraints = await captureBreakConstraints(passSource, checkPagination);
         const allocatePage = (name: string | undefined): PageParts => {
           throwIfAborted(signal);
           if (passPages.length >= settings.limits.maxPages) {
@@ -2592,6 +2656,14 @@ export async function buildGeneration(
           const created = createPage(frameDocument, pageMedia, passPages.length + 1, name);
           passPages.push(created);
           probe.append(created.page);
+          settings.onProgress?.(
+            Object.freeze({
+              completedPages: passPages.length,
+              pass: passNumber,
+              provisional: true,
+            }),
+          );
+          throwIfAborted(signal);
           return created;
         };
         const nextContentPage = (name: string | undefined): PageParts => {
@@ -2599,6 +2671,7 @@ export async function buildGeneration(
         };
         const fragmenter = new RecursiveFragmenter({
           constraints: breakConstraints,
+          checkpoint: checkPagination,
           signal,
           deadlineAt,
           limits: settings.limits,
@@ -2608,6 +2681,7 @@ export async function buildGeneration(
           warnings: passFragmentationWarnings,
           tableSplits: passTableSplits,
         });
+        await fragmenter.prepare();
         const initialPage = allocatePage(undefined);
         let currentCursor: FragmentCursor = { page: initialPage, container: initialPage.flow };
         const continueRoot: ContinueFragment = (name) => {
@@ -2616,6 +2690,10 @@ export async function buildGeneration(
         };
         let pendingBreakAfter: PageBreak = "auto";
         for (const node of [...passSource.childNodes]) {
+          const scheduled = checkPagination();
+          if (scheduled !== undefined) {
+            await scheduled;
+          }
           fragmenter.check();
           const contributesToFlow = nodeContributesToFlow(node, breakConstraints);
           const constraint = breakConstraintFor(node, breakConstraints);
@@ -2638,7 +2716,7 @@ export async function buildGeneration(
               requestedName,
             );
           }
-          currentCursor = fragmenter.placeNode(node, currentCursor, continueRoot);
+          currentCursor = await fragmenter.placeNode(node, currentCursor, continueRoot);
           if (contributesToFlow) pendingBreakAfter = constraint.after;
         }
         const finalized = finalizePublishingPass(passPages, publishing, settings.experimental);
@@ -2654,10 +2732,10 @@ export async function buildGeneration(
       let generatedValues: ReadonlyMap<string, string> = new Map();
       let previousSignature: string | undefined;
       const signatures = new Set<string>();
-      let accepted: ReturnType<typeof paginate> | undefined;
+      let accepted: Awaited<ReturnType<typeof paginate>> | undefined;
       const passLimit = publishing.requiresConvergence ? settings.limits.maxLayoutPasses : 1;
       for (let pass = 0; pass < passLimit; pass += 1) {
-        const result = paginate(generatedValues);
+        const result = await paginate(generatedValues, pass + 1);
         if (!publishing.requiresConvergence || result.publishing.signature === previousSignature) {
           accepted = result;
           break;
