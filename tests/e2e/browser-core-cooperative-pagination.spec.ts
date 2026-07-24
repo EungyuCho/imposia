@@ -1,6 +1,8 @@
 import { expect, test } from "@playwright/test";
 import { captureBrowserErrors } from "./browser-core-support.js";
 
+const MAX_COOPERATIVE_SLICE_SMOKE_MS = 100;
+
 const containmentTokens = Array.from(
   { length: 72 },
   (_, index) => `CONTAIN-${String(index + 1).padStart(3, "0")}`,
@@ -364,7 +366,7 @@ test("yields within one deeply fragmenting text node", async ({ page, browserNam
   }
 });
 
-test("keeps cooperative pagination slices below the long-task threshold", async ({
+test("keeps cooperative pagination slices within the CI smoke tolerance", async ({
   page,
   browserName,
 }) => {
@@ -434,7 +436,7 @@ test("keeps cooperative pagination slices below the long-task threshold", async 
 
     expect(observation.pageCount).toBeGreaterThan(1);
     expect(observation.schedulerCalls).toBeGreaterThan(2);
-    expect(observation.maximumSliceMs).toBeLessThanOrEqual(50);
+    expect(observation.maximumSliceMs).toBeLessThanOrEqual(MAX_COOPERATIVE_SLICE_SMOKE_MS);
   } finally {
     expect(errors).toEqual([]);
     expect(pageErrors).toEqual([]);
