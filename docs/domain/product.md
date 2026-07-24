@@ -145,7 +145,8 @@ furniture, generated page counters, Blob URLs, and page-only experimental conten
 are intentionally omitted.
 
 Printing remains native browser printing: Core, the React handle, and the page
-Viewer call the canonical iframe's `Window.print()`. The browser may provide
-Save as PDF, but Imposia does not expose PDF bytes and does not claim fixed-layout
-EPUB output or complete CSS parity. The authoritative support matrix is
+Viewer clone the accepted canonical pages into a transient isolated top-document
+print host before calling the top window's `Window.print()`. The browser may
+provide Save as PDF, but Imposia does not expose PDF bytes and does not claim
+fixed-layout EPUB output or complete CSS parity. The authoritative support matrix is
 [`docs/compatibility.md`](../compatibility.md).

@@ -349,8 +349,13 @@ test("spread survives generation refresh and restores all presentation state on 
       const frameWindow = frame.contentWindow;
       if (frameWindow === null) throw new Error("Missing canonical frame window.");
       let framePrints = 0;
+      let parentPrints = 0;
       frameWindow.print = () => {
         framePrints += 1;
+      };
+      window.print = () => {
+        parentPrints += 1;
+        window.dispatchEvent(new Event("afterprint"));
       };
       viewer.goToPage(3);
       const nextDocument = await controller.update(source);
@@ -394,7 +399,7 @@ test("spread survives generation refresh and restores all presentation state on 
         ),
       };
       await controller.destroy();
-      return { refreshed, framePrints, restored };
+      return { refreshed, framePrints, parentPrints, restored };
     }, PAGED_SOURCE);
 
     expect(observation.refreshed).toMatchObject({
@@ -411,7 +416,8 @@ test("spread survives generation refresh and restores all presentation state on 
         observation.refreshed.pair[1]?.left ?? -Infinity,
       );
     }
-    expect(observation.framePrints).toBe(1);
+    expect(observation.framePrints).toBe(0);
+    expect(observation.parentPrints).toBe(1);
     expect(observation.restored).toEqual({
       frameFirst: true,
       frameClass: null,

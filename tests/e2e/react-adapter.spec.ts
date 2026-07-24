@@ -728,6 +728,7 @@ test("React imperative handle exposes the current document, print, and EPUB expo
         writable: true,
         value: () => {
           printObservation.parent += 1;
+          window.dispatchEvent(new Event("afterprint"));
         },
       });
       (globalThis as { initialReactFrame?: HTMLIFrameElement }).initialReactFrame = current.iframe;
@@ -893,8 +894,8 @@ test("React imperative handle exposes the current document, print, and EPUB expo
     expect(initial.pageCount).toBeGreaterThan(0);
     expect(initial.text).toContain("Initial page");
     expect(initial.printIsPromise).toBe(true);
-    expect(initial.framePrints).toBe(1);
-    expect(initial.parentPrints).toBe(0);
+    expect(initial.framePrints).toBe(0);
+    expect(initial.parentPrints).toBe(1);
     expect(exported.isBlob).toBe(true);
     expect(exported.type).toBe("application/epub+zip");
     expect(exported.size).toBeGreaterThan(100);
@@ -902,8 +903,8 @@ test("React imperative handle exposes the current document, print, and EPUB expo
     expect(updated.generation).toBe(2);
     expect(updated.text).toContain("Second generation");
     expect(updated.sameFrame).toBe(true);
-    expect(updated.framePrints).toBe(2);
-    expect(updated.parentPrints).toBe(0);
+    expect(updated.framePrints).toBe(0);
+    expect(updated.parentPrints).toBe(2);
     expect(disposed).toEqual({
       currentUndefined: true,
       printRejected: true,

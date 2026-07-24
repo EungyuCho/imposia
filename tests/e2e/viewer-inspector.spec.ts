@@ -663,17 +663,10 @@ test("adds no Viewer inspector surface unless explicitly enabled", async ({
         viewer.goToPage(2);
         viewer.setZoom(1.2);
       }
-      const printCalls = [0, 0];
-      const omittedWindow = omittedDocument.iframe.contentWindow;
-      const falseWindow = falseDocument.iframe.contentWindow;
-      if (omittedWindow === null || falseWindow === null) {
-        throw new Error("Disabled parity frame window is unavailable.");
-      }
-      omittedWindow.print = () => {
-        printCalls[0] += 1;
-      };
-      falseWindow.print = () => {
-        printCalls[1] += 1;
+      let printCalls = 0;
+      window.print = () => {
+        printCalls += 1;
+        window.dispatchEvent(new Event("afterprint"));
       };
       await Promise.all([omittedViewer.print(), falseViewer.print()]);
       const metadata = {
@@ -737,7 +730,7 @@ test("adds no Viewer inspector surface unless explicitly enabled", async ({
       canonicalIdentity: true,
       state: { page: 2, pageCount: 2, zoom: 1.2, mode: "single", effectiveMode: "single" },
     });
-    expect(observation.printCalls).toEqual([1, 1]);
+    expect(observation.printCalls).toBe(2);
     expect(observation.sameEpub).toBe(true);
     expect(observation.epubHasInspector).toBe(false);
   } finally {

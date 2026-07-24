@@ -252,7 +252,9 @@ failure, and destroy. Input, resolver output, and extension output remain subjec
 to sanitization, limits, abort, rollback, warnings, and cleanup.
 
 Ordered extensions can transform sanitized copied string input, filter resolver requests,
-and add page decorations without receiving DOM or network access. This example
+and add page decorations without receiving DOM or network access. A synchronous
+`finalizePage` hook is the narrow exception: it receives the live measurable page
+and split-table provenance after Core decoration and before commit. This example
 adds furniture from immutable page metadata:
 
 ```ts
@@ -269,9 +271,11 @@ const lastPageFooter: PageExtension = {
 const controller = mountPageDocument(host, source, { extensions: [lastPageFooter] });
 ```
 
-Extension order is fixed for the controller lifetime. Extensions cannot replace
-the resolver, access the canonical DOM, weaken limits/CSP, or change lifecycle
-atomicity.
+Extension order is fixed for the controller lifetime. Later `finalizePage` hooks
+observe earlier mutations. Extensions cannot replace the resolver, access the
+canonical iframe, weaken limits/CSP, or change lifecycle atomicity. Use the
+opt-in `createTableColgroupExtension()` when continued tables without a complete
+authored colgroup need measured pixel column widths frozen across fragments.
 
 A Publication uses `transformEntry` so Core can preserve its private composition
 markers. The callback receives sanitized copied input plus frozen publication and
@@ -375,15 +379,17 @@ succeeds, then one atomic commit replaces them and removes the staging iframe.
 This provides double-buffered updates without introducing a second presentation
 or print authority.
 
-Printing remains native browser printing:
+Printing remains native browser printing. Core clones the accepted page sections
+and generation styles into a transient top-document shadow root, then invokes
+the top window so Chromium does not snapshot the sandboxed iframe as a blank
+sheet:
 
 ```ts
-await controller.print(); // invokes the current canonical iframe's Window.print()
+await controller.print(); // invokes the top Window.print() on the committed page snapshot
 ```
 
-The canonical iframe sandbox permits modals only so this native print dialog can
-open; authored scripts remain disabled by the sandbox and CSP. The browser can
-offer Save as PDF from the print dialog; Core does not return PDF bytes. Call
-`controller.destroy()` when the host is no longer needed.
+The canonical iframe remains script-disabled by the sandbox and CSP. The browser
+can offer Save as PDF from the top-window print dialog; Core does not return PDF
+bytes. Call `controller.destroy()` when the host is no longer needed.
 
 See `LICENSE` and `THIRD_PARTY_NOTICES.md` in this package for distribution terms.

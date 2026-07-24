@@ -6,6 +6,7 @@ import type {
   PageExtensionContext,
   PageExtensionDecoration,
   PageExtensionEntryTransformInput,
+  PageExtensionFinalizePageInput,
   PageExtensionPage,
   PageExtensionTransformInput,
   PageExtensionTransformOutput,
@@ -22,6 +23,7 @@ type ExtensionSnapshot = Readonly<{
   transformEntry: unknown;
   allowAsset: unknown;
   decoratePage: unknown;
+  finalizePage: unknown;
 }>;
 
 export type PageExtensionSnapshots = readonly ExtensionSnapshot[];
@@ -33,6 +35,7 @@ export type ValidatedPageExtension = Readonly<{
   transformEntry?: PublicationExtension["transformEntry"];
   allowAsset?: PageExtension["allowAsset"];
   decoratePage?: PageExtension["decoratePage"];
+  finalizePage?: PageExtension["finalizePage"];
 }>;
 
 type ExtensionWarningEntry = Readonly<{
@@ -91,6 +94,7 @@ export function snapshotExtensions(value: unknown): PageExtensionSnapshots {
         transformEntry: undefined,
         allowAsset: undefined,
         decoratePage: undefined,
+        finalizePage: undefined,
       }),
     ]);
   }
@@ -104,6 +108,7 @@ export function snapshotExtensions(value: unknown): PageExtensionSnapshots {
         transformEntry: record?.transformEntry,
         allowAsset: record?.allowAsset,
         decoratePage: record?.decoratePage,
+        finalizePage: record?.finalizePage,
       });
     }),
   );
@@ -133,6 +138,9 @@ export function validateExtensions(
     if (snapshot.decoratePage !== undefined && typeof snapshot.decoratePage !== "function") {
       throw invalidExtension(`decoratePage for "${snapshot.name}" must be a function.`);
     }
+    if (snapshot.finalizePage !== undefined && typeof snapshot.finalizePage !== "function") {
+      throw invalidExtension(`finalizePage for "${snapshot.name}" must be a function.`);
+    }
     names.add(snapshot.name);
     extensions.push(
       Object.freeze({
@@ -152,6 +160,9 @@ export function validateExtensions(
         ...(snapshot.decoratePage === undefined
           ? {}
           : { decoratePage: snapshot.decoratePage as PageExtension["decoratePage"] }),
+        ...(snapshot.finalizePage === undefined
+          ? {}
+          : { finalizePage: snapshot.finalizePage as PageExtension["finalizePage"] }),
       }),
     );
   }
@@ -477,4 +488,25 @@ export function decorateExtensionPage(
     decorations.push(output);
   }
   return Object.freeze(decorations);
+}
+
+export function finalizeExtensionPages(
+  extensions: readonly ValidatedPageExtension[],
+  pages: readonly PageExtensionFinalizePageInput[],
+  signal: AbortSignal,
+  warnings: ExtensionWarningCollector,
+): void {
+  for (const page of pages) {
+    for (const extension of extensions) {
+      if (extension.finalizePage === undefined) continue;
+      throwIfAborted(signal);
+      const output = callExtensionSync(() =>
+        extension.finalizePage?.(page, warnings.context(extension, { page: page.number })),
+      );
+      throwIfAborted(signal);
+      if (output !== undefined) {
+        throw invalidExtension(`finalizePage for "${extension.name}" must not return a value.`);
+      }
+    }
+  }
 }

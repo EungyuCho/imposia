@@ -78,6 +78,21 @@ export interface PageExtensionDecoration {
   readonly footerHtml?: string;
 }
 
+export interface PageExtensionTableFragment {
+  readonly origin: Element;
+  readonly fragment: Element;
+  readonly index: number;
+}
+
+export interface PageExtensionFinalizePageInput {
+  readonly number: number;
+  readonly totalPages: number;
+  readonly side: "left" | "right";
+  readonly blank: boolean;
+  readonly element: HTMLElement;
+  readonly tableFragments: readonly PageExtensionTableFragment[];
+}
+
 export interface PageExtensionContext {
   readonly signal: AbortSignal;
   warn(warning: PageExtensionWarning): void;
@@ -95,6 +110,7 @@ export interface PageExtension {
     page: PageExtensionPage,
     context: PageExtensionContext,
   ): PageExtensionDecoration | undefined;
+  finalizePage?(page: PageExtensionFinalizePageInput, context: PageExtensionContext): void;
 }
 
 export interface PublicationExtension {
@@ -108,6 +124,7 @@ export interface PublicationExtension {
     page: PageExtensionPage,
     context: PageExtensionContext,
   ): PageExtensionDecoration | undefined;
+  finalizePage?(page: PageExtensionFinalizePageInput, context: PageExtensionContext): void;
 }
 
 export type PageSize = "A4" | "Letter" | { readonly width: string; readonly height: string };

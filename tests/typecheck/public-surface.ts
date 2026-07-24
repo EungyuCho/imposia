@@ -5,7 +5,9 @@ import type {
   PageDocument,
   PageExtension,
   PageExtensionContext,
+  PageExtensionFinalizePageInput,
   PageExtensionPage,
+  PageExtensionTableFragment,
   PageViewerController,
   PageViewerMode,
   PageViewerOptions,
@@ -21,11 +23,13 @@ import type {
   PublicationSearchResult,
   PublicationSnapshot,
   PublicationThumbnail,
+  TableColgroupExtensionOptions,
   ViewerInspectorController,
   ViewerInspectorState,
   ViewerTheme,
 } from "../../packages/client/src/index.js";
 import {
+  createTableColgroupExtension,
   mountPublication,
   pageWarningTargetBounds,
   restorePublicationDeepLink,
@@ -38,6 +42,7 @@ import {
   ImposiaPublicationViewer,
   type ImposiaPublicationViewerHandle,
   type PageExtension as ReactPageExtension,
+  type PageExtensionFinalizePageInput as ReactPageExtensionFinalizePageInput,
   useImposiaPublication,
 } from "../../packages/react/src/index.js";
 
@@ -55,6 +60,15 @@ const extension = {
 } satisfies PageExtension;
 
 const reactExtension: ReactPageExtension = extension;
+const tableColgroupOptions: TableColgroupExtensionOptions = {};
+const tableColgroupExtension = createTableColgroupExtension(tableColgroupOptions);
+declare const finalizeInput: PageExtensionFinalizePageInput;
+declare const reactFinalizeInput: ReactPageExtensionFinalizePageInput;
+declare const tableFragment: PageExtensionTableFragment;
+void tableColgroupExtension;
+void finalizeInput;
+void reactFinalizeInput;
+void tableFragment;
 const warningLocation: PageWarningLocation = {
   generation: 1,
   entryId: undefined,

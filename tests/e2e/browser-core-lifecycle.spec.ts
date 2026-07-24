@@ -305,6 +305,7 @@ test("prints the newest canonical iframe and preserves current after a failed up
           writable: true,
           value: () => {
             parentPrintCalls += 1;
+            window.dispatchEvent(new Event("afterprint"));
           },
         });
         const stalePromise = controller.update({ html: "<p>stale</p>" });
@@ -362,8 +363,8 @@ test("prints the newest canonical iframe and preserves current after a failed up
     expect(observation.winningText).toContain("winner");
     expect(observation.failed).toEqual({ status: "rejected", name: "TypeError" });
     expect(observation.preserved).toBe(true);
-    expect(observation.canonicalPrintCalls).toBe(2);
-    expect(observation.parentPrintCalls).toBe(0);
+    expect(observation.canonicalPrintCalls).toBe(0);
+    expect(observation.parentPrintCalls).toBe(2);
     expect(observation.frameCount).toBe(1);
   } finally {
     expect(errors).toEqual([]);
@@ -442,14 +443,16 @@ test("waits for one winning update before native print and semantic EPUB export"
           },
         );
         const oldDocument = await controller.ready;
-        const frameWindow = oldDocument.iframe.contentWindow;
-        if (frameWindow === null) throw new Error("Missing canonical iframe window.");
-        const originalPrint = frameWindow.print;
+        const originalPrint = window.print;
         const printedTexts: string[] = [];
-        Object.defineProperty(frameWindow, "print", {
+        Object.defineProperty(window, "print", {
           configurable: true,
           writable: true,
-          value: () => printedTexts.push(frameWindow.document.body.textContent ?? ""),
+          value: () => {
+            const root = document.querySelector<HTMLElement>("[data-imposia-print-root]");
+            printedTexts.push(root?.shadowRoot?.textContent ?? "");
+            window.dispatchEvent(new Event("afterprint"));
+          },
         });
         try {
           const update = controller.update({
@@ -487,7 +490,7 @@ test("waits for one winning update before native print and semantic EPUB export"
             epubText,
           };
         } finally {
-          Object.defineProperty(frameWindow, "print", {
+          Object.defineProperty(window, "print", {
             configurable: true,
             writable: true,
             value: originalPrint,

@@ -7,6 +7,11 @@ export {
   pageWarningTargetBounds,
 } from "./page-document.js";
 export { hasPageDocumentFrameSandbox, PAGE_DOCUMENT_FRAME_SANDBOX } from "./page-document-frame.js";
+export {
+  PRINT_ROOT_ATTRIBUTE,
+  PRINT_STYLE_ATTRIBUTE,
+  printComposedPageDocument,
+} from "./page-document-print.js";
 export type {
   AssetResolution,
   AssetResolver,
@@ -27,8 +32,10 @@ export type {
   PageExtensionDecoration,
   PageExtensionEntryMetadata,
   PageExtensionEntryTransformInput,
+  PageExtensionFinalizePageInput,
   PageExtensionPage,
   PageExtensionPublicationMetadata,
+  PageExtensionTableFragment,
   PageExtensionTransformInput,
   PageExtensionTransformOutput,
   PageExtensionWarning,
@@ -51,6 +58,8 @@ export type {
 } from "./page-document-types.js";
 export type { PageSideConstraint } from "./page-side-parity.js";
 export { selectBlankMarkers } from "./page-side-parity.js";
+export type { TableColgroupExtensionOptions } from "./presets/table-colgroup.js";
+export { createTableColgroupExtension } from "./presets/table-colgroup.js";
 export { mountPublication } from "./publication.js";
 export type {
   CommittedPublicationEntry,
