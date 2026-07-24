@@ -153,8 +153,13 @@ const pageDocument = await controller.ready;
 | `decorateBlankPages` | Whether blank pages receive decorations. |
 | `experimental` | `{ footnotes?: boolean; pageFloats?: boolean }`. |
 | `extensions` | Ordered `PageExtension` or `PublicationExtension` values. |
+| `compose` | `{ yieldBudgetMs?: number; scheduler?: () => Promise<void> }`; cooperative main-thread pagination with an 8 ms default budget. Use `Infinity` to disable scheduler handoffs. |
 | `signal` | Cancels the initial generation. |
-| `onProgress` | Receives `{ completedPages }` during commit. |
+| `onProgress` | Receives pass-local `{ completedPages, pass, provisional: true }` whenever staging allocates a page. A later convergence pass resets the count. |
+
+Scheduler, font, and image waits count toward the wall-clock
+`limits.resourceDeadlineMs`. Progress describes provisional staging work; read
+`controller.current` only for the latest committed generation.
 
 An `AssetResolver` receives `{ url, kind, baseUrl, signal }` and resolves to `{ status: "resolved", bytes, mimeType, resolvedUrl? }` or `{ status: "blocked", reason? }`.
 

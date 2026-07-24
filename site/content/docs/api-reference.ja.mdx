@@ -212,8 +212,13 @@ console.log(document.pageCount);
 | `decorateBlankPages` | `boolean` | `true`。空白ページにも装飾を出すか指定します。 |
 | `experimental` | `{ footnotes?: boolean; pageFloats?: boolean }` | `{}`。実験機能を個別に有効化します。 |
 | `extensions` | `readonly (PageExtension \| PublicationExtension)[]` | `[]`。変換、アセット許可、ページ装飾のフックです。 |
+| `compose` | `{ yieldBudgetMs?: number; scheduler?: () => Promise<void> }` | 8 ms budget。メインスレッドのページネーションを協調的に分割します。`Infinity` は scheduler handoff を無効にします。 |
 | `signal` | `AbortSignal` | なし。初回処理を中止します。 |
-| `onProgress` | `(progress: { completedPages: number }) => void` | なし。コミット前に完成ページ数を通知します。 |
+| `onProgress` | `(progress: { completedPages: number; pass: number; provisional: true }) => void` | なし。staging でページを割り当てるたびに pass-local な暫定進捗を通知します。次の収束 pass では 1 から再開できます。 |
+
+scheduler、font、image の待機時間も wall-clock
+`limits.resourceDeadlineMs` に含まれます。進捗は暫定 staging 作業のみを
+表し、確定済みの結果は `controller.current` から読み取ります。
 
 `PageOptions.size` は `"A4"`、`"Letter"`、または `{ width, height }` です。寸法と余白には `px`、`mm`、`cm`、`in`、`pt`、`pc` の正の絶対長を使います。`margin` は単一文字列、または `{ top, right, bottom, left }` です。余白を引いた内容領域が正でなければ `ImposiaError` を throw します。
 

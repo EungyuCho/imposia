@@ -28,7 +28,10 @@ const host = document.querySelector<HTMLElement>("#preview")!;
 const controller = mountPageDocument(
   host,
   { html: "<article><h1>Hello</h1></article>" },
-  { page: { size: "A4", margin: "18mm" } },
+  {
+    page: { size: "A4", margin: "18mm" },
+    compose: { yieldBudgetMs: 8 },
+  },
 );
 const pageDocument = await controller.ready;
 const viewer = mountPageViewer(host, pageDocument, {
@@ -62,6 +65,11 @@ iframe; it does not clone pages or run a second layout pass. `print()` uses a
 transient isolated top-document snapshot of the committed pages before invoking
 the native `Window.print()`; Save as PDF is supplied by the browser, not by a
 PDF-byte export API.
+
+The entrypoint also re-exports `PageComposeOptions` and
+`PageComposeProgress`. Cooperative pagination defaults to an 8 ms main-thread
+budget; progress is pass-local staging information and does not replace the
+atomic committed-document contract.
 
 `PageViewerMode` adds `spread` to the page-document Viewer's existing
 `continuous` and `single` choices without changing the PDF Viewer's

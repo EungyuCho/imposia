@@ -24,6 +24,7 @@ const controller = mountPageDocument(
   { html: "<article><h1>Hello</h1><p>Browser page DOM</p></article>" },
   {
     page: { size: "A4", orientation: "portrait", margin: "18mm" },
+    compose: { yieldBudgetMs: 8 },
   },
 );
 const pageDocument = await controller.ready;
@@ -37,6 +38,13 @@ and six margin boxes, breaks, constrained tables/flex/grid/multi-column layout,
 local references, and named strings are described in the [compatibility matrix](../../docs/compatibility.md).
 Structural pagination is a Chromium-reference behavior; this package does not
 claim complete CSS parity across engines.
+
+Core time-slices input-sized fragmentation work on the browser main thread.
+`compose.yieldBudgetMs` defaults to 8 ms, `Infinity` disables scheduler
+handoffs, and `compose.scheduler` can supply a host scheduler. `onProgress`
+receives pass-local `{ completedPages, pass, provisional: true }` values as
+staging pages are allocated. Scheduler, font, and image waits count toward the
+wall-clock resource deadline; only `controller.current` is committed.
 
 ## Locate committed warnings
 

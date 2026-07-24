@@ -166,8 +166,13 @@ canonical iframe을 붙이고 컨트롤러를 즉시 반환합니다. 첫 결과
 | `decorateBlankPages?: boolean` | `true` | 의도적으로 삽입한 빈 페이지에 장식을 적용합니다. |
 | `experimental?: { footnotes?: boolean; pageFloats?: boolean }` | 꺼짐 | 실험 기능을 명시적으로 켭니다. |
 | `extensions?: readonly (PageExtension \| PublicationExtension)[]` | `[]` | 선언 순서대로 transform, asset 정책, 장식, `finalizePage`를 적용합니다. |
+| `compose?: { yieldBudgetMs?: number; scheduler?: () => Promise<void> }` | 8 ms budget | 메인 스레드 페이지네이션을 협력적으로 나눕니다. `Infinity`는 scheduler handoff를 끕니다. |
 | `signal?: AbortSignal` | 없음 | 최초 작업을 취소합니다. |
-| `onProgress?: ({ completedPages }) => void` | 없음 | commit 직전에 완료 페이지 수를 전달합니다. |
+| `onProgress?: ({ completedPages, pass, provisional }) => void` | 없음 | staging에서 페이지를 할당할 때 pass-local 진행률을 전달합니다. 다음 수렴 pass에서는 수가 1부터 다시 시작할 수 있습니다. |
+
+scheduler, font, image 대기 시간도 wall-clock
+`limits.resourceDeadlineMs`에 포함됩니다. 진행률은 항상 provisional staging
+작업이며, 확정된 결과는 `controller.current`에서만 읽습니다.
 
 ```ts
 type AssetResolver = (request: {
