@@ -1,0 +1,82 @@
+---
+title: 変更履歴
+description: npm で公開された Imposia パッケージのバージョンごとの変更点を確認できます。
+---
+
+このページには npm で公開されたバージョンのみを掲載しています。`@imposia/core`、`@imposia/viewer`、`@imposia/client`、`@imposia/react` は同じバージョン番号を使用します。
+
+## 0.4.0 — 2026年7月24日
+
+確定するページ構造を変えずに、長い HTML・CSR 更新中もメインスレッドへ協調的に実行時間を返します。
+
+- `PageDocumentOptions.compose` に既定の 8ms 実行予算、注入可能なスケジューラー、`Infinity` による無効化を追加しました。
+- 完了ページ数と収束パスを含む暫定進捗を追加しました。
+- ステージング内容とスタイルのマウント後にフォントと画像の準備を待機します。
+- スケジューラー待機を中断可能にし、先行世代の後始末後に後続世代を開始します。
+- ネイティブ印刷スナップショットで元の `html`・`body` コンテキスト、body スコープのセレクター、計算済みカスタムプロパティを保持します。
+- ページをまたぐカウンターを保つため style containment を使わず、確定ページルートに layout containment を適用しました。
+
+[0.4.0 のリリースノート](https://github.com/EungyuCho/imposia/releases/tag/v0.4.0)
+
+## 0.3.0 — 2026年7月24日
+
+印刷を iframe のサイズから分離し、制約付きテーブル構成に明示的な拡張ポイントを追加しました。
+
+- Chromium の白紙印刷を避けるため、ネイティブ印刷をトップ文書の一時的で隔離されたスナップショットへ移しました。
+- Core と Publication 拡張向けの同期 `finalizePage` フックを追加しました。
+- 分割テーブルの列幅を固定する任意の `createTableColgroupExtension()` プリセットを追加しました。
+- 分割テーブル、安全な Grid、高すぎる通常ブロックが現在ページの残り領域から使用するようにしました。
+
+[0.3.0 のリリースノート](https://github.com/EungyuCho/imposia/releases/tag/v0.3.0)
+
+## 0.2.0 — 2026年7月24日
+
+ホストアプリケーションが Viewer の操作 UI を完全に構成できるようになりました。
+
+- ホスト独自のナビゲーション、表示モード、ズーム UI のために <code className="whitespace-nowrap">controls: false</code> を追加しました。
+- 即時 Viewer 状態購読、React 状態コールバック、命令的な移動・ズーム操作を追加しました。
+- Viewer のトークンと表示スタイルを各 Viewer ルートに限定し、スタイルシートがホストページを変更しないようにしました。
+
+[0.2.0 のリリースノート](https://github.com/EungyuCho/imposia/releases/tag/v0.2.0)
+
+## 0.1.3 — 2026年7月23日
+
+HTML・CSR ページネーションの整合性を主要な製品契約にしました。
+
+- 元のトークンが確定ページ全体に一度ずつ順番どおり現れることをブラウザー横断で検証します。
+- canonical iframe を保持したまま高速なソース更新を行う公開 CSR 整合性サンプルを追加しました。
+- reflowable EPUB を主要レンダリング経路ではなく、対応するセマンティック投影として明確にしました。
+
+[0.1.3 のリリースノート](https://github.com/EungyuCho/imposia/releases/tag/v0.1.3)
+
+## 0.1.2 — 2026年7月23日
+
+リリース検査とデモサーバーのセキュリティを強化しました。
+
+- 検証とコードスキャンに CodeRabbit の自動レビューを追加しました。
+- 未使用のデモサーバー要求遅延機能と関連する CodeQL 警告を削除しました。
+- 構造セレクターが保守的なフォールバックを持つ `Element.matches()` のみに渡ることを確認しました。
+
+[0.1.2 のリリースノート](https://github.com/EungyuCho/imposia/releases/tag/v0.1.2)
+
+## 0.1.1 — 2026年7月23日
+
+デモ、ドキュメント、リリース経路を公開パッケージ更新向けに整備しました。
+
+- 縦向き A4 の既定値、向き切り替え、A3・A4・B1 用紙プリセットを追加しました。
+- 多言語 API とパブリッシング文書を拡充しました。
+- npm trusted publishing、タグ、GitHub Release、tarball、チェックサムを検証する保護されたリリース経路を追加しました。
+
+[0.1.1 のリリースノート](https://github.com/EungyuCho/imposia/releases/tag/v0.1.1)
+
+## 0.1.0 — 2026年7月19日
+
+最初のブラウザー専用リリースで公開パッケージ群を確立しました。
+
+- 1つの永続的な canonical iframe で決定的なブラウザーページネーションを提供します。
+- Viewer 表示層、ブラウザー Client エントリーポイント、主要 React アダプターを追加しました。
+- Publication 構成、Reader の移動・検索・サムネイルと複数の表示モードを追加しました。
+- 確定ソースからのネイティブ印刷と reflowable EPUB 3.3 エクスポートを追加しました。
+- 型付き診断、制限付き拡張、アセット解決、テーブル・Flex・Grid・段組み・CJK 分割の対応境界を定めました。
+
+[npm で @imposia/core 0.1.0 を見る](https://www.npmjs.com/package/@imposia/core/v/0.1.0)

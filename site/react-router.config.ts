@@ -6,6 +6,7 @@ const DOC_PATHS = [
   "docs/getting-started",
   "docs/publishing-contract",
   "docs/api-reference",
+  "docs/changelog",
 ] as const;
 
 export default {

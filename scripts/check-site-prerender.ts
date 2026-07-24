@@ -9,6 +9,7 @@ const DOC_PATHS = [
   "docs/getting-started",
   "docs/publishing-contract",
   "docs/api-reference",
+  "docs/changelog",
 ] as const;
 
 const prerenderPaths = LOCALES.flatMap((locale) => [

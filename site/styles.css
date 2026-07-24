@@ -423,7 +423,7 @@ body.imposia-root {
   outline-offset: 3px;
 }
 
-[lang="ko"] :where(.landing-hero, .feature-section),
+[lang="ko"] body,
 [lang="zh-CN"] :where(.landing-hero, .feature-section),
 [lang="ja"] :where(.landing-hero, .feature-section) {
   word-break: keep-all;
@@ -432,6 +432,11 @@ body.imposia-root {
 [lang="zh-CN"] body,
 [lang="ja"] body {
   line-break: strict;
+}
+
+[lang="zh-CN"] article :where(p, li),
+[lang="ja"] article :where(p, li) {
+  text-wrap: balance;
 }
 
 @media (max-width: 900px) {
