@@ -127,6 +127,15 @@ successful candidate current. Failure, abort, or supersession leaves the previou
 commit untouched and removes the staging iframe. The staging frame is never a
 presentation or print authority.
 
+Pagination is cooperatively time-sliced on the browser main thread. The default
+8 ms budget yields through the best available task scheduler while retaining the
+same browser measurement algorithm. Superseding work first aborts and cleans its
+predecessor, so only one staging generation composes at a time. Fonts and images
+settle after the candidate source and styles are mounted and before measurement.
+Progress reports pass-local provisional page allocation; only the later atomic
+commit becomes observable through `controller.current`. The complete decision is
+[ADR 0012](../architecture/0012-cooperative-pagination.md).
+
 ## Assets and export
 
 The host `assetResolver` is the only admitted resource boundary. Core discovers

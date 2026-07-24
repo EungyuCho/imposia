@@ -2,6 +2,8 @@ import * as React from "react";
 import type {
   EpubExportOptions,
   ExtensionPageWarning,
+  PageComposeOptions,
+  PageComposeProgress,
   PageDocument,
   PageExtension,
   PageExtensionContext,
@@ -45,6 +47,18 @@ import {
   type PageExtensionFinalizePageInput as ReactPageExtensionFinalizePageInput,
   useImposiaPublication,
 } from "../../packages/react/src/index.js";
+
+const composeOptions: PageComposeOptions = {
+  yieldBudgetMs: 8,
+  scheduler: async () => undefined,
+};
+const progress: PageComposeProgress = {
+  completedPages: 1,
+  pass: 1,
+  provisional: true,
+};
+void composeOptions;
+void progress;
 
 const extension = {
   name: "example/running-head",

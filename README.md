@@ -163,6 +163,7 @@ const controller = mountPageDocument(
   },
   {
     page: { size: "A4", orientation: "portrait", margin: "18mm" },
+    compose: { yieldBudgetMs: 8 },
   },
 );
 
@@ -216,6 +217,10 @@ The previous committed generation stays visible in the canonical iframe while
 its replacement is prepared in a temporary, noncanonical staging iframe.
 Successful source revisions swap atomically and remove that staging frame;
 failed, aborted, or superseded revisions leave the prior commit untouched.
+Pagination yields cooperatively from input-sized fragmentation loops. The
+default budget is 8 ms; `compose.yieldBudgetMs: Infinity` disables scheduler
+handoffs for structural comparison. Fonts and images settle after staging is
+mounted, and pass-local `onProgress` events are provisional until atomic commit.
 
 ---
 

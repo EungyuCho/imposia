@@ -3,6 +3,30 @@
 All notable changes to Imposia are recorded here. The project follows semantic
 versioning for its published package interfaces.
 
+## 0.4.0 — 2026-07-24
+
+Minor release for cooperative main-thread pagination.
+
+### Added
+
+- Added `PageDocumentOptions.compose` with an 8 ms default yield budget,
+  injectable scheduler, and `Infinity` opt-out.
+- Added pass-local provisional page-allocation progress with one-based
+  convergence pass metadata.
+- Added deterministic font and image settlement after staging source and styles
+  are mounted.
+
+### Changed
+
+- Time-sliced constraint capture and recursive text, element, grid, line, and
+  table fragmentation without changing the accepted page structure.
+- Made scheduler waits abortable and serialized superseding generations so a
+  predecessor cleans up before the winning staging generation starts.
+- Added layout containment to committed page roots without enabling
+  counter-altering style containment.
+- Synchronized `@imposia/core`, `@imposia/viewer`, `@imposia/client`, and
+  `@imposia/react` at version `0.4.0`.
+
 ## 0.3.1 — 2026-07-24
 
 Patch release for the public `@imposia/*` package family.

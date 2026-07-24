@@ -228,6 +228,17 @@ export type EffectivePageLimits = Readonly<{
   [Key in keyof typeof DEFAULT_PAGE_LIMITS]: number;
 }>;
 
+export interface PageComposeOptions {
+  yieldBudgetMs?: number;
+  scheduler?: () => Promise<void>;
+}
+
+export interface PageComposeProgress {
+  readonly completedPages: number;
+  readonly pass: number;
+  readonly provisional: true;
+}
+
 export interface PageDocumentOptions {
   css?: readonly string[];
   assetResolver?: AssetResolver;
@@ -238,8 +249,9 @@ export interface PageDocumentOptions {
   decorateBlankPages?: boolean;
   experimental?: ExperimentalPageFeatures;
   extensions?: readonly (PageExtension | PublicationExtension)[];
+  compose?: PageComposeOptions;
   signal?: AbortSignal;
-  onProgress?: (progress: { completedPages: number }) => void;
+  onProgress?: (progress: PageComposeProgress) => void;
 }
 
 export type CorePageWarningCode =

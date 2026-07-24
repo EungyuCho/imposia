@@ -35,7 +35,7 @@ import type {
 interface ActiveOperation {
   id: number;
   controller: AbortController;
-  stagingIframe: HTMLIFrameElement;
+  stagingIframe?: HTMLIFrameElement;
 }
 
 const warningPublicationEntryIndexes = new WeakMap<PageDocument, ReadonlyMap<string, number>>();
@@ -313,19 +313,32 @@ function createPageDocumentController(
 
   const begin = (nextSource: PageSource, callerSignal: AbortSignal | undefined) => {
     if (destroyed) return Promise.reject(destroyedError());
+    const predecessor = active === undefined ? undefined : latestWork;
     active?.controller.abort();
-    active?.stagingIframe.remove();
     const id = operationId + 1;
     operationId = id;
     const controller = new AbortController();
-    const stagingIframe = createStagingIframe(container, iframe);
+    const activeOperation: ActiveOperation = { id, controller };
+    if (predecessor === undefined) {
+      activeOperation.stagingIframe = createStagingIframe(container, iframe);
+    }
     const unlink = linkSignal(callerSignal, controller);
     const startedAt = performance.now();
     const operation = Promise.resolve().then(async () => {
       let deadlineExceeded = false;
       let deadline: ReturnType<typeof setTimeout> | undefined;
       try {
+        if (predecessor !== undefined) {
+          try {
+            await predecessor;
+          } catch {
+            // A superseded generation is expected to reject before its successor starts.
+          }
+        }
         if (controller.signal.aborted) throw abortError();
+        const stagingIframe =
+          activeOperation.stagingIframe ?? createStagingIframe(container, iframe);
+        activeOperation.stagingIframe = stagingIframe;
         const [frameDocument, stagingDocument] = await Promise.all([
           frameReady(iframe, controller.signal),
           frameReady(stagingIframe, controller.signal),
@@ -345,10 +358,6 @@ function createPageDocumentController(
         let committed = false;
         try {
           if (controller.signal.aborted || destroyed || id !== operationId) throw abortError();
-          for (let index = 0; index < generation.pages.length; index += 1) {
-            settings.onProgress?.({ completedPages: index + 1 });
-            if (controller.signal.aborted || destroyed || id !== operationId) throw abortError();
-          }
           const previousHead = [...frameDocument.head.childNodes];
           const previousBody = [...frameDocument.body.childNodes];
           const previousDocumentLanguage = frameDocument.documentElement.getAttribute("lang");
@@ -440,7 +449,7 @@ function createPageDocumentController(
         throw error;
       } finally {
         if (deadline !== undefined) clearTimeout(deadline);
-        stagingIframe.remove();
+        activeOperation.stagingIframe?.remove();
       }
     });
     let tracked: Promise<PageDocument>;
@@ -459,7 +468,7 @@ function createPageDocumentController(
       },
     );
     operations.add(tracked);
-    active = { id, controller, stagingIframe };
+    active = activeOperation;
     latestWork = tracked;
     return tracked;
   };
@@ -504,7 +513,7 @@ function createPageDocumentController(
       if (destroyPromise !== undefined) return destroyPromise;
       destroyed = true;
       active?.controller.abort();
-      active?.stagingIframe.remove();
+      active?.stagingIframe?.remove();
       for (const controller of exportControllers) controller.abort();
       for (const url of activeBlobUrls) URL.revokeObjectURL(url);
       activeBlobUrls = [];

@@ -1,7 +1,7 @@
 # Open-source readiness
 
 This list records the current launch boundary for Imposia. The browser library
-is ready for a maintainer-reviewed `0.3.1` release. Repository rules, the
+is ready for a maintainer-reviewed `0.4.0` release. Repository rules, the
 protected release environment, private vulnerability reporting, dependency
 alerts, code scanning, secret scanning, and automatic pull-request review are
 enabled. npm trusted publishing and the protected release workflow were proven
@@ -41,6 +41,9 @@ by the synchronized `0.1.1` package release.
   snapshot, avoiding Chromium's sandboxed-iframe blank-sheet failure.
 - Public browser conformance and performance fixtures, packed ESM/CommonJS/React
   consumers, and a Chromium/Firefox/WebKit release matrix.
+- Cooperative main-thread pagination with deterministic uninterrupted parity,
+  abortable scheduler handoffs, asset settlement, provisional progress, and a
+  browser slice-duration smoke check.
 - English, Korean, Japanese, and Simplified Chinese onboarding guides and
   homepage copy audited for the same public identifiers and lifecycle facts.
 - Reproducible minified and gzip reports for six consumer bundle routes, with
@@ -48,7 +51,7 @@ by the synchronized `0.1.1` package release.
 
 ## Post-release engineering follow-ups
 
-These refinements are useful, but they do not block the `0.3.1` release:
+These refinements are useful, but they do not block the `0.4.0` release:
 
 1. Isolate the latest-generation scheduler only when the extraction removes the
    current duplicated async bookkeeping; do not add a second rendering authority.
@@ -67,4 +70,4 @@ These refinements are useful, but they do not block the `0.3.1` release:
   after its verification job passes, and confirm npm provenance for all four
   packages.
 - Install the published tarballs in a clean consumer project and confirm the
-  `v0.3.1` GitHub Release contains matching package assets and checksums.
+  `v0.4.0` GitHub Release contains matching package assets and checksums.
