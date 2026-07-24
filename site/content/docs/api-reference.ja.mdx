@@ -359,7 +359,7 @@ const viewer = mountPageViewer(host, await documentController.ready, {
 | `setTheme(theme?)` | `void` | Viewer 用 CSS custom property を差し替え、未指定で元の値へ戻します。 |
 | `subscribe(listener)` | `() => void` | 現在の state を即時通知し、以後の表示変更も通知します。戻り値で購読解除します。 |
 | `refresh(pageDocument)` | `void` | 同じ正規 iframe の、より新しい generation を反映します。別 iframe、同世代、古い世代は throw します。 |
-| `print()` | `Promise<void>` | 現在の正規 iframe を印刷します。破棄後、または iframe の window がない場合は reject します。 |
+| `print()` | `Promise<void>` | 現在の正規ページの隔離された top document スナップショットを印刷します。破棄後は reject します。 |
 | `destroy()` | `void` | UI とイベントを外し、元の container/iframe 属性を復元します。複数回呼べます。 |
 | `state` | `PageViewerState` | page、pageCount、zoom、mode、effectiveMode、status、generation の snapshot です。 |
 | `reader` | `PublicationReaderController \| undefined` | `options.reader` を渡した場合だけ存在します。 |

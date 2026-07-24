@@ -3,6 +3,31 @@
 All notable changes to Imposia are recorded here. The project follows semantic
 versioning for its published package interfaces.
 
+## 0.3.0 — 2026-07-24
+
+Minor release for deterministic browser printing and constrained table extension
+composition.
+
+### Added
+
+- Added synchronous `finalizePage` hooks for Core and Publication extensions.
+  Hooks receive the measurable live page element and deterministic split-table
+  continuation provenance before commit.
+- Added `createTableColgroupExtension()` as an opt-in preset that freezes
+  measured column widths in split table continuations while Core continues to
+  carry authored `<colgroup>` structure by default.
+
+### Changed
+
+- Switched Core, Viewer, Client, and React native printing to a transient,
+  isolated top-document snapshot of accepted pages. This avoids Chromium's
+  sandboxed-iframe blank-sheet failure without rerunning pagination.
+- Split tables, safe grids, and over-tall normal blocks now fragment into the
+  current page's remaining space instead of unnecessarily relocating to a fresh
+  page.
+- Synchronized `@imposia/core`, `@imposia/viewer`, `@imposia/client`, and
+  `@imposia/react` at version `0.3.0`.
+
 ## 0.2.0 — 2026-07-24
 
 Minor release for the public `@imposia/*` package family.

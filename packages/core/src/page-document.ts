@@ -15,6 +15,7 @@ import {
   buildGeneration,
   snapshotSettings,
 } from "./page-document-generation.js";
+import { printComposedPageDocument } from "./page-document-print.js";
 import {
   pageSemanticSnapshot,
   releasePageSemanticSnapshot,
@@ -491,7 +492,11 @@ function createPageDocumentController(
         if (latestWork !== observedWork) continue;
         const printable = current;
         if (printable === undefined) throw new Error("Page document is not ready.");
-        printable.iframe.contentWindow?.print();
+        const frameDocument = printable.iframe.contentDocument;
+        if (frameDocument === null) {
+          throw new Error("The page document iframe has no content document.");
+        }
+        await printComposedPageDocument(frameDocument, settings.limits.resourceDeadlineMs);
         return;
       }
     },

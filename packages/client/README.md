@@ -58,9 +58,10 @@ console.log(epub.type); // application/epub+zip
 
 The entrypoint re-exports the Core page-document API and types together with the
 Viewer APIs and types. `mountPageViewer()` presents Core's existing canonical
-iframe; it does not clone pages or run a second layout pass. `print()` invokes
-that iframe's native `Window.print()`; Save as PDF is supplied by the browser,
-not by a PDF-byte export API.
+iframe; it does not clone pages or run a second layout pass. `print()` uses a
+transient isolated top-document snapshot of the committed pages before invoking
+the native `Window.print()`; Save as PDF is supplied by the browser, not by a
+PDF-byte export API.
 
 `PageViewerMode` adds `spread` to the page-document Viewer's existing
 `continuous` and `single` choices without changing the PDF Viewer's

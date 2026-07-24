@@ -66,9 +66,10 @@ The handle always delegates to the current Core generation. `current` becomes
 mounted page Viewer and retain its canonical iframe and Core generation.
 `ImposiaDocumentHandle` is the same public handle type when using
 `ImposiaDocument`.
-`print()` invokes the canonical iframe's native `Window.print()` so the browser
-can offer Save as PDF. `exportEpub()` returns a reflowable `application/epub+zip`
-Blob from semantic source, not a fixed-layout EPUB or PDF bytes.
+`print()` invokes the top window's native `Window.print()` on a transient,
+isolated snapshot of the committed canonical pages so the browser can offer Save
+as PDF without iframe blank-sheet failures. `exportEpub()` returns a reflowable
+`application/epub+zip` Blob from semantic source, not a fixed-layout EPUB or PDF bytes.
 
 For a host-designed header, disable the built-in controls and drive the Viewer
 through its handle:

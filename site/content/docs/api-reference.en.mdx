@@ -158,6 +158,17 @@ const pageDocument = await controller.ready;
 
 An `AssetResolver` receives `{ url, kind, baseUrl, signal }` and resolves to `{ status: "resolved", bytes, mimeType, resolvedUrl? }` or `{ status: "blocked", reason? }`.
 
+`PageExtension` and `PublicationExtension` can also implement synchronous
+`finalizePage(page, context)`. It runs once per accepted page after Core has
+resolved decoration and margin boxes but before commit, so `page.element` is a
+live measurable page element. `page.tableFragments` lists continued table
+fragments with their origin and one-based continuation index. Mutations persist
+into the committed iframe; a non-`undefined` return rejects the generation.
+
+Use `createTableColgroupExtension()` as an opt-in extension when split tables
+need measured pixel column widths frozen in continuation fragments. Core always
+carries authored `<colgroup>` elements, but never synthesizes widths by default.
+
 #### `PageDocumentController`
 
 | Member | Returns | Readiness and errors |
@@ -165,7 +176,7 @@ An `AssetResolver` receives `{ url, kind, baseUrl, signal }` and resolves to `{ 
 | `ready` | `Promise<PageDocument>` | First commit, or rejection if it cannot commit. |
 | `current` | `PageDocument \| undefined` | Previous commit remains during/after a failed update; cleared by destruction. |
 | `update(source, options?)` | `Promise<PageDocument>` | Starts a generation; a newer update aborts the active one. Supports `options.signal`. |
-| `print()` | `Promise<void>` | Waits for latest work, then prints the latest successful commit. Rejects with no commit/after destruction. |
+| `print()` | `Promise<void>` | Waits for latest work, then prints the latest successful commit through an isolated top-document snapshot. Rejects with no commit/after destruction. |
 | `destroy()` | `Promise<void>` | Aborts generation/export work, removes the iframe, releases resources, and waits for tracked work. Idempotent. |
 
 ### `PageDocument`

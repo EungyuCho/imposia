@@ -1,4 +1,8 @@
-import { hasPageDocumentFrameSandbox, type PageDocument } from "@imposia/core";
+import {
+  hasPageDocumentFrameSandbox,
+  type PageDocument,
+  printComposedPageDocument,
+} from "@imposia/core";
 import { mountPublicationReader, validatePublicationReaderDocument } from "./publication-reader.js";
 import { createViewerInspector } from "./viewer-inspector.js";
 import { createPageViewerInterface } from "./viewer-interface.js";
@@ -519,9 +523,10 @@ export function mountPageViewer(
     },
     async print() {
       if (destroyed) throw new Error("Page viewer has been destroyed.");
-      const printable = currentDocument.iframe.contentWindow;
-      if (printable === null) throw new Error("Canonical page iframe is unavailable for printing.");
-      printable.print();
+      const frameDocument = currentDocument.iframe.contentDocument;
+      if (frameDocument === null)
+        throw new Error("Canonical page iframe is unavailable for printing.");
+      await printComposedPageDocument(frameDocument);
     },
     destroy() {
       if (destroyed) return;

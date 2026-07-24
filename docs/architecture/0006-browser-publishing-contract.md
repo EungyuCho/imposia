@@ -37,10 +37,12 @@ would make browser differences indistinguishable from defects.
    limits are validated; only retained resolver assets may be included. Page
    wrappers, margin furniture, generated counters, Blob URLs, and page-only
    experimental artifacts are excluded.
-6. `print()` remains a native browser action on the canonical iframe's
-   `Window.print()`. Save as PDF is the browser's print destination. Imposia does
-   not expose PDF bytes, fixed-layout EPUB, Node/CLI rendering, or complete CSS
-   parity.
+6. `print()` remains a native browser action on the top-level `Window.print()`.
+   Core transiently clones the accepted canonical pages and styles into an
+   isolated shadow-root print host, hoisting only `@page` and `@font-face` rules
+   required by Chromium. Save as PDF is the browser's print destination. Imposia
+   does not expose PDF bytes, fixed-layout EPUB, Node/CLI rendering, or complete
+   CSS parity.
 
 ## Rationale and audit trail
 

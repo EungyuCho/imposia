@@ -95,9 +95,10 @@ await pageViewer.print();
 
 `mountPageViewer()` retains Core's exact canonical iframe. Its `host` must be the
 iframe's current parent, and it is currently a Chromium-reference presentation
-surface. `print()` invokes that iframe's native `Window.print()`; the browser may
-offer Save as PDF, but this package does not produce PDF bytes. For reflowable
-EPUB export, call `pageDocument.exportEpub()` through Core, Client, or React.
+surface. `print()` clones the committed pages into a transient isolated
+top-document snapshot before invoking `Window.print()`; the browser may offer
+Save as PDF, but this package does not produce PDF bytes. For reflowable EPUB
+export, call `pageDocument.exportEpub()` through Core, Client, or React.
 
 The page Viewer supports `continuous`, `single`, and `spread` modes. Set
 `spread.cover` to keep page 1 alone before the 2–3, 4–5, and later pairs. A

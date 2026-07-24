@@ -9,6 +9,7 @@ import {
   createExtensionWarningCollector,
   decorateExtensionPage,
   type ExtensionWarningCollector,
+  finalizeExtensionPages,
   type PageExtensionSnapshots,
   snapshotExtensions,
   type ValidatedPageExtension,
@@ -44,6 +45,8 @@ import type {
   ExperimentalPageFeatures,
   PageContext,
   PageDocumentOptions,
+  PageExtensionFinalizePageInput,
+  PageExtensionTableFragment,
   PageGeometry,
   PageLimits,
   PageSource,
@@ -113,6 +116,12 @@ interface PageParts extends BuiltPage {
   content: HTMLElement;
   decorated: boolean;
   marginBoxes: ReadonlyMap<PageMarginBoxName, readonly PageMarginContentPart[]>;
+}
+
+interface TableSplitRecord {
+  readonly origin: Element;
+  readonly fragment: Element;
+  readonly page: PageParts;
 }
 
 interface PaginationPageMedia {
@@ -1446,6 +1455,7 @@ interface RecursiveFragmenterOptions {
   readonly pageMedia: PaginationPageMedia;
   readonly reportOverflow: () => void;
   readonly warnings: PageWarning[];
+  readonly tableSplits: TableSplitRecord[];
 }
 
 class RecursiveFragmenter {
@@ -1457,6 +1467,7 @@ class RecursiveFragmenter {
   readonly #pageMedia: PaginationPageMedia;
   readonly #reportOverflow: () => void;
   readonly #warnings: PageWarning[];
+  readonly #tableSplits: TableSplitRecord[];
   readonly #warned = new Set<string>();
   readonly #pageContent = new Map<PageParts, number>();
   #generatedFragments = 0;
@@ -1471,6 +1482,7 @@ class RecursiveFragmenter {
     this.#pageMedia = options.pageMedia;
     this.#reportOverflow = options.reportOverflow;
     this.#warnings = options.warnings;
+    this.#tableSplits = options.tableSplits;
     for (const [element, constraint] of this.#constraints) {
       this.#prepareTypography(element, constraint);
       if (constraint.widowOrphanFallback) {
@@ -1766,10 +1778,21 @@ class RecursiveFragmenter {
     const mustHonorDescendantBreak = constraint.hasForcedDescendant && !constraint.atomic;
 
     if (overflows && pageHadContent) {
-      element.remove();
-      cursor = continueParent(cursor.page.name);
-      cursor.container.append(element);
-      overflows = this.#elementOverflows(element, cursor, constraint);
+      const fitsOnFreshPage =
+        element.getBoundingClientRect().height <=
+        cursor.page.geometry.contentHeightCssPx + OVERFLOW_TOLERANCE_CSS_PX;
+      const fragmentsInPlace =
+        !constraint.atomic &&
+        !constraint.insideAvoid &&
+        (constraint.layout === "table" ||
+          constraint.layout === "safe-grid" ||
+          (constraint.layout === "normal" && !fitsOnFreshPage));
+      if (!fragmentsInPlace) {
+        element.remove();
+        cursor = continueParent(cursor.page.name);
+        cursor.container.append(element);
+        overflows = this.#elementOverflows(element, cursor, constraint);
+      }
     }
 
     if (
@@ -2245,6 +2268,12 @@ class RecursiveFragmenter {
         tableShell.append(this.#cloneFragment(template, true));
       }
       parentAtFragment.container.append(tableShell);
+      // Authored column structure belongs on every continuation. Measured width freezing is opt-in.
+      this.#tableSplits.push({
+        origin: element,
+        fragment: tableShell,
+        page: parentAtFragment.page,
+      });
       tableCursor = {
         page: parentAtFragment.page,
         container: groupShell,
@@ -2538,6 +2567,7 @@ export async function buildGeneration(
         probe.append(passSource);
         const passPages: PageParts[] = [];
         const passFragmentationWarnings: PageWarning[] = [];
+        const passTableSplits: TableSplitRecord[] = [];
         let passOverflowWarning: PageWarning | undefined;
         const reportOverflow = () => {
           passOverflowWarning ??= Object.freeze({
@@ -2576,6 +2606,7 @@ export async function buildGeneration(
           pageMedia,
           reportOverflow,
           warnings: passFragmentationWarnings,
+          tableSplits: passTableSplits,
         });
         const initialPage = allocatePage(undefined);
         let currentCursor: FragmentCursor = { page: initialPage, container: initialPage.flow };
@@ -2614,6 +2645,7 @@ export async function buildGeneration(
         return {
           pages: passPages,
           fragmentationWarnings: passFragmentationWarnings,
+          tableSplits: passTableSplits,
           overflowWarning: passOverflowWarning,
           publishing: finalized,
         };
@@ -2667,6 +2699,30 @@ export async function buildGeneration(
       }
       warningSourceLocations = collectWarningSourceLocations(pages);
       cleanPublishingInternals(pages);
+      if (extensions.some((extension) => extension.finalizePage !== undefined)) {
+        const fragmentsByPage = new Map<PageParts, PageExtensionTableFragment[]>();
+        const continuationCounts = new Map<Element, number>();
+        for (const record of accepted.tableSplits) {
+          const index = (continuationCounts.get(record.origin) ?? 0) + 1;
+          continuationCounts.set(record.origin, index);
+          const fragments = fragmentsByPage.get(record.page) ?? [];
+          fragments.push(
+            Object.freeze({ origin: record.origin, fragment: record.fragment, index }),
+          );
+          fragmentsByPage.set(record.page, fragments);
+        }
+        const finalPages: PageExtensionFinalizePageInput[] = pages.map((page, index) =>
+          Object.freeze({
+            number: index + 1,
+            totalPages: pages.length,
+            side: pageSide(page),
+            blank: page.blank,
+            element: page.page,
+            tableFragments: Object.freeze(fragmentsByPage.get(page) ?? []),
+          }),
+        );
+        finalizeExtensionPages(extensions, Object.freeze(finalPages), signal, extensionWarnings);
+      }
       body.append(...pages.map((page) => page.page));
     } finally {
       probe.remove();

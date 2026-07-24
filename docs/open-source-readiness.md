@@ -34,8 +34,11 @@ by the synchronized `0.1.1` package release.
 - Explicit supported subsets for flex, grid, complex tables, multi-column flow,
   and CJK typography. Unsupported cases retain typed, source-aware recovery
   warnings instead of silently approximating output.
-- Capability-bounded extensions that cannot take ownership of the canonical DOM,
-  resolver, or lifecycle.
+- Capability-bounded extensions that cannot take ownership of the canonical iframe,
+  resolver, or lifecycle, with a synchronous measurable-page `finalizePage` hook
+  for deterministic post-pagination fixups and split-table provenance.
+- Deterministic top-window native printing through a transient isolated page
+  snapshot, avoiding Chromium's sandboxed-iframe blank-sheet failure.
 - Public browser conformance and performance fixtures, packed ESM/CommonJS/React
   consumers, and a Chromium/Firefox/WebKit release matrix.
 - English, Korean, Japanese, and Simplified Chinese onboarding guides and
@@ -51,9 +54,9 @@ These refinements are useful, but they do not block the `0.2.0` release:
    current duplicated async bookkeeping; do not add a second rendering authority.
 2. Automate the current localized README structure, identifier, link, and
    lifecycle-fact audit so future documentation changes cannot drift silently.
-3. Make Core's native `print()` temporarily own print-ready canonical iframe
-   sizing so headless `mountPageDocument()` consumers do not need host-specific
-   paint workarounds.
+3. Add host-facing presets only when a documented compatibility boundary needs an
+   opt-in policy; Core must retain authored structure without silently adopting
+   layout heuristics.
 
 ## Maintainer launch gates
 

@@ -4,7 +4,7 @@ Status: accepted and implemented in the browser Core.
 
 ## Decision
 
-Imposia can support a clean-room, Tiptap-inspired *extension composition model* without adopting any third-party implementation, names, or internal architecture. An extension is an ordered, browser-only policy object that contributes only at explicit Core phases. It cannot take ownership of the canonical iframe, mutate page DOM, fetch resources, weaken limits or CSP, suppress Core warnings, or change lifecycle atomicity.
+Imposia can support a clean-room, Tiptap-inspired *extension composition model* without adopting any third-party implementation, names, or internal architecture. An extension is an ordered, browser-only policy object that contributes only at explicit Core phases. It cannot take ownership of the canonical iframe, fetch resources, weaken limits or CSP, suppress Core warnings, or change lifecycle atomicity. `finalizePage` is the deliberately narrow exception to DOM isolation: it receives a live, measurable page element after Core finishes decoration and before commit.
 
 The runtime exports `PageExtension` and accepts an immutable ordered `extensions` list on `PageDocumentOptions`. Every phase stays inside the existing sanitization, asset-resolution, warning, abort, rollback, and cleanup boundaries; it is not a compatibility alias for another editor or paginator.
 
@@ -62,6 +62,21 @@ interface PageExtensionDecoration {
   readonly footerHtml?: string;
 }
 
+interface PageExtensionTableFragment {
+  readonly origin: Element;
+  readonly fragment: Element;
+  readonly index: number;
+}
+
+interface PageExtensionFinalizePageInput {
+  readonly number: number;
+  readonly totalPages: number;
+  readonly side: "left" | "right";
+  readonly blank: boolean;
+  readonly element: HTMLElement;
+  readonly tableFragments: readonly PageExtensionTableFragment[];
+}
+
 interface PageExtensionContext {
   readonly signal: AbortSignal;
   warn(warning: PageExtensionWarning): void;
@@ -80,6 +95,7 @@ interface PageExtension {
     page: PageExtensionPage,
     context: PageExtensionContext,
   ): PageExtensionDecoration | undefined;
+  finalizePage?(page: PageExtensionFinalizePageInput, context: PageExtensionContext): void;
 }
 
 interface PublicationExtension {
@@ -109,6 +125,7 @@ interface PublicationExtension {
     page: PageExtensionPage,
     context: PageExtensionContext,
   ): PageExtensionDecoration | undefined;
+  finalizePage?(page: PageExtensionFinalizePageInput, context: PageExtensionContext): void;
 }
 
 interface PageDocumentOptions {
@@ -129,13 +146,15 @@ Before a transform callback, Core removes executable markup and normalizes CSS i
 
 After pagination accepts the generation's final page set, Core invokes `decoratePage` in declared order for every allocated page. The immutable page snapshot includes `number`, `totalPages`, `side`, and `blank`; `number === totalPages` selects the final physical page. Core appends returned header/footer snippets in extension order after the base Core decoration. It runs the same structural and URL sanitizer used for normal decorations and then resolves the existing page-number tokens. Decorators run for blank pages only when the completed `decorateBlankPages` behavior says decorations are enabled. No decorator runs after `PageDocument` metadata has been measured, and decoration output does not trigger another pagination pass.
 
+Before Core moves accepted pages from the measurable probe into the committed iframe body, it invokes `finalizePage` page-major and then extension-major. The hook is synchronous and must return `undefined`. It receives the live page element and each continued table fragment on that page, identified by its origin table, continuation fragment, and one-based continuation index. Mutations persist into the committed iframe and Core does not sanitize them again: re-sanitizing would mangle Core's `!important` geometry. Safety remains bounded by the script-disabled frame sandbox and resolver-only asset pipeline. A throwing hook, invalid declaration or return, or abort rejects the whole generation before commit.
+
 Before and after every asynchronous transform, Core checks the generation abort signal. An extension throw, invalid output, duplicate name, or invalid warning rejects that generation exactly like another generation error; it never partially commits a frame. Any assets created by the generation still use the present rollback and URL-revocation path.
 
 `context.onCleanup()` registers synchronous generation-scoped cleanup. Core runs callbacks in reverse registration order after successful work and after failure, abort, supersession, or destroy cancellation. Thrown extension callbacks and cleanup callbacks reject with `ImposiaError.code === "EXTENSION_FAILED"`; abort continues to reject with `AbortError`. Cleanup cannot retain or receive a Core resource.
 
 ## Deliberate exclusions
 
-- No `iframe`, `Document`, `Element`, `PageDocument`, or mutable warning array is handed to an extension.
+- Except for `finalizePage`'s live `HTMLElement` and split-table provenance, no `iframe`, `Document`, `Element`, `PageDocument`, or mutable warning array is handed to an extension.
 - No `resolveAsset`, network, file, worker, timer ownership, custom CSP, direct stylesheet injection, or blob-URL API is exposed.
 - No composed Publication source, private entry marker, resolver result, raw committed content, or mutable lifecycle object is exposed.
 - An extension cannot replace the host `assetResolver`, increase limits, modify warning severity, intercept `print()`, or affect controller update/destroy semantics.

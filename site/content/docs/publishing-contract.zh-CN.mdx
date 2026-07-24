@@ -25,7 +25,7 @@ staging iframe 从不用于预览、展示或打印。
 | 输出 | 来源 | 结果 |
 | --- | --- | --- |
 | 预览 | Canonical iframe | Viewer 显示的已完成分页页面 |
-| 打印 | 通过 `Window.print()` 使用 canonical iframe | 浏览器原生打印流程；Imposia 不返回 PDF 字节 |
+| 打印 | 通过 canonical 页面隔离的 top document 快照调用 `Window.print()` | 浏览器原生打印流程；Imposia 不返回 PDF 字节 |
 | EPUB | 最新已提交语义源 | 可重排 EPUB 3.3 `Blob`，不是页面 DOM 的固定版式副本 |
 
 `PageDocument.exportEpub()` 不会重新运行 extension，也不会序列化固定页面布局。
@@ -46,7 +46,7 @@ staging iframe 从不用于预览、展示或打印。
 
 *保存为 PDF 的预览保留了上方第 2、3 页相同的表格内容、页面顺序、重复表头与页眉页脚。*
 
-Imposia 不会复制 Viewer 页面，也不会为打印创建单独的 PDF renderer。`print()` 会对 Viewer 显示的 canonical iframe 调用 `Window.print()`。因此，在文档所列的支持范围内，页面方向、margin box、重复表头、页码与内容顺序会在 Viewer、浏览器打印和保存为 PDF 的结果之间保持一致。
+Imposia 不会为打印重新执行布局，也不会创建单独的 PDF renderer。`print()` 会将已提交的 canonical 页面和生成 CSS 克隆到 top document 中临时隔离的 shadow root，再调用 top `Window.print()`。这避免 Chromium 的 iframe 空白快照，同时在文档所列的支持范围内保持 Viewer、浏览器打印和保存为 PDF 的页面方向、margin box、重复表头、页码与内容顺序一致。
 
 Viewer 与保存为 PDF 的预览内容一致，是因为两个路径读取同一个 committed generation。这并不表示 Imposia 会直接返回 PDF 字节。打印机驱动的页边距、缩放、颜色校正以及不同浏览器的字体度量仍可能影响最终结果。
 

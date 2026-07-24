@@ -489,6 +489,7 @@ test("React publishing lab prints the canonical frame for browser PDF saving", a
         writable: true,
         value: () => {
           observation.parent += 1;
+          window.dispatchEvent(new Event("afterprint"));
         },
       });
       Reflect.set(globalThis, "__imposiaDemoPrintObservation", observation);
@@ -497,7 +498,7 @@ test("React publishing lab prints the canonical frame for browser PDF saving", a
     await printButton.click();
     expect(
       await page.evaluate(() => Reflect.get(globalThis, "__imposiaDemoPrintObservation")),
-    ).toEqual({ frame: 1, parent: 0 });
+    ).toEqual({ frame: 0, parent: 1 });
   } finally {
     expect(errors).toEqual([]);
     expect(pageErrors).toEqual([]);

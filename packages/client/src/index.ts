@@ -19,8 +19,10 @@ export type {
   PageExtensionDecoration,
   PageExtensionEntryMetadata,
   PageExtensionEntryTransformInput,
+  PageExtensionFinalizePageInput,
   PageExtensionPage,
   PageExtensionPublicationMetadata,
+  PageExtensionTableFragment,
   PageExtensionTransformInput,
   PageExtensionTransformOutput,
   PageExtensionWarning,
@@ -51,8 +53,10 @@ export type {
   PublicationPageRange,
   PublicationSearchResult,
   PublicationSnapshot,
+  TableColgroupExtensionOptions,
 } from "@imposia/core";
 export {
+  createTableColgroupExtension,
   ImposiaError,
   mountPageDocument,
   mountPublication,

@@ -80,6 +80,7 @@ test("presents the real canonical iframe without taking over its lifecycle", asy
       };
       window.print = () => {
         parentPrints += 1;
+        window.dispatchEvent(new Event("afterprint"));
       };
       await viewer.print();
       const second = await controller.update({ html: "<h1>Two</h1><p>Updated canonical text</p>" });
@@ -157,8 +158,8 @@ test("presents the real canonical iframe without taking over its lifecycle", asy
       zoom: 1.2,
       mode: "single",
     });
-    expect(observation.framePrints).toBe(1);
-    expect(observation.parentPrints).toBe(0);
+    expect(observation.framePrints).toBe(0);
+    expect(observation.parentPrints).toBe(1);
     expect(observation.mismatchRejected).toBe(true);
     expect(observation.restored).toBe(true);
     expect(observation.restoredAttributes).toEqual({

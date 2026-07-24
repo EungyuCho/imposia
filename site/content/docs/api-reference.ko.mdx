@@ -165,7 +165,7 @@ canonical iframe을 붙이고 컨트롤러를 즉시 반환합니다. 첫 결과
 | `headerTemplate`, `footerTemplate` | 없음 | 페이지 머리말과 꼬리말 HTML입니다. |
 | `decorateBlankPages?: boolean` | `true` | 의도적으로 삽입한 빈 페이지에 장식을 적용합니다. |
 | `experimental?: { footnotes?: boolean; pageFloats?: boolean }` | 꺼짐 | 실험 기능을 명시적으로 켭니다. |
-| `extensions?: readonly (PageExtension \| PublicationExtension)[]` | `[]` | 선언 순서대로 transform, asset 정책, 장식을 적용합니다. |
+| `extensions?: readonly (PageExtension \| PublicationExtension)[]` | `[]` | 선언 순서대로 transform, asset 정책, 장식, `finalizePage`를 적용합니다. |
 | `signal?: AbortSignal` | 없음 | 최초 작업을 취소합니다. |
 | `onProgress?: ({ completedPages }) => void` | 없음 | commit 직전에 완료 페이지 수를 전달합니다. |
 
@@ -190,7 +190,7 @@ type AssetResolver = (request: {
 | `ready` | `Promise<PageDocument>`. 최초 commit입니다. |
 | `current` | 마지막 성공 문서 또는 `undefined`입니다. |
 | `update(source, { signal? })` | 새 문서를 준비해 같은 iframe에 원자적으로 commit합니다. |
-| `print()` | 최신 작업을 기다린 뒤 마지막 성공 iframe에서 브라우저 인쇄를 시작합니다. |
+| `print()` | 최신 작업을 기다린 뒤 마지막 성공 페이지의 격리된 top-document 스냅샷으로 브라우저 인쇄를 시작합니다. |
 | `destroy()` | 작업과 export를 취소하고 iframe과 Core 소유 리소스를 정리합니다. |
 
 `PageDocument`는 `iframe`, `generation`, `pageCount`, `pages`, `warnings`, `timings`와 `exportEpub(options): Promise<Blob>`을 제공하는 불변 commit입니다. 각 `PageMetadata`에는 번호, 좌우 면, page name, blank 여부, sheet/content geometry와 `bodyText`가 있습니다.
@@ -271,7 +271,7 @@ function mountPageViewer(
 | `setTheme(theme?)` | `--imposia-viewer-*` 문자열 custom property 맵을 교체하거나 제거합니다. |
 | `subscribe(listener)` | 현재 상태를 즉시 전달하고 이후 표시 상태 변경을 전달합니다. 반환 함수를 호출하면 구독을 해제합니다. |
 | `refresh(pageDocument)` | 같은 iframe의 더 최신 generation으로 갱신합니다. 다른 iframe이나 오래된 generation이면 throw합니다. |
-| `print()` | canonical iframe의 `Window.print()`를 호출합니다. destroy 뒤에는 reject합니다. |
+| `print()` | 현재 canonical 페이지의 격리된 top-document 스냅샷으로 `Window.print()`를 호출합니다. destroy 뒤에는 reject합니다. |
 | `destroy()` | Reader, Inspector, 테마와 이벤트를 정리하고 기존 속성을 복원합니다. |
 | `state` | `{ page, pageCount, zoom, mode, effectiveMode, status: "ready", generation }`입니다. |
 | `reader`, `inspector` | 옵션을 켰을 때 각 컨트롤러, 아니면 `undefined`입니다. |

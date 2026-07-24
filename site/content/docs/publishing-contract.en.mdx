@@ -25,7 +25,7 @@ The staging iframe is never used for preview, presentation, or print.
 | Output | Source | Result |
 | --- | --- | --- |
 | Preview | Canonical iframe | The completed paginated pages shown by the Viewer |
-| Print | Canonical iframe through `Window.print()` | The browser's native print flow; Imposia does not return PDF bytes |
+| Print | Isolated top-document snapshot of canonical pages through `Window.print()` | The browser's native print flow; Imposia does not return PDF bytes |
 | EPUB | Latest committed semantic source | A reflowable EPUB 3.3 `Blob`, not a fixed-layout copy of the page DOM |
 
 `PageDocument.exportEpub()` does not rerun extensions or serialize the fixed page layout.
@@ -46,7 +46,7 @@ First, inspect pages 2 and 3 of the committed generation in the Viewer. Then sel
 
 *The Save to PDF preview contains the same page 2 and 3 table content, page order, repeated heading, and page furniture shown above.*
 
-Imposia does not clone Viewer pages or create a separate PDF renderer for print. `print()` calls `Window.print()` on the canonical iframe shown by the Viewer. Within the documented support boundary, orientation, margin boxes, repeated table headings, page numbers, and content order therefore stay aligned between the Viewer and browser print or Save to PDF output.
+Imposia does not rerun layout or create a PDF renderer for print. `print()` clones the accepted canonical pages and generation styles into a transient isolated shadow root in the top document, then calls the top `Window.print()`. This avoids Chromium's unreliable iframe print snapshot while preserving the committed page sequence. Within the documented support boundary, orientation, margin boxes, repeated table headings, page numbers, and content order therefore stay aligned between the Viewer and browser print or Save to PDF output.
 
 The Viewer and Save to PDF preview match because both paths observe the same committed generation. This does not mean that Imposia returns PDF bytes. Printer-driver margins, scaling, color correction, and browser-specific font metrics can still affect the final result.
 
