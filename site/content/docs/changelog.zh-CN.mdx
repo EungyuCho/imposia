@@ -1,0 +1,82 @@
+---
+title: 更新日志
+description: 查看已发布到 npm 的各个 Imposia 软件包版本的变化。
+---
+
+本页只列出已发布到 npm 的版本。`@imposia/core`、`@imposia/viewer`、`@imposia/client` 和 `@imposia/react` 使用相同的版本号。
+
+## 0.4.0 — 2026年7月24日
+
+在不改变最终页面结构的前提下，长时间运行的 HTML 和 CSR 更新会协作式地把执行时间交还给主线程。
+
+- 在 `PageDocumentOptions.compose` 中加入默认 8ms 执行预算、可注入调度器和 `Infinity` 禁用选项。
+- 加入包含已完成页数和收敛轮次的临时进度信息。
+- 挂载暂存内容和样式后等待字体与图片准备完成。
+- 调度器等待可被中止，并在前一代清理完成后再开始替代版本。
+- 在原生打印快照中保留源文档的 `html`、`body` 上下文、body 范围选择器和计算后的自定义属性。
+- 在已提交页面根节点上启用 layout containment，但不使用会破坏跨页计数器的 style containment。
+
+[查看 0.4.0 发布说明](https://github.com/EungyuCho/imposia/releases/tag/v0.4.0)
+
+## 0.3.0 — 2026年7月24日
+
+打印不再依赖 iframe 尺寸，并为受限表格组合加入明确的扩展点。
+
+- 将原生打印移至顶层文档中临时且隔离的快照，以避免 Chromium 白页问题。
+- 为 Core 和 Publication 扩展加入同步 `finalizePage` 钩子。
+- 加入可选的 `createTableColgroupExtension()` 预设，用于固定拆分表格的列宽。
+- 拆分表格、安全的 Grid 和过高的普通区块会先使用当前页面的剩余空间。
+
+[查看 0.3.0 发布说明](https://github.com/EungyuCho/imposia/releases/tag/v0.3.0)
+
+## 0.2.0 — 2026年7月24日
+
+宿主应用现在可以完全自行组合 Viewer 操作界面。
+
+- 加入 `controls: false`，让宿主提供自己的导航、视图模式和缩放界面。
+- 加入即时 Viewer 状态订阅、React 状态回调以及命令式导航和缩放控制。
+- 将 Viewer 变量和展示样式限定在各自根节点，导入样式表不再改变宿主页面。
+
+[查看 0.2.0 发布说明](https://github.com/EungyuCho/imposia/releases/tag/v0.2.0)
+
+## 0.1.3 — 2026年7月23日
+
+HTML 和 CSR 分页完整性成为主要产品契约。
+
+- 加入跨浏览器连续性验证，确保源标记在已提交页面中按顺序且只出现一次。
+- 加入公开的 CSR 连续性示例，在保留 canonical iframe 的同时快速更新源内容。
+- 明确 reflowable EPUB 是受支持的语义投影，而不是主要渲染路径。
+
+[查看 0.1.3 发布说明](https://github.com/EungyuCho/imposia/releases/tag/v0.1.3)
+
+## 0.1.2 — 2026年7月23日
+
+加强了发布检查和演示服务器的安全性。
+
+- 在验证和代码扫描之外加入 CodeRabbit 自动审查。
+- 移除未使用的演示服务器请求延迟功能及相关 CodeQL 警告。
+- 确认结构选择器只会传给具有保守回退行为的 `Element.matches()`。
+
+[查看 0.1.2 发布说明](https://github.com/EungyuCho/imposia/releases/tag/v0.1.2)
+
+## 0.1.1 — 2026年7月23日
+
+演示、文档和发布流程已为公开软件包更新做好准备。
+
+- 加入竖向 A4 默认值、方向切换以及 A3、A4、B1 纸张预设。
+- 扩充多语言 API 和发布文档。
+- 加入受保护的发布流程，验证 npm trusted publishing、标签、GitHub Release、tarball 和校验和。
+
+[查看 0.1.1 发布说明](https://github.com/EungyuCho/imposia/releases/tag/v0.1.1)
+
+## 0.1.0 — 2026年7月19日
+
+首次纯浏览器版本建立了完整的公开软件包系列。
+
+- 在一个持久的 canonical iframe 中提供确定性的浏览器分页。
+- 加入 Viewer 展示层、浏览器 Client 入口和主要 React 适配器。
+- 加入 Publication 组合、Reader 导航、搜索、缩略图和多种展示模式。
+- 从已提交源内容提供原生打印和 reflowable EPUB 3.3 导出。
+- 定义类型化诊断、受限扩展、资源解析以及表格、Flex、Grid、多栏和 CJK 拆分页的支持边界。
+
+[在 npm 查看 @imposia/core 0.1.0](https://www.npmjs.com/package/@imposia/core/v/0.1.0)

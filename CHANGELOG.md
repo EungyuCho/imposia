@@ -22,25 +22,13 @@ Minor release for cooperative main-thread pagination.
   table fragmentation without changing the accepted page structure.
 - Made scheduler waits abortable and serialized superseding generations so a
   predecessor cleans up before the winning staging generation starts.
+- Preserved the canonical source document's `html` and `body` context,
+  body-scoped CSS selectors, and computed custom properties in the isolated
+  native-print snapshot.
 - Added layout containment to committed page roots without enabling
   counter-altering style containment.
 - Synchronized `@imposia/core`, `@imposia/viewer`, `@imposia/client`, and
   `@imposia/react` at version `0.4.0`.
-
-## 0.3.1 — 2026-07-24
-
-Patch release for the public `@imposia/*` package family.
-
-### Fixed
-
-- Preserved the canonical source document's `html` and `body` context,
-  body-scoped CSS selectors, and computed custom properties in the isolated
-  native-print snapshot used by Core, Viewer, Client, and React.
-
-### Changed
-
-- Synchronized `@imposia/core`, `@imposia/viewer`, `@imposia/client`, and
-  `@imposia/react` at version `0.3.1`.
 
 ## 0.3.0 — 2026-07-24
 

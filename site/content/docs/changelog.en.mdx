@@ -1,0 +1,82 @@
+---
+title: Changelog
+description: See what changed in each published Imposia package version.
+---
+
+This page lists the versions published to npm. `@imposia/core`, `@imposia/viewer`, `@imposia/client`, and `@imposia/react` use the same version number.
+
+## 0.4.0 — July 24, 2026
+
+Cooperative pagination keeps long HTML and CSR updates responsive without changing the accepted page structure.
+
+- Added an 8 ms default yield budget, an injectable scheduler, and an `Infinity` opt-out through `PageDocumentOptions.compose`.
+- Added provisional progress with the completed page count and convergence pass.
+- Settled fonts and images after staging content and styles are mounted.
+- Made scheduler waits abortable and serialized superseding generations before staging the winner.
+- Preserved source `html` and `body` context, body-scoped selectors, and computed custom properties in native-print snapshots.
+- Added layout containment to committed page roots while leaving style containment disabled so counters keep working across pages.
+
+[Read the 0.4.0 release notes](https://github.com/EungyuCho/imposia/releases/tag/v0.4.0).
+
+## 0.3.0 — July 24, 2026
+
+Printing became independent from iframe sizing, and constrained table composition gained explicit extension hooks.
+
+- Moved native printing to a transient, isolated snapshot in the top document to avoid Chromium blank-sheet failures.
+- Added synchronous `finalizePage` hooks for Core and Publication extensions.
+- Added the opt-in `createTableColgroupExtension()` preset for stable split-table column widths.
+- Used the current page's remaining space when fragmenting split tables, safe grids, and over-tall normal blocks.
+
+[Read the 0.3.0 release notes](https://github.com/EungyuCho/imposia/releases/tag/v0.3.0).
+
+## 0.2.0 — July 24, 2026
+
+Viewer controls became fully composable by host applications.
+
+- Added `controls: false` for hosts that provide their own navigation, view-mode, and zoom UI.
+- Added immediate Viewer state subscriptions, React state callbacks, and imperative navigation and zoom controls.
+- Scoped Viewer tokens and presentation styles to each Viewer root so importing the stylesheet no longer changes the host page.
+
+[Read the 0.2.0 release notes](https://github.com/EungyuCho/imposia/releases/tag/v0.2.0).
+
+## 0.1.3 — July 23, 2026
+
+HTML and CSR pagination integrity became the primary product contract.
+
+- Added cross-browser continuity coverage that proves source tokens appear exactly once and in order across committed pages.
+- Added a public CSR continuity specimen that applies rapid source revisions while retaining the canonical iframe.
+- Positioned reflowable EPUB as a supported semantic projection rather than the headline rendering path.
+
+[Read the 0.1.3 release notes](https://github.com/EungyuCho/imposia/releases/tag/v0.1.3).
+
+## 0.1.2 — July 23, 2026
+
+Release checks and the demo server's security posture were tightened.
+
+- Added automatic CodeRabbit review alongside verification and code-scanning checks.
+- Removed unused demo-server request-delay behavior and resolved the related CodeQL finding.
+- Confirmed that structural selectors reach only `Element.matches()` with conservative fallback behavior.
+
+[Read the 0.1.2 release notes](https://github.com/EungyuCho/imposia/releases/tag/v0.1.2).
+
+## 0.1.1 — July 23, 2026
+
+The demo, documentation, and release path became ready for public package updates.
+
+- Added portrait-first A4 controls with orientation switching and A3, A4, and B1 presets.
+- Expanded multilingual API and publishing documentation.
+- Added a protected GitHub Actions release path with npm trusted publishing, tags, GitHub Releases, tarballs, and checksums.
+
+[Read the 0.1.1 release notes](https://github.com/EungyuCho/imposia/releases/tag/v0.1.1).
+
+## 0.1.0 — July 19, 2026
+
+The initial browser-only release established the complete public package family.
+
+- Added deterministic browser pagination in one persistent canonical iframe.
+- Added Viewer presentation, the browser Client entrypoint, and the primary React adapter.
+- Added Publication composition, reader navigation, search, thumbnails, and multiple presentation modes.
+- Added native print and reflowable EPUB 3.3 export from the committed source.
+- Added typed diagnostics, bounded extensions, asset resolution, and constrained table, Flex, Grid, multi-column, and CJK fragmentation.
+
+[View @imposia/core 0.1.0 on npm](https://www.npmjs.com/package/@imposia/core/v/0.1.0).
