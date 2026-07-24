@@ -1,6 +1,6 @@
 {
   "name": "@imposia/react",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "React adapter for atomic browser-native HTML/CSR pagination, preview, and print.",
   "repository": {
     "type": "git",

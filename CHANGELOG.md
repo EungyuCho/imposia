@@ -3,6 +3,21 @@
 All notable changes to Imposia are recorded here. The project follows semantic
 versioning for its published package interfaces.
 
+## 0.3.1 — 2026-07-24
+
+Patch release for the public `@imposia/*` package family.
+
+### Fixed
+
+- Preserved the canonical source document's `html` and `body` context,
+  body-scoped CSS selectors, and computed custom properties in the isolated
+  native-print snapshot used by Core, Viewer, Client, and React.
+
+### Changed
+
+- Synchronized `@imposia/core`, `@imposia/viewer`, `@imposia/client`, and
+  `@imposia/react` at version `0.3.1`.
+
 ## 0.3.0 — 2026-07-24
 
 Minor release for deterministic browser printing and constrained table extension
