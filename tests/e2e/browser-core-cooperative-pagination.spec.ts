@@ -364,6 +364,83 @@ test("yields within one deeply fragmenting text node", async ({ page, browserNam
   }
 });
 
+test("keeps cooperative pagination slices below the long-task threshold", async ({
+  page,
+  browserName,
+}) => {
+  test.skip(browserName !== "chromium", "Chromium is the performance smoke reference.");
+  const { errors, pageErrors } = captureBrowserErrors(page, browserName);
+  await page.goto("/examples/book.html");
+
+  try {
+    const observation = await page.evaluate(async () => {
+      type Controller = Readonly<{
+        readonly ready: Promise<Readonly<{ readonly pageCount: number }>>;
+        destroy(): Promise<void>;
+      }>;
+      type Core = Readonly<{
+        mountPageDocument(
+          host: HTMLElement,
+          source: Readonly<{ html: string }>,
+          options: Readonly<{
+            compose: Readonly<{
+              yieldBudgetMs: number;
+              scheduler: () => Promise<void>;
+            }>;
+          }>,
+        ): Controller;
+      }>;
+
+      const core = (await import("/packages/core/dist/index.js")) as Core;
+      const host = document.body.appendChild(document.createElement("div"));
+      const yieldBudgetMs = 4;
+      let schedulerCalls = 0;
+      let sliceStartedAt = performance.now();
+      let maximumSliceMs = 0;
+      const controller = core.mountPageDocument(
+        host,
+        {
+          html: `
+            <style>
+              @page { size: 320px 360px; margin: 24px; }
+              body { margin: 0; font: 12px/1.4 sans-serif; }
+              p { margin: 0; }
+            </style>
+            <p>${Array.from({ length: 900 }, (_, index) => `slice-${index + 1}`).join(" ")}</p>
+          `,
+        },
+        {
+          compose: {
+            yieldBudgetMs,
+            scheduler: async () => {
+              maximumSliceMs = Math.max(maximumSliceMs, performance.now() - sliceStartedAt);
+              schedulerCalls += 1;
+              await Promise.resolve();
+              sliceStartedAt = performance.now();
+            },
+          },
+        },
+      );
+
+      try {
+        const ready = await controller.ready;
+        maximumSliceMs = Math.max(maximumSliceMs, performance.now() - sliceStartedAt);
+        return { maximumSliceMs, pageCount: ready.pageCount, schedulerCalls, yieldBudgetMs };
+      } finally {
+        await controller.destroy();
+        host.remove();
+      }
+    });
+
+    expect(observation.pageCount).toBeGreaterThan(1);
+    expect(observation.schedulerCalls).toBeGreaterThan(2);
+    expect(observation.maximumSliceMs).toBeLessThanOrEqual(50);
+  } finally {
+    expect(errors).toEqual([]);
+    expect(pageErrors).toEqual([]);
+  }
+});
+
 test("reports provisional progress as each page is allocated", async ({ page, browserName }) => {
   test.skip(browserName !== "chromium", "Chromium is the structural pagination reference.");
   const { errors, pageErrors } = captureBrowserErrors(page, browserName);
