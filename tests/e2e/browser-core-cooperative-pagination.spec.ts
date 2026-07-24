@@ -415,7 +415,7 @@ test("keeps cooperative pagination slices below the long-task threshold", async 
             scheduler: async () => {
               maximumSliceMs = Math.max(maximumSliceMs, performance.now() - sliceStartedAt);
               schedulerCalls += 1;
-              await Promise.resolve();
+              await new Promise<void>((resolve) => setTimeout(resolve, 0));
               sliceStartedAt = performance.now();
             },
           },
