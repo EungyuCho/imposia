@@ -3,7 +3,7 @@ export const PRINT_STYLE_ATTRIBUTE = "data-imposia-print-style";
 
 const PRINT_ROOT_RETENTION_MS = 60_000;
 const PRINT_ISOLATION_CSS = `@media print{body>:not([${PRINT_ROOT_ATTRIBUTE}]){display:none!important}[${PRINT_ROOT_ATTRIBUTE}]{display:block!important;position:static!important;inset:auto!important;margin:0!important;padding:0!important;border:0!important;width:auto!important;height:auto!important;min-width:0!important;min-height:0!important;max-width:none!important;max-height:none!important;transform:none!important;filter:none!important;opacity:1!important;visibility:visible!important;overflow:visible!important;contain:none!important;z-index:auto!important}html,body{margin:0!important;padding:0!important;background:#fff!important;width:auto!important;height:auto!important;min-height:0!important;max-height:none!important;overflow:visible!important}}`;
-const PRINT_SHADOW_BASE_CSS = "[data-imposia-pages]{all:initial;display:block;color-scheme:light}";
+const PRINT_SHADOW_BASE_CSS = ":host{all:initial;display:block;color-scheme:light}";
 const INHERITED_BODY_PROPERTIES = [
   "color",
   "direction",
@@ -26,6 +26,18 @@ function hasNestedRules(rule: CSSRule): rule is CSSGroupingRule {
   return "cssRules" in rule;
 }
 
+function copyPrintElementContext(source: Element, target: HTMLElement, sourceWindow: Window): void {
+  for (const attribute of source.attributes) {
+    target.setAttribute(attribute.name, attribute.value);
+  }
+  const computedStyle = sourceWindow.getComputedStyle(source);
+  for (let index = 0; index < computedStyle.length; index += 1) {
+    const property = computedStyle.item(index);
+    if (!property.startsWith("--")) continue;
+    target.style.setProperty(property, computedStyle.getPropertyValue(property));
+  }
+}
+
 export function collectHoistedPagedMediaRules(rules: CSSRuleList, hoisted: string[]): void {
   for (const rule of rules) {
     if (rule.type === CSSRule.PAGE_RULE || rule.type === CSSRule.FONT_FACE_RULE) {
@@ -37,19 +49,23 @@ export function collectHoistedPagedMediaRules(rules: CSSRuleList, hoisted: strin
 }
 
 export function createPagesWrapper(topDocument: Document, sourceDocument: Document): HTMLElement {
-  const wrapper = topDocument.createElement("div");
-  wrapper.setAttribute("data-imposia-pages", "");
+  const html = topDocument.createElement("html");
+  const body = topDocument.createElement("body");
+  body.setAttribute("data-imposia-pages", "");
   const sourceWindow = sourceDocument.defaultView;
   if (sourceWindow !== null) {
+    copyPrintElementContext(sourceDocument.documentElement, html, sourceWindow);
+    copyPrintElementContext(sourceDocument.body, body, sourceWindow);
     const bodyStyle = sourceWindow.getComputedStyle(sourceDocument.body);
     for (const property of INHERITED_BODY_PROPERTIES) {
-      wrapper.style.setProperty(property, bodyStyle.getPropertyValue(property));
+      body.style.setProperty(property, bodyStyle.getPropertyValue(property));
     }
   }
   for (const child of sourceDocument.body.childNodes) {
-    wrapper.append(topDocument.importNode(child, true));
+    body.append(topDocument.importNode(child, true));
   }
-  return wrapper;
+  html.append(body);
+  return html;
 }
 
 export function commitPrintRoot(

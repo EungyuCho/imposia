@@ -150,3 +150,7 @@ print host before calling the top window's `Window.print()`. The browser may
 provide Save as PDF, but Imposia does not expose PDF bytes and does not claim
 fixed-layout EPUB output or complete CSS parity. The authoritative support matrix is
 [`docs/compatibility.md`](../compatibility.md).
+
+The isolated print host protects page content and generation styles, but CSS `@page`
+rules remain document-level. Applications should avoid competing unnamed top-level
+print-page rules while an Imposia print flow is active.

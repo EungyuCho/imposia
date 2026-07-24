@@ -1,6 +1,79 @@
 import { expect, test } from "@playwright/test";
 import { captureBrowserErrors } from "./browser-core-support.js";
 
+test("preserves body-scoped styles and custom properties in the public print snapshot", async ({
+  page,
+  browserName,
+}) => {
+  test.skip(browserName !== "chromium", "Browser pagination is Chromium-reference only.");
+  const { errors, pageErrors } = captureBrowserErrors(page, browserName);
+  await page.goto("/examples/book.html");
+  try {
+    const observation = await page.evaluate(async () => {
+      type Controller = {
+        ready: Promise<unknown>;
+        print(): Promise<void>;
+        destroy(): Promise<void>;
+      };
+      type Core = {
+        mountPageDocument(host: HTMLElement, source: { html: string }): Controller;
+      };
+      const core = (await import("/packages/core/dist/index.js")) as Core;
+      const host = document.body.appendChild(document.createElement("div"));
+      const originalPrint = window.print;
+      const printed = {
+        hasBody: false,
+        color: "",
+        accent: "",
+      };
+      let controller: Controller | undefined;
+      try {
+        controller = core.mountPageDocument(host, {
+          html: `<style>body{--print-accent:rgb(12,34,56)}body .print-chapter{color:var(--print-accent)}</style><article class="print-chapter">Body cascade</article>`,
+        });
+        await controller.ready;
+        Object.defineProperty(window, "print", {
+          configurable: true,
+          writable: true,
+          value: () => {
+            const shadow = document.querySelector<HTMLElement>(
+              "[data-imposia-print-root]",
+            )?.shadowRoot;
+            const snapshotBody = shadow?.querySelector("body") ?? undefined;
+            const chapter = shadow?.querySelector<HTMLElement>(".print-chapter") ?? undefined;
+            printed.hasBody = snapshotBody !== undefined;
+            printed.color = chapter === undefined ? "" : getComputedStyle(chapter).color;
+            printed.accent =
+              chapter === undefined
+                ? ""
+                : getComputedStyle(chapter).getPropertyValue("--print-accent").trim();
+            window.dispatchEvent(new Event("afterprint"));
+          },
+        });
+        await controller.print();
+        return printed;
+      } finally {
+        Object.defineProperty(window, "print", {
+          configurable: true,
+          writable: true,
+          value: originalPrint,
+        });
+        await controller?.destroy();
+        host.remove();
+      }
+    });
+
+    expect(observation).toEqual({
+      hasBody: true,
+      color: "rgb(12, 34, 56)",
+      accent: "rgb(12,34,56)",
+    });
+  } finally {
+    expect(errors).toEqual([]);
+    expect(pageErrors).toEqual([]);
+  }
+});
+
 test("keeps the committed generation visible while staging an atomic update", async ({
   page,
   browserName,

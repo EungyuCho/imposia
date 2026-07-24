@@ -42,7 +42,9 @@ would make browser differences indistinguishable from defects.
    isolated shadow-root print host, hoisting only `@page` and `@font-face` rules
    required by Chromium. Save as PDF is the browser's print destination. Imposia
    does not expose PDF bytes, fixed-layout EPUB, Node/CLI rendering, or complete
-   CSS parity.
+   CSS parity. Because CSS page rules are document-level print rules, an app's
+   own unnamed top-level `@page` rule can still interact with the hoisted rules;
+   applications should avoid competing global print-page defaults.
 
 ## Rationale and audit trail
 

@@ -48,6 +48,8 @@ staging iframe 从不用于预览、展示或打印。
 
 Imposia 不会为打印重新执行布局，也不会创建单独的 PDF renderer。`print()` 会将已提交的 canonical 页面和生成 CSS 克隆到 top document 中临时隔离的 shadow root，再调用 top `Window.print()`。这避免 Chromium 的 iframe 空白快照，同时在文档所列的支持范围内保持 Viewer、浏览器打印和保存为 PDF 的页面方向、margin box、重复表头、页码与内容顺序一致。
 
+打印 host 会隔离页面内容和 generation CSS，但 CSS `@page` 规则处于 document 级别。host 应用若同时定义未命名的 top-level `@page` 规则，可能与 Imposia hoist 的打印页面规则交互；打印时应避免这类竞争性的全局规则。
+
 Viewer 与保存为 PDF 的预览内容一致，是因为两个路径读取同一个 committed generation。这并不表示 Imposia 会直接返回 PDF 字节。打印机驱动的页边距、缩放、颜色校正以及不同浏览器的字体度量仍可能影响最终结果。
 
 ## 控制外部资源
