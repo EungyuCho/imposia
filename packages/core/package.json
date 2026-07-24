@@ -41,7 +41,7 @@
     "access": "public"
   },
   "dependencies": {
-    "parse5": "8.0.0",
-    "postcss": "8.5.20"
+    "parse5": "8.0.1",
+    "postcss": "8.5.22"
   }
 }
