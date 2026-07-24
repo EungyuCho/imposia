@@ -172,6 +172,8 @@ const document = await controller.ready;
 console.log(document.pageCount);
 ```
 
+`PageExtension` と `PublicationExtension` は同期 `finalizePage(page, context)` を実装できます。Core が装飾と margin box を完了し commit する前に実行され、`page.element` は計測可能な live ページ要素です。`page.tableFragments` には元のテーブルと 1 始まりの継続インデックスを持つ分割片が入ります。`finalizePage` は `decorateBlankPages` の設定にかかわらず、意図的に挿入された空白ページを含むすべての割り当てページで実行されます。戻り値は許可されず、変更は committed iframe に保持されます。
+
 ### `PageDocumentController`
 
 | メンバー | 戻り値 | 動作と制約 |

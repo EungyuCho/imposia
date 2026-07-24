@@ -105,6 +105,82 @@ test("finalizes live pages in declaration order and retains split-table provenan
   }
 });
 
+test("finalizes intentionally inserted blank pages even when decorations are disabled", async ({
+  page,
+  browserName,
+}) => {
+  test.skip(browserName !== "chromium", "Browser pagination is Chromium-reference only.");
+  const { errors, pageErrors } = captureBrowserErrors(page, browserName);
+  await page.goto("/examples/book.html");
+  try {
+    const observation = await page.evaluate(async () => {
+      type Controller = {
+        ready: Promise<{ iframe: HTMLIFrameElement; pageCount: number }>;
+        destroy(): Promise<void>;
+      };
+      type Core = {
+        mountPageDocument(
+          host: HTMLElement,
+          source: { html: string },
+          options: { decorateBlankPages: boolean; extensions: readonly object[] },
+        ): Controller;
+      };
+      const core = (await import("/packages/core/dist/index.js")) as Core;
+      const host = document.body.appendChild(document.createElement("div"));
+      const finalized: Array<{ number: number; blank: boolean }> = [];
+      let controller: Controller | undefined;
+      try {
+        controller = core.mountPageDocument(
+          host,
+          {
+            html: '<section>FIRST</section><section style="break-before:right">SECOND</section>',
+          },
+          {
+            decorateBlankPages: false,
+            extensions: [
+              {
+                name: "acme/finalize-blank",
+                finalizePage(input: { number: number; blank: boolean; element: HTMLElement }) {
+                  finalized.push({ number: input.number, blank: input.blank });
+                  input.element.setAttribute("data-finalized", String(input.blank));
+                },
+              },
+            ],
+          },
+        );
+        const committed = await controller.ready;
+        const frameDocument = committed.iframe.contentDocument;
+        if (frameDocument === null) throw new Error("Missing canonical iframe document.");
+        return {
+          finalized,
+          committed: Array.from(frameDocument.querySelectorAll("[data-imposia-page]")).map(
+            (pageElement) => ({
+              finalized: pageElement.getAttribute("data-finalized"),
+            }),
+          ),
+        };
+      } finally {
+        await controller?.destroy();
+        host.remove();
+      }
+    });
+
+    expect(observation.finalized).toEqual([
+      { number: 1, blank: false },
+      { number: 2, blank: true },
+      { number: 3, blank: false },
+    ]);
+    expect(observation.committed).toEqual([
+      { finalized: "false" },
+      { finalized: "true" },
+      { finalized: "false" },
+    ]);
+  } finally {
+    expect(errors).toEqual([]);
+    expect(pageErrors).toEqual([]);
+  }
+});
+
 test("rejects invalid finalizePage declarations and returns atomically", async ({
   page,
   browserName,

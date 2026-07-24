@@ -164,6 +164,8 @@ resolved decoration and margin boxes but before commit, so `page.element` is a
 live measurable page element. `page.tableFragments` lists continued table
 fragments with their origin and one-based continuation index. Mutations persist
 into the committed iframe; a non-`undefined` return rejects the generation.
+It runs for every allocated page, including intentionally inserted blank pages,
+regardless of `decorateBlankPages`.
 
 Use `createTableColgroupExtension()` as an opt-in extension when split tables
 need measured pixel column widths frozen in continuation fragments. Core always

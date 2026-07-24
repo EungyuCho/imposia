@@ -48,6 +48,8 @@ First, inspect pages 2 and 3 of the committed generation in the Viewer. Then sel
 
 Imposia does not rerun layout or create a PDF renderer for print. `print()` clones the accepted canonical pages and generation styles into a transient isolated shadow root in the top document, then calls the top `Window.print()`. This avoids Chromium's unreliable iframe print snapshot while preserving the committed page sequence. Within the documented support boundary, orientation, margin boxes, repeated table headings, page numbers, and content order therefore stay aligned between the Viewer and browser print or Save to PDF output.
 
+The print host isolates page content and generation styles, but CSS `@page` rules are document-level. Avoid a competing unnamed top-level `@page` rule in the host application while printing, because it can interact with Imposia's hoisted print-page rules.
+
 The Viewer and Save to PDF preview match because both paths observe the same committed generation. This does not mean that Imposia returns PDF bytes. Printer-driver margins, scaling, color correction, and browser-specific font metrics can still affect the final result.
 
 ## Control external resources

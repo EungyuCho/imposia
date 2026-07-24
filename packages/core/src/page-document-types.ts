@@ -110,6 +110,10 @@ export interface PageExtension {
     page: PageExtensionPage,
     context: PageExtensionContext,
   ): PageExtensionDecoration | undefined;
+  /**
+   * Mutates an accepted live page before commit. Runs for every allocated page,
+   * including intentionally inserted blank pages, regardless of `decorateBlankPages`.
+   */
   finalizePage?(page: PageExtensionFinalizePageInput, context: PageExtensionContext): void;
 }
 
@@ -124,6 +128,10 @@ export interface PublicationExtension {
     page: PageExtensionPage,
     context: PageExtensionContext,
   ): PageExtensionDecoration | undefined;
+  /**
+   * Mutates an accepted live page before commit. Runs for every allocated page,
+   * including intentionally inserted blank pages, regardless of `decorateBlankPages`.
+   */
   finalizePage?(page: PageExtensionFinalizePageInput, context: PageExtensionContext): void;
 }
 
