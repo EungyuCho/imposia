@@ -167,7 +167,7 @@ type PageSource =
 | `extensions` | `readonly (PageExtension \| PublicationExtension)[]` / `[]` | 按顺序执行转换、资源过滤和页面装饰。 |
 | `compose` | `{ yieldBudgetMs?: number; scheduler?: () => Promise<void> }` / 8 ms budget | 协作式切分主线程分页；`Infinity` 禁用 scheduler handoff。 |
 | `signal` | `AbortSignal` / 无 | 只连接首次生成。 |
-| `onProgress` | `({ completedPages, pass, provisional }) => void` / 无 | staging 每分配一页就报告当前 pass 的临时进度；下一轮收敛 pass 可从 1 重新开始。 |
+| `onProgress` | `({ completedPages, pass, provisional: true }) => void` / 无 | staging 每分配一页就报告当前 pass 的临时进度；下一轮收敛 pass 可从 1 重新开始。 |
 
 scheduler、字体和图像等待均计入 wall-clock
 `limits.resourceDeadlineMs`。进度只描述临时 staging 工作；已提交结果请从
