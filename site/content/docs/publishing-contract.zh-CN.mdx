@@ -3,20 +3,20 @@ title: 预览与输出为何始终一致
 description: 了解 Imposia 显示、打印以及生成 EPUB 时分别使用哪一份文档。
 ---
 
-文档包含图片、表格或大量页面时，分页需要一定时间。Imposia 会在准备新版本时继续显示上一次完成的文档，让读者始终看到完整布局。
+图片、表格或页面较多时，文档分页需要一定时间。Imposia 会在准备下一份文档时继续显示上一次完成的文档。计算尚未结束的布局不会出现在界面中。
 
 ## 读者实际看到的文档
 
-Core 拥有一个持久的 canonical iframe。该 iframe 始终保存最近一次成功完成分页的文档。
+Core 会持续维护一个 canonical iframe，作为界面显示和打印的依据。其中保存着最近一次成功完成分页的文档。
 
 React 组件与 Viewer 直接显示这个 iframe。它们不会复制页面，也不会创建第二份展示文档。
 
 ## 源内容更新时会发生什么
 
-1. Core 为新源内容创建一个临时 staging iframe。
+1. Core 为新源内容创建一个临时 iframe，下文称为 staging iframe。
 2. Core 在其中加载已获准的资源，并对完整文档执行分页。
 3. 分页成功后，Core 一次性替换 canonical iframe 的内容。
-4. 如果任务失败、被取消或被较新任务取代，Core 会移除 staging iframe，并继续显示之前的文档。
+4. 如果任务失败、被取消或被更新的任务取代，Core 会移除 staging iframe，并继续显示之前的文档。
 
 staging iframe 从不用于预览、展示或打印。
 
@@ -25,14 +25,14 @@ staging iframe 从不用于预览、展示或打印。
 | 输出 | 来源 | 结果 |
 | --- | --- | --- |
 | 预览 | Canonical iframe | Viewer 显示的已完成分页页面 |
-| 打印 | 通过 canonical 页面隔离的 top document 快照调用 `Window.print()` | 浏览器原生打印流程；Imposia 不返回 PDF 字节 |
-| EPUB | 最新已提交语义源 | 可重排 EPUB 3.3 `Blob`，不是页面 DOM 的固定版式副本 |
+| 打印 | 将 canonical 页面复制到顶层文档中隔离的快照，再调用 `Window.print()` | 浏览器原生打印流程；Imposia 不返回 PDF 字节 |
+| EPUB | 最后确认的文档源内容 | 根据源内容的语义结构生成可重排 EPUB 3.3 `Blob`，而不是复制页面 DOM 的固定版式 |
 
-`PageDocument.exportEpub()` 不会重新运行 extension，也不会序列化固定页面布局。
+`PageDocument.exportEpub()` 不会重新运行扩展，也不会序列化固定页面布局。
 
 ## Viewer 与原生打印为何保持一致
 
-先在 Viewer 中查看 committed generation 的第 2、3 页，再在浏览器打印预览中选择“保存为 PDF”。打印预览会显示相同的内容与页面顺序。
+先在 Viewer 中查看当前已确认文档的第 2、3 页，再在浏览器打印预览中选择“保存为 PDF”。打印预览会显示相同的内容与页面顺序。
 
 ![Imposia Viewer 中显示的同一第二页](/images/publishing-contract/committed-page-viewer.png)
 
@@ -46,22 +46,22 @@ staging iframe 从不用于预览、展示或打印。
 
 *保存为 PDF 的预览保留了上方第 2、3 页相同的表格内容、页面顺序、重复表头与页眉页脚。*
 
-Imposia 不会为打印重新执行布局，也不会创建单独的 PDF renderer。`print()` 会将已提交的 canonical 页面和生成 CSS 克隆到 top document 中临时隔离的 shadow root，再调用 top `Window.print()`。这避免 Chromium 的 iframe 空白快照，同时在文档所列的支持范围内保持 Viewer、浏览器打印和保存为 PDF 的页面方向、margin box、重复表头、页码与内容顺序一致。
+Imposia 不会为打印重新计算布局，也不会创建单独的 PDF 渲染器。`print()` 会把已确认的 canonical 页面和生成的 CSS 复制到顶层文档中临时隔离的 Shadow Root，再调用顶层的 `Window.print()`。这种方式可以避开 Chromium 的 iframe 空白快照问题，并在文档列出的支持范围内，使 Viewer、浏览器打印和“保存为 PDF”结果中的纸张方向、margin box、重复表头、页码与正文顺序保持一致。
 
-打印 host 会隔离页面内容和 generation CSS，但 CSS `@page` 规则处于 document 级别。host 应用若同时定义未命名的 top-level `@page` 规则，可能与 Imposia hoist 的打印页面规则交互；打印时应避免这类竞争性的全局规则。
+打印宿主会隔离页面内容和每个版本的 CSS，但 CSS `@page` 规则仍作用于整个文档。如果宿主应用还定义了未命名的全局 `@page` 规则，可能会与 Imposia 提升到顶层文档的打印规则冲突。打印时请避免使用这类相互竞争的全局规则。
 
-Viewer 与保存为 PDF 的预览内容一致，是因为两个路径读取同一个 committed generation。这并不表示 Imposia 会直接返回 PDF 字节。打印机驱动的页边距、缩放、颜色校正以及不同浏览器的字体度量仍可能影响最终结果。
+Viewer 与“保存为 PDF”的预览内容一致，是因为两条路径使用同一份已确认文档。这并不表示 Imposia 会直接生成 PDF 字节。打印机驱动设置的页边距、缩放和颜色校正，以及不同浏览器的字体度量，仍可能影响最终结果。
 
 ## 控制外部资源
 
-宿主应用的 `assetResolver` 是外部资源的唯一入口。Core 拥有通过该入口生成的 Blob URL，并会在文档被替换、失败或销毁时撤销它们。
+宿主应用只能通过 `assetResolver` 获取外部资源。Core 管理通过该入口生成的 Blob URL，并会在替换文档、任务失败或销毁控制器时释放这些 URL。
 
-经过清理的输入、resolver 输出与 extension 仍受已记录的限制约束。当 Imposia 无法精确应用某项功能时，它会返回类型化警告，而不是静默猜测。
+经过清理的输入、`assetResolver` 输出和扩展仍受文档所列限制的约束。当 Imposia 无法准确处理某项功能时，不会静默猜测，而是返回带有代码和消息的警告。
 
 ## 检查兼容性边界
 
-- **稳定：** 浏览器 ESM API、iframe 生命周期、resolver 隔离、支持的页面媒体、原生打印与可重排 EPUB。
-- **受限：** 已记录的表格、flex、grid、多栏布局、引用和 named string 子集。
+- **稳定：** 浏览器 ESM API、iframe 生命周期、通过 `assetResolver` 隔离资源、支持的页面媒体、原生打印与可重排 EPUB。
+- **受限：** 文档列出的表格、flex、grid、多栏布局、引用和 named string。
 - **实验性：** 需显式启用的页内脚注和页浮动；这些功能会返回警告。
 - **不支持：** Node 或 CLI 渲染、服务端导出、PDF 字节、固定版式 EPUB、任意 CSS 分片，以及各浏览器页数完全一致。
 
