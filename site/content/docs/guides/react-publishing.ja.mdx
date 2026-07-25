@@ -1,0 +1,67 @@
+---
+title: Reactでプレビュー・印刷・PDF保存
+description: ひとつのReactページ文書をアプリで確認し、ブラウザー標準印刷またはPDF保存へつなげます。
+---
+
+最初のページが表示できた状態から始めます。同じ完成済み文書をアプリで確認し、紙へ印刷またはPDFとして保存します。EPUBも、この文書とともに確定したソースから作ります。
+
+## はじめに
+
+React 18以降のブラウザーアプリで[最初のページを作る](/ja/docs/getting-started)を完了してください。
+
+## 出版操作を接続する
+
+Viewerの隣に命令型ハンドルを置きます。各操作の完了を待ち、失敗はアプリのエラー処理境界へ渡します。
+
+```tsx
+import { ImposiaPageViewer, type ImposiaPageViewerHandle } from "@imposia/react";
+import { useRef } from "react";
+import "@imposia/react/styles.css";
+
+type PublishingActionsProps = {
+  readonly html: string;
+  readonly onActionError: (error: unknown) => void;
+};
+
+export function PublishingActions({ html, onActionError }: PublishingActionsProps) {
+  const viewer = useRef<ImposiaPageViewerHandle>(null);
+
+  async function print(): Promise<void> {
+    try {
+      await viewer.current?.print();
+    } catch (error) {
+      onActionError(error);
+    }
+  }
+
+  async function exportEpub(): Promise<void> {
+    try {
+      const blob = await viewer.current?.exportEpub({
+        metadata: { title: "四半期レポート", language: "ja", identifier: "urn:report:quarterly" },
+      });
+      if (!blob) return;
+
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "report.epub";
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      onActionError(error);
+    }
+  }
+
+  return (
+    <>
+      <ImposiaPageViewer ref={viewer} source={{ html }} onError={onActionError} />
+      <button type="button" onClick={() => void print()}>印刷 / PDF保存</button>
+      <button type="button" onClick={() => void exportEpub()}>EPUBを出力</button>
+    </>
+  );
+}
+```
+
+## 結果を確認する
+
+新しいソースを準備している間も、現在のプレビューは表示されたままです。印刷ボタンを押すと、完成済みページを使ってブラウザー標準の印刷画面が開きます。プリンターまたは**PDFとして保存**を選んでください。ImposiaはPDFバイトを直接返しません。EPUBは最後に確定したソースの意味構造をリフロー型EPUB 3.3 `Blob`として出力します。

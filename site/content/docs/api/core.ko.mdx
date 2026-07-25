@@ -1,0 +1,129 @@
+---
+title: Core API
+description: "@imposia/core가 제공하는 프레임워크 중립적인 페이지 문서와 Publication 컨트롤러입니다."
+---
+
+## Core 페이지 문서
+
+### `mountPageDocument`
+
+```ts
+function mountPageDocument(
+  container: HTMLElement,
+  source: { html: string; baseUrl?: string } | { lightDom: Element | DocumentFragment; baseUrl?: string },
+  options?: PageDocumentOptions,
+): PageDocumentController;
+```
+
+화면 표시와 인쇄의 기준이 되는 iframe(canonical iframe)을 하나 연결하고 다음 문서를 준비한 뒤, 컨트롤러를 바로 반환합니다. 첫 문서를 읽기 전에는 `await controller.ready`로 완료를 기다리세요. `baseUrl`은 상대 에셋 URL을 `assetResolver`에 넘기기 전에 해석하는 기준입니다. Core는 문서에 작성된 URL을 직접 가져오지 않습니다.
+
+| 옵션 | 기본값 | 설명 |
+| --- | --- | --- |
+| `css?: readonly string[]` | `[]` | 함께 적용할 CSS입니다. |
+| `assetResolver?: AssetResolver` | 없음 | 글꼴, 이미지, 미디어, 스타일시트 요청에 `resolved` 또는 `blocked`로 응답합니다. |
+| `page?: PageOptions` | A4, 세로, 20mm | `size`, `orientation`, `margin`을 정합니다. 사용자 크기와 여백은 양의 절대 CSS 길이여야 합니다. |
+| `limits?: PageLimits` | 내장 상한 | 입력, 노드, 에셋, 페이지, 레이아웃 작업의 상한을 더 낮춥니다. |
+| `headerTemplate`, `footerTemplate` | 없음 | 페이지 머리말과 꼬리말 HTML입니다. |
+| `decorateBlankPages?: boolean` | `true` | 의도적으로 삽입한 빈 페이지에 장식을 적용합니다. |
+| `experimental?: { footnotes?: boolean; pageFloats?: boolean }` | 꺼짐 | 실험 기능을 명시적으로 켭니다. |
+| `extensions?: readonly (PageExtension \| PublicationExtension)[]` | `[]` | 선언한 순서대로 변환, 에셋 정책, 장식, `finalizePage`를 적용합니다. |
+| `compose?: { yieldBudgetMs?: number; scheduler?: () => Promise<void> }` | 8ms 실행 예산 | 메인 스레드의 페이지네이션 작업을 나누어 실행합니다. `Infinity`는 스케줄러에 실행권을 넘기지 않습니다. |
+| `signal?: AbortSignal` | 없음 | 최초 작업을 취소합니다. |
+| `onProgress?: ({ completedPages, pass, provisional: true }) => void` | 없음 | 준비 단계에서 페이지를 할당할 때 현재 수렴 단계의 진행률을 전달합니다. 다음 수렴 단계에서는 완료 페이지 수가 1부터 다시 시작할 수 있습니다. |
+
+스케줄러, 글꼴, 이미지 대기 시간도 실제 경과 시간을 재는
+`limits.resourceDeadlineMs`에 포함됩니다. 진행률은 언제나 준비 단계의 잠정
+값입니다. 확정된 결과는 `controller.current`에서만 읽으세요.
+
+```ts
+type AssetResolver = (request: {
+  url: string;
+  kind: "font" | "image" | "media" | "stylesheet";
+  baseUrl?: string;
+  signal: AbortSignal;
+}) => Promise<
+  | { status: "resolved"; bytes: Uint8Array; mimeType: string; resolvedUrl?: string }
+  | { status: "blocked"; reason?: string }
+>;
+```
+
+`PageLimits` 필드는 `maxInputBytes`, `maxNodes`, `maxAssetBytes`, `maxAssetDepth`, `maxAssetReferences`, `resourceDeadlineMs`, `maxPages`, `maxLayoutPasses`, `maxGeneratedFragments`, `maxGeneratedRecords`입니다. 모두 양의 정수이며 내장 상한보다 클 수 없습니다.
+
+`PageExtension`과 `PublicationExtension`은 동기식 `finalizePage(page, context)`를 구현할 수 있습니다. Core가 장식과 margin box 처리를 마치고 문서를 확정하기 전에 승인된 페이지마다 한 번 실행됩니다. `page.element`는 크기를 측정할 수 있는 실제 페이지 요소입니다. `page.tableFragments`에는 원본과 1부터 시작하는 연속 인덱스를 가진 표 조각이 들어갑니다. `finalizePage`는 `decorateBlankPages` 설정과 관계없이, 의도적으로 삽입한 빈 페이지를 포함한 모든 할당 페이지에서 실행됩니다. 변경 내용은 확정된 iframe에 유지되며, `undefined`가 아닌 값을 반환하면 해당 세대가 거부됩니다.
+
+분할된 표의 이어지는 조각에도 측정한 열 너비를 고정해야 한다면 선택형 `createTableColgroupExtension()`을 사용하세요. Core는 작성된 `<colgroup>`을 항상 유지하지만 기본값으로 열 너비를 새로 만들지는 않습니다.
+
+#### `PageDocumentController`
+
+| 컨트롤러 멤버 | 반환값과 동작 |
+| --- | --- |
+| `ready` | `Promise<PageDocument>`. 첫 문서가 확정되면 이행되고, 확정할 수 없으면 거부됩니다. |
+| `current` | `PageDocument \| undefined`. 갱신이 실패해도 이전 확정 문서를 유지하고, 컨트롤러를 제거하면 `undefined`가 됩니다. |
+| `update(source, options?)` | `Promise<PageDocument>`. 새 세대를 시작하며 더 새로운 갱신이 시작되면 진행 중인 작업을 취소합니다. `options.signal`을 지원합니다. |
+| `print()` | `Promise<void>`. 최신 작업이 끝날 때까지 기다린 뒤 마지막 성공 페이지로 브라우저의 기본 인쇄 창을 엽니다. 이 창에서 **PDF로 저장**을 선택할 수 있으며, PDF 바이트는 반환하지 않습니다. 완성된 문서가 없거나 컨트롤러를 제거한 뒤에는 거부됩니다. |
+| `destroy()` | `Promise<void>`. 세대 생성과 내보내기를 취소하고 iframe과 Core 소유 리소스를 정리한 뒤 추적 중인 작업이 끝날 때까지 기다립니다. 여러 번 호출해도 안전합니다. |
+
+### `PageDocument`
+
+`PageDocument`는 한 번 확정되면 바뀌지 않습니다.
+
+| 멤버 | 타입·반환값 | 의미 |
+| --- | --- | --- |
+| `iframe` | `HTMLIFrameElement` | Core가 소유하는 canonical iframe입니다. |
+| `generation`, `pageCount` | `number` | 확정 세대 번호와 페이지 수입니다. |
+| `pages` | `readonly PageMetadata[]` | 페이지 번호, 좌우 면, 이름, 빈 페이지 여부, 크기, 본문 텍스트입니다. |
+| `warnings` | `readonly PageWarning[]` | 현재 세대의 진단입니다. |
+| `timings` | `{ totalMs; resourceMs; paginationMs }` | 밀리초 단위의 세대 처리 시간입니다. |
+| `exportEpub(options)` | `Promise<Blob>` | 진행 중인 최신 작업을 기다린 뒤, 의미 구조를 보존한 최신 확정 원본을 내보냅니다. |
+
+```ts
+const controller = mountPageDocument(host, { html: "<h1>안녕하세요</h1>" });
+const pageDocument = await controller.ready;
+const epub = await pageDocument.exportEpub({
+  metadata: { title: "문서", language: "ko", identifier: "urn:example:doc" },
+});
+```
+
+EPUB 옵션에는 `metadata: { title, language, identifier, modified? }`가 필요합니다. `modified?`는 `Z`로 끝나는 UTC 타임스탬프이며 기본값은 `1970-01-01T00:00:00Z`입니다. `signal?`과 `limits?: { maxEntries?, maxBytes? }`도 받을 수 있습니다. 반환되는 `Blob`의 `type`은 `application/epub+zip`입니다.
+
+### Core 유틸리티
+
+| API | 반환값과 제한 |
+| --- | --- |
+| `prepareDocument(html, options?)` | `{ html, headerTemplate?, footerTemplate?, warnings }`. 동기적으로 정리하며 페이지나 iframe은 만들지 않습니다. 옵션은 `headerTemplate`, `footerTemplate`, `allowRemoteResources`입니다. |
+| `pageWarningTargetBounds(pageDocument, warning)` | `{ left, top, width, height } \| undefined`. 현재 문서의 추적 가능한 경고만 좌표를 반환합니다. |
+| `hasPageDocumentFrameSandbox(iframe)` | `boolean`. sandbox 토큰이 공개 상수 `PAGE_DOCUMENT_FRAME_SANDBOX`의 `allow-same-origin`, `allow-modals`와 정확히 같은지 확인합니다. |
+| `selectBlankMarkers(markers, pages)` | 빈 페이지가 필요한 marker ID 배열입니다. `markers`는 `{ id, side: "left" \| "right" }[]`이고 ID를 찾을 수 없으면 예외가 발생합니다. |
+
+## Core Publication
+
+### `mountPublication`
+
+```ts
+function mountPublication(
+  container: HTMLElement,
+  snapshot: PublicationSnapshot,
+  options?: PublicationOptions,
+): PublicationController;
+```
+
+순서가 있는 `entry`를 하나의 페이지 순서로 조합하고 컨트롤러를 동기적으로 반환합니다. `snapshot`이 잘못됐거나 Publication 확장 기능이 실패하면 마운트 중에 예외가 발생할 수 있습니다.
+
+`PublicationSnapshot`은 `metadata: { title, language?, identifier? }`와 순서가 있는 `entries`를 가집니다. 각 `entry`에는 `id`, `title`, 선택형 `baseUrl`, 그리고 `html` 또는 `lightDom` 중 정확히 하나가 필요합니다. Publication 제목과 각 `entry`의 ID·제목은 비어 있지 않아야 하며, `entry`가 하나 이상 필요합니다. ID는 서로 달라야 하고 공백이나 제어 문자를 포함해서는 안 됩니다.
+
+`PublicationOptions`는 `PageDocumentOptions`와 같지만 `extensions`의 타입이 `readonly PublicationExtension[]`입니다. Publication 확장 기능은 `transformEntry`, `allowAsset`, `decoratePage`를 제공할 수 있지만 일반 페이지용 `transform`은 사용할 수 없습니다.
+
+#### `PublicationController`
+
+| 멤버 | 반환값과 동작 |
+| --- | --- |
+| `ready` | `Promise<PublicationDocument>`. 처음 확정된 Publication입니다. |
+| `current` | `PublicationDocument \| undefined`. 현재 확정 문서입니다. |
+| `resolveDestination(id)` | `PublicationDestination \| undefined`. 현재 세대의 `outline`이나 검색 결과 ID를 해석합니다. |
+| `search(query)` | `readonly PublicationSearchResult[]`. 문서가 확정되기 전에는 빈 배열을 반환하고, 이후에는 현재 색인을 검색합니다. |
+| `navigate(destination)` | `void`. 목적지 전체가 현재 세대와 일치하고 실제로 존재할 때만 이동합니다. 그렇지 않으면 예외가 발생합니다. |
+| `update(snapshot, options?)` | `Promise<PublicationDocument>`. 완전한 `snapshot`을 검증하고 준비합니다. `options.signal`을 지원합니다. |
+| `print()` | `Promise<void>`. 내부 Page 컨트롤러의 최신 성공 문서 인쇄 동작을 사용합니다. |
+| `destroy()` | `Promise<void>`. 내부 Page와 Publication 리소스를 정리합니다. |
+
+`PublicationDocument`는 `PageDocument`에 `metadata`, `entries`, `outline`을 더합니다. 각 `entry`의 `pageRange`는 전역 페이지 범위이며, 서로 이웃한 `entry`가 한 페이지를 공유할 수 있습니다. `outline` 항목은 `kind`, `title`, `level`, `destination`, `children`을 가집니다. `destination`에는 `id`, `entryId`, `page`, `generation`이 있습니다. 검색 결과는 `entry`, `page`, `excerpt`, `destination`을 제공합니다.

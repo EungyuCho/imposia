@@ -1,9 +1,9 @@
 ---
 title: 첫 페이지 만들기
-description: React 앱에 Imposia를 추가하고 HTML을 A4 페이지로 표시한 뒤 인쇄와 EPUB 동작을 연결합니다.
+description: React 앱에서 HTML을 A4 페이지로 미리보고, 인쇄하거나 PDF로 저장합니다.
 ---
 
-이 문서를 따라 기존 React 앱에 페이지 미리보기를 추가해 보세요. 하나의 컴포넌트로 HTML을 A4 페이지에 표시하고, 인쇄와 EPUB 내보내기를 호출할 수 있습니다.
+기존 React 앱에 페이지 미리보기를 붙여 봅니다. 이 문서를 마치면 HTML을 A4 페이지로 확인하고, 같은 결과를 브라우저 인쇄 창으로 보내 종이로 출력하거나 PDF로 저장할 수 있습니다.
 
 ## 시작하기 전에
 
@@ -35,7 +35,7 @@ export function Preview() {
         documentOptions={{ page: { size: "A4", margin: "18mm" } }}
       />
       <button type="button" onClick={() => void viewer.current?.print()}>
-        인쇄
+        인쇄 / PDF 저장
       </button>
       <button
         type="button"
@@ -58,9 +58,9 @@ export function Preview() {
 
 브라우저에서 컴포넌트를 열고 HTML이 A4 페이지로 표시되는지 확인하세요.
 
-- **인쇄**를 누르면 Viewer에 표시된 페이지를 사용해 브라우저 인쇄를 시작합니다.
+- **인쇄 / PDF 저장**을 누르면 Viewer에 보이는 페이지로 브라우저의 기본 인쇄 창이 열립니다. 종이로 출력하려면 프린터를, 파일로 남기려면 **PDF로 저장**을 선택하세요. 이 메서드는 PDF 바이트를 반환하지 않습니다.
 - **EPUB 내보내기**는 리플로우형 EPUB 3.3 `Blob`을 반환합니다. 위 예제는 내보내기 메서드까지만 호출하므로, 실제 앱에서는 반환된 `Blob`을 다운로드나 저장 흐름에 연결하세요.
 
-`source`가 바뀌어도 다음 문서가 완성될 때까지 현재 페이지를 계속 보여줍니다. 에셋을 불러오거나 실제 출력 UI를 연결하기 전에 [미리보기와 출력이 일치하는 방식](/ko/docs/publishing-contract)을 확인하세요.
+`source`가 바뀌어도 다음 문서가 완성될 때까지 현재 페이지를 계속 보여줍니다. 에셋을 불러오거나 실제 출력 UI를 연결하기 전에 [미리보기와 출력이 일치하는 방식](/ko/docs/concepts/publishing-model)을 확인하세요.
 
-컴포넌트 props, ref 핸들, Core 컨트롤러와 Viewer 메서드를 더 자세히 보려면 [API 레퍼런스](/ko/docs/api-reference)로 이어가세요.
+컴포넌트 props, ref 핸들, Core 컨트롤러와 Viewer 메서드를 더 자세히 보려면 [API 레퍼런스](/ko/docs/api)로 이어가세요.

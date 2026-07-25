@@ -1,0 +1,5 @@
+{
+  "title": "APIリファレンス",
+  "defaultOpen": true,
+  "pages": ["index", "react", "core", "viewer"]
+}

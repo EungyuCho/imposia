@@ -1,0 +1,64 @@
+---
+title: API 레퍼런스
+description: React, Core, Viewer 중 필요한 API를 고르고 패키지 관계와 공통 수명 주기를 확인합니다.
+---
+
+첫 문서를 띄운 뒤 필요한 API를 찾을 때 사용하세요. 패키지별 페이지에서 컴포넌트, 컨트롤러, 옵션, 호출 시점을 확인할 수 있습니다.
+
+## 패키지 맵
+
+| 패키지 | 용도 | 대표 API |
+| --- | --- | --- |
+| `@imposia/react` | React 통합 | `ImposiaPageViewer`, `ImposiaDocument`, `ImposiaPublicationViewer`, 두 수명 주기 훅 |
+| `@imposia/core` | 프레임워크에 종속되지 않는 페이지네이션과 Publication | `mountPageDocument`, `mountPublication`, `prepareDocument` |
+| `@imposia/viewer` | 완성된 페이지 또는 기존 PDF 표시 | `mountPageViewer`, `mountViewer`, 딥 링크 도우미 |
+| `@imposia/client` | 프레임워크에 종속되지 않는 통합 진입점 | 주요 Core·Viewer 통합 API를 다시 내보냅니다. |
+
+React 패키지를 사용할 때는 `@imposia/react/styles.css`를 한 번만 불러오세요.
+
+```ts
+import "@imposia/react/styles.css";
+// 또는 import "@imposia/client/styles.css";
+```
+
+## API를 선택하세요
+
+- [React API](/ko/docs/api/react): React 앱에서 사용하는 컴포넌트, 훅, 명령형 핸들입니다.
+- [Core API](/ko/docs/api/core): 프레임워크 중립적인 페이지네이션과 Publication 컨트롤러입니다.
+- [Viewer API](/ko/docs/api/viewer): 페이지, PDF, Reader, Inspector, 탐색 컨트롤러입니다.
+
+## 수명 주기와 오류
+
+| 상황 | 결과 |
+| --- | --- |
+| 첫 세대를 준비하는 중 | `current`는 `undefined`이고 React 상태는 `loading`입니다. |
+| 문서를 확정한 뒤 갱신하는 중 | 이전 확정 문서가 화면과 React 상태에 남습니다. |
+| 더 새로운 갱신 시작 | 진행 중이던 이전 세대의 `Promise`가 `AbortError`와 함께 거부됩니다. |
+| 호출자가 작업 취소 | 관련 세대 생성 또는 내보내기의 `Promise`가 DOM `AbortError`와 함께 거부됩니다. |
+| 문서를 확정한 뒤 갱신 실패 | `Promise`는 거부되지만 이전 확정 문서는 `current`에 남습니다. |
+| 컨트롤러 제거 | 작업을 취소하고 리소스와 iframe을 해제하며 `current`를 비웁니다. |
+
+`ImposiaError`는 `Error`를 확장하며 `readonly code: string`을 가집니다. 취소는 보고해야 할 실패와 구분해 처리하세요.
+
+```ts
+class ImposiaError extends Error {
+  readonly code: string;
+  constructor(code: string, message: string);
+}
+```
+
+Core가 분류한 오류에는 `code`가 있습니다. 예를 들어 잘못된 페이지 크기는 `INVALID_PAGE_GEOMETRY`, 이전 세대의 Publication 목적지는 `STALE_PUBLICATION_DESTINATION`, 리소스 시간 초과는 `RESOURCE_TIMEOUT`입니다. 공개 타입의 `code`는 문자열이므로 모든 코드가 고정된 union이라고 가정하지 마세요. 구조나 호출 순서가 잘못되면 일반 `Error`나 `TypeError`가 발생할 수도 있습니다.
+
+```ts
+try {
+  await controller.update(nextSource, { signal });
+} catch (error) {
+  if (error instanceof DOMException && error.name === "AbortError") return;
+  if (error instanceof ImposiaError) console.error(error.code, error.message);
+  throw error;
+}
+```
+
+Viewer 메서드는 현재 상태에서 실행할 수 없는 호출을 대체로 무시합니다. 다만 소유 관계가 중요한 호출은 예외를 발생시킵니다. Page Viewer의 마운트와 `refresh()`는 canonical iframe을 검증하고, Publication 탐색은 이전 세대의 목적지를 거부하며, Reader와 Inspector는 각각 다른 세대의 썸네일과 경고를 거부합니다.
+
+이전 세대의 `destination`, 검색 결과, 썸네일, 경고를 새 확정 문서에서 다시 사용하지 마세요. `resolveDestination()`, `search()`, Reader `state`, 새 문서의 `warnings`에서 다시 가져오세요.

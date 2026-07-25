@@ -1,0 +1,67 @@
+---
+title: Preview, print, and save as PDF from React
+description: Connect one React page document to preview, native print, Save as PDF, and reflowable EPUB export.
+---
+
+This guide starts after your first page is working. It keeps preview, native print, Save as PDF, and EPUB actions on the same completed document instead of creating a second rendering path.
+
+## Start here
+
+Complete [Build your first page](/en/docs/getting-started) in a React 18 or later browser application.
+
+## Connect publishing actions
+
+Keep the imperative handle beside the Viewer. Await each action and route failures to your application's error boundary.
+
+```tsx
+import { ImposiaPageViewer, type ImposiaPageViewerHandle } from "@imposia/react";
+import { useRef } from "react";
+import "@imposia/react/styles.css";
+
+type PublishingActionsProps = {
+  readonly html: string;
+  readonly onActionError: (error: unknown) => void;
+};
+
+export function PublishingActions({ html, onActionError }: PublishingActionsProps) {
+  const viewer = useRef<ImposiaPageViewerHandle>(null);
+
+  async function print(): Promise<void> {
+    try {
+      await viewer.current?.print();
+    } catch (error) {
+      onActionError(error);
+    }
+  }
+
+  async function exportEpub(): Promise<void> {
+    try {
+      const blob = await viewer.current?.exportEpub({
+        metadata: { title: "Quarterly report", language: "en", identifier: "urn:report:quarterly" },
+      });
+      if (!blob) return;
+
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "report.epub";
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      onActionError(error);
+    }
+  }
+
+  return (
+    <>
+      <ImposiaPageViewer ref={viewer} source={{ html }} onError={onActionError} />
+      <button type="button" onClick={() => void print()}>Print / Save as PDF</button>
+      <button type="button" onClick={() => void exportEpub()}>Export EPUB</button>
+    </>
+  );
+}
+```
+
+## Check the result
+
+Preview stays visible while a new source is staged. Print opens the browser's native dialog for the committed page document; choose a printer or **Save as PDF** there. Imposia does not return PDF bytes. EPUB exports the latest committed semantic source as a reflowable EPUB 3.3 `Blob`.

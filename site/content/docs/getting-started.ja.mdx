@@ -1,9 +1,9 @@
 ---
 title: 最初のページを作る
-description: React アプリに Imposia を追加し、HTML を A4 ページとして表示して、印刷と EPUB の操作を接続します。
+description: ReactアプリでHTMLをA4ページとして確認し、印刷またはPDFとして保存します。
 ---
 
-このガイドに沿って、既存の React アプリにページプレビューを追加してみましょう。1 つのコンポーネントで HTML を A4 ページとして表示し、印刷と EPUB 書き出しを実行できるようになります。
+既存のReactアプリにページプレビューを追加します。このガイドを終えると、HTMLをA4ページとして確認し、同じ結果をブラウザーの印刷画面から紙へ印刷またはPDFとして保存できます。
 
 ## 始める前に
 
@@ -35,7 +35,7 @@ export function Preview() {
         documentOptions={{ page: { size: "A4", margin: "18mm" } }}
       />
       <button type="button" onClick={() => void viewer.current?.print()}>
-        印刷
+        印刷 / PDF保存
       </button>
       <button
         type="button"
@@ -58,9 +58,9 @@ export function Preview() {
 
 ブラウザーでコンポーネントを開き、HTML が A4 ページとして表示されることを確認してください。
 
-- **印刷**を押すと、Viewer に表示中のページを使ってブラウザーの印刷処理が始まります。
+- **印刷 / PDF保存**を押すと、Viewerに表示中のページを使ってブラウザー標準の印刷画面が開きます。紙に出す場合はプリンターを、ファイルに残す場合は**PDFとして保存**を選びます。このメソッドはPDFバイトを返しません。
 - **EPUB を書き出す**を押すと、リフロー型 EPUB 3.3 `Blob` が返ります。この例では書き出しメソッドを呼ぶところまでしか扱いません。実際のアプリでは、返された `Blob` をダウンロードまたは保存処理につないでください。
 
-`source` を更新しても、次の文書が完成するまでは現在のページが表示され続けます。アセットの読み込みや本番用の出力 UI を追加する前に、[プレビューと出力が一致する仕組み](/ja/docs/publishing-contract)を確認してください。
+`source` を更新しても、次の文書が完成するまでは現在のページが表示され続けます。アセットの読み込みや本番用の出力 UI を追加する前に、[プレビューと出力が一致する仕組み](/ja/docs/concepts/publishing-model)を確認してください。
 
-コンポーネントの全 props、ハンドル、Core と Viewer の低レベル API は、[API リファレンス](/ja/docs/api-reference)で確認できます。
+コンポーネントの全 props、ハンドル、Core と Viewer の低レベル API は、[API リファレンス](/ja/docs/api)で確認できます。

@@ -1,0 +1,91 @@
+---
+title: Viewer API
+description: "@imposia/viewer가 제공하는 페이지, PDF, Reader, Inspector, 탐색 컨트롤러입니다."
+---
+
+## Viewer 페이지/PDF, Reader, Inspector
+
+### `mountPageViewer`
+
+```ts
+function mountPageViewer(
+  container: HTMLElement,
+  pageDocument: PageDocument,
+  options?: PageViewerOptions,
+): PageViewerController;
+```
+
+`pageDocument.iframe.parentElement`는 `container`여야 합니다. 옵션은 `mode?: "continuous" | "single" | "spread"`, `spread?: { cover? }`, `zoom?`, `controls?`, `theme?`, `inspector?`, `reader?`입니다. 기본값은 `continuous`, `cover: false`, `zoom: 1`, `controls: true`이며 Inspector와 Reader는 사용하지 않습니다. `controls: false`를 지정하면 표시 컨트롤러는 유지하면서 기본 조작 UI를 만들지 않습니다. 배율은 0.5–2.5로 제한됩니다. 너비가 720px보다 좁으면 요청한 spread 모드는 유지하되 `effectiveMode`만 `single`이 됩니다.
+
+#### `PageViewerController`
+
+| 멤버 | 반환값과 동작 |
+| --- | --- |
+| `goToPage(page)` | 번호를 유효 범위로 제한해 이동합니다. 유한하지 않은 값은 무시합니다. |
+| `nextPage()`, `previousPage()` | 다음 또는 이전 페이지·spread로 이동합니다. |
+| `setZoom(zoom)` | 0.5–2.5, 0.1 단위로 배율을 바꿉니다. |
+| `setMode(mode)` | continuous, single, spread를 선택합니다. |
+| `setSpreadCover(cover)` | spread 표지 배치를 바꿉니다. |
+| `setTheme(theme?)` | `--imposia-viewer-*` 문자열 사용자 정의 속성 맵을 교체하거나 제거합니다. |
+| `subscribe(listener)` | 현재 상태를 즉시 전달하고 이후 표시 상태 변경을 전달합니다. 반환 함수를 호출하면 구독을 해제합니다. |
+| `refresh(pageDocument)` | 같은 iframe의 더 최신 세대로 갱신합니다. 다른 iframe이나 이전 세대의 문서를 전달하면 예외가 발생합니다. |
+| `print()` | 현재 기준 페이지를 최상위 문서의 격리된 복사본으로 옮긴 뒤 브라우저의 기본 인쇄 창을 엽니다. 사용자는 여기서 **PDF로 저장**을 선택할 수 있습니다. 컨트롤러를 제거한 뒤에는 `Promise`가 거부됩니다. |
+| `destroy()` | Reader, Inspector, 테마와 이벤트를 정리하고 기존 속성을 복원합니다. |
+| `state` | `{ page, pageCount, zoom, mode, effectiveMode, status: "ready", generation }`입니다. |
+| `reader`, `inspector` | 옵션을 켰을 때 각 컨트롤러, 아니면 `undefined`입니다. |
+
+Viewer CSS는 `.imposia-viewer` 안에만 적용됩니다. 호스트 앱의 `body`,
+`:root`, 외부 요소, 스크롤을 바꾸지 않으며 미리보기의 크기와 배경은
+호스트가 정합니다.
+
+`validatePageViewerOptions(pageDocument, options?)`는 테마, `PageDocument` 구조, Reader 소유 관계를 검사하고 `void`를 반환합니다. 어댑터가 기존 Viewer를 해제하기 전에 새 설정을 확인할 때 사용합니다.
+
+### Publication Reader와 딥 링크
+
+Reader 옵션은 현재 `PublicationDocument`를 소유한 `controller`, `initialDeepLink?`, `onDeepLinkChange?`입니다.
+
+| `PublicationReaderController` 메서드 | 반환값과 동작 |
+| --- | --- |
+| `openTableOfContents()`, `closeTableOfContents()`, `toggleTableOfContents()` | 목차 상태를 제어합니다. |
+| `openThumbnails()`, `closeThumbnails()`, `toggleThumbnails()` | 썸네일 상태를 제어합니다. |
+| `selectThumbnail(thumbnail)` | 현재 세대의 전역 페이지로 이동합니다. 이전 세대의 모델을 전달하면 예외가 발생합니다. |
+| `openSearch()`, `closeSearch()`, `toggleSearch()` | 검색 상태를 제어합니다. |
+| `search(query)` | 현재 확정 문서의 검색 결과 배열입니다. |
+| `nextSearchResult()`, `previousSearchResult()` | 결과를 선택해 이동하거나 결과가 없으면 `undefined`입니다. |
+| `selectSearchResult(result)` | 결과 목적지로 이동합니다. |
+| `navigate(destination)` | Core 목적지와 Viewer 페이지를 함께 이동하고 딥 링크를 갱신합니다. |
+| `restoreDeepLink(value)` | 현재 목적지로 복원해 이동하거나 `undefined`를 반환합니다. |
+| `state` | 목차·썸네일·검색 상태와 현재 `destination`, 딥 링크의 스냅샷입니다. |
+
+Reader 메서드는 컨트롤러를 제거한 뒤 호출하면 모두 예외가 발생합니다. 목차·썸네일·검색 패널 중 하나를 열면 나머지 패널은 닫힙니다. `PublicationThumbnail`에는 페이지, 세대, 크기, `previewLineCount`가 있습니다.
+
+`serializePublicationDeepLink(destination)`은 `v1.`과 URL 인코딩된 ID를 반환합니다. `restorePublicationDeepLink(value, controller)`는 현재 목적지를 반환하며 이동하지 않습니다. 형식이나 ID가 유효하지 않으면 `undefined`입니다.
+
+### Viewer Inspector
+
+| `ViewerInspectorController` 멤버 | 반환값과 동작 |
+| --- | --- |
+| `open()`, `close()`, `toggle()` | 경고 패널 상태를 제어합니다. 컨트롤러를 제거한 뒤에는 예외가 발생합니다. |
+| `select(warning)` | 현재 문서의 경고를 선택하고 위치가 있으면 이동해 강조합니다. 이전 세대의 경고이면 예외가 발생합니다. |
+| `state` | `{ open, warnings, selected }`입니다. |
+
+### `mountViewer`로 PDF 표시
+
+```ts
+function mountViewer(
+  container: HTMLElement,
+  source: Uint8Array | ArrayBuffer | string | { pdf: Uint8Array },
+  options?: ViewerOptions,
+): ViewerController;
+```
+
+이 별도 Viewer는 PDF.js로 PDF 페이지를 불러와 이미지로 표시합니다. 옵션은 `mode?: "continuous" | "single"`, `zoom?`, `workerSrc?`, `theme?`입니다. 컨트롤러를 즉시 반환하며 `ready` Promise는 없습니다. 준비 상태는 `state.status`의 `loading`, `ready`, `error`로 확인하세요. 오류 문자열은 `state.error`에 들어갑니다.
+
+| `ViewerController` 멤버 | 반환값과 동작 |
+| --- | --- |
+| `goToPage(page)`, `nextPage()`, `previousPage()` | PDF 페이지를 이동합니다. |
+| `setZoom(zoom)` | 배율을 0.5–2.5로 제한하고 다시 렌더링합니다. |
+| `setMode(mode)` | continuous 또는 single로 바꿉니다. |
+| `setTheme(theme?)` | 인스턴스 테마를 교체하거나 제거합니다. |
+| `destroy()` | 로딩과 렌더링을 취소하고 컨테이너를 비웁니다. |
+| `state` | `{ page, pageCount, zoom, mode, status, error? }`의 복사본입니다. |

@@ -1,0 +1,67 @@
+---
+title: React 文档的预览、打印与 PDF 保存
+description: 用同一份 React 分页文档完成应用内预览、浏览器原生打印与“保存为 PDF”。
+---
+
+本指南从第一个分页文档已经正常显示的状态开始。同一份已完成文档可在应用中预览、打印到纸张或保存为 PDF。EPUB 也由与页面一同确认的源内容生成。
+
+## 开始
+
+请先在 React 18 或更高版本的浏览器应用中完成[创建第一个分页预览](/zh-CN/docs/getting-started)。
+
+## 连接出版操作
+
+将命令式句柄放在 Viewer 旁。等待每项操作完成，并把失败交给应用的错误处理边界。
+
+```tsx
+import { ImposiaPageViewer, type ImposiaPageViewerHandle } from "@imposia/react";
+import { useRef } from "react";
+import "@imposia/react/styles.css";
+
+type PublishingActionsProps = {
+  readonly html: string;
+  readonly onActionError: (error: unknown) => void;
+};
+
+export function PublishingActions({ html, onActionError }: PublishingActionsProps) {
+  const viewer = useRef<ImposiaPageViewerHandle>(null);
+
+  async function print(): Promise<void> {
+    try {
+      await viewer.current?.print();
+    } catch (error) {
+      onActionError(error);
+    }
+  }
+
+  async function exportEpub(): Promise<void> {
+    try {
+      const blob = await viewer.current?.exportEpub({
+        metadata: { title: "季度报告", language: "zh-CN", identifier: "urn:report:quarterly" },
+      });
+      if (!blob) return;
+
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "report.epub";
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      onActionError(error);
+    }
+  }
+
+  return (
+    <>
+      <ImposiaPageViewer ref={viewer} source={{ html }} onError={onActionError} />
+      <button type="button" onClick={() => void print()}>打印 / 保存为 PDF</button>
+      <button type="button" onClick={() => void exportEpub()}>导出 EPUB</button>
+    </>
+  );
+}
+```
+
+## 检查结果
+
+准备新源内容时，现有预览会继续显示。点击打印按钮后，浏览器会为已完成页面打开原生打印对话框；选择打印机或**保存为 PDF**即可。Imposia 不直接返回 PDF 字节。EPUB 则把最后确认的语义源导出为可重排 EPUB 3.3 `Blob`。

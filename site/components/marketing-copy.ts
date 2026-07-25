@@ -1,30 +1,37 @@
 import { LOCALES, type Locale } from "../lib/i18n";
 
 export interface MarketingFeature {
-  description: string;
-  proof: string;
-  title: string;
+  readonly description: string;
+  readonly proof: string;
+  readonly title: string;
+}
+
+export interface MarketingOutcome {
+  readonly description: string;
+  readonly title: string;
 }
 
 export interface MarketingCopy {
-  codeLabel: string;
-  copiedLabel: string;
-  copyFailedLabel: string;
-  copyLabel: string;
-  description: string;
-  docsCta: string;
-  eyebrow: string;
-  featureDescription: string;
-  featureEyebrow: string;
-  featureTitle: string;
-  features: readonly MarketingFeature[];
-  footerDescription: string;
-  metadataDescription: string;
-  metadataTitle: string;
-  primaryCta: string;
-  publishingContractLabel: string;
-  skipLink: string;
-  title: string;
+  readonly codeLabel: string;
+  readonly copiedLabel: string;
+  readonly copyFailedLabel: string;
+  readonly copyLabel: string;
+  readonly description: string;
+  readonly docsCta: string;
+  readonly eyebrow: string;
+  readonly featureDescription: string;
+  readonly featureEyebrow: string;
+  readonly featureTitle: string;
+  readonly features: readonly MarketingFeature[];
+  readonly footerDescription: string;
+  readonly metadataDescription: string;
+  readonly metadataTitle: string;
+  readonly outcomes: readonly MarketingOutcome[];
+  readonly outcomesLabel: string;
+  readonly primaryCta: string;
+  readonly publishingContractLabel: string;
+  readonly skipLink: string;
+  readonly title: string;
 }
 
 export const HERO_CODE = [
@@ -34,239 +41,300 @@ export const HERO_CODE = [
 
 export const marketingCopy: Record<Locale, MarketingCopy> = {
   en: {
-    metadataTitle: "Imposia — HTML in. Pages out.",
+    metadataTitle: "Imposia — Print React HTML or save it as PDF",
     metadataDescription:
-      "Atomic browser-native HTML/CSR pagination for React preview, native print, and semantic export.",
-    eyebrow: "HTML/CSR pagination integrity",
-    title: "HTML in. Pages out.",
+      "Turn React HTML into complete browser-native pages for in-app preview, native print, Save as PDF, and reflowable EPUB.",
+    outcomesLabel: "What you can do with Imposia",
+    eyebrow: "Browser-native document publishing for React",
+    title: "Turn React HTML into pages you can preview, print, and save as PDF.",
     description:
-      "Turn current HTML and CSS into committed pages without losing or duplicating declared-flow content at page boundaries. Rapid CSR updates replace only complete generations.",
+      "Add a paginated document surface without sending HTML to a server renderer. Imposia keeps the last complete document visible while it prepares the next, then uses that committed result for preview and print.",
     codeLabel: "React quick start",
     copyLabel: "Copy code",
     copiedLabel: "Copied",
     copyFailedLabel: "Copy failed",
-    primaryCta: "Explore the demo",
-    docsCta: "Read the docs",
-    publishingContractLabel: "Publishing contract",
+    primaryCta: "Try the publishing lab",
+    docsCta: "Start building",
+    publishingContractLabel: "Publishing model",
     skipLink: "Skip to content",
-    featureEyebrow: "One source, one committed sequence",
-    featureTitle: "Page breaks and rapid updates stay internally consistent.",
+    outcomes: [
+      {
+        title: "Preview in your app",
+        description: "Render paginated HTML inside the product your users already know.",
+      },
+      {
+        title: "Print or save as PDF",
+        description:
+          "Open native browser print from the same committed pages, then print or choose Save as PDF.",
+      },
+      {
+        title: "Publish a real EPUB",
+        description: "Export reflowable EPUB 3.3 from the latest committed semantic source.",
+      },
+    ],
+    featureEyebrow: "What your product gains",
+    featureTitle: "One browser document path, from live content to reader-ready output.",
     featureDescription:
-      "Public fixtures flatten every page back to the exact source order. Preview and print share that committed document; EPUB remains a semantic projection.",
+      "Keep authoring in React. Imposia handles page boundaries, complete updates, native print, and semantic export in the browser.",
     features: [
       {
-        title: "Exact committed sequence",
+        title: "Start with one React component",
         description:
-          "Every source token in the declared continuity fixture appears exactly once and in order across the committed page boundaries.",
+          "Pass HTML to ImposiaPageViewer and add a paginated surface without introducing a document server.",
+        proof: "@IMPOSIA/REACT",
+      },
+      {
+        title: "Keep complete pages on screen",
+        description:
+          "A source update replaces the visible document only after the next generation finishes.",
+        proof: "ATOMIC COMMIT",
+      },
+      {
+        title: "Protect content at page breaks",
+        description:
+          "Within the declared contract, authored content remains exactly once and in source order across pages.",
         proof: "NO GAPS · NO DUPLICATES",
       },
       {
-        title: "Browser-native pagination",
+        title: "Use native print and Save as PDF",
         description:
-          "HTML, CSS page rules, and recursive flow fragmentation stay in the browser where the final document lives.",
-        proof: "BROWSER ESM",
+          "Open the browser print dialog from the accepted page sequence. PDF output comes from its Save as PDF option, not a separate PDF renderer.",
+        proof: "NATIVE PRINT · PDF",
       },
       {
-        title: "React-first, Core underneath",
+        title: "Export semantic EPUB",
         description:
-          "Use the React component for application work or the framework-neutral Core controller for a custom surface.",
-        proof: "REACT 18+ · CORE API",
+          "Create a reflowable EPUB 3.3 Blob from the committed source rather than wrapping page DOM.",
+        proof: "REFLOWABLE EPUB",
       },
       {
-        title: "Native print",
+        title: "Drop down to Core when needed",
         description:
-          "Printing calls the committed iframe's Window.print(). There is no cloned print document or second layout pass.",
-        proof: "NO PRINT CLONE",
-      },
-      {
-        title: "Reflowable EPUB 3.3",
-        description:
-          "Export a browser Blob from the latest committed semantic source, without pretending the paginated DOM is fixed-layout EPUB.",
-        proof: "SEMANTIC EXPORT",
-      },
-      {
-        title: "Explicit boundaries",
-        description:
-          "Typed warnings expose constrained behavior, while the host asset resolver remains the only admitted resource boundary.",
-        proof: "WARNINGS, NOT GUESSWORK",
+          "Use framework-neutral controllers and Viewer APIs for custom integration and presentation.",
+        proof: "CORE · VIEWER",
       },
     ],
-    footerDescription: "React-first, framework-neutral underneath, and browser-only by design.",
+    footerDescription:
+      "React-first document publishing, framework-neutral underneath, and browser-only by design.",
   },
   ko: {
-    metadataTitle: "Imposia — HTML을 넣으면, 페이지가 됩니다.",
+    metadataTitle: "Imposia — React HTML을 브라우저에서 인쇄하고 PDF로 저장하세요",
     metadataDescription:
-      "React 미리보기, 브라우저 기본 인쇄, 의미 기반 내보내기를 위한 원자적 HTML/CSR 페이지네이션.",
-    eyebrow: "HTML/CSR 페이지네이션 정합성",
-    title: "HTML을 넣으면, 페이지가 됩니다.",
+      "React HTML을 앱 미리보기, 브라우저 기본 인쇄, PDF 저장, 리플로우형 EPUB에 쓸 완성된 페이지로 만듭니다.",
+    outcomesLabel: "Imposia로 할 수 있는 일",
+    eyebrow: "React HTML을 인쇄 가능한 문서로",
+    title: "React에서 만든 HTML을 미리보고, 인쇄하고, PDF로 저장하세요.",
     description:
-      "선언된 흐름의 내용이 페이지 경계에서 빠지거나 중복되지 않도록 현재 HTML과 CSS를 커밋된 페이지로 만듭니다. 빠른 CSR 갱신도 완전한 세대만 교체합니다.",
+      "HTML을 서버 렌더러로 보내지 않고 앱 안에서 페이지로 만드세요. 새 문서를 준비하는 동안에는 마지막으로 완성된 페이지를 계속 보여 주고, 미리본 페이지를 그대로 인쇄하거나 PDF로 저장할 수 있습니다.",
     codeLabel: "React 빠른 시작",
     copyLabel: "코드 복사",
     copiedLabel: "복사됨",
     copyFailedLabel: "복사 실패",
-    primaryCta: "데모 살펴보기",
-    docsCta: "문서 읽기",
-    publishingContractLabel: "퍼블리싱 계약",
+    primaryCta: "라이브 데모 보기",
+    docsCta: "만들어 보기",
+    publishingContractLabel: "미리보기와 출력 원리",
     skipLink: "본문으로 바로가기",
-    featureEyebrow: "하나의 원본, 하나의 커밋된 순서",
-    featureTitle: "페이지 경계와 빠른 갱신에서도 내용 순서가 유지됩니다.",
+    outcomes: [
+      {
+        title: "앱에서 페이지를 미리봅니다",
+        description: "별도 문서 서버 없이, 지금 쓰는 제품 화면 안에 페이지를 띄웁니다.",
+      },
+      {
+        title: "인쇄하거나 PDF로 저장합니다",
+        description: "미리본 페이지로 브라우저 인쇄 창을 열어 바로 인쇄하거나 PDF로 저장합니다.",
+      },
+      {
+        title: "리플로우형 EPUB으로 내보냅니다",
+        description: "완성된 문서의 의미 구조를 읽기 편한 EPUB 3.3으로 만듭니다.",
+      },
+    ],
+    featureEyebrow: "HTML 하나로 이어지는 작업",
+    featureTitle: "미리보기부터 인쇄, PDF 저장, EPUB까지 한 흐름으로 이어집니다.",
     featureDescription:
-      "공개 검증 픽스처의 모든 페이지를 이으면 원문 순서와 정확히 일치합니다. 미리보기와 인쇄는 이 문서를 공유하고, EPUB은 의미 구조를 투영합니다.",
+      "React 앱은 지금처럼 HTML을 만들면 됩니다. Imposia가 브라우저에서 페이지를 나누고, 완성된 문서만 화면에 바꾸어 표시하며, 인쇄와 내보내기까지 연결합니다.",
     features: [
       {
-        title: "정확한 커밋 순서",
+        title: "React 컴포넌트 하나로 시작합니다",
+        description: "HTML을 ImposiaPageViewer에 넘겨 문서 서버 없이 페이지 화면을 추가합니다.",
+        proof: "@IMPOSIA/REACT",
+      },
+      {
+        title: "완성된 페이지만 보여 줍니다",
+        description: "원본이 바뀌어도 다음 문서를 끝까지 만든 뒤에만 화면을 바꿉니다.",
+        proof: "완성 후 교체",
+      },
+      {
+        title: "페이지 경계에서도 내용을 지킵니다",
         description:
-          "선언된 연속성 픽스처의 모든 원문 토큰이 페이지 경계를 지나 정확히 한 번, 원문 순서대로 나타납니다.",
+          "지원 범위 안에서는 원문 내용이 페이지를 넘어가도 빠지거나 겹치지 않고 순서를 유지합니다.",
         proof: "누락 없음 · 중복 없음",
       },
       {
-        title: "브라우저 네이티브 페이지네이션",
+        title: "브라우저에서 인쇄하고 PDF로 저장합니다",
         description:
-          "HTML, CSS 페이지 규칙, 재귀 흐름 분할이 최종 문서가 존재하는 브라우저 안에 머뭅니다.",
-        proof: "BROWSER ESM",
+          "미리본 페이지를 그대로 브라우저 인쇄에 사용합니다. 별도 PDF 렌더러는 없으며, PDF는 인쇄 창에서 저장합니다.",
+        proof: "기본 인쇄 · PDF 저장",
       },
       {
-        title: "React 우선, 그 아래 Core",
+        title: "의미 구조를 EPUB으로 내보냅니다",
         description:
-          "앱에서는 React 컴포넌트를, 직접 만든 화면에서는 프레임워크 중립적인 Core 컨트롤러를 사용하세요.",
-        proof: "REACT 18+ · CORE API",
+          "페이지 DOM을 그대로 묶지 않고, 완성된 원본으로 리플로우형 EPUB 3.3 Blob을 만듭니다.",
+        proof: "리플로우형 EPUB",
       },
       {
-        title: "브라우저 기본 인쇄",
+        title: "직접 제어하려면 Core를 사용합니다",
         description:
-          "커밋된 iframe의 Window.print()를 호출합니다. 인쇄용 문서 복제나 두 번째 레이아웃 계산은 없습니다.",
-        proof: "인쇄 복제 없음",
-      },
-      {
-        title: "리플로우형 EPUB 3.3",
-        description:
-          "최신 커밋의 의미 구조를 브라우저 Blob으로 내보냅니다. 페이지 DOM을 고정 레이아웃 EPUB처럼 포장하지 않습니다.",
-        proof: "의미 기반 내보내기",
-      },
-      {
-        title: "명확한 경계",
-        description:
-          "제약된 동작은 타입이 있는 경고로 드러내고, 호스트의 에셋 리졸버만 리소스를 들이는 경계로 둡니다.",
-        proof: "추측 대신 경고",
+          "직접 통합하거나 화면을 구성할 때는 프레임워크에 묶이지 않는 Core와 Viewer API를 사용하세요.",
+        proof: "CORE · VIEWER",
       },
     ],
     footerDescription:
-      "React를 우선하고, 내부는 프레임워크 중립적이며, 처음부터 브라우저 전용으로 설계했습니다.",
+      "React 앱에서 바로 시작하고, 필요할 때 Core와 Viewer로 확장하는 브라우저 문서 도구입니다.",
   },
   "zh-CN": {
-    metadataTitle: "Imposia — 输入 HTML，输出页面。",
-    metadataDescription: "面向 React 预览、原生打印与语义导出的原子化浏览器 HTML/CSR 分页。",
-    eyebrow: "HTML/CSR 分页完整性",
-    title: "输入 HTML，输出页面。",
+    metadataTitle: "Imposia — 将 React HTML 原生打印或另存为 PDF",
+    metadataDescription:
+      "把 React HTML 转换为可在应用中预览、原生打印、另存为 PDF 并导出可重排 EPUB 的完整页面。",
+    outcomesLabel: "Imposia 可以完成的工作",
+    eyebrow: "面向 React 的浏览器文档出版",
+    title: "把 React 生成的 HTML 变成可预览、打印或另存为 PDF 的分页文档。",
     description:
-      "把当前 HTML 与 CSS 转换为已提交页面，避免声明流内容在分页边界丢失或重复；快速 CSR 更新只替换完整版本。",
+      "无需把 HTML 发送给服务端渲染器，即可在应用中加入分页文档。Imposia 准备新文档时会继续显示上一份完整文档，并让预览与打印共用确认后的结果。",
     codeLabel: "React 快速开始",
     copyLabel: "复制代码",
     copiedLabel: "已复制",
     copyFailedLabel: "复制失败",
-    primaryCta: "查看演示",
-    docsCta: "阅读文档",
-    publishingContractLabel: "出版契约",
+    primaryCta: "体验出版实验室",
+    docsCta: "开始构建",
+    publishingContractLabel: "出版模型",
     skipLink: "跳到正文",
-    featureEyebrow: "一份源内容，一条已提交序列",
-    featureTitle: "分页边界与快速更新保持内容顺序一致。",
+    outcomes: [
+      {
+        title: "在应用中预览分页文档",
+        description: "直接在用户熟悉的产品界面中显示分页后的 HTML。",
+      },
+      {
+        title: "打印或另存为 PDF",
+        description: "从同一组确认页面打开浏览器打印对话框，直接打印或选择另存为 PDF。",
+      },
+      {
+        title: "导出真正的 EPUB",
+        description: "从最后确认的语义源导出可重排 EPUB 3.3。",
+      },
+    ],
+    featureEyebrow: "产品将获得什么",
+    featureTitle: "从应用中的实时内容到读者可用的输出，只保留一条文档路径。",
     featureDescription:
-      "公开验证样例拼接所有页面后与源顺序完全一致。预览和打印共用该文档，EPUB 保留为语义投影。",
+      "继续在 React 中创作内容。分页边界、完整版本替换、原生打印、PDF 保存与语义导出都在浏览器中完成。",
     features: [
       {
-        title: "精确的已提交序列",
-        description: "声明的连续性样例中，每个源标记跨越分页边界后仍仅出现一次，并保持原始顺序。",
+        title: "从一个 React 组件开始",
+        description: "把 HTML 交给 ImposiaPageViewer，无需文档服务器即可加入分页界面。",
+        proof: "@IMPOSIA/REACT",
+      },
+      {
+        title: "始终显示完整页面",
+        description: "源内容变化后，只有下一版本完成时才会替换当前可见文档。",
+        proof: "原子提交",
+      },
+      {
+        title: "在分页边界保护内容",
+        description: "在已声明的支持范围内，源内容跨页后仍仅出现一次，并保持原始顺序。",
         proof: "无缺失 · 无重复",
       },
       {
-        title: "浏览器原生分页",
-        description: "HTML、CSS 页面规则与递归流分段都留在最终文档所在的浏览器中。",
-        proof: "BROWSER ESM",
-      },
-      {
-        title: "React 优先，Core 托底",
-        description: "应用开发可使用 React 组件，自定义界面则可直接使用框架无关的 Core 控制器。",
-        proof: "REACT 18+ · CORE API",
-      },
-      {
-        title: "浏览器原生打印",
+        title: "原生打印并另存为 PDF",
         description:
-          "打印直接调用已提交 iframe 的 Window.print()，不会克隆打印文档，也不会再次排版。",
-        proof: "无打印副本",
+          "从确认后的页面序列打开浏览器打印对话框。PDF 来自其中的另存为 PDF，而不是独立 PDF 渲染器。",
+        proof: "原生打印 · PDF",
       },
       {
-        title: "可重排 EPUB 3.3",
-        description: "从最新提交的语义源导出浏览器 Blob，不会把分页 DOM 冒充为固定版式 EPUB。",
-        proof: "语义化导出",
+        title: "导出语义化 EPUB",
+        description: "根据确认后的源内容生成可重排 EPUB 3.3 Blob，而不是包装分页 DOM。",
+        proof: "可重排 EPUB",
       },
       {
-        title: "边界清晰可见",
-        description: "类型化警告揭示受限行为，宿主资源解析器则是唯一允许资源进入的边界。",
-        proof: "警告，而非猜测",
+        title: "需要时直接使用 Core",
+        description: "自定义集成与展示可使用框架无关的 Core 和 Viewer API。",
+        proof: "CORE · VIEWER",
       },
     ],
-    footerDescription: "以 React 为先，底层不绑定框架，并且从设计之初就只运行在浏览器中。",
+    footerDescription: "从 React 直接开始，并可深入使用框架无关 Core 的浏览器文档出版工具。",
   },
   ja: {
-    metadataTitle: "Imposia — HTMLから、ページへ。",
+    metadataTitle: "Imposia — React HTMLを印刷・PDF保存できるページへ",
     metadataDescription:
-      "Reactプレビュー、ブラウザー標準印刷、セマンティック出力のためのアトミックなHTML/CSRページネーション。",
-    eyebrow: "HTML/CSRページネーション整合性",
-    title: "HTMLから、ページへ。",
+      "React HTMLを、アプリ内プレビュー、ブラウザー標準印刷、PDF保存、リフロー型EPUBに使える完成済みページへ変換します。",
+    outcomesLabel: "Imposiaでできること",
+    eyebrow: "Reactアプリから始めるブラウザー出版",
+    title: "Reactで作ったHTMLを、プレビュー・印刷・PDF保存できるページへ。",
     description:
-      "宣言済みフローの内容をページ境界で欠落・重複させず、現在のHTMLとCSSを確定済みページへ変換します。高速なCSR更新も完全な世代だけを置き換えます。",
+      "HTMLをサーバーレンダラーへ送らず、アプリ内でページ文書に変換できます。新しい文書の準備中は最後に完成したページを表示し続け、プレビューしたページをそのまま印刷またはPDF保存に使えます。",
     codeLabel: "Reactクイックスタート",
     copyLabel: "コードをコピー",
     copiedLabel: "コピーしました",
     copyFailedLabel: "コピーできませんでした",
-    primaryCta: "デモを見る",
-    docsCta: "ドキュメントを読む",
-    publishingContractLabel: "出版契約",
+    primaryCta: "出版ラボを試す",
+    docsCta: "作り始める",
+    publishingContractLabel: "出版モデル",
     skipLink: "本文へ移動",
-    featureEyebrow: "ひとつのソース、ひとつの確定済み順序",
-    featureTitle: "ページ境界と高速更新でも内容の順序を維持します。",
+    outcomes: [
+      {
+        title: "アプリ内で\nページをプレビュー",
+        description: "ユーザーが使い慣れた画面の中に、ページ分割したHTMLを表示します。",
+      },
+      {
+        title: "印刷またはPDFとして保存",
+        description:
+          "同じ確定済みページからブラウザーの印刷画面を開き、印刷またはPDF保存を選べます。",
+      },
+      {
+        title: "読みやすいEPUBとして出力",
+        description: "最後に確定したセマンティックソースからリフロー型EPUB 3.3を出力します。",
+      },
+    ],
+    featureEyebrow: "ひとつのHTMLから続く作業",
+    featureTitle: "プレビュー、印刷、PDF保存、EPUB出力までをひとつの流れに。",
     featureDescription:
-      "公開検証フィクスチャの全ページを連結するとソース順序と完全に一致します。プレビューと印刷はその文書を共有し、EPUBはセマンティック投影として残ります。",
+      "ReactアプリはこれまでどおりHTMLを作れます。Imposiaがブラウザー内でページを分割し、完成した文書だけを表示して、印刷と出力までつなぎます。",
     features: [
       {
-        title: "正確な確定済み順序",
+        title: "ひとつのReactコンポーネントから開始",
         description:
-          "宣言済みの連続性フィクスチャでは、すべてのソーストークンがページ境界を越えても一度だけ元の順序で現れます。",
+          "HTMLをImposiaPageViewerへ渡すだけで、文書サーバーを増やさずページ表示を追加できます。",
+        proof: "@IMPOSIA/REACT",
+      },
+      {
+        title: "完成したページだけを表示",
+        description: "ソースが変わっても、次の世代が完成してから表示中の文書を置き換えます。",
+        proof: "アトミックコミット",
+      },
+      {
+        title: "ページ境界でも内容を維持",
+        description:
+          "対応範囲内では、ソース内容がページをまたいでも欠落・重複せず、元の順序を保ちます。",
         proof: "欠落なし · 重複なし",
       },
       {
-        title: "ブラウザーネイティブのページネーション",
+        title: "標準印刷とPDF保存",
         description:
-          "HTML、CSSページ規則、再帰的なフロー分割は、最終文書が存在するブラウザー内に留まります。",
-        proof: "BROWSER ESM",
+          "確定済みページでブラウザーの印刷画面を開きます。PDFは別のレンダラーではなく、印刷画面から保存します。",
+        proof: "標準印刷 · PDF",
       },
       {
-        title: "React優先、その下にCore",
+        title: "セマンティックなEPUBを出力",
         description:
-          "アプリにはReactコンポーネントを、独自UIにはフレームワーク非依存のCoreコントローラーを利用できます。",
-        proof: "REACT 18+ · CORE API",
+          "ページDOMを包むのではなく、確定済みソースからリフロー型EPUB 3.3 Blobを作ります。",
+        proof: "リフロー型EPUB",
       },
       {
-        title: "ブラウザー標準印刷",
-        description:
-          "確定済みiframeのWindow.print()を呼び出します。印刷文書の複製や二度目のレイアウト処理はありません。",
-        proof: "印刷用複製なし",
-      },
-      {
-        title: "リフロー型EPUB 3.3",
-        description:
-          "最新の確定済みセマンティックソースからブラウザーBlobを書き出します。ページDOMを固定レイアウトEPUBには見せかけません。",
-        proof: "セマンティック出力",
-      },
-      {
-        title: "明確な境界",
-        description:
-          "制約のある動作は型付き警告で示し、ホストのアセットリゾルバーだけをリソース受け入れ境界にします。",
-        proof: "推測ではなく警告",
+        title: "直接制御するならCore",
+        description: "独自の統合や表示には、フレームワーク非依存のCoreとViewer APIを利用できます。",
+        proof: "CORE · VIEWER",
       },
     ],
-    footerDescription: "Reactを第一に、内部はフレームワーク非依存で、初めからブラウザー専用です。",
+    footerDescription:
+      "Reactアプリから始め、必要に応じてCoreとViewerへ広げられるブラウザー出版ツールです。",
   },
 };
 

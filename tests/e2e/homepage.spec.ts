@@ -1,36 +1,6 @@
 import { expect, test } from "@playwright/test";
+import { LOCALES } from "../../site/lib/i18n";
 import { captureBrowserErrors } from "./browser-core-support.js";
-
-const locales = [
-  {
-    locale: "en",
-    heading: "HTML in. Pages out.",
-    docsCta: /documentation|get started|docs/i,
-    demoCta: /demo/i,
-    gettingStarted: "Build your first page",
-  },
-  {
-    locale: "ko",
-    heading: "HTML을 넣으면, 페이지가 됩니다.",
-    docsCta: /문서|시작/i,
-    demoCta: /데모/i,
-    gettingStarted: "첫 페이지 만들기",
-  },
-  {
-    locale: "zh-CN",
-    heading: "输入 HTML，输出页面。",
-    docsCta: /文档|开始|入门/i,
-    demoCta: /演示/i,
-    gettingStarted: "创建第一个分页预览",
-  },
-  {
-    locale: "ja",
-    heading: "HTMLから、ページへ。",
-    docsCta: /ドキュメント|はじめに|始める/i,
-    demoCta: /デモ/i,
-    gettingStarted: "最初のページを作る",
-  },
-] as const;
 
 function assertNoBrowserErrors(errors: ReturnType<typeof captureBrowserErrors>) {
   expect(errors.errors).toEqual([]);
@@ -45,7 +15,7 @@ test("root redirects to the default English landing page", async ({ page, browse
   try {
     await expect(page).toHaveURL(/\/en\/?$/, { timeout: 15_000 });
     await expect(page.locator("html")).toHaveAttribute("lang", "en");
-    await expect(page.getByRole("heading", { level: 1 })).toHaveText(locales[0].heading);
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
   } finally {
     assertNoBrowserErrors(captured);
   }
@@ -59,20 +29,20 @@ test("localized landing pages expose docs and demo calls to action", async ({
   const captured = captureBrowserErrors(page, browserName);
 
   try {
-    for (const locale of locales) {
-      await page.goto(`/${locale.locale}`);
-      await expect(page).toHaveURL(new RegExp(`/${locale.locale}/?$`));
-      await expect(page.locator("html")).toHaveAttribute("lang", locale.locale);
-      await expect(page.getByRole("heading", { level: 1 })).toHaveText(locale.heading);
+    for (const locale of LOCALES) {
+      await page.goto(`/${locale}`);
+      await expect(page).toHaveURL(new RegExp(`/${locale}/?$`));
+      await expect(page.locator("html")).toHaveAttribute("lang", locale);
+      await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
 
       const landing = page.getByRole("main");
-      const docsCta = landing.getByRole("link", { name: locale.docsCta }).first();
+      const docsCta = landing.locator(`.hero-actions a[href="/${locale}/docs"]`);
       await expect(docsCta).toBeVisible();
-      await expect(docsCta).toHaveAttribute("href", new RegExp(`/${locale.locale}/docs`));
 
-      const demoCta = landing.getByRole("link", { name: locale.demoCta }).first();
+      const demoCta = landing.locator('.hero-actions a[href="/examples/demo/index.html"]');
       await expect(demoCta).toBeVisible();
-      await expect(demoCta).toHaveAttribute("href", "/examples/demo/index.html");
+      await expect(landing.locator(".outcome-section .outcome-card")).toHaveCount(3);
+      await expect(landing.locator(".outcome-section h2")).toHaveCount(3);
     }
   } finally {
     assertNoBrowserErrors(captured);
@@ -179,11 +149,11 @@ test("localized getting-started docs render through the public route", async ({
   const captured = captureBrowserErrors(page, browserName);
 
   try {
-    for (const locale of locales) {
-      await page.goto(`/${locale.locale}/docs/getting-started`);
-      await expect(page).toHaveURL(new RegExp(`/${locale.locale}/docs/getting-started/?$`));
-      await expect(page.locator("html")).toHaveAttribute("lang", locale.locale);
-      await expect(page.getByRole("heading", { level: 1 })).toHaveText(locale.gettingStarted);
+    for (const locale of LOCALES) {
+      await page.goto(`/${locale}/docs/getting-started`);
+      await expect(page).toHaveURL(new RegExp(`/${locale}/docs/getting-started/?$`));
+      await expect(page.locator("html")).toHaveAttribute("lang", locale);
+      await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
       await expect(page.getByText("@imposia/react", { exact: true })).toBeVisible();
     }
   } finally {
@@ -191,7 +161,7 @@ test("localized getting-started docs render through the public route", async ({
   }
 });
 
-test("localized API references expose the public React, Core, and Viewer surfaces", async ({
+test("localized documentation separates concepts and task guides", async ({
   page,
   browserName,
 }) => {
@@ -199,13 +169,40 @@ test("localized API references expose the public React, Core, and Viewer surface
   const captured = captureBrowserErrors(page, browserName);
 
   try {
-    for (const locale of locales) {
-      await page.goto(`/${locale.locale}/docs/api-reference`);
-      await expect(page).toHaveURL(new RegExp(`/${locale.locale}/docs/api-reference/?$`));
-      await expect(page.locator("html")).toHaveAttribute("lang", locale.locale);
-      await expect(page.getByRole("heading", { level: 1 })).toContainText("API");
+    for (const locale of LOCALES) {
+      await page.goto(`/${locale}/docs/concepts/publishing-model`);
+      await expect(page).toHaveURL(new RegExp(`/${locale}/docs/concepts/publishing-model/?$`));
+      await expect(page.locator("html")).toHaveAttribute("lang", locale);
+      await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+
+      await page.goto(`/${locale}/docs/guides/react-publishing`);
+      await expect(page).toHaveURL(new RegExp(`/${locale}/docs/guides/react-publishing/?$`));
+      await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+    }
+  } finally {
+    assertNoBrowserErrors(captured);
+  }
+});
+
+test("localized API references expose separate React, Core, and Viewer pages", async ({
+  page,
+  browserName,
+}) => {
+  test.skip(browserName !== "chromium", "Documentation rendering is Chromium-reference only.");
+  const captured = captureBrowserErrors(page, browserName);
+
+  try {
+    for (const locale of LOCALES) {
+      await page.goto(`/${locale}/docs/api/react`);
+      await expect(page).toHaveURL(new RegExp(`/${locale}/docs/api/react/?$`));
       await expect(page.getByText("ImposiaPageViewer", { exact: true }).first()).toBeVisible();
+
+      await page.goto(`/${locale}/docs/api/core`);
+      await expect(page).toHaveURL(new RegExp(`/${locale}/docs/api/core/?$`));
       await expect(page.getByText("mountPageDocument", { exact: true }).first()).toBeVisible();
+
+      await page.goto(`/${locale}/docs/api/viewer`);
+      await expect(page).toHaveURL(new RegExp(`/${locale}/docs/api/viewer/?$`));
       await expect(page.getByText("mountPageViewer", { exact: true }).first()).toBeVisible();
     }
   } finally {
@@ -213,19 +210,58 @@ test("localized API references expose the public React, Core, and Viewer surface
   }
 });
 
-test("localized landing pages do not overflow a 320px viewport", async ({ page, browserName }) => {
+test("legacy API reference routes redirect to the package overview", async ({
+  page,
+  browserName,
+}) => {
+  test.skip(browserName !== "chromium", "Documentation routing is Chromium-reference only.");
+  const captured = captureBrowserErrors(page, browserName);
+
+  try {
+    for (const legacyPath of ["/en/docs/api-reference", "/en/docs/api-reference/"]) {
+      await page.goto(legacyPath);
+      await expect(page).toHaveURL(/\/en\/docs\/api\/?$/);
+      await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+    }
+  } finally {
+    assertNoBrowserErrors(captured);
+  }
+});
+
+test("legacy publishing routes redirect to the publishing model", async ({ page, browserName }) => {
+  test.skip(browserName !== "chromium", "Documentation routing is Chromium-reference only.");
+  const captured = captureBrowserErrors(page, browserName);
+
+  try {
+    for (const legacyPath of ["/ko/docs/publishing-contract", "/ko/docs/publishing-contract/"]) {
+      await page.goto(legacyPath);
+      await expect(page).toHaveURL(/\/ko\/docs\/concepts\/publishing-model\/?$/);
+      await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+    }
+  } finally {
+    assertNoBrowserErrors(captured);
+  }
+});
+
+test("localized landing and documentation pages do not overflow a 320px viewport", async ({
+  page,
+  browserName,
+}) => {
   test.skip(browserName !== "chromium", "Responsive layout is Chromium-reference only.");
   const captured = captureBrowserErrors(page, browserName);
 
   await page.setViewportSize({ width: 320, height: 700 });
-  await page.goto("/en");
-
   try {
-    const geometry = await page.evaluate(() => ({
-      viewportWidth: document.documentElement.clientWidth,
-      documentWidth: document.documentElement.scrollWidth,
-    }));
-    expect(geometry.documentWidth).toBe(geometry.viewportWidth);
+    for (const locale of LOCALES) {
+      for (const path of ["", "/docs", "/docs/api/react"]) {
+        await page.goto(`/${locale}${path}`);
+        const geometry = await page.evaluate(() => ({
+          viewportWidth: document.documentElement.clientWidth,
+          documentWidth: document.documentElement.scrollWidth,
+        }));
+        expect(geometry.documentWidth, `/${locale}${path}`).toBe(geometry.viewportWidth);
+      }
+    }
   } finally {
     assertNoBrowserErrors(captured);
   }

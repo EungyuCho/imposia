@@ -36,6 +36,13 @@ function pathToSlugs(path: string | undefined): string[] | undefined {
   return slugs.length > 0 ? slugs : undefined;
 }
 
+function legacyDocsPath(path: string | undefined): string | undefined {
+  const normalizedPath = path?.replace(/\/+$/, "");
+  if (normalizedPath === "api-reference") return "api";
+  if (normalizedPath === "publishing-contract") return "concepts/publishing-model";
+  return undefined;
+}
+
 export const meta: MetaFunction = ({ params }) => {
   const lang = params.lang;
   if (!lang || !isSupportedLocale(lang)) return [];
@@ -55,7 +62,13 @@ export default function DocumentationRoute() {
     return <Navigate replace to="/en/docs" />;
   }
 
-  const page = source.getPage(pathToSlugs(params["*"]), lang);
+  const path = params["*"];
+  const redirect = legacyDocsPath(path);
+  if (redirect) {
+    return <Navigate replace to={`/${lang}/docs/${redirect}`} />;
+  }
+
+  const page = source.getPage(pathToSlugs(path), lang);
   const tree = source.getPageTree(lang);
   const missing = notFoundCopy[lang];
 

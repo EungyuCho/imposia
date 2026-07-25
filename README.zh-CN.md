@@ -12,9 +12,9 @@
 </p>
 
 <p align="center">
-  <strong>HTML in. Pages out.</strong>
+  <strong>把 React HTML 打印出来，或保存为 PDF。</strong>
   <br/>
-  <sub>在浏览器中把 HTML/CSR 拆分为完整页面，并用同一份文档完成 React 预览、原生打印和保留语义结构的 EPUB 导出。</sub>
+  <sub>在应用中预览分页结果，再通过浏览器原生打印流程输出纸张或保存 PDF；也可导出 EPUB。</sub>
 </p>
 
 <p align="center">
@@ -39,14 +39,15 @@
   <a href="#交互式演示">演示</a>
 </p>
 
-**将 HTML 和 CSS 转换为可检查的浏览器页面。声明流中的内容跨越分页边界时，
-不会丢失或重复。**
+**继续使用现有的 HTML 和 CSS。Imposia 会把它们排成完整页面，供应用内预览、
+浏览器原生打印或“保存为 PDF”使用。**
 
-Imposia 是一个 React 优先、仅运行于浏览器的出版工具包。它负责清理源内容、
-解析允许的资源，并在临时 iframe 中准备页面。只有全部计算完成的结果才会写入
-同一个 canonical iframe，供预览与浏览器原生打印使用。即使 CSR 更新接连发生，
-Imposia 也会在下一份文档准备完成前继续显示上一份已确认文档。最后确认的源内容
-及其语义结构还可以导出为可重排 EPUB 3.3 `Blob`。
+Imposia 是一个面向 React、仅在浏览器中运行的文档工具。它会先完成下一版页面，
+再替换屏幕上的文档，因此连续的客户端更新不会露出尚未完成的布局。预览与打印
+共用同一组页面。与页面一起确认的语义源内容也可导出为可重排 EPUB 3.3 `Blob`。
+
+调用 `print()` 会打开浏览器原生打印对话框。用户可以选择打印机，也可以选择
+**保存为 PDF**。Imposia 不会另外运行 PDF 渲染器，也不会返回 PDF 字节。
 
 Core 无需 React 即可使用。Imposia 不提供 Node 运行时、命令行渲染器、服务端
 导出、固定版式 EPUB、PDF 字节 API，也不承诺完整的 CSS 分片兼容性。
@@ -70,6 +71,7 @@ Imposia 将一份页面文档放在整个工作流的中心。
 | 内容跨越分页边界 | 片段丢失、重复或顺序错乱 | 验证范围内的输入在拼接页面后与原有顺序完全一致；不支持的情况会保持为一个整体或发出警告，而不会假装成功 |
 | 分页期间 CSR 状态变化 | 预览显示不完整或过期版本 | 准备期间保留上一份已确认文档，仅在下一版本全部完成后替换 |
 | 预览与打印不一致 | 每个界面都会重新执行布局 | 同一个 canonical iframe 贯穿分页、展示和原生打印 |
+| HTML 转 PDF 需要另一套渲染器 | 应用预览与 PDF 结果不同 | `print()` 把已完成页面交给浏览器原生打印对话框，用户可直接保存为 PDF |
 | 编写的 URL 被隐式请求 | 渲染流程出现不受控的网络通道 | 所有允许的 HTML/CSS 资源都必须经过宿主 `assetResolver` 边界 |
 | 不支持的布局看起来“差不多” | 静默近似掩盖错误输出 | 受限或不支持的情况会保持为一个整体，或返回带有代码的警告 |
 | React 维护第二套渲染器 | 组件行为与框架无关行为产生偏差 | React 保留同一个 Core 控制器与 iframe |
@@ -85,7 +87,7 @@ Imposia 将一份页面文档放在整个工作流的中心。
 pnpm add @imposia/react react react-dom
 ```
 
-挂载页面文档，然后打印当前已确认文档或将其导出为 EPUB：
+挂载页面文档，然后预览、打印或保存为 PDF：
 
 ```tsx
 import {
@@ -114,7 +116,7 @@ export function BookPreview() {
       </button>
 
       <button type="button" onClick={() => void viewer.current?.print()}>
-        Print
+        打印 / 保存为 PDF
       </button>
 
       <button
@@ -135,6 +137,9 @@ export function BookPreview() {
   );
 }
 ```
+
+`print()` 会把 Viewer 中的页面交给浏览器原生打印对话框。需要纸张时选择打印机，
+需要文件时选择**保存为 PDF**。
 
 命令式句柄始终指向当前已确认的 Core 版本。它不会创建第二个控制器、iframe、
 布局流程或资源请求通道。
