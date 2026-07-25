@@ -1253,6 +1253,12 @@ button {
   }
 }
 
+@media (max-width: 480px) {
+  .demo-metrics {
+    display: none;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .demo-intro,
   .demo-preview {

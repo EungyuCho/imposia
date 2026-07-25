@@ -109,6 +109,28 @@ export function LiveRenderRunner({ snapshot, disabled, onStart, onCancel }: Live
           <dd data-testid="live-render-blank">{snapshot.blankChecks}</dd>
         </div>
         <div>
+          <dt>Iframe identity</dt>
+          <dd data-testid="live-render-canonical">
+            {snapshot.canonicalChecks === 0
+              ? "—"
+              : snapshot.canonicalMismatches === 0
+                ? "stable"
+                : `${snapshot.canonicalMismatches} changes`}
+          </dd>
+        </div>
+        <div>
+          <dt>Progress events</dt>
+          <dd data-testid="live-render-progress-events">{snapshot.progressEvents}</dd>
+        </div>
+        <div>
+          <dt>Latest progress</dt>
+          <dd data-testid="live-render-latest-progress">
+            {snapshot.latestPass === undefined || snapshot.latestCompletedPages === undefined
+              ? "—"
+              : `P${snapshot.latestPass} · page ${snapshot.latestCompletedPages}`}
+          </dd>
+        </div>
+        <div>
           <dt>Generation</dt>
           <dd>{snapshot.latestGeneration ?? "—"}</dd>
         </div>

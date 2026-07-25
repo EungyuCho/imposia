@@ -2,6 +2,7 @@ import {
   type ImposiaDocumentState,
   ImposiaPageViewer,
   type ImposiaPageViewerHandle,
+  type PageComposeProgress,
   type PageDocument,
   type PageDocumentOptions,
   type PageExtension,
@@ -581,12 +582,20 @@ function App() {
       integrityTokens.length
     );
   }, []);
+  const getCanonicalIframe = useCallback(() => viewerRef.current?.current?.iframe, []);
   const liveRender = useLiveRenderRunner({
     currentRevision: csrRevision,
     enabled: demoCase === "stress" && sampleId === "integrity",
     onRequestRevision: requestLiveRevision,
     isCanonicalIntact: isCanonicalIntegrityIntact,
+    getCanonicalIframe,
   });
+  const handleComposeProgress = useCallback(
+    (progress: PageComposeProgress) => {
+      liveRender.recordProgress(progress);
+    },
+    [liveRender.recordProgress],
+  );
   const runningHeadExtension = useMemo<PageExtension>(
     () => ({
       name: "demo/running-head",
@@ -636,8 +645,9 @@ function App() {
       extensions: [runningHeadExtension],
       experimental: { footnotes: true, pageFloats: true },
       page: { size: pagePreset.size, orientation: pageOrientation },
+      onProgress: handleComposeProgress,
     }),
-    [pageOrientation, pagePreset, runningHeadExtension],
+    [handleComposeProgress, pageOrientation, pagePreset, runningHeadExtension],
   );
 
   const cancelCsrBurst = () => {

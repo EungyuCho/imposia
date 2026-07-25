@@ -59,6 +59,14 @@
 
   --imposia-viewer-rail-height: 66px;
   --imposia-viewer-rail-height-mobile: 106px;
+  --imposia-viewer-rail-height-compact: calc(
+    var(--imposia-viewer-identity-height-mobile) +
+    var(--imposia-viewer-control-size-mobile) *
+    2 +
+    var(--imposia-viewer-toolbar-gap) +
+    var(--imposia-viewer-space-2) *
+    2
+  );
   --imposia-viewer-identity-gap: 12px;
   --imposia-viewer-identity-padding-inline: 22px;
   --imposia-viewer-identity-height-mobile: 44px;
@@ -825,14 +833,40 @@ button.imposia-inspector-finding[aria-current="true"] {
 }
 
 @container imposia-viewer (max-width: 390px) {
+  .imposia-rail {
+    min-height: var(--imposia-viewer-rail-height-compact);
+  }
+
+  .imposia-toc-panel,
+  .imposia-search-panel,
+  .imposia-thumbnail-panel,
+  .imposia-inspector-panel {
+    top: var(--imposia-viewer-rail-height-compact);
+    max-height: calc(100% - var(--imposia-viewer-rail-height-compact));
+  }
+
   .imposia-toolbar {
+    display: grid;
     width: 100%;
     max-width: 100%;
-    justify-content: flex-start;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
     gap: var(--imposia-viewer-toolbar-gap);
     padding: var(--imposia-viewer-space-2);
-    overflow-x: auto;
-    scroll-padding-inline: var(--imposia-viewer-space-2);
+    overflow-x: visible;
+  }
+
+  .imposia-toolbar .imposia-divider {
+    display: none;
+  }
+
+  .imposia-toolbar .imposia-control,
+  .imposia-toolbar .imposia-readout {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .imposia-toolbar .imposia-mode {
+    grid-column: span 2;
   }
 }
 

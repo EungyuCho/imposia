@@ -68,6 +68,8 @@ Spacing derives from a 4px base using `--demo-space-1` through `--demo-space-7` 
 - Desktop shell: `330–390px` control sidebar plus a flexible preview workspace.
 - Compact breakpoint: `1050px` narrows the control rail.
 - Stacked breakpoint: `820px` places the scrollable control panel above the preview.
+- Narrow breakpoint: `480px` hides workspace summary metrics so the active specimen
+  title remains readable.
 - Required QA widths: 375px, 768px, and 1280px.
 
 ### Rules
@@ -137,6 +139,16 @@ Spacing derives from a 4px base using `--demo-space-1` through `--demo-space-7` 
 - **Accessibility**: titled contenteditable region, native toolbar buttons, visible focus, polite commit status
 - **Motion**: none; typing and metric updates remain immediate
 - **Layout**: vertical stack; the editor grows within the panel and the panel remains the scroll owner
+
+### Embedded Viewer Rail
+
+- **Structure**: identity row plus page, zoom, and mode controls
+- **Variants**: single-row desktop; two-row toolbar below `390px`
+- **Spacing**: existing Viewer spacing and control-size tokens only
+- **States**: page and zoom controls remain in the first row; all three mode controls remain visible in the second
+- **Accessibility**: native buttons retain their full accessible labels; no control depends on horizontal scrolling for discovery
+- **Motion**: existing control color transition only
+- **Layout**: the narrow toolbar uses six equal columns, with each mode spanning two columns
 
 ## 6. Motion & Interaction
 
