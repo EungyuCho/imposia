@@ -14,7 +14,7 @@
 <p align="center">
   <strong>HTML in. Pages out.</strong>
   <br/>
-  <sub>브라우저에서 HTML/CSR을 원자적으로 페이지화하고 React 미리보기, 네이티브 인쇄, 의미 기반 EPUB 내보내기를 제공하는 툴킷.</sub>
+  <sub>HTML/CSR을 브라우저에서 완성된 페이지로 나누고 React 미리보기, 네이티브 인쇄, 의미 기반 EPUB 내보내기를 연결하는 툴킷.</sub>
 </p>
 
 <p align="center">
@@ -39,18 +39,18 @@
   <a href="#인터랙티브-데모">데모</a>
 </p>
 
-**선언된 흐름의 내용이 페이지 경계에서 빠지거나 중복되지 않도록, 현재 HTML과
-CSS를 검사 가능한 브라우저 페이지로 변환하세요.**
+**HTML과 CSS를 검사 가능한 브라우저 페이지로 변환하세요. 선언된 흐름의
+내용은 페이지 경계에서도 빠지거나 중복되지 않습니다.**
 
 Imposia는 React 우선, 브라우저 전용 퍼블리싱 툴킷입니다. 소스를 정제하고,
-허용된 에셋을 해석한 뒤 최종 표시 기준이 아닌 임시 iframe에서 페이지를
-준비합니다. 성공한 결과만 계속 유지되는 하나의 canonical iframe에 커밋해
-미리보기와 네이티브 인쇄에 사용합니다. CSR 갱신이 빠르게 이어져도 완전한 다음
-세대가 준비될 때까지 이전 커밋을 보여줍니다. 동일한 최신 커밋 시맨틱 소스는
-리플로우형 EPUB 3.3 `Blob`으로도 내보낼 수 있습니다.
+허용된 에셋을 확인한 뒤 준비용 iframe에서 페이지를 만듭니다. 페이지 계산이
+모두 끝난 결과만 하나의 canonical iframe에 반영해 미리보기와 네이티브 인쇄에
+사용합니다. CSR 갱신이 빠르게 이어져도 다음 세대가 완성될 때까지 이전에
+확정한 문서를 보여줍니다. 같은 의미 구조를 보존한 최신 원본은 리플로우형
+EPUB 3.3 `Blob`으로도 내보낼 수 있습니다.
 
 Core는 React 없이도 사용할 수 있습니다. Node 런타임, 명령줄 렌더러, 서버
-내보내기, 고정 레이아웃 EPUB, PDF 바이트 API, 완전한 CSS 프래그먼테이션
+내보내기, 고정 레이아웃 EPUB, PDF 바이트 API, 모든 CSS 분할 규칙과의 완전한
 호환성은 제공하지 않습니다.
 
 <p align="center">
@@ -61,22 +61,23 @@ Core는 React 없이도 사용할 수 있습니다. Node 런타임, 명령줄 �
 
 ## 왜 Imposia인가?
 
-브라우저 퍼블리싱은 각 화면이 서로 다른 문서를 소유할 때 쉽게 어긋납니다.
+브라우저 퍼블리싱에서는 화면마다 서로 다른 문서를 사용하면 결과가 쉽게
+어긋납니다.
 편집기는 하나의 트리를 측정하고, 미리보기는 다른 트리를 복제하며, 인쇄는
 세 번째 트리를 다시 만듭니다. 작은 차이는 페이지 수 불일치, 깨진 참조,
 재현하기 어려운 출력으로 이어집니다.
 
-Imposia는 워크플로우 중심에 하나의 페이지 문서를 둡니다.
+Imposia는 작업 흐름의 중심에 하나의 페이지 문서를 둡니다.
 
 | 퍼블리싱 문제 | 일반적인 결과 | Imposia의 계약 |
 | :--- | :--- | :--- |
-| 내용이 페이지 경계를 넘음 | 조각이 빠지거나 중복되거나 순서가 바뀜 | 선언된 검증 픽스처는 페이지를 다시 이었을 때 원문 순서와 정확히 일치하며, 미지원 사례는 성공처럼 보이지 않고 원자적으로 유지되거나 경고함 |
-| 페이지화 도중 CSR 상태가 바뀜 | 일부만 반영된 세대나 오래된 세대가 노출됨 | 스테이징 동안 이전 커밋을 유지하고, 완전한 최종 세대만 교체함 |
-| 미리보기와 인쇄가 달라짐 | 화면마다 레이아웃을 다시 실행함 | 하나의 canonical iframe이 페이지네이션, 표시, 네이티브 인쇄까지 유지됨 |
+| 내용이 페이지 경계를 넘음 | 조각이 빠지거나 중복되거나 순서가 바뀜 | 검증 범위에 포함된 입력은 페이지를 다시 이었을 때 원문 순서와 정확히 일치함. 지원하지 않는 사례는 성공으로 처리하지 않고 한 덩어리로 유지하거나 경고함 |
+| 페이지를 만드는 동안 CSR 상태가 바뀜 | 일부만 반영된 세대나 오래된 세대가 노출됨 | 준비하는 동안 이전 확정 문서를 유지하고, 다음 세대가 완성됐을 때만 교체함 |
+| 미리보기와 인쇄가 달라짐 | 화면마다 레이아웃을 다시 실행함 | 하나의 canonical iframe을 페이지네이션, 화면 표시, 네이티브 인쇄에 함께 사용함 |
 | 작성된 URL이 암묵적으로 요청됨 | 렌더링 과정에 통제되지 않는 네트워크 경로가 생김 | 허용되는 모든 HTML/CSS 에셋이 호스트 `assetResolver` 경계를 통과함 |
-| 지원되지 않는 레이아웃이 그럴듯하게 보임 | 조용한 근사 처리로 잘못된 출력을 숨김 | 제한·미지원 사례는 원자적으로 유지되거나 타입이 있는 경고를 반환함 |
+| 지원되지 않는 레이아웃이 그럴듯하게 보임 | 근사 처리된 잘못된 출력이 문제없이 보일 수 있음 | 제한되거나 지원하지 않는 사례는 한 덩어리로 유지하거나 코드가 있는 경고를 반환함 |
 | React가 두 번째 렌더러를 소유함 | 컴포넌트와 프레임워크 중립 동작이 어긋남 | React가 동일한 Core 컨트롤러와 iframe을 유지함 |
-| 내보내기에 서버 파이프라인이 필요함 | 브라우저 앱이 콘텐츠를 다른 런타임으로 넘김 | 현재 시맨틱 소스에서 제한된 리플로우형 EPUB `Blob`을 내보냄 |
+| 내보내기에 서버 파이프라인이 필요함 | 브라우저 앱이 콘텐츠를 다른 런타임으로 넘김 | 현재 원본의 의미 구조를 보존한 리플로우형 EPUB `Blob`을 정해진 한도 안에서 내보냄 |
 
 ---
 
@@ -88,7 +89,7 @@ React 어댑터를 설치합니다.
 pnpm add @imposia/react react react-dom
 ```
 
-페이지 문서를 마운트한 뒤 커밋된 문서를 인쇄 또는 EPUB 대상으로 사용합니다.
+페이지 문서를 마운트한 뒤 확정된 문서를 인쇄하거나 EPUB으로 내보냅니다.
 
 ```tsx
 import {
@@ -139,11 +140,11 @@ export function BookPreview() {
 }
 ```
 
-명령형 핸들은 항상 현재 커밋된 Core 세대를 대상으로 합니다. 두 번째
-컨트롤러, iframe, 레이아웃 패스, 에셋 요청 경로를 만들지 않습니다.
-`documentOptions`는 컨트롤러를 마운트할 때 고정됩니다. resolver,
-extension, 제한, 페이지 설정을 바꾸려면 `documentOptionsRevision`을
-증가시켜 새 canonical iframe으로 구성된 컨트롤러로 교체하세요.
+명령형 핸들은 항상 현재 확정된 Core 세대를 대상으로 합니다. 별도의
+컨트롤러, iframe, 레이아웃 계산, 에셋 요청 경로는 만들지 않습니다.
+`documentOptions`는 컨트롤러를 마운트할 때 고정됩니다. `assetResolver`,
+확장 기능, 제한, 페이지 설정을 바꾸려면 `documentOptionsRevision`을
+증가시켜 새로운 canonical iframe을 가진 컨트롤러로 교체하세요.
 `source` 및 `sourceRevision` 갱신은 기존 iframe을 계속 사용합니다.
 
 ### React 없이 Core 사용하기
@@ -179,42 +180,41 @@ console.log({
 
 ## 작동 방식
 
-Imposia는 하나의 문서를 진실의 원천으로 유지하면서 소스 처리와 표시를
-분리합니다.
+Imposia는 하나의 문서를 기준으로 삼되, 소스 처리와 화면 표시는 분리합니다.
 
 ```text
- HTML / CSS source
+ HTML / CSS 원본
         │
-        ├── discover assets ──► host assetResolver ──► Core-owned Blob URLs
-        │
-        ▼
- sanitize + normalize page media
+        ├── 에셋 찾기 ──► 호스트 assetResolver ──► Core 소유 Blob URL
         │
         ▼
- 최종 표시 기준이 아닌 임시 iframe에서 페이지네이션
+ 정제 + 페이지 미디어 정규화
         │
         ▼
- 성공한 결과를 계속 유지되는 canonical iframe에 원자적으로 커밋
+ 준비용 iframe에서 페이지 계산
         │
-        ├──► immutable page metadata + warnings + timings
-        ├──► continuous / single-page / spread presentation
-        └──► native browser print
+        ▼
+ 완성된 결과를 canonical iframe에 한 번에 반영
+        │
+        ├──► 불변 페이지 메타데이터 + 경고 + 소요 시간
+        ├──► 연속 / 단일 페이지 / 펼침면 표시
+        └──► 브라우저 네이티브 인쇄
 
- latest committed semantic source ──► bounded reflowable EPUB 3.3 Blob
+ 의미 구조를 보존한 최신 확정 원본 ──► 크기가 제한된 리플로우형 EPUB 3.3 Blob
 ```
 
 | 단계 | 처리 내용 |
 | :--- | :--- |
-| **해석** | Imposia가 HTML과 CSS 리소스를 발견하고 호스트에 허용된 바이트를 요청합니다. 작성된 URL은 iframe 요청이 되지 않습니다. |
-| **정제** | 마크업, CSS, resolver 결과, extension 결과가 Core의 CSP, 제한, 경고 경계 안에 머뭅니다. |
-| **페이지네이션** | 페이지 지오메트리, 지원되는 `@page` 규칙, 프래그먼테이션, 참조, 퍼블리싱 콘텐츠를 최종 표시 기준이 아닌 임시 iframe에서 해석합니다. |
-| **표시** | Viewer와 React 화면은 페이지를 복제하거나 레이아웃을 재실행하지 않고 계속 유지되는 canonical iframe을 사용합니다. |
-| **퍼블리싱** | 네이티브 인쇄는 해당 iframe을 대상으로 하며, EPUB은 최신 커밋 시맨틱 소스에서 제한된 리플로우형 아카이브를 만듭니다. |
+| **해석** | Imposia가 HTML과 CSS 리소스를 찾아 호스트에 허용된 바이트를 요청합니다. 문서에 작성된 URL을 iframe에서 직접 요청하지 않습니다. |
+| **정제** | 마크업, CSS, `assetResolver` 결과, 확장 기능의 결과를 Core의 CSP와 각종 제한, 경고 정책 안에서 처리합니다. |
+| **페이지네이션** | 페이지 크기, 지원되는 `@page` 규칙, 콘텐츠 분할, 참조, 퍼블리싱 콘텐츠를 준비용 iframe에서 계산합니다. |
+| **표시** | Viewer와 React는 페이지를 복제하거나 레이아웃을 다시 계산하지 않고 canonical iframe을 그대로 보여줍니다. |
+| **퍼블리싱** | 네이티브 인쇄는 이 iframe을 사용합니다. EPUB은 확정된 최신 원본의 의미 구조로 리플로우형 아카이브를 만듭니다. |
 
-새 세대를 준비하는 동안에도 이전 커밋은 계속 유지되는 canonical iframe에
-계속 표시됩니다. 완전히 성공한 결과만 iframe 내용을 원자적으로 갱신하고
-staging iframe을 제거합니다. 실패, 중단, 더 새로운 작업에 의한 대체는 이전
-커밋을 그대로 보존합니다.
+새 세대를 준비하는 동안에도 canonical iframe에는 이전에 확정한 문서가
+표시됩니다. 준비가 모두 끝난 결과만 iframe에 한 번에 반영하고 준비용 iframe을
+제거합니다. 작업이 실패하거나 중단되거나 더 새로운 요청으로 대체되면 이전
+문서를 그대로 유지합니다.
 
 ---
 
@@ -226,19 +226,19 @@ staging iframe을 제거합니다. 실패, 중단, 더 새로운 작업에 의�
 | 패키지 | 역할 | 이런 경우에 선택하세요 |
 | :--- | :--- | :--- |
 | [`@imposia/react`](https://www.npmjs.com/package/@imposia/react) | 주 React 어댑터 | React 18+ 앱에서 컴포넌트, 훅, 명령형 페이지 핸들이 필요할 때 |
-| [`@imposia/client`](https://www.npmjs.com/package/@imposia/client) | 통합 프레임워크 중립 진입점 | 하나의 브라우저 전용 의존성에서 Core와 Viewer API를 함께 사용할 때 |
-| [`@imposia/core`](https://www.npmjs.com/package/@imposia/core) | canonical 페이지 문서 런타임 | React 없이 생명주기, 페이지네이션, resolver, extension, 인쇄, EPUB을 직접 제어할 때 |
+| [`@imposia/client`](https://www.npmjs.com/package/@imposia/client) | 통합 프레임워크 중립 진입점 | 브라우저 전용 패키지 하나로 Core와 Viewer API를 함께 사용할 때 |
+| [`@imposia/core`](https://www.npmjs.com/package/@imposia/core) | canonical 페이지 문서 런타임 | React 없이 수명 주기, 페이지네이션, 에셋 해석, 확장 기능, 인쇄, EPUB을 직접 제어할 때 |
 | [`@imposia/viewer`](https://www.npmjs.com/package/@imposia/viewer) | 페이지 및 PDF 표시 | Core iframe을 표시하거나 독립 PDF.js 캔버스 뷰어를 마운트할 때 |
 
-패키지 분리는 통합 방식만 바꿉니다. 문서 소유권의 단일 진실 원천은 계속
-Core입니다.
+패키지는 통합 방식에 따라 나뉘지만 문서의 기준은 언제나 Core가 소유합니다.
 
 ---
 
 ## 순서가 있는 Publication과 Reader 탐색
 
-여러 시맨틱 소스가 하나의 읽기 순서, 전역 페이지 순서, outline,
-EPUB spine을 공유해야 할 때는 `ImposiaPublicationViewer`를 사용합니다.
+의미 구조를 가진 여러 원본이 하나의 읽기 순서, 전역 페이지 순서, 개요
+(`outline`), EPUB spine을 공유해야 한다면 `ImposiaPublicationViewer`를
+사용하세요.
 
 ```tsx
 import {
@@ -269,25 +269,26 @@ export function PublicationPreview() {
 }
 ```
 
-기본 Reader는 커밋된 outline을 목차로 표시하고 시맨틱 검색과 내용에 상한을 둔
-페이지 썸네일을 제공합니다. React 핸들에서도 `navigate()`, `search()`,
-`selectSearchResult()`, `getThumbnails()`, `selectThumbnail()`로 동일한 현재
-컨트롤러 경로를 사용합니다. Inspector, Contents, Search, Page thumbnails는
-canonical iframe 밖에 있는 상호 배제·키보드 탐색 패널입니다.
+기본 Reader는 확정된 `outline`을 목차로 보여주며, 의미 기반 검색과 크기가
+제한된 페이지 썸네일을 제공합니다. React 핸들의 `navigate()`, `search()`,
+`selectSearchResult()`, `getThumbnails()`, `selectThumbnail()`도 현재
+컨트롤러를 그대로 사용합니다. Inspector, Contents, Search, Page thumbnails는
+canonical iframe 밖에 있으며, 한 번에 하나만 열리고 키보드로 탐색할 수
+있습니다.
 
-검색 결과와 썸네일은 하나의 컨트롤러와 커밋 세대에 속합니다.
-교체 후에는 다시 해석하거나 검색하세요. 보관한 오래된(stale) 값은 거부됩니다. Reader
-UI는 작성 소스를 다시 파싱하거나 페이지를 래스터화하지 않으며, iframe이나
-페이지네이션 패스를 추가하지 않습니다.
+검색 결과와 썸네일은 특정 컨트롤러와 확정 세대에 속합니다. 문서를 교체한
+뒤에는 목적지를 다시 확인하거나 검색하세요. 이전 세대에서 보관한 값은 사용할
+수 없습니다. Reader UI는 원본을 다시 파싱하거나 페이지를 이미지로 만들지
+않으며, iframe이나 별도의 페이지네이션 과정도 추가하지 않습니다.
 
 ---
 
 ## Canonical 페이지 문서
 
-`PageDocument`는 렌더링된 미리보기보다 더 많은 정보를 담습니다. 한 세대의
-커밋된 퍼블리싱 상태입니다.
+`PageDocument`는 화면에 표시된 미리보기뿐 아니라 한 세대에서 확정된
+퍼블리싱 상태 전체를 담습니다.
 
-- 정규화된 용지 및 콘텐츠 지오메트리
+- 정규화된 용지와 콘텐츠 크기
 - 불변 페이지 메타데이터, 페이지 면, 이름이 있는 컨텍스트, 빈 페이지 표시
 - 순서가 있는 본문 텍스트, 장식, 경고, 타이밍
 - 표시와 인쇄에 사용되는 격리된 canonical iframe
@@ -317,20 +318,22 @@ h1 {
 }
 ```
 
-지원되지 않는 선언은 동등한 브라우저 출력처럼 조용히 표시되지 않고 진단을
-생성합니다.
+지원하지 않는 선언을 비슷한 브라우저 출력으로 조용히 흉내 내지 않고 진단을
+남깁니다.
 
 ### Resolver 전용 에셋
 
-호스트 `assetResolver`는 유일하게 허용된 리소스 경계입니다. Core는 승인된
-바이트를 소유 Blob URL로 바꾸고 교체, 실패, 파괴 시 해제합니다. 입력
-마크업은 격리된 iframe에서 작성된 URL을 직접 요청할 수 없습니다.
+호스트의 `assetResolver`만 외부 리소스를 가져올 수 있습니다. Core는 승인된
+바이트를 자체 Blob URL로 바꾸고, 문서를 교체하거나 작업이 실패하거나
+컨트롤러를 제거할 때 URL을 해제합니다. 입력 마크업은 격리된 iframe에서
+작성된 URL을 직접 요청할 수 없습니다.
 
 ### 순서가 보장되는 Extension
 
-Extension은 문자열 입력을 변환하고, resolver 요청을 필터링하고, 페이지
-장식을 추가할 수 있습니다. DOM 또는 네트워크 접근 없이 선언 순서대로
-실행되며 resolver 교체, CSP·제한 완화, 생명주기 롤백 우회는 할 수 없습니다.
+확장 기능은 문자열 입력을 변환하고, `assetResolver` 요청을 걸러내며, 페이지
+장식을 추가할 수 있습니다. DOM이나 네트워크에 접근하지 않고 선언한 순서대로
+실행됩니다. `assetResolver`를 교체하거나 CSP와 각종 제한을 완화하거나 수명
+주기 롤백을 우회할 수는 없습니다.
 
 ```ts
 import { mountPageDocument, type PageExtension } from "@imposia/core";
@@ -348,8 +351,8 @@ const controller = mountPageDocument(host, source, {
 });
 ```
 
-Publication extension은 작성된 각 entry를 독립적으로 변환하며, Core가
-보호하는 composition marker를 추가하기 전에 실행됩니다.
+Publication 확장 기능은 작성된 각 `entry`를 독립적으로 변환하며, Core가
+보호하는 조합 표식(`composition marker`)을 추가하기 전에 실행됩니다.
 
 ```ts
 import { mountPublication, type PublicationExtension } from "@imposia/core";
@@ -372,27 +375,29 @@ const publication = mountPublication(host, snapshot, {
 });
 ```
 
-두 extension 형태는 동결된 값만 받습니다. 출력은 다시 제한·sanitize되며,
-실패하면 커밋된 generation을 보존합니다. abort, supersession, destroy는
-`context.signal`을 중단하고 `context.onCleanup()`에 등록된 정리를 실행합니다.
+두 확장 기능은 동결된 값만 받습니다. 출력은 다시 정제되고 각종 제한을
+적용받습니다. 확장 기능이 실패하면 현재 확정 세대를 보존합니다. 작업이
+취소되거나 더 새로운 요청으로 대체되거나 컨트롤러가 제거되면
+`context.signal`을 중단하고 `context.onCleanup()`에 등록된 정리 작업을
+실행합니다.
 
 ---
 
 ## 퍼블리싱 계약
 
-Imposia는 경계를 명시적으로 구분합니다. 작고 검증 가능한 부분 집합이
-브라우저-인쇄 호환성을 무조건 약속하는 것보다 유용합니다.
+Imposia는 지원 경계를 명확히 구분합니다. 모든 브라우저와 인쇄 결과가 같다고
+약속하기보다, 작더라도 검증할 수 있는 범위를 제공합니다.
 
 | 상태 | 포함되는 동작 |
 | :--- | :--- |
-| **Stable** | 브라우저 ESM API, canonical iframe 생명주기, resolver 격리, 페이지 지오메트리, 지원되는 `@page` selector와 margin box, break, 네이티브 인쇄, 리플로우형 EPUB 내보내기 |
-| **Constrained** | 행 경계 테이블, column/no-wrap flex, 단일 열 non-spanning grid, 제한된 multi-column 레이아웃, 로컬 target reference, named string |
-| **Experimental** | 명시적인 defer·fallback 경고를 제공하는 선택적 페이지 로컬 각주와 위·아래 page float |
-| **Unsupported** | Node·CLI 렌더링, 서버 내보내기, 고정 레이아웃 EPUB, PDF 바이트, 임의 CSS 프래그먼테이션, 정확한 크로스 브라우저 페이지 수 일치 |
+| **Stable** | 브라우저 ESM API, canonical iframe 수명 주기, `assetResolver` 격리, 페이지 크기, 지원되는 `@page` 선택자와 margin box, break, 네이티브 인쇄, 리플로우형 EPUB 내보내기 |
+| **Constrained** | 행 경계에서 나뉘는 표, column/no-wrap flex, 단일 열 non-spanning grid, 제한된 multi-column 레이아웃, 로컬 target reference, named string |
+| **Experimental** | 지연·대체 경고를 명시적으로 제공하는 선택형 페이지 내부 각주와 위·아래 page float |
+| **Unsupported** | Node·CLI 렌더링, 서버 내보내기, 고정 레이아웃 EPUB, PDF 바이트, 임의 CSS 분할, 브라우저마다 같은 페이지 수를 보장하는 기능 |
 
 Chromium은 구조적 페이지네이션의 기준입니다. Firefox와 WebKit에서는 공개
-API, 격리, resolver 경계, 생명주기, 정리, 네이티브 인쇄 호출, EPUB 아카이브
-동작을 검증합니다. 메트릭과 줄바꿈은 달라질 수 있습니다.
+API, 격리, `assetResolver` 경계, 수명 주기, 정리, 네이티브 인쇄 호출, EPUB
+아카이브 동작을 검증합니다. 측정값과 줄바꿈은 달라질 수 있습니다.
 
 제한 또는 실험적 기능에 의존하기 전에 공식
 [호환성 매트릭스](./docs/compatibility.md)를 확인하세요.
@@ -401,7 +406,7 @@ API, 격리, resolver 경계, 생명주기, 정리, 네이티브 인쇄 호출, 
 
 ## 리플로우형 EPUB
 
-`PageDocument.exportEpub()`은 최신 커밋 시맨틱 소스로부터
+`PageDocument.exportEpub()`은 의미 구조를 보존한 최신 확정 원본에서
 `application/epub+zip` 브라우저 `Blob`을 반환합니다.
 
 ```ts
@@ -418,13 +423,14 @@ const epub = await pageDocument.exportEpub({
 });
 ```
 
-내보내기는 유지 중인 resolver 에셋만 허용하며 메타데이터, 항목 수, 바이트,
-중단, 생명주기 제한을 적용합니다. 페이지 wrapper, margin furniture, 생성된
-페이지 counter, Blob URL, 페이지 전용 실험적 아티팩트는 제외합니다.
+내보내기에는 현재 관리 중인 `assetResolver` 에셋만 포함할 수 있습니다.
+메타데이터, 항목 수, 바이트 수, 작업 중단, 수명 주기 제한도 적용합니다. 페이지
+wrapper, margin furniture, 생성된 page counter, Blob URL, 페이지 전용 실험
+결과물은 제외합니다.
 
-이는 페이지 미리보기의 고정 레이아웃 스냅샷이 아니라 시맨틱 리플로우형
-EPUB 3.3입니다. PDF가 필요하면 `print()`를 호출하고 브라우저의 PDF로 저장
-기능을 사용하세요.
+이 EPUB 3.3은 페이지 미리보기의 고정 레이아웃 복사본이 아니라 의미 구조를
+보존한 리플로우형 문서입니다. PDF가 필요하면 `print()`를 호출하고 브라우저의
+PDF 저장 기능을 사용하세요.
 
 ---
 
@@ -447,7 +453,7 @@ import "./viewer-theme.css";
 }
 ```
 
-사용자가 선택하는 테마는 동일한 토큰을 인스턴스별로 전달할 수 있습니다.
+사용자가 고른 테마도 같은 토큰을 각 인스턴스에 전달해 적용할 수 있습니다.
 
 ```ts
 const viewer = mountPageViewer(host, pageDocument, {
@@ -460,7 +466,7 @@ const viewer = mountPageViewer(host, pageDocument, {
 viewer.setTheme({ "--imposia-viewer-color-accent": "#ef6a3b" });
 ```
 
-테마는 React 또는 Core 생명주기를 추가하지 않고 표시만 바꿉니다. 전체 공개
+테마는 React나 Core의 수명 주기를 바꾸지 않고 화면 표시만 바꿉니다. 전체 공개
 토큰은 [`@imposia/viewer` 테마 계약](./packages/viewer/README.md#theme-modules)을
 참고하세요.
 
@@ -486,17 +492,16 @@ viewer.setZoom(1.2);
 viewer.nextPage();
 ```
 
-Core 페이지 문서를 표시할 때는 `mountPageViewer()`를 사용하세요. 해당 문서의
-컨트롤러가 만든 정확한 iframe을 유지합니다.
+Core 페이지 문서를 표시할 때는 `mountPageViewer()`를 사용하세요. 문서
+컨트롤러가 만든 iframe을 그대로 유지합니다.
 
 ---
 
 ## 인터랙티브 데모
 
-[`examples/demo`](./examples/demo)의 React 퍼블리싱 랩에서는 실시간 소스
-변경, 정규화된 페이지 미디어, margin box, 순서가 있는 extension, 제한된
-퍼블리싱 사례, Viewer 컨트롤, 네이티브 인쇄, EPUB 내보내기를 확인할 수
-있습니다.
+[`examples/demo`](./examples/demo)의 React 퍼블리싱 실험실에서는 실시간 소스
+변경, 정규화된 페이지 미디어, margin box, 순서가 있는 확장 기능, 제한된
+퍼블리싱 사례, Viewer 조작, 네이티브 인쇄, EPUB 내보내기를 확인할 수 있습니다.
 
 ```bash
 corepack pnpm install --frozen-lockfile
@@ -516,22 +521,23 @@ pnpm setup:browsers
 pnpm check
 ```
 
-`pnpm check`는 preflight 검증, 타입 검사, lint, 단위 테스트, 패키지 빌드,
-브라우저 E2E suite, production 취약점 감사, 의존성 라이선스 감사를 실행합니다. 전체 gate와 캡처된
-아티팩트 목록은 [`docs/verification.md`](./docs/verification.md)에 있습니다.
+`pnpm check`는 사전 검증, 타입 검사, lint, 단위 테스트, 패키지 빌드,
+브라우저 E2E 테스트, 프로덕션 취약점 검사, 의존성 라이선스 감사를 실행합니다.
+전체 검증 항목과 저장된 결과물은
+[`docs/verification.md`](./docs/verification.md)에서 확인할 수 있습니다.
 
 제품 계약과 아키텍처 결정은 [`docs/routing.md`](./docs/routing.md)에서
-찾을 수 있습니다. 예제와 구현 세부사항이 다를 때는 호환성 매트릭스를
-진실의 원천으로 사용합니다.
+찾을 수 있습니다. 예제와 구현 세부사항이 다르면 호환성 매트릭스를 기준으로
+판단하세요.
 
 ## 기여와 릴리스
 
-변경을 제안하기 전에 [CONTRIBUTING.md](./CONTRIBUTING.md)를 읽고 clean-room 및
+변경을 제안하기 전에 [CONTRIBUTING.md](./CONTRIBUTING.md)를 읽고 clean-room과
 실제 브라우저 관찰 요구사항을 확인하세요. 유지보수자용 릴리스 순서와 registry
 전제 조건은 [RELEASING.md](./RELEASING.md), 버전별 공개 변경은
-[CHANGELOG.md](./CHANGELOG.md)에 있습니다. 취약점은 [SECURITY.md](./SECURITY.md)의 비공개
-경로로 제보하고, 사용자 공간에서는 [Code of Conduct](./CODE_OF_CONDUCT.md)를
-따르세요.
+[CHANGELOG.md](./CHANGELOG.md)에 있습니다. 취약점은
+[SECURITY.md](./SECURITY.md)에 안내된 비공개 경로로 제보하고, 사용자
+커뮤니티에서는 [Code of Conduct](./CODE_OF_CONDUCT.md)를 따르세요.
 
 ---
 
