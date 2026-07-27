@@ -404,11 +404,12 @@
 .imposia-inspector-panel {
   position: absolute;
   box-sizing: border-box;
-  top: var(--imposia-viewer-rail-height);
+  grid-row: 2;
+  top: 0;
   left: 0;
   z-index: 3;
   width: min(24rem, 100%);
-  max-height: calc(100% - var(--imposia-viewer-rail-height));
+  max-height: 100%;
   padding: 1rem;
   overflow: auto;
   border-right: var(--imposia-viewer-border-hairline) solid var(--imposia-viewer-color-line);
@@ -425,6 +426,7 @@
 :where(.imposia-page-viewer--headless) .imposia-search-panel,
 :where(.imposia-page-viewer--headless) .imposia-thumbnail-panel,
 :where(.imposia-page-viewer--headless) .imposia-inspector-panel {
+  grid-row: 1;
   top: 0;
   max-height: 100%;
 }
@@ -755,14 +757,6 @@ button.imposia-inspector-finding[aria-current="true"] {
     flex-direction: column;
   }
 
-  .imposia-toc-panel,
-  .imposia-search-panel,
-  .imposia-thumbnail-panel,
-  .imposia-inspector-panel {
-    top: var(--imposia-viewer-rail-height-mobile);
-    max-height: calc(100% - var(--imposia-viewer-rail-height-mobile));
-  }
-
   .imposia-identity {
     min-height: var(--imposia-viewer-identity-height-mobile);
     padding: 0 var(--imposia-viewer-identity-padding-inline-mobile);
@@ -835,14 +829,6 @@ button.imposia-inspector-finding[aria-current="true"] {
 @container imposia-viewer (max-width: 390px) {
   .imposia-rail {
     min-height: var(--imposia-viewer-rail-height-compact);
-  }
-
-  .imposia-toc-panel,
-  .imposia-search-panel,
-  .imposia-thumbnail-panel,
-  .imposia-inspector-panel {
-    top: var(--imposia-viewer-rail-height-compact);
-    max-height: calc(100% - var(--imposia-viewer-rail-height-compact));
   }
 
   .imposia-toolbar {

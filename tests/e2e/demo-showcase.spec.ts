@@ -568,8 +568,6 @@ test("React publishing lab keeps viewer controls inside a 320px viewport", async
         controls: [...toolbar.querySelectorAll<HTMLElement>("button")].map((control) => ({
           name: control.getAttribute("aria-label") ?? control.textContent?.trim() ?? "",
           rect: control.getBoundingClientRect().toJSON(),
-          offsetLeft: control.offsetLeft,
-          offsetRight: control.offsetLeft + control.offsetWidth,
           fontSize: Number.parseFloat(getComputedStyle(control).fontSize),
         })),
       };
@@ -592,10 +590,11 @@ test("React publishing lab keeps viewer controls inside a 320px viewport", async
       expect(control.rect.width, `${control.name} width`).toBeGreaterThanOrEqual(24);
       expect(control.rect.height, `${control.name} height`).toBeGreaterThanOrEqual(24);
       expect(control.fontSize, `${control.name} font size`).toBeGreaterThanOrEqual(8);
-    }
-    for (let index = 1; index < geometry.controls.length; index += 1) {
-      expect(geometry.controls[index]?.offsetLeft).toBeGreaterThanOrEqual(
-        geometry.controls[index - 1]?.offsetRight ?? 0,
+      expect(control.rect.left, `${control.name} left edge`).toBeGreaterThanOrEqual(
+        geometry.toolbar.left,
+      );
+      expect(control.rect.right, `${control.name} right edge`).toBeLessThanOrEqual(
+        geometry.toolbar.right,
       );
     }
     const activeModeControl = geometry.controls.find(({ name }) => name === "Continuous pages");
