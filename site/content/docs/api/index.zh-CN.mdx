@@ -1,0 +1,56 @@
+---
+title: API 参考
+description: 按 React、Core 与 Viewer 查找 API，并了解软件包关系和共用生命周期。
+---
+
+渲染第一个文档后，可在这里查找所需 API。各软件包页面分别说明组件、控制器、选项与生命周期约束。
+
+## 软件包映射
+
+| 软件包 | 公开入口 | 适用场景 |
+| --- | --- | --- |
+| `@imposia/react` | React 组件、Hook，以及 `@imposia/client` 的公开导出 | React 18+ 应用 |
+| `@imposia/client` | Core 和 Viewer 的主要集成 API | 希望从一个依赖使用框架无关 API |
+| `@imposia/core` | 分页、Publication、打印、EPUB、资源和 Core 辅助函数 | 直接管理 canonical iframe 与生命周期 |
+| `@imposia/viewer` | 页面 Viewer、Reader、Inspector 和独立 PDF.js Viewer | 展示已有 `PageDocument` 或 PDF |
+
+React Viewer 需导入 `@imposia/react/styles.css`；直接使用 Viewer 时导入 `@imposia/viewer/styles.css`。
+
+## 选择 API
+
+- [React API](/zh-CN/docs/api/react): React 应用使用的组件、Hook 与命令式句柄。
+- [Core API](/zh-CN/docs/api/core): 框架无关的分页与出版物控制器。
+- [Viewer API](/zh-CN/docs/api/viewer): 页面、PDF、Reader、Inspector 与导航控制器。
+
+## 生命周期与错误
+
+```ts
+class ImposiaError extends Error {
+  readonly code: string;
+  constructor(code: string, message: string);
+}
+```
+
+对于可分类的配置、资源、Publication、分页和 EPUB 错误，Core 会抛出 `ImposiaError`。取消操作使用名称为 `AbortError` 的 `DOMException`。Viewer 的所有权、版本、已销毁状态和无效对象约束通常会抛出普通 `Error` 或 `TypeError`。
+
+```ts
+try {
+  await controller.update(nextSource, { signal });
+} catch (error) {
+  if (error instanceof DOMException && error.name === "AbortError") return;
+  if (error instanceof ImposiaError) console.error(error.code, error.message);
+  else throw error;
+}
+```
+
+手动组合时，先等待 Core `ready`，再挂载 Viewer；update 成功后用新文档调用 `refresh()`。销毁时先拆 Viewer，再销毁 Core：
+
+```ts
+const first = await controller.ready;
+const viewer = mountPageViewer(host, first);
+viewer.refresh(await controller.update(nextSource));
+viewer.destroy();
+await controller.destroy();
+```
+
+React 组件和 Hook 会自动清理。`print()` 调用浏览器原生打印；Imposia 不返回 PDF 字节。`exportEpub()` 返回可重排 EPUB，不是页面预览的固定版快照。

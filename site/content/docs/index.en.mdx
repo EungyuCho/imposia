@@ -1,15 +1,15 @@
 ---
 title: Imposia Documentation
-description: Render HTML and CSS as browser pages for preview and print, then export EPUB from the same committed source.
+description: Turn React HTML into browser pages you can preview, print, and save as PDF, with EPUB export when you need it.
 ---
 
-Imposia turns HTML and CSS into pages inside the browser. Preview and print use the completed pages; EPUB export uses the semantic source committed with them.
+Imposia turns the HTML and CSS you already have into pages inside the browser. Preview those pages in your React app, send them to native print, or choose **Save as PDF** in the print dialog. EPUB export uses the semantic source committed with the same pages.
 
 ## Choose where to start
 
 - **Build a working preview:** follow [Build your first page](/en/docs/getting-started) to install the React package and render HTML as A4 pages.
-- **Look up a component or method:** use the [API reference](/en/docs/api-reference) for React handles, Core controllers, Viewer navigation, reader controls, and lifecycle constraints.
-- **Understand the output:** read [How preview and output stay consistent](/en/docs/publishing-contract) before you connect printing, EPUB downloads, or external assets.
+- **Look up a component or method:** use the [API reference](/en/docs/api) for React handles, Core controllers, Viewer navigation, reader controls, and lifecycle constraints.
+- **Understand the output:** read [How preview and output stay consistent](/en/docs/concepts/publishing-model) before you connect printing, EPUB downloads, or external assets.
 
 ## What happens to your HTML
 
@@ -22,9 +22,9 @@ If pagination fails or a newer update arrives first, readers keep seeing the las
 ## Use one committed source in three ways
 
 - **Preview:** show the completed pages through the React Viewer.
-- **Print:** open the browser print dialog for those same pages.
+- **Print or save as PDF:** open the browser's native print dialog for those same pages, then choose a printer or **Save as PDF**.
 - **EPUB:** create a reflowable EPUB 3.3 `Blob` from the document's committed semantic source.
 
 ## Know the boundary
 
-Imposia runs in the browser and ships as ESM. It does not include a Node renderer, a CLI renderer, a server publishing API, or a PDF generator. If that matches your application, continue with [Build your first page](/en/docs/getting-started).
+Imposia runs in the browser and ships as ESM. `print()` uses the browser's native print flow; it does not return PDF bytes. There is no Node renderer, CLI renderer, server publishing API, or separate PDF generator. If that matches your application, continue with [Build your first page](/en/docs/getting-started).

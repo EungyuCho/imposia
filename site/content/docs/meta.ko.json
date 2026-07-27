@@ -1,4 +1,13 @@
 {
   "title": "Imposia 문서",
-  "pages": ["index", "getting-started", "api-reference", "publishing-contract", "changelog"]
+  "pages": [
+    "---시작하기---",
+    "index",
+    "getting-started",
+    "concepts",
+    "guides",
+    "api",
+    "---프로젝트---",
+    "changelog"
+  ]
 }

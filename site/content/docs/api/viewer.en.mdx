@@ -1,0 +1,88 @@
+---
+title: Viewer API
+description: Page, PDF, Reader, Inspector, and navigation controllers from @imposia/viewer.
+---
+
+## Viewer page documents, PDF, reader, and inspector
+
+### `mountPageViewer`
+
+```ts
+mountPageViewer(container: HTMLElement, document: PageDocument, options?: PageViewerOptions): PageViewerController;
+validatePageViewerOptions(document: PageDocument, options?: PageViewerOptions): void;
+```
+
+Mount only after Core commits. `container` must be the canonical iframe's current parent. Validation checks the document, sandbox, theme, and optional reader synchronously.
+
+`PageViewerOptions` accepts `mode?: "continuous" | "single" | "spread"`, `spread?: { cover? }`, `zoom?`, `controls?`, `theme?`, `inspector?`, and `reader?`. `controls` defaults to `true`; set it to `false` to keep the presentation controller without the built-in brand rail. A theme is a map of CSS properties whose names begin `--imposia-viewer-`.
+
+#### `PageViewerController`
+
+| Member | Returns | Effect or constraint |
+| --- | --- | --- |
+| `goToPage(page)`, `nextPage()`, `previousPage()` | `void` | Clamp/advance within current pages or effective spreads. |
+| `setZoom(zoom)` | `void` | Rounds/clamps finite input. |
+| `setMode(mode)`, `setSpreadCover(cover)` | `void` | Change requested mode/cover layout. |
+| `setTheme(theme?)` | `void` | Replace or clear Viewer variables. |
+| `subscribe(listener)` | `() => void` | Immediately emits state, then emits presentation changes; returns an unsubscribe function. |
+| `refresh(document)` | `void` | Requires the same iframe and a newer generation; throws after destruction/invalid input. |
+| `print()` | `Promise<void>` | Rejects after destruction or when the iframe is unavailable. |
+| `destroy()` | `void` | Removes Viewer bindings/UI and restores the Core iframe container. Idempotent. |
+| `state` | `PageViewerState` | Page, count, zoom, requested/effective mode, `status`, and generation. |
+| `reader` | `PublicationReaderController \| undefined` | Present when reader options were supplied. |
+| `inspector` | `ViewerInspectorController \| undefined` | Present when `inspector: true`. |
+
+Narrow containers can report `mode: "spread"` with `effectiveMode: "single"`.
+Viewer CSS is scoped to `.imposia-viewer`; the host owns body styles, preview
+dimensions, background, and surrounding scrolling.
+
+### Publication reader and deep links
+
+Reader options require the `PublicationController` that owns the exact displayed `PublicationDocument`; they may include `initialDeepLink` and `onDeepLinkChange`.
+
+| `PublicationReaderController` member | Returns / effect |
+| --- | --- |
+| `openTableOfContents()`, `closeTableOfContents()`, `toggleTableOfContents()` | Control the outline panel. |
+| `openThumbnails()`, `closeThumbnails()`, `toggleThumbnails()` | Control thumbnails. |
+| `selectThumbnail(thumbnail)` | Goes to a current-generation thumbnail; foreign thumbnails throw. |
+| `openSearch()`, `closeSearch()`, `toggleSearch()` | Control search. |
+| `search(query)` | `readonly PublicationSearchResult[]`. |
+| `nextSearchResult()`, `previousSearchResult()` | `PublicationSearchResult \| undefined`. |
+| `selectSearchResult(result)` | Selects/navigates to a result. |
+| `navigate(destination)` | Validates, navigates, and emits a deep link. |
+| `restoreDeepLink(value)` | `PublicationDestination \| undefined`; resolves and navigates. |
+| `state` | Panel state, thumbnails, destination/deep link, query, results, and active result index. |
+
+All reader methods throw after destruction. Opening one auxiliary panel closes the others. `PublicationThumbnail` exposes page, generation, dimensions, and `previewLineCount`.
+
+```ts
+serializePublicationDeepLink(destination: PublicationDestination): string;
+restorePublicationDeepLink(value: string, controller: PublicationController): PublicationDestination | undefined;
+```
+
+Serialization produces a versioned value from the destination ID. The standalone restore helper accepts only canonical encoding and resolves against the current generation; unlike the reader method, it does not navigate.
+
+### Viewer inspector
+
+| `ViewerInspectorController` member | Returns / effect |
+| --- | --- |
+| `open()`, `close()`, `toggle()` | Control diagnostics; throw after destruction. |
+| `select(warning)` | Goes to/highlights a located warning; foreign-generation warnings throw. |
+| `state` | `{ open, warnings, selected }`. |
+
+### `mountViewer` for PDF
+
+```ts
+mountViewer(container: HTMLElement, source: ViewerSource, options?: ViewerOptions): ViewerController;
+type ViewerSource = Uint8Array | ArrayBuffer | string | { pdf: Uint8Array };
+```
+
+This separate Viewer loads/rasterizes PDF pages with PDF.js. Options are `mode?: "continuous" | "single"`, `zoom?`, `workerSrc?`, and `theme?`. It returns immediately in `loading`; failures set `state.status` to `error` and populate `state.error`.
+
+| `ViewerController` member | Returns / effect |
+| --- | --- |
+| `goToPage(page)`, `nextPage()`, `previousPage()` | Navigate only while ready. |
+| `setZoom(zoom)`, `setMode(mode)` | Update rendering only while ready. |
+| `setTheme(theme?)` | Replace/clear Viewer variables; ignored after destruction. |
+| `destroy()` | Cancels work, destroys PDF.js resources, and empties the container. |
+| `state` | Page, count, zoom, mode, loading/ready/error status, and optional error text. |

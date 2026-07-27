@@ -14,6 +14,8 @@
   --imposia-code: #1b1c1a;
   --imposia-code-ink: #f4f2ec;
   --imposia-success: #5f9d78;
+  --imposia-display:
+    "Iowan Old Style", "Palatino Linotype", "Book Antiqua", "Noto Serif KR", "Noto Serif JP", serif;
   --color-fd-primary: var(--imposia-coral);
   --fd-layout-width: 1180px;
   color-scheme: light;
@@ -33,7 +35,9 @@ body.imposia-root {
   margin: 0;
   overflow-x: hidden;
   background:
-    radial-gradient(circle at 85% 8%, rgba(239, 106, 59, 0.08), transparent 28rem),
+    linear-gradient(90deg, transparent 0, transparent calc(100% - 1px), rgba(23, 23, 21, 0.035) 0) 0
+    0 / 6rem 6rem,
+    radial-gradient(circle at 85% 8%, rgba(239, 106, 59, 0.1), transparent 30rem),
     var(--imposia-page);
   color: var(--imposia-ink);
   font-family:
@@ -87,6 +91,7 @@ body.imposia-root {
 }
 
 .landing-hero,
+.outcome-section,
 .feature-section,
 .landing-footer {
   width: min(100% - 4rem, 1180px);
@@ -95,12 +100,12 @@ body.imposia-root {
 
 .landing-hero {
   display: flex;
-  min-height: 760px;
+  min-height: 720px;
   flex-direction: column;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
-  padding-block: clamp(7rem, 12vw, 10.5rem) clamp(8rem, 13vw, 11rem);
-  text-align: center;
+  padding-block: clamp(7rem, 11vw, 9.5rem) clamp(5rem, 9vw, 7.5rem);
+  text-align: left;
 }
 
 .hero-eyebrow,
@@ -114,19 +119,20 @@ body.imposia-root {
 }
 
 .landing-hero h1 {
-  max-width: 12ch;
+  max-width: 16ch;
   margin: 1.4rem 0 0;
-  color: var(--imposia-coral);
-  font-size: clamp(3.7rem, 8.5vw, 7rem);
-  font-weight: 800;
-  letter-spacing: -0.067em;
-  line-height: 0.91;
+  color: var(--imposia-ink);
+  font-family: var(--imposia-display);
+  font-size: clamp(3.6rem, 7vw, 6.4rem);
+  font-weight: 620;
+  letter-spacing: -0.06em;
+  line-height: 0.96;
   text-wrap: balance;
 }
 
 .hero-description {
   max-width: 790px;
-  margin: 2rem auto 0;
+  margin: 2rem 0 0;
   color: var(--imposia-muted);
   font-size: clamp(1.08rem, 2vw, 1.34rem);
   font-weight: 450;
@@ -136,7 +142,7 @@ body.imposia-root {
 }
 
 .hero-code {
-  width: min(100%, 760px);
+  width: min(100%, 820px);
   margin-top: 2.65rem;
   overflow: hidden;
   border: 1px solid var(--imposia-line);
@@ -155,8 +161,9 @@ body.imposia-root {
   justify-content: space-between;
   gap: 1rem;
   padding: 0.55rem 0.75rem 0.55rem 1.15rem;
-  border-bottom: 1px solid var(--imposia-line);
-  color: var(--imposia-muted);
+  border-bottom: 0;
+  background: var(--imposia-ink);
+  color: color-mix(in srgb, var(--imposia-code-ink) 74%, transparent);
   font-size: 0.72rem;
   font-weight: 680;
   letter-spacing: 0.05em;
@@ -201,6 +208,15 @@ body.imposia-root {
   color: var(--imposia-coral-hover);
 }
 
+.hero-code-bar .copy-command {
+  color: inherit;
+}
+
+.hero-code-bar .copy-command:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+}
+
 .copy-command[data-status="copied"] {
   color: var(--imposia-success);
 }
@@ -218,7 +234,7 @@ body.imposia-root {
 .hero-actions {
   display: flex;
   flex-wrap: wrap;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 0.9rem;
   margin-top: 2rem;
 }
@@ -272,7 +288,7 @@ body.imposia-root {
 .hero-evidence {
   display: flex;
   flex-wrap: wrap;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 0.55rem;
   margin: 1.8rem 0 0;
   color: var(--imposia-muted);
@@ -281,9 +297,50 @@ body.imposia-root {
   letter-spacing: 0.025em;
 }
 
+.outcome-section {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border-block: 1px solid var(--imposia-line);
+}
+
+.outcome-card {
+  min-width: 0;
+  padding: clamp(2rem, 4vw, 3.25rem);
+}
+
+.outcome-card + .outcome-card {
+  border-left: 1px solid var(--imposia-line);
+}
+
+.outcome-card > span {
+  color: var(--imposia-coral-hover);
+  font-family: SFMono-Regular, "Cascadia Code", monospace;
+  font-size: 0.72rem;
+  font-weight: 720;
+  letter-spacing: 0.09em;
+}
+
+.outcome-card h2 {
+  max-width: 15ch;
+  margin: 1.5rem 0 0;
+  font-family: var(--imposia-display);
+  font-size: clamp(1.8rem, 3vw, 2.65rem);
+  font-weight: 620;
+  letter-spacing: -0.045em;
+  line-height: 1.03;
+  text-wrap: balance;
+  white-space: pre-line;
+}
+
+.outcome-card p {
+  margin: 1rem 0 0;
+  color: var(--imposia-muted);
+  font-size: 0.94rem;
+  line-height: 1.65;
+}
+
 .feature-section {
   padding-block: clamp(5rem, 9vw, 7rem) clamp(6rem, 10vw, 8rem);
-  border-top: 1px solid var(--imposia-line);
 }
 
 .section-heading {
@@ -423,15 +480,14 @@ body.imposia-root {
   outline-offset: 3px;
 }
 
-[lang="ko"] body,
-[lang="zh-CN"] :where(.landing-hero, .feature-section),
-[lang="ja"] :where(.landing-hero, .feature-section) {
+[lang="ko"] body {
   word-break: keep-all;
 }
 
 [lang="zh-CN"] body,
 [lang="ja"] body {
   line-break: strict;
+  overflow-wrap: anywhere;
 }
 
 [lang="zh-CN"] article :where(p, li),
@@ -441,6 +497,7 @@ body.imposia-root {
 
 @media (max-width: 900px) {
   .landing-hero,
+  .outcome-section,
   .feature-section,
   .landing-footer {
     width: min(100% - 2.5rem, 1180px);
@@ -467,6 +524,7 @@ body.imposia-root {
 
 @media (max-width: 620px) {
   .landing-hero,
+  .outcome-section,
   .feature-section,
   .landing-footer {
     width: min(100% - 2rem, 1180px);
@@ -476,6 +534,15 @@ body.imposia-root {
     align-items: stretch;
     padding-block: 5.75rem 6rem;
     text-align: left;
+  }
+
+  .outcome-section {
+    grid-template-columns: 1fr;
+  }
+
+  .outcome-card + .outcome-card {
+    border-top: 1px solid var(--imposia-line);
+    border-left: 0;
   }
 
   .hero-eyebrow {

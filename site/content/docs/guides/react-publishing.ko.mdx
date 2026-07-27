@@ -1,0 +1,70 @@
+---
+title: React에서 미리보고, 인쇄하고, PDF로 저장하기
+description: React 페이지 문서 하나를 앱에서 미리보고, 브라우저 기본 인쇄 창으로 보내거나 PDF로 저장합니다.
+---
+
+첫 페이지가 보이는 상태에서 시작합니다. 같은 완성본을 앱에서 미리보고, 종이로 인쇄하거나 PDF로 저장합니다. EPUB도 이 문서와 함께 확정한 원본에서 만듭니다.
+
+## 시작하기
+
+React 18 이상을 사용하는 브라우저 앱에서 [첫 페이지 만들기](/ko/docs/getting-started)를 완료하세요.
+
+## 출력 버튼을 연결합니다
+
+Viewer 옆에 명령형 핸들을 둡니다. 각 작업이 끝날 때까지 기다리고, 실패하면 앱에서 쓰는 오류 처리 함수로 넘깁니다.
+
+```tsx
+import { ImposiaPageViewer, type ImposiaPageViewerHandle } from "@imposia/react";
+import { useRef } from "react";
+import "@imposia/react/styles.css";
+
+type PublishingActionsProps = {
+  readonly html: string;
+  readonly onActionError: (error: unknown) => void;
+};
+
+export function PublishingActions({ html, onActionError }: PublishingActionsProps) {
+  const viewer = useRef<ImposiaPageViewerHandle>(null);
+
+  async function print(): Promise<void> {
+    try {
+      const current = viewer.current;
+      if (current === null) throw new DOMException("Viewer is not available", "InvalidStateError");
+      await current.print();
+    } catch (error) {
+      onActionError(error);
+    }
+  }
+
+  async function exportEpub(): Promise<void> {
+    try {
+      const current = viewer.current;
+      if (current === null) throw new DOMException("Viewer is not available", "InvalidStateError");
+      const blob = await current.exportEpub({
+        metadata: { title: "분기 보고서", language: "ko", identifier: "urn:report:quarterly" },
+      });
+
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "report.epub";
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      onActionError(error);
+    }
+  }
+
+  return (
+    <>
+      <ImposiaPageViewer ref={viewer} source={{ html }} onError={onActionError} />
+      <button type="button" onClick={() => void print()}>인쇄 / PDF 저장</button>
+      <button type="button" onClick={() => void exportEpub()}>EPUB 내보내기</button>
+    </>
+  );
+}
+```
+
+## 결과를 확인합니다
+
+새 원본을 준비하는 동안에도 지금 보이는 미리보기는 유지됩니다. 인쇄 버튼을 누르면 완성된 페이지로 브라우저의 기본 인쇄 창이 열립니다. 종이로 출력하려면 프린터를, 파일로 남기려면 **PDF로 저장**을 선택하세요. Imposia는 PDF 바이트를 직접 반환하지 않습니다. EPUB은 마지막으로 확정한 의미 구조를 리플로우형 EPUB 3.3 `Blob`으로 내보냅니다.

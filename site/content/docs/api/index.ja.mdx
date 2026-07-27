@@ -1,0 +1,53 @@
+---
+title: APIリファレンス
+description: React、Core、Viewerから必要な契約を選び、パッケージの関係と共通ライフサイクルを確認します。
+---
+
+最初の文書を表示した後、必要なAPIを探すためのリファレンスです。パッケージ別のページで、コンポーネント、コントローラー、オプション、ライフサイクル上の制約を確認できます。
+
+## パッケージ構成
+
+| パッケージ | 主な用途 | スタイル |
+| --- | --- | --- |
+| `@imposia/react` | React コンポーネントと Hooks。`@imposia/client` の API も再エクスポートします。 | `@imposia/react/styles.css` |
+| `@imposia/client` | ブラウザー統合用の入口。Core と Viewer の主要 API を再エクスポートします。 | `@imposia/client/styles.css` |
+| `@imposia/core` | HTML/CSS のページ分割、Publication、印刷、EPUB 書き出し。 | 不要 |
+| `@imposia/viewer` | Core の `PageDocument` と PDF の表示 UI。Reader と Inspector を含みます。 | `@imposia/viewer/styles.css` |
+
+すべてのマウント API はブラウザー DOM を必要とします。
+
+## APIを選ぶ
+
+- [React API](/ja/docs/api/react): Reactアプリ向けの<span style={{ whiteSpace: "nowrap" }}>コンポーネント</span>、Hooks、命令型ハンドルです。
+- [Core API](/ja/docs/api/core): フレームワーク非依存のページネーションとPublicationコントローラーです。
+- [Viewer API](/ja/docs/api/viewer): ページ、PDF、Reader、Inspector、ナビゲーションのコントローラーです。
+
+## ライフサイクルとエラー
+
+Core は staging iframe で更新を完了してから canonical iframe を置き換えます。更新中や更新に失敗した場合も、直前に確定した文書を引き続き利用できます。`PageDocument`、`PublicationDocument`、移動先、警告、サムネイル、検索結果は特定の世代に結び付きます。更新後は `controller.current` と各解決 API から取得し直してください。
+
+`ImposiaError` は `Error` を継承し、`code: string` を持ちます。
+
+```ts
+try {
+  await controller.update(nextSource);
+} catch (error) {
+  if (error instanceof ImposiaError) console.error(error.code, error.message);
+  else if (error instanceof DOMException && error.name === "AbortError") console.info("中止");
+  else throw error;
+}
+```
+
+代表的な失敗条件は次のとおりです。
+
+| 条件 | 結果 |
+| --- | --- |
+| 新しい update が開始された、または `AbortSignal` が中止された | 進行中の処理が `AbortError` で reject します。 |
+| リソース期限を超えた | `ImposiaError` の `RESOURCE_TIMEOUT` で reject します。 |
+| ページ寸法や余白が不正 | `INVALID_PAGE_GEOMETRY` を throw します。 |
+| Publication の構造または拡張機能が不正 | `INVALID_PUBLICATION` をスローするか、Promise を reject します。 |
+| 古い Publication destination を渡した | `STALE_PUBLICATION_DESTINATION` を throw します。 |
+| destination の DOM を見つけられない | `PUBLICATION_DESTINATION_NOT_FOUND` を throw します。 |
+| destroy 後に Core 操作を呼んだ | Promise が reject します。Reader/Inspector の操作は throw します。 |
+
+処理を終えたら、低レベル API では必ず `destroy()` を呼んでください。React コンポーネントと Hooks はアンマウント時に自動で破棄します。

@@ -1,0 +1,137 @@
+---
+title: Core API
+description: Framework-neutral page document and publication controllers from @imposia/core.
+---
+
+## Core page document
+
+### `mountPageDocument`
+
+```ts
+mountPageDocument(
+  container: HTMLElement,
+  source: PageSource,
+  options?: PageDocumentOptions,
+): PageDocumentController;
+```
+
+The function appends one canonical iframe immediately, starts a staged generation, and returns synchronously. Await `ready` before reading the first document.
+
+```ts
+const controller = mountPageDocument(host, { html: "<article><h1>Hello</h1></article>" });
+const pageDocument = await controller.ready;
+```
+
+`PageSource` is `{ html: string; baseUrl?: string }` or `{ lightDom: Element | DocumentFragment; baseUrl?: string }`.
+
+| `PageDocumentOptions` field | Type / purpose |
+| --- | --- |
+| `css` | `readonly string[]`; additional authored CSS. |
+| `assetResolver` | Async resolver for font, image, media, and stylesheet requests. |
+| `page` | `{ size?, orientation?, margin? }`; size accepts `A4`, `Letter`, or custom width/height. |
+| `limits` | Optional input, node, asset, deadline, page, layout-pass, and generated-output limits. |
+| `headerTemplate`, `footerTemplate` | Decoration markup. |
+| `decorateBlankPages` | Whether blank pages receive decorations. |
+| `experimental` | `{ footnotes?: boolean; pageFloats?: boolean }`. |
+| `extensions` | Ordered `PageExtension` or `PublicationExtension` values. |
+| `compose` | `{ yieldBudgetMs?: number; scheduler?: () => Promise<void> }`; cooperative main-thread pagination with an 8 ms default budget. Use `Infinity` to disable scheduler handoffs. |
+| `signal` | Cancels the initial generation. |
+| `onProgress` | Receives pass-local `{ completedPages, pass, provisional: true }` whenever staging allocates a page. A later convergence pass resets the count. |
+
+Scheduler, font, and image waits count toward the wall-clock
+`limits.resourceDeadlineMs`. Progress describes provisional staging work; read
+`controller.current` only for the latest committed generation.
+
+An `AssetResolver` receives `{ url, kind, baseUrl, signal }` and resolves to `{ status: "resolved", bytes, mimeType, resolvedUrl? }` or `{ status: "blocked", reason? }`.
+
+`PageExtension` and `PublicationExtension` can also implement synchronous
+`finalizePage(page, context)`. It runs once per accepted page after Core has
+resolved decoration and margin boxes but before commit, so `page.element` is a
+live measurable page element. `page.tableFragments` lists continued table
+fragments with their origin and one-based continuation index. Mutations persist
+into the committed iframe; a non-`undefined` return rejects the generation.
+It runs for every allocated page, including intentionally inserted blank pages,
+regardless of `decorateBlankPages`.
+
+Use `createTableColgroupExtension()` as an opt-in extension when split tables
+need measured pixel column widths frozen in continuation fragments. Core always
+carries authored `<colgroup>` elements, but never synthesizes widths by default.
+
+#### `PageDocumentController`
+
+| Member | Returns | Readiness and errors |
+| --- | --- | --- |
+| `ready` | `Promise<PageDocument>` | First commit, or rejection if it cannot commit. |
+| `current` | `PageDocument \| undefined` | Previous commit remains during/after a failed update; cleared by destruction. |
+| `update(source, options?)` | `Promise<PageDocument>` | Starts a generation; a newer update aborts the active one. Supports `options.signal`. |
+| `print()` | `Promise<void>` | Waits for latest work, then prints the latest successful commit through an isolated top-document snapshot. Rejects with no commit/after destruction. |
+| `destroy()` | `Promise<void>` | Aborts generation/export work, removes the iframe, releases resources, and waits for tracked work. Idempotent. |
+
+### `PageDocument`
+
+| Member | Type / return | Meaning |
+| --- | --- | --- |
+| `iframe` | `HTMLIFrameElement` | Core-owned canonical frame. |
+| `generation`, `pageCount` | `number` | Commit number and page count. |
+| `pages` | `readonly PageMetadata[]` | Page number, side, name, blank state, geometry, dimensions, and body text. |
+| `warnings` | `readonly PageWarning[]` | Current-generation diagnostics. |
+| `timings` | `{ totalMs; resourceMs; paginationMs }` | Generation timings in milliseconds. |
+| `exportEpub(options)` | `Promise<Blob>` | Waits for latest active work and exports the latest committed semantic source. |
+
+EPUB options require `metadata: { title, language, identifier, modified? }` and optionally accept `signal` and `{ maxEntries?, maxBytes? }` limits.
+
+### Core utilities
+
+```ts
+prepareDocument(html: string, options?: PrepareDocumentOptions): PreparedDocument;
+pageWarningTargetBounds(document: PageDocument, warning: PageWarning): PageWarningTargetBounds | undefined;
+hasPageDocumentFrameSandbox(iframe: HTMLIFrameElement): boolean;
+selectBlankMarkers(markers: PageSideConstraint[], pages: Map<number, number>): number[];
+```
+
+- `prepareDocument` synchronously normalizes/sanitizes HTML and returns `{ html, headerTemplate?, footerTemplate?, warnings }`. Its options are `headerTemplate`, `footerTemplate`, and `allowRemoteResources`. API decoration options override embedded templates.
+- `pageWarningTargetBounds` returns live `{ left, top, width, height }` in iframe viewport coordinates. It returns `undefined` for a foreign/unlocated warning.
+- `hasPageDocumentFrameSandbox` is true only for the exact public sandbox token set (`allow-same-origin` and `allow-modals`).
+- `selectBlankMarkers` returns marker IDs needing a blank to satisfy left/right parity, accounting for prior selections. It throws when a marker has no page mapping.
+
+## Core publication
+
+### `mountPublication`
+
+```ts
+mountPublication(
+  container: HTMLElement,
+  snapshot: PublicationSnapshot,
+  options?: PublicationOptions,
+): PublicationController;
+```
+
+It composes ordered entries into one page sequence and returns synchronously. Invalid snapshots or Publication extensions can throw during mounting.
+
+```ts
+const controller = mountPublication(host, {
+  metadata: { title: "Handbook", language: "en" },
+  entries: [
+    { id: "cover", title: "Cover", html: "<h1>Handbook</h1>" },
+    { id: "start", title: "Start", html: "<h1>Start</h1><p>First step.</p>" },
+  ],
+});
+const publication = await controller.ready;
+```
+
+`PublicationSnapshot` contains `metadata: { title, language?, identifier? }` and ordered entries. Each entry requires `id`, `title`, optional `baseUrl`, and exactly one of `html` or `lightDom`. `PublicationOptions` contains `PageDocumentOptions` except that `extensions` accepts only `PublicationExtension[]`.
+
+#### `PublicationController`
+
+| Member | Returns | Readiness and errors |
+| --- | --- | --- |
+| `ready` | `Promise<PublicationDocument>` | First committed Publication. |
+| `current` | `PublicationDocument \| undefined` | Current commit. |
+| `resolveDestination(id)` | `PublicationDestination \| undefined` | Resolves an outline/search ID in the current generation. |
+| `search(query)` | `readonly PublicationSearchResult[]` | Empty before commit; otherwise searches the current index. |
+| `navigate(destination)` | `void` | Throws unless the complete destination matches and exists in the current generation. |
+| `update(snapshot, options?)` | `Promise<PublicationDocument>` | Validates/stages a complete snapshot; supports `options.signal`. |
+| `print()` | `Promise<void>` | Uses the page controller's latest-successful-commit behavior. |
+| `destroy()` | `Promise<void>` | Destroys underlying page and Publication resources. |
+
+`PublicationDocument` extends `PageDocument` with committed `metadata`, `entries`, and nested `outline`. Each entry has an inclusive global `pageRange`. A `PublicationDestination` is `{ id, entryId, page, generation }`; it is generation-bound. A search result is `{ entry, page, excerpt, destination }`.

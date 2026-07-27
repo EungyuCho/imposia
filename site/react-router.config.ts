@@ -1,18 +1,7 @@
 import type { Config } from "@react-router/dev/config";
-
-const LOCALES = ["en", "ko", "zh-CN", "ja"] as const;
-const DOC_PATHS = [
-  "docs",
-  "docs/getting-started",
-  "docs/publishing-contract",
-  "docs/api-reference",
-  "docs/changelog",
-] as const;
+import { SITE_PRERENDER_ROUTES } from "./prerender-paths";
 
 export default {
-  prerender: LOCALES.flatMap((locale) => [
-    `/${locale}`,
-    ...DOC_PATHS.map((path) => `/${locale}/${path}`),
-  ]),
+  prerender: SITE_PRERENDER_ROUTES,
   ssr: false,
 } satisfies Config;

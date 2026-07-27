@@ -12,9 +12,9 @@
 </p>
 
 <p align="center">
-  <strong>HTML in. Pages out.</strong>
+  <strong>Turn React HTML into pages you can print and save as PDF.</strong>
   <br/>
-  <sub>Atomic HTML/CSR pagination in the browser, with React preview, native print, and semantic EPUB export.</sub>
+  <sub>Preview paginated HTML in your app, open the browser's native print flow, or export a reflowable EPUB.</sub>
 </p>
 
 <p align="center">
@@ -39,15 +39,18 @@
   <a href="#interactive-demo">Demo</a>
 </p>
 
-**Turn current HTML and CSS into complete, inspectable browser pages without
-losing or duplicating declared-flow content at page boundaries.**
+**Keep your existing HTML and CSS. Imposia turns them into complete browser
+pages for in-app preview, native print, and the browser's Save as PDF flow.**
 
-Imposia is a React-first, browser-only publishing toolkit. It sanitizes source,
-resolves admitted assets, prepares pages in a temporary noncanonical staging
-iframe, then commits them into one persistent canonical iframe for preview and
-native print. During rapid CSR updates, the previous committed generation stays
-visible until one complete replacement is ready. The same committed semantic
-source can also be exported as a reflowable EPUB 3.3 `Blob`.
+Imposia is a React-first, browser-only publishing toolkit. It finishes the next
+set of pages before replacing the document on screen, so rapid client-side
+updates never expose a half-built layout. Preview and print use the same
+completed pages. The matching semantic source can also be exported as a
+reflowable EPUB 3.3 `Blob`.
+
+Call `print()` to open the browser's native print dialog. From there, the reader
+can print on paper or choose **Save as PDF**. Imposia deliberately does not add a
+separate PDF renderer or return PDF bytes.
 
 Core works without React. There is no Node runtime, command-line renderer,
 server export, fixed-layout EPUB, PDF-byte API, or promise of complete CSS
@@ -73,6 +76,7 @@ Imposia keeps one page document at the center of the workflow:
 | Content crosses a page boundary | Fragments disappear, duplicate, or resume out of order | Declared conformance fixtures flatten back to the exact source sequence; unsupported cases warn instead of claiming success |
 | CSR state changes during pagination | Preview flashes a partial or stale generation | The previous commit remains visible while staging; only a complete winning generation replaces it |
 | Preview and print diverge | Each surface reruns layout | One canonical iframe survives pagination, presentation, and native print |
+| HTML-to-PDF needs another renderer | The PDF drifts from the in-app preview | `print()` sends the completed pages to the browser's native print dialog, where readers can choose Save as PDF |
 | Authored URLs fetch implicitly | Rendering gains an uncontrolled network path | Every admitted HTML/CSS asset crosses the host `assetResolver` boundary |
 | Unsupported layout looks "close enough" | Silent approximation hides broken output | Constrained and unsupported cases remain atomic or emit typed warnings |
 | React owns a second renderer | Component and framework-neutral behavior drift | React retains the same Core controller and iframe |
@@ -88,7 +92,7 @@ Install the React adapter:
 pnpm add @imposia/react react react-dom
 ```
 
-Mount a page document, then target the committed document for print or EPUB:
+Mount a page document, then preview it, print it, or save it as PDF:
 
 ```tsx
 import {
@@ -117,7 +121,7 @@ export function BookPreview() {
       </button>
 
       <button type="button" onClick={() => void viewer.current?.print()}>
-        Print
+        Print / Save as PDF
       </button>
 
       <button
@@ -138,6 +142,9 @@ export function BookPreview() {
   );
 }
 ```
+
+`print()` opens the browser's native print dialog for the pages shown in the
+Viewer. Choose a printer for paper output or **Save as PDF** for a PDF file.
 
 The imperative handle always targets the current committed Core generation. It
 does not create a second controller, iframe, layout pass, or asset-fetch path.

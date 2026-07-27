@@ -85,6 +85,16 @@ export default function HomeRoute() {
           </p>
         </section>
 
+        <section className="outcome-section" aria-label={copy.outcomesLabel}>
+          {copy.outcomes.map((outcome, index) => (
+            <article className="outcome-card" key={outcome.title}>
+              <span aria-hidden="true">{String(index + 1).padStart(2, "0")}</span>
+              <h2>{outcome.title}</h2>
+              <p>{outcome.description}</p>
+            </article>
+          ))}
+        </section>
+
         <section className="feature-section" aria-labelledby={featureTitleId}>
           <div className="section-heading">
             <p className="section-eyebrow">{copy.featureEyebrow}</p>
@@ -118,7 +128,9 @@ export default function HomeRoute() {
           <div className="footer-links">
             <Link to={`/${lang}/docs`}>{copy.docsCta}</Link>
             <a href="/examples/demo/index.html">{copy.primaryCta}</a>
-            <Link to={`/${lang}/docs/publishing-contract`}>{copy.publishingContractLabel}</Link>
+            <Link to={`/${lang}/docs/concepts/publishing-model`}>
+              {copy.publishingContractLabel}
+            </Link>
           </div>
         </footer>
       </div>

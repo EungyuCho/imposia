@@ -4,34 +4,36 @@ import type { MdxComponents } from "../mdx-components";
 import { i18n } from "./i18n";
 
 interface MdxModule {
-  default: ComponentType<{ components?: MdxComponents }>;
-  frontmatter: {
-    description?: string;
-    full?: boolean;
-    title: string;
+  readonly default: ComponentType<{ readonly components?: MdxComponents }>;
+  readonly frontmatter: {
+    readonly description?: string;
+    readonly full?: boolean;
+    readonly title: string;
   };
-  toc: Array<{ depth: number; title: ReactNode; url: string }>;
+  readonly toc: { depth: number; title: ReactNode; url: string }[];
 }
 
-const pageModules = import.meta.glob<MdxModule>("../content/docs/*.{md,mdx}", {
+const CONTENT_ROOT = "../content/docs/";
+
+const pageModules = import.meta.glob<MdxModule>("../content/docs/**/*.{md,mdx}", {
   eager: true,
   query: { collection: "docs" },
 });
 
-const metaModules = import.meta.glob<MetaData>("../content/docs/*.{json,yaml}", {
+const metaModules = import.meta.glob<MetaData>("../content/docs/**/*.{json,yaml}", {
   eager: true,
   import: "default",
   query: { collection: "docs" },
 });
 
-function fileName(path: string): string {
-  return path.split("/").at(-1) ?? path;
+function contentPath(path: string): string {
+  return path.slice(CONTENT_ROOT.length);
 }
 
 const docsSource = createSource({
   pages: Object.entries(pageModules).map(([path, module]) => ({
     type: "page" as const,
-    path: fileName(path),
+    path: contentPath(path),
     data: {
       ...module.frontmatter,
       body: module.default,
@@ -40,7 +42,7 @@ const docsSource = createSource({
   })),
   metas: Object.entries(metaModules).map(([path, data]) => ({
     type: "meta" as const,
-    path: fileName(path),
+    path: contentPath(path),
     data,
   })),
 });

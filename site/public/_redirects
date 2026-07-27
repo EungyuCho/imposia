@@ -1,1 +1,5 @@
 / /en 302
+/:lang/docs/api-reference /:lang/docs/api 301
+/:lang/docs/api-reference/ /:lang/docs/api 301
+/:lang/docs/publishing-contract /:lang/docs/concepts/publishing-model 301
+/:lang/docs/publishing-contract/ /:lang/docs/concepts/publishing-model 301

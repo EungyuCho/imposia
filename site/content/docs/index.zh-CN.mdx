@@ -1,15 +1,15 @@
 ---
 title: Imposia 文档
-description: 在浏览器中将 HTML 和 CSS 分页，并用同一份源内容完成预览、打印和 EPUB 导出。
+description: 把 React HTML 变成可在应用中预览、打印或保存为 PDF 的页面，需要时还可导出 EPUB。
 ---
 
-Imposia 在浏览器中把 HTML 和 CSS 拆分为页面。预览和打印使用已经完成的页面，EPUB 则使用同时确认的源内容及其语义结构。
+Imposia 会在浏览器中把现有 HTML 和 CSS 排成页面。你可以在 React 应用中预览，将页面交给浏览器原生打印流程，或选择**保存为 PDF**。EPUB 则根据与这些页面一同确认的语义源内容生成。
 
 ## 选择你的起点
 
 - **先构建可用的预览：** 按照[创建第一个分页预览](/zh-CN/docs/getting-started)安装 React 软件包，并把 HTML 渲染成 A4 页面。
-- **查询组件和方法：** 打开 [API 参考](/zh-CN/docs/api-reference)，查看 React 句柄、Core 控制器、Viewer、Reader 和 Inspector 的完整公开方法。
-- **先了解输出机制：** 在接入打印、EPUB 下载或外部资源前，阅读[预览与输出为何始终一致](/zh-CN/docs/publishing-contract)。
+- **查询组件和方法：** 打开 [API 参考](/zh-CN/docs/api)，查看 React 句柄、Core 控制器、Viewer、Reader 和 Inspector 的完整公开方法。
+- **先了解输出机制：** 在接入打印、EPUB 下载或外部资源前，阅读[预览与输出为何始终一致](/zh-CN/docs/concepts/publishing-model)。
 
 ## Imposia 如何处理 HTML
 
@@ -19,12 +19,12 @@ Imposia 在浏览器中把 HTML 和 CSS 拆分为页面。预览和打印使用�
 
 如果分页失败，或当前更新被更晚发起的更新取代，Imposia 会继续显示上一次完成的文档。计算尚未结束的布局不会出现在界面中。
 
-## 一份已确认的源内容，三种用途
+## 一份源内容，三种用途
 
 - **预览：** 通过 React Viewer 显示已完成的分页结果。
-- **打印：** 为同一组页面打开浏览器原生打印对话框。
+- **打印或保存为 PDF：** 为同一组页面打开浏览器原生打印对话框，然后选择打印机或**保存为 PDF**。
 - **EPUB：** 根据最后确认的源内容及其语义结构创建可重排 EPUB 3.3 `Blob`。
 
 ## 先确认适用范围
 
-Imposia 仅在浏览器中运行，并以 ESM 形式发布。它不包含 Node 渲染器、CLI 渲染器、服务端导出 API 或 PDF 生成器。如果这些边界符合你的应用，请继续[创建第一个分页预览](/zh-CN/docs/getting-started)。
+Imposia 仅在浏览器中运行，并以 ESM 形式发布。`print()` 使用浏览器原生打印流程，不返回 PDF 字节；项目也不包含 Node 渲染器、CLI 渲染器、服务端导出 API 或独立 PDF 生成器。如果这些边界符合你的应用，请继续[创建第一个分页预览](/zh-CN/docs/getting-started)。

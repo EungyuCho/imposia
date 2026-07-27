@@ -1,9 +1,9 @@
 ---
 title: Build your first page
-description: Add Imposia to a React app, render HTML as A4 pages, and connect print and EPUB actions.
+description: Add Imposia to a React app, render HTML as A4 pages, then print or save them as PDF.
 ---
 
-This guide adds a paginated preview to an existing React app. When you finish, the same component will show your HTML as A4 pages and expose print and EPUB actions.
+This guide adds a paginated preview to an existing React app. When you finish, the same component will show your HTML as A4 pages and open the browser's native print flow for paper or PDF output.
 
 ## Before you begin
 
@@ -35,7 +35,7 @@ export function Preview() {
         documentOptions={{ page: { size: "A4", margin: "18mm" } }}
       />
       <button type="button" onClick={() => void viewer.current?.print()}>
-        Print
+        Print / Save as PDF
       </button>
       <button
         type="button"
@@ -58,9 +58,9 @@ export function Preview() {
 
 Open the component in a browser and confirm that the HTML appears as an A4 page.
 
-- **Print** opens the browser's print flow for the page currently shown in the Viewer.
+- **Print / Save as PDF** opens the browser's native print dialog for the page currently shown in the Viewer. Choose a printer or **Save as PDF** there. The method does not return PDF bytes.
 - **Export EPUB** returns a reflowable EPUB 3.3 `Blob`. The example calls the export method; connect the returned `Blob` to your app's download or storage flow.
 
-If you update `source`, Imposia keeps the current page visible until the next version is ready. Read [How preview and output stay consistent](/en/docs/publishing-contract) before adding asset loading or production export controls.
+If you update `source`, Imposia keeps the current page visible until the next version is ready. Read [How preview and output stay consistent](/en/docs/concepts/publishing-model) before adding asset loading or production export controls.
 
-Use the [API reference](/en/docs/api-reference) when you need every React handle method, Core controller option, Publication reader action, or Viewer lifecycle constraint.
+Use the [API reference](/en/docs/api) when you need every React handle method, Core controller option, Publication reader action, or Viewer lifecycle constraint.

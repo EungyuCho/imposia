@@ -1,0 +1,110 @@
+---
+title: React API
+description: React components, hooks, props, and imperative handles from @imposia/react.
+---
+
+## React components and hooks
+
+### `ImposiaPageViewer` and `ImposiaDocument`
+
+`ImposiaPageViewer` mounts a Core page document, then binds the page Viewer after the first commit. `ImposiaDocument` is a compatibility wrapper with the same public props and handle types: `ImposiaDocumentProps = ImposiaPageViewerProps` and `ImposiaDocumentHandle = ImposiaPageViewerHandle`.
+
+```tsx
+const viewer = useRef<ImposiaPageViewerHandle>(null);
+
+<ImposiaPageViewer
+  ref={viewer}
+  source={{ html: "<main><h1>Report</h1></main>" }}
+  documentOptions={{ page: { size: "A4", margin: "18mm" } }}
+  viewerOptions={{ mode: "single", inspector: true }}
+  onError={console.error}
+/>;
+```
+
+| Prop | Type | Required | Purpose |
+| --- | --- | --- | --- |
+| `source` | `PageSource` | Yes | HTML or light DOM to paginate. |
+| `sourceRevision` | `string \| number` | No | Forces an update when source identity/content comparison is otherwise unchanged. |
+| `documentOptions` | `PageDocumentOptions` | No | Core pagination options. |
+| `documentOptionsRevision` | `string \| number` | No | Remounts Core with new document options. |
+| `viewerOptions` | `PageViewerOptions` | No | Page presentation, reader, and inspector options. |
+| `onViewerStateChange` | `(state: PageViewerState) => void` | No | Receives page, zoom, mode, effective-mode, and generation changes. |
+| `className`, `style` | `string`, `CSSProperties` | No | Host `div` presentation. |
+| `onReady` | `(document: PageDocument) => void` | No | Runs after the document and Viewer binding are ready. |
+| `onError` | `(error: unknown) => void` | No | Receives Core or Viewer binding failures. |
+| `onStateChange` | `(state: ImposiaDocumentState) => void` | No | Receives `idle`, `loading`, `ready`, and `error`. |
+
+#### `ImposiaPageViewerHandle`
+
+| Member | Returns | Constraint |
+| --- | --- | --- |
+| `current` | `PageDocument \| undefined` | Current commit while mounted. |
+| `viewerState` | `PageViewerState \| undefined` | Current presentation snapshot while ready. |
+| `goToPage(page)`, `nextPage()`, `previousPage()` | `void` | Move through the committed global page sequence. |
+| `setZoom(zoom)` | `void` | Rounds and clamps the presentation zoom. |
+| `setMode(mode)` | `void` | Accepts `continuous`, `single`, or `spread`; throws before ready/after unmount. |
+| `setSpreadCover(cover)` | `void` | Throws before ready/after unmount. |
+| `openInspector()`, `closeInspector()`, `toggleInspector()` | `void` | Require `viewerOptions.inspector: true`. |
+| `selectWarning(warning)` | `void` | Requires the inspector and a warning from its current generation. |
+| `print()` | `Promise<void>` | Opens native print for the latest completed pages. Readers can choose Save as PDF; the method does not return PDF bytes. Rejects before ready/after unmount. |
+| `exportEpub(options)` | `Promise<Blob>` | Rejects before ready/after unmount. |
+
+### `ImposiaPublicationViewer`
+
+```tsx
+const publication = useRef<ImposiaPublicationViewerHandle>(null);
+
+<ImposiaPublicationViewer
+  ref={publication}
+  snapshot={{
+    metadata: { title: "Guide", language: "en" },
+    entries: [{ id: "intro", title: "Introduction", html: "<h1>Introduction</h1>" }],
+  }}
+/>;
+```
+
+Its required `snapshot` prop accepts `PublicationSnapshot`. Optional props are `snapshotRevision`, `publicationOptions`, `publicationOptionsRevision`, `viewerOptions` (without `reader`), `readerOptions` (without `controller`), `className`, `style`, `onReady`, `onError`, and `onStateChange`. Revision props force updates/remounts as their names indicate. The component supplies the reader/controller binding.
+
+#### `ImposiaPublicationViewerHandle`
+
+All actions except `current` and `resolveDestination` throw after unmount. Reader actions also throw before the Publication reader is ready.
+
+| Member | Returns | Effect or constraint |
+| --- | --- | --- |
+| `current` | `PublicationDocument \| undefined` | Current commit while mounted. |
+| `resolveDestination(id)` | `PublicationDestination \| undefined` | `undefined` before commit, after unmount, or for an unknown ID. |
+| `navigate(destination)` | `void` | A stale destination throws. |
+| `openTableOfContents()`, `closeTableOfContents()`, `toggleTableOfContents()` | `void` | Control the outline panel. |
+| `openThumbnails()`, `closeThumbnails()`, `toggleThumbnails()` | `void` | Control the thumbnail panel. |
+| `getThumbnails()` | `readonly PublicationThumbnail[]` | Current-generation thumbnails. |
+| `selectThumbnail(thumbnail)` | `void` | A thumbnail from another generation throws. |
+| `restoreDeepLink(value)` | `PublicationDestination \| undefined` | Resolves and navigates a valid current link. |
+| `openSearch()`, `closeSearch()`, `toggleSearch()` | `void` | Control the search panel. |
+| `search(query)` | `readonly PublicationSearchResult[]` | Searches the current commit. |
+| `nextSearchResult()`, `previousSearchResult()` | `PublicationSearchResult \| undefined` | Move through results. |
+| `selectSearchResult(result)` | `void` | Navigates to a result. |
+| `setMode(mode)`, `setSpreadCover(cover)` | `void` | Control page presentation. |
+| `openInspector()`, `closeInspector()`, `toggleInspector()` | `void` | Require `viewerOptions.inspector: true`. |
+| `selectWarning(warning)` | `void` | Requires an inspector warning from the current generation. |
+| `print()` | `Promise<void>` | Opens native print for the latest commit, including the browser's Save as PDF option. Rejects before ready/after unmount. |
+| `exportEpub(options)` | `Promise<Blob>` | Exports the latest commit; rejects before ready/after unmount. |
+
+### `useImposiaDocument` and `useImposiaPublication`
+
+```ts
+useImposiaDocument(props: UseImposiaDocumentProps): UseImposiaDocumentResult;
+useImposiaPublication(props: UseImposiaPublicationProps): UseImposiaPublicationResult;
+```
+
+Both hooks return a `hostRef`, lifecycle `state`, and a controller that is `undefined` until the mount effect creates it. Attach `hostRef` to one `div`. A `loading` or `error` state can retain the last committed document/publication.
+
+`useImposiaDocument` accepts the page component's source, revision, options, and callbacks. HTML sources update when HTML/base URL changes; light-DOM sources update when node identity changes. `sourceRevision` forces an update, and `documentOptionsRevision` remounts the controller.
+
+`useImposiaPublication` accepts the publication component's snapshot, revision, options, and callbacks. It updates when the snapshot reference or `snapshotRevision` changes; `publicationOptionsRevision` remounts the controller. Both hooks destroy their controller on cleanup and treat `AbortError` as lifecycle cancellation.
+
+```tsx
+function Article({ html }: { html: string }) {
+  const { hostRef, state } = useImposiaDocument({ source: { html } });
+  return <div ref={hostRef} aria-busy={state.status === "loading"} />;
+}
+```

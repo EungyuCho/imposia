@@ -1,5 +1,6 @@
 import { RootProvider } from "fumadocs-ui/provider/react-router";
 import type { ComponentProps } from "react";
+import { useEffect } from "react";
 import type { LinksFunction, MetaFunction } from "react-router";
 import {
   Links,
@@ -49,6 +50,10 @@ function localeFromPathname(pathname: string): Locale {
 export function Layout({ children }: { children: React.ReactNode }) {
   const { pathname } = useLocation();
   const lang = localeFromPathname(pathname);
+
+  useEffect(() => {
+    document.documentElement.lang = lang;
+  }, [lang]);
 
   return (
     <html lang={lang} suppressHydrationWarning>
