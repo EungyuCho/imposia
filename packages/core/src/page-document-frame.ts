@@ -59,7 +59,7 @@ export function frameStyle(geometries: readonly PageGeometry[]): string {
     '[data-imposia-margin-box$="-left"]{left:var(--imposia-margin-left);width:calc(var(--imposia-content-width)/3);justify-content:flex-start;text-align:left}',
     '[data-imposia-margin-box$="-center"]{left:calc(var(--imposia-margin-left) + var(--imposia-content-width)/3);width:calc(var(--imposia-content-width)/3);justify-content:center;text-align:center}',
     '[data-imposia-margin-box$="-right"]{right:var(--imposia-margin-right);width:calc(var(--imposia-content-width)/3);justify-content:flex-end;text-align:right}',
-    `@media print{html,body{width:${cssPx(first.sheetWidthCssPx)};min-height:${cssPx(first.sheetHeightCssPx)};background:#fff}body[data-imposia-pages]{display:block;gap:0;padding:0;margin:0;background:#fff}[data-imposia-page]{break-after:page;page-break-after:always;margin:0}[data-imposia-page]:last-child{break-after:auto;page-break-after:auto}}`,
+    `@media print{html,body{width:${cssPx(first.sheetWidthCssPx)};min-height:${cssPx(first.sheetHeightCssPx)};background:#fff}html[data-imposia-document]{height:auto;max-height:none;overflow:visible}body[data-imposia-pages]{display:block;gap:0;padding:0;margin:0;background:#fff;height:auto;max-height:none;overflow:visible}[data-imposia-page]{break-after:page;page-break-after:always;margin:0}[data-imposia-page]:last-child{break-after:auto;page-break-after:auto}}`,
   ].join("");
 }
 
