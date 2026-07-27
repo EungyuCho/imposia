@@ -28,7 +28,9 @@ export function PublishingActions({ html, onActionError }: PublishingActionsProp
 
   async function print(): Promise<void> {
     try {
-      await viewer.current?.print();
+      const current = viewer.current;
+      if (current === null) throw new DOMException("Viewer is not available", "InvalidStateError");
+      await current.print();
     } catch (error) {
       onActionError(error);
     }
@@ -36,10 +38,11 @@ export function PublishingActions({ html, onActionError }: PublishingActionsProp
 
   async function exportEpub(): Promise<void> {
     try {
-      const blob = await viewer.current?.exportEpub({
+      const current = viewer.current;
+      if (current === null) throw new DOMException("Viewer is not available", "InvalidStateError");
+      const blob = await current.exportEpub({
         metadata: { title: "季度报告", language: "zh-CN", identifier: "urn:report:quarterly" },
       });
-      if (!blob) return;
 
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");

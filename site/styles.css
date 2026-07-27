@@ -314,7 +314,7 @@ body.imposia-root {
 
 .outcome-card > span {
   color: var(--imposia-coral-hover);
-  font-family: "SFMono-Regular", "Cascadia Code", monospace;
+  font-family: SFMono-Regular, "Cascadia Code", monospace;
   font-size: 0.72rem;
   font-weight: 720;
   letter-spacing: 0.09em;

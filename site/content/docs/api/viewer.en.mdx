@@ -28,7 +28,7 @@ Mount only after Core commits. `container` must be the canonical iframe's curren
 | `refresh(document)` | `void` | Requires the same iframe and a newer generation; throws after destruction/invalid input. |
 | `print()` | `Promise<void>` | Rejects after destruction or when the iframe is unavailable. |
 | `destroy()` | `void` | Removes Viewer bindings/UI and restores the Core iframe container. Idempotent. |
-| `state` | `PageViewerState` | Page, count, zoom, requested/effective mode, `ready`, and generation. |
+| `state` | `PageViewerState` | Page, count, zoom, requested/effective mode, `status`, and generation. |
 | `reader` | `PublicationReaderController \| undefined` | Present when reader options were supplied. |
 | `inspector` | `ViewerInspectorController \| undefined` | Present when `inspector: true`. |
 
