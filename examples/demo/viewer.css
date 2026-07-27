@@ -59,6 +59,14 @@
 
   --imposia-viewer-rail-height: 66px;
   --imposia-viewer-rail-height-mobile: 106px;
+  --imposia-viewer-rail-height-compact: calc(
+    var(--imposia-viewer-identity-height-mobile) +
+    var(--imposia-viewer-control-size-mobile) *
+    2 +
+    var(--imposia-viewer-toolbar-gap) +
+    var(--imposia-viewer-space-2) *
+    2
+  );
   --imposia-viewer-identity-gap: 12px;
   --imposia-viewer-identity-padding-inline: 22px;
   --imposia-viewer-identity-height-mobile: 44px;
@@ -396,11 +404,12 @@
 .imposia-inspector-panel {
   position: absolute;
   box-sizing: border-box;
-  top: var(--imposia-viewer-rail-height);
+  grid-row: 2;
+  top: 0;
   left: 0;
   z-index: 3;
   width: min(24rem, 100%);
-  max-height: calc(100% - var(--imposia-viewer-rail-height));
+  max-height: 100%;
   padding: 1rem;
   overflow: auto;
   border-right: var(--imposia-viewer-border-hairline) solid var(--imposia-viewer-color-line);
@@ -417,6 +426,7 @@
 :where(.imposia-page-viewer--headless) .imposia-search-panel,
 :where(.imposia-page-viewer--headless) .imposia-thumbnail-panel,
 :where(.imposia-page-viewer--headless) .imposia-inspector-panel {
+  grid-row: 1;
   top: 0;
   max-height: 100%;
 }
@@ -747,14 +757,6 @@ button.imposia-inspector-finding[aria-current="true"] {
     flex-direction: column;
   }
 
-  .imposia-toc-panel,
-  .imposia-search-panel,
-  .imposia-thumbnail-panel,
-  .imposia-inspector-panel {
-    top: var(--imposia-viewer-rail-height-mobile);
-    max-height: calc(100% - var(--imposia-viewer-rail-height-mobile));
-  }
-
   .imposia-identity {
     min-height: var(--imposia-viewer-identity-height-mobile);
     padding: 0 var(--imposia-viewer-identity-padding-inline-mobile);
@@ -825,14 +827,32 @@ button.imposia-inspector-finding[aria-current="true"] {
 }
 
 @container imposia-viewer (max-width: 390px) {
+  .imposia-rail {
+    min-height: var(--imposia-viewer-rail-height-compact);
+  }
+
   .imposia-toolbar {
+    display: grid;
     width: 100%;
     max-width: 100%;
-    justify-content: flex-start;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
     gap: var(--imposia-viewer-toolbar-gap);
     padding: var(--imposia-viewer-space-2);
-    overflow-x: auto;
-    scroll-padding-inline: var(--imposia-viewer-space-2);
+    overflow-x: visible;
+  }
+
+  .imposia-toolbar .imposia-divider {
+    display: none;
+  }
+
+  .imposia-toolbar .imposia-control,
+  .imposia-toolbar .imposia-readout {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .imposia-toolbar .imposia-mode {
+    grid-column: span 2;
   }
 }
 

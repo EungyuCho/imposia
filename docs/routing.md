@@ -1,6 +1,7 @@
 # Documentation routing
 
 - Product and public contracts: [domain/product.md](domain/product.md). It defines HTML/CSR pagination integrity as the primary product contract, the React-first browser package, framework-neutral Core/Client/Viewer contracts, canonical iframe lifecycle, and semantic EPUB export.
+- Product roadmap: [roadmap.md](roadmap.md). It orders post-`0.4.0` work by evidence and adoption risk, defines milestone exit criteria, and makes `0.5` the public React/CSR proof release.
 - Open-source launch work: [open-source-readiness.md](open-source-readiness.md). It separates the completed client release gate, post-release engineering follow-ups, and maintainer-controlled launch gates.
 - Compatibility matrix: [compatibility.md](compatibility.md). It is authoritative for Stable, Experimental, Constrained, and Unsupported page-media, fragmentation, publishing, export, and browser behavior.
 - Browser bundle report and gzip budgets: [bundle-size.md](bundle-size.md). It defines the measured consumer routes, reproducible command, budget policy, and current EPUB size decision.

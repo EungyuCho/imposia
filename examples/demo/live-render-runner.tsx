@@ -19,6 +19,12 @@ type CommitSample = Readonly<{
   exactSequence: boolean;
 }>;
 
+type ProgressSample = Readonly<{
+  completedPages: number;
+  pass: number;
+  provisional: true;
+}>;
+
 export type LiveRenderSnapshot = Readonly<{
   status: RunnerStatus;
   requested: number;
@@ -26,6 +32,11 @@ export type LiveRenderSnapshot = Readonly<{
   superseded: number;
   exactCommits: number;
   blankChecks: number;
+  canonicalChecks: number;
+  canonicalMismatches: number;
+  progressEvents: number;
+  latestCompletedPages: number | undefined;
+  latestPass: number | undefined;
   latestGeneration: number | undefined;
   p50Ms: number | undefined;
   p95Ms: number | undefined;
@@ -39,9 +50,15 @@ type ActiveRun = {
   readonly requestTimes: Map<number, number>;
   readonly committedRevisions: Set<number>;
   readonly latencies: number[];
+  readonly canonicalIframe: HTMLIFrameElement | undefined;
   requested: number;
   exactCommits: number;
   blankChecks: number;
+  canonicalChecks: number;
+  canonicalMismatches: number;
+  progressEvents: number;
+  latestCompletedPages: number | undefined;
+  latestPass: number | undefined;
   latestGeneration: number | undefined;
 };
 
@@ -50,6 +67,7 @@ type UseLiveRenderRunnerOptions = Readonly<{
   enabled: boolean;
   onRequestRevision: (revision: number) => void;
   isCanonicalIntact: () => boolean;
+  getCanonicalIframe: () => HTMLIFrameElement | undefined;
 }>;
 
 const livePreset: RunnerPreset = {
@@ -85,6 +103,11 @@ const idleSnapshot: LiveRenderSnapshot = {
   superseded: 0,
   exactCommits: 0,
   blankChecks: 0,
+  canonicalChecks: 0,
+  canonicalMismatches: 0,
+  progressEvents: 0,
+  latestCompletedPages: undefined,
+  latestPass: undefined,
   latestGeneration: undefined,
   p50Ms: undefined,
   p95Ms: undefined,
@@ -100,6 +123,11 @@ function snapshotFor(active: ActiveRun, status: RunnerStatus): LiveRenderSnapsho
     superseded: Math.max(0, active.requested - active.committedRevisions.size),
     exactCommits: active.exactCommits,
     blankChecks: active.blankChecks,
+    canonicalChecks: active.canonicalChecks,
+    canonicalMismatches: active.canonicalMismatches,
+    progressEvents: active.progressEvents,
+    latestCompletedPages: active.latestCompletedPages,
+    latestPass: active.latestPass,
     latestGeneration: active.latestGeneration,
     ...latency,
   };
@@ -114,6 +142,7 @@ export function useLiveRenderRunner({
   enabled,
   onRequestRevision,
   isCanonicalIntact,
+  getCanonicalIframe,
 }: UseLiveRenderRunnerOptions) {
   const [snapshot, setSnapshot] = useState<LiveRenderSnapshot>(idleSnapshot);
   const revisionRef = useRef(currentRevision);
@@ -163,9 +192,15 @@ export function useLiveRenderRunner({
         requestTimes: new Map(),
         committedRevisions: new Set(),
         latencies: [],
+        canonicalIframe: getCanonicalIframe(),
         requested: 0,
         exactCommits: 0,
         blankChecks: 0,
+        canonicalChecks: 0,
+        canonicalMismatches: 0,
+        progressEvents: 0,
+        latestCompletedPages: undefined,
+        latestPass: undefined,
         latestGeneration: undefined,
       };
       activeRef.current = active;
@@ -177,6 +212,8 @@ export function useLiveRenderRunner({
           if (activeRef.current?.id !== id) return;
           active.requested += 1;
           if (!isCanonicalIntact()) active.blankChecks += 1;
+          active.canonicalChecks += 1;
+          if (getCanonicalIframe() !== active.canonicalIframe) active.canonicalMismatches += 1;
           active.requestTimes.set(revision, performance.now());
           setSnapshot(snapshotFor(active, "running"));
           onRequestRevision(revision);
@@ -184,8 +221,17 @@ export function useLiveRenderRunner({
         timeoutIdsRef.current.push(timeoutId);
       }
     },
-    [clearSchedule, enabled, isCanonicalIntact, onRequestRevision],
+    [clearSchedule, enabled, getCanonicalIframe, isCanonicalIntact, onRequestRevision],
   );
+
+  const recordProgress = useCallback((sample: ProgressSample) => {
+    const active = activeRef.current;
+    if (active === undefined) return;
+    active.progressEvents += 1;
+    active.latestCompletedPages = sample.completedPages;
+    active.latestPass = sample.pass;
+    setSnapshot(snapshotFor(active, "running"));
+  }, []);
 
   const recordCommit = useCallback(
     (sample: CommitSample) => {
@@ -197,6 +243,9 @@ export function useLiveRenderRunner({
       active.committedRevisions.add(sample.revision);
       active.latencies.push(performance.now() - requestedAt);
       if (sample.exactSequence) active.exactCommits += 1;
+      active.canonicalChecks += 1;
+      if (getCanonicalIframe() !== active.canonicalIframe) active.canonicalMismatches += 1;
+      if (!isCanonicalIntact()) active.blankChecks += 1;
       active.latestGeneration = sample.generation;
 
       const isFinalCommit =
@@ -210,8 +259,8 @@ export function useLiveRenderRunner({
       activeRef.current = undefined;
       setSnapshot(snapshotFor(active, sample.exactSequence ? "complete" : "failed"));
     },
-    [clearSchedule],
+    [clearSchedule, getCanonicalIframe, isCanonicalIntact],
   );
 
-  return { snapshot, start, cancel, recordCommit };
+  return { snapshot, start, cancel, recordCommit, recordProgress };
 }

@@ -244,6 +244,9 @@ test("React publishing lab measures sustained live HTML commit latency without b
     await expect(page.getByTestId("live-render-blank")).toHaveText("0");
     await expect(page.getByTestId("live-render-p50")).toHaveText(/\d+ ms/);
     await expect(page.getByTestId("live-render-p95")).toHaveText(/\d+ ms/);
+    await expect(page.getByTestId("live-render-progress-events")).toHaveText(/[1-9]\d*/);
+    await expect(page.getByTestId("live-render-latest-progress")).toHaveText(/P\d+ · page \d+/);
+    await expect(page.getByTestId("live-render-canonical")).toHaveText("stable");
     await expect(page.getByTestId("integrity-count")).toHaveText("96 / 96");
     await expect(page.getByTestId("integrity-status")).toContainText(
       "Exact and ordered · CSR revision 24",
@@ -271,6 +274,39 @@ test("React publishing lab measures sustained live HTML commit latency without b
   } finally {
     expect(errors).toEqual([]);
     expect(pageErrors).toEqual([]);
+  }
+});
+
+test("React publishing lab keeps its title and viewer modes readable at 375px", async ({
+  page,
+  browserName,
+}) => {
+  test.skip(browserName !== "chromium", "Canonical pagination is Chromium-reference only.");
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto("/examples/demo/");
+  await page.locator("[data-demo-case='stress']").click();
+
+  const workspaceTitle = page.locator(".demo-workspace-header strong");
+  await expect(workspaceTitle).toHaveText("CSR continuity proof");
+  expect(
+    await workspaceTitle.evaluate((element) => element.scrollWidth <= element.clientWidth),
+  ).toBe(true);
+
+  const viewer = page.getByTestId("demo-preview-surface").locator(".imposia-viewer");
+  for (const name of ["Continuous pages", "Single page", "Spread pages"]) {
+    const control = viewer.getByRole("button", { name });
+    await expect(control).toBeVisible();
+    expect(
+      await control.evaluate((element) => {
+        const controlBounds = element.getBoundingClientRect();
+        const viewerBounds = element.closest(".imposia-viewer")?.getBoundingClientRect();
+        return (
+          viewerBounds !== undefined &&
+          controlBounds.left >= viewerBounds.left &&
+          controlBounds.right <= viewerBounds.right
+        );
+      }),
+    ).toBe(true);
   }
 });
 
@@ -532,8 +568,6 @@ test("React publishing lab keeps viewer controls inside a 320px viewport", async
         controls: [...toolbar.querySelectorAll<HTMLElement>("button")].map((control) => ({
           name: control.getAttribute("aria-label") ?? control.textContent?.trim() ?? "",
           rect: control.getBoundingClientRect().toJSON(),
-          offsetLeft: control.offsetLeft,
-          offsetRight: control.offsetLeft + control.offsetWidth,
           fontSize: Number.parseFloat(getComputedStyle(control).fontSize),
         })),
       };
@@ -556,10 +590,11 @@ test("React publishing lab keeps viewer controls inside a 320px viewport", async
       expect(control.rect.width, `${control.name} width`).toBeGreaterThanOrEqual(24);
       expect(control.rect.height, `${control.name} height`).toBeGreaterThanOrEqual(24);
       expect(control.fontSize, `${control.name} font size`).toBeGreaterThanOrEqual(8);
-    }
-    for (let index = 1; index < geometry.controls.length; index += 1) {
-      expect(geometry.controls[index]?.offsetLeft).toBeGreaterThanOrEqual(
-        geometry.controls[index - 1]?.offsetRight ?? 0,
+      expect(control.rect.left, `${control.name} left edge`).toBeGreaterThanOrEqual(
+        geometry.toolbar.left,
+      );
+      expect(control.rect.right, `${control.name} right edge`).toBeLessThanOrEqual(
+        geometry.toolbar.right,
       );
     }
     const activeModeControl = geometry.controls.find(({ name }) => name === "Continuous pages");
