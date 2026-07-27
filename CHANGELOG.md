@@ -3,6 +3,25 @@
 All notable changes to Imposia are recorded here. The project follows semantic
 versioning for its published package interfaces.
 
+## 0.4.1 — 2026-07-27
+
+Patch release for reliable multi-page printing and compact Viewer controls.
+
+### Fixed
+
+- Prevented caller-authored `html` and `body` viewport constraints from
+  clipping the isolated native-print snapshot to one sheet while preserving
+  the source document's print cascade.
+- Positioned Viewer TOC, search, thumbnail, and Inspector panels below the
+  actual responsive control rail, including the wrapped 320 px layout.
+
+### Changed
+
+- Reorganized the localized documentation around getting started, concepts,
+  publishing guides, package API references, and browser-native Save as PDF.
+- Synchronized `@imposia/core`, `@imposia/viewer`, `@imposia/client`, and
+  `@imposia/react` at version `0.4.1`.
+
 ## 0.4.0 — 2026-07-24
 
 Minor release for cooperative main-thread pagination.
