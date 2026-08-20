@@ -193,6 +193,15 @@ export interface ExperimentalPageFeatures {
    */
   readonly forceSequentialPlacement?: boolean;
   /**
+   * Forces break-constraint capture to compute a full constraint for every
+   * element, including elements inside atomic subtrees (SVG, MathML,
+   * unsupported layouts) whose interior constraints are never read. The
+   * default fast path skips those interiors when the document's CSS and the
+   * subtree's inline styles provably contain no fragmentation-relevant
+   * declarations; this escape hatch restores the previous full sweep.
+   */
+  readonly forceFullConstraintCapture?: boolean;
+  /**
    * Internal debug channel: receives the engine's internal counters for the
    * accepted pagination pass. Only intended for equivalence tests and
    * instrumentation; the counter names and values are not a stable contract.

@@ -266,6 +266,12 @@ function snapshotExperimental(
   ) {
     throw new TypeError("experimental.forceSequentialPlacement must be a boolean.");
   }
+  if (
+    record.forceFullConstraintCapture !== undefined &&
+    typeof record.forceFullConstraintCapture !== "boolean"
+  ) {
+    throw new TypeError("experimental.forceFullConstraintCapture must be a boolean.");
+  }
   if (record.onDebugCounters !== undefined && typeof record.onDebugCounters !== "function") {
     throw new TypeError("experimental.onDebugCounters must be a function.");
   }
@@ -278,6 +284,9 @@ function snapshotExperimental(
     ...(record.forceSequentialPlacement === undefined
       ? {}
       : { forceSequentialPlacement: record.forceSequentialPlacement }),
+    ...(record.forceFullConstraintCapture === undefined
+      ? {}
+      : { forceFullConstraintCapture: record.forceFullConstraintCapture }),
     ...(record.onDebugCounters === undefined
       ? {}
       : {
@@ -1042,21 +1051,125 @@ function elementSourceIdentity(element: Element): string | undefined {
   return `source-${authoredOrder}:${authoredElement.localName.toLowerCase()}`;
 }
 
+/**
+ * Declarations that make an atomic subtree's interior observable to
+ * pagination: forced fragmentation breaks (`break-before`/`break-after`,
+ * including the `page-break-*` aliases, whose names contain the same tokens)
+ * and `hyphens` (whose `auto` value drives the hyphenation-fallback DOM
+ * mutation and warning inside `prepare`). A conservative substring match is
+ * enough: any hit disables the interior skip, so false positives only cost
+ * the optimization, never correctness.
+ */
+const SKIP_SENSITIVE_DECLARATION_TOKEN = /break-(?:before|after)|hyphens/iu;
+
+/**
+ * Decides once per generation whether atomic-subtree interiors may skip
+ * constraint capture. Scans the compiled author CSS and the inline `<style>`
+ * elements that every pass source clones. `FRAME_STYLE` is excluded on
+ * purpose: it is library-controlled, and its only break declarations target
+ * `[data-imposia-page]` sheets inside `@media print`, which can never match
+ * authored content inside the staging frame's screen media.
+ */
+function cssAllowsAtomicInteriorSkip(css: readonly string[], sourceFlow: HTMLElement): boolean {
+  if (css.some((value) => SKIP_SENSITIVE_DECLARATION_TOKEN.test(value))) return false;
+  for (const style of sourceFlow.querySelectorAll("style")) {
+    if (SKIP_SENSITIVE_DECLARATION_TOKEN.test(style.textContent ?? "")) return false;
+  }
+  return true;
+}
+
+function subtreeHasSkipSensitiveInlineStyle(element: Element): boolean {
+  for (const styled of element.querySelectorAll<Element>("[style]")) {
+    if (SKIP_SENSITIVE_DECLARATION_TOKEN.test(styled.getAttribute("style") ?? "")) return true;
+  }
+  return false;
+}
+
+/**
+ * Style-free equivalent of the `hasUnbreakableDescendant` upward propagation
+ * for a subtree whose interior constraints are skipped: the propagated value
+ * is exactly "some strict-descendant element has a direct non-whitespace text
+ * child" (`directUnbreakableText` needs no computed style). Text directly
+ * under `element` is excluded because it feeds the element's own
+ * `hasDirectText` instead.
+ */
+function subtreeHasNestedUnbreakableText(element: Element): boolean {
+  const walker = element.ownerDocument.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+  for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
+    if (node.parentNode !== element && /\S/u.test((node as Text).data)) return true;
+  }
+  return false;
+}
+
+interface CapturedBreakConstraints {
+  readonly constraints: ReadonlyMap<Element, BreakConstraint>;
+  readonly hyphenationFallbackTargets: ReadonlySet<Element>;
+  readonly atomicSubtreeSkips: number;
+}
+
 async function captureBreakConstraints(
   root: HTMLElement,
   checkpoint: PaginationCheckpoint,
-): Promise<ReadonlyMap<Element, BreakConstraint>> {
+  skipAtomicInteriors: boolean,
+): Promise<CapturedBreakConstraints> {
   const constraints = new Map<Element, BreakConstraint>();
+  const hyphenationFallbackTargets = new Set<Element>();
+  let atomicSubtreeSkips = 0;
   const view = root.ownerDocument.defaultView;
-  if (view === null) return constraints;
+  if (view === null) return { constraints, hyphenationFallbackTargets, atomicSubtreeSkips };
+
+  // Source identities memoized down the document-order sweep: an element with
+  // its own marker derives the identity from itself; every other element
+  // inherits its parent's memo, which the sweep has always visited first.
+  // This is `closest()` without the ancestor walk.
+  const identities = new Map<Element, string | undefined>();
+  identities.set(root, elementSourceIdentity(root));
+  const memoizedSourceIdentity = (element: Element): string | undefined => {
+    let identity: string | undefined;
+    const authoredOrder = element.getAttribute(PUBLISHING_SOURCE_MARKER);
+    if (authoredOrder !== null) {
+      identity = /^[1-9][0-9]*$/u.test(authoredOrder)
+        ? `source-${authoredOrder}:${element.localName.toLowerCase()}`
+        : undefined;
+    } else {
+      const parent = element.parentElement;
+      identity = parent === null ? undefined : identities.get(parent);
+    }
+    identities.set(element, identity);
+    return identity;
+  };
 
   const elements = [...root.querySelectorAll<Element>("*")];
+  let skipRoot: Element | undefined;
   for (const element of elements) {
+    if (skipRoot !== undefined) {
+      if (skipRoot.contains(element)) {
+        // Interior of an atomic subtree: never placed, fragmented, or warned
+        // about individually, and its upward propagations were computed on the
+        // subtree root without styles. Skip the constraint entirely.
+        atomicSubtreeSkips += 1;
+        continue;
+      }
+      skipRoot = undefined;
+    }
     const scheduled = checkpoint();
     if (scheduled !== undefined) await scheduled;
     const localName = element.localName.toLowerCase();
-    const sourceIdentity = elementSourceIdentity(element);
+    const sourceIdentity = memoizedSourceIdentity(element);
     if (NON_FLOW_ELEMENT_NAMES.has(localName)) {
+      const hasDirectText = directUnbreakableText(element);
+      // `prepare()` used to sweep every constraint with a fresh computed
+      // style; keep its hyphenation decision for non-flow elements, which the
+      // main capture path below otherwise never styles.
+      if (
+        hasDirectText &&
+        element.children.length === 0 &&
+        htmlElement(element) !== undefined &&
+        view.getComputedStyle(element).hyphens === "auto" &&
+        !hasKnownContentLanguage(element)
+      ) {
+        hyphenationFallbackTargets.add(element);
+      }
       constraints.set(element, {
         sourceIdentity,
         before: "auto",
@@ -1068,7 +1181,7 @@ async function captureBreakConstraints(
         contributesToFlow: false,
         layout: "normal",
         atomic: true,
-        hasDirectText: directUnbreakableText(element),
+        hasDirectText,
         overflowXVisible: false,
         horizontalWriting: true,
         authoredName: undefined,
@@ -1088,8 +1201,51 @@ async function captureBreakConstraints(
       (!isInlineDisplay(style.display) || isReplacedElement(element));
     const computedWidows = positiveComputedInteger(style.widows, 0);
     const computedOrphans = positiveComputedInteger(style.orphans, 0);
-    const inlineWidows = inheritedInlinePositiveInteger(element, "widows");
-    const inlineOrphans = inheritedInlinePositiveInteger(element, "orphans");
+    // The inline ancestor walk only matters when the browser does not expose
+    // the computed value (it reads as 0): both the effective value and the
+    // fallback flag ignore the inline value otherwise.
+    const inlineWidows =
+      computedWidows === 0 ? inheritedInlinePositiveInteger(element, "widows") : undefined;
+    const inlineOrphans =
+      computedOrphans === 0 ? inheritedInlinePositiveInteger(element, "orphans") : undefined;
+    const atomic = atomicElement(element, style, layout);
+    const hasDirectText = directUnbreakableText(element);
+    if (
+      hasDirectText &&
+      element.children.length === 0 &&
+      htmlElement(element) !== undefined &&
+      style.hyphens === "auto" &&
+      !hasKnownContentLanguage(element)
+    ) {
+      hyphenationFallbackTargets.add(element);
+    }
+    let hasUnbreakableDescendant = false;
+    let hasDirectLineBreak = false;
+    if (
+      skipAtomicInteriors &&
+      atomic &&
+      element.firstElementChild !== null &&
+      // A zero computed widows/orphans means this browser hides them from
+      // computed style, so interior constraints could carry the inline
+      // fallback flag; capture them fully in that case.
+      computedWidows !== 0 &&
+      computedOrphans !== 0 &&
+      // Inherited `hyphens: auto` (set via an ancestor's inline style; the
+      // stylesheet case is excluded per generation) could reach interior
+      // text and demand the hyphenation fallback.
+      style.hyphens !== "auto" &&
+      !subtreeHasSkipSensitiveInlineStyle(element)
+    ) {
+      // The only observable effects of interior constraints are the upward
+      // propagations onto this subtree root; compute them without styles.
+      // Forced interior breaks are excluded by the CSS and inline-style
+      // gates, so `hasForcedDescendant` stays false by construction.
+      hasUnbreakableDescendant = subtreeHasNestedUnbreakableText(element);
+      hasDirectLineBreak = [...element.children].some(
+        (child) => child.localName.toLowerCase() === "br",
+      );
+      skipRoot = element;
+    }
     constraints.set(element, {
       sourceIdentity,
       before: supportsBreak ? pageBreak(style.breakBefore) : "auto",
@@ -1102,14 +1258,14 @@ async function captureBreakConstraints(
         (computedOrphans === 0 && inlineOrphans !== undefined),
       contributesToFlow,
       layout,
-      atomic: atomicElement(element, style, layout),
-      hasDirectText: directUnbreakableText(element),
+      atomic,
+      hasDirectText,
       overflowXVisible: style.overflowX === "visible",
       horizontalWriting: style.writingMode === "horizontal-tb",
       authoredName: authoredPageName(element),
       hasForcedDescendant: false,
-      hasUnbreakableDescendant: false,
-      hasDirectLineBreak: false,
+      hasUnbreakableDescendant,
+      hasDirectLineBreak,
     });
   }
 
@@ -1130,7 +1286,7 @@ async function captureBreakConstraints(
       parentConstraint.hasDirectLineBreak ||= element.localName.toLowerCase() === "br";
     }
   }
-  return constraints;
+  return { constraints, hyphenationFallbackTargets, atomicSubtreeSkips };
 }
 
 function nodeContributesToFlow(
@@ -1520,6 +1676,7 @@ async function renderedLineEnds(
 
 interface RecursiveFragmenterOptions {
   readonly constraints: ReadonlyMap<Element, BreakConstraint>;
+  readonly hyphenationFallbackTargets: ReadonlySet<Element>;
   readonly checkpoint: PaginationCheckpoint;
   readonly signal: AbortSignal;
   readonly deadlineAt: number;
@@ -1539,6 +1696,7 @@ interface PlacementRun {
 
 class RecursiveFragmenter {
   readonly #constraints: ReadonlyMap<Element, BreakConstraint>;
+  readonly #hyphenationFallbackTargets: ReadonlySet<Element>;
   readonly #checkpoint: PaginationCheckpoint;
   readonly #signal: AbortSignal;
   readonly #deadlineAt: number;
@@ -1559,6 +1717,7 @@ class RecursiveFragmenter {
 
   constructor(options: RecursiveFragmenterOptions) {
     this.#constraints = options.constraints;
+    this.#hyphenationFallbackTargets = options.hyphenationFallbackTargets;
     this.#checkpoint = options.checkpoint;
     this.#signal = options.signal;
     this.#deadlineAt = options.deadlineAt;
@@ -1582,7 +1741,9 @@ class RecursiveFragmenter {
     for (const [element, constraint] of this.#constraints) {
       const scheduled = this.#checkpoint();
       if (scheduled !== undefined) await scheduled;
-      this.#prepareTypography(element, constraint);
+      if (this.#hyphenationFallbackTargets.has(element)) {
+        this.#applyHyphenationFallback(element, constraint);
+      }
       if (constraint.widowOrphanFallback) {
         this.#warnOnce(
           "WIDOW_ORPHAN_FALLBACK",
@@ -1730,29 +1891,26 @@ class RecursiveFragmenter {
     return element.scrollWidth > availableWidth + OVERFLOW_TOLERANCE_CSS_PX;
   }
 
-  #prepareTypography(element: Element, constraint: BreakConstraint): void {
+  /**
+   * Applies the hyphenation fallback the capture sweep decided on. The
+   * decision (`hyphens: auto` on a leaf text element with no known content
+   * language) is computed during capture with the computed style already in
+   * hand; no earlier fallback can change it, because the mutation only
+   * targets elements without element children, which are never ancestors of
+   * other targets.
+   */
+  #applyHyphenationFallback(element: Element, constraint: BreakConstraint): void {
     const html = htmlElement(element);
-    const view = element.ownerDocument.defaultView;
-    if (html === undefined || view === null) return;
-    const style = view.getComputedStyle(element);
-    if (
-      style.hyphens === "auto" &&
-      element.children.length === 0 &&
-      [...element.childNodes].some(
-        (child) => child.nodeType === Node.TEXT_NODE && (child.textContent ?? "").trim() !== "",
-      ) &&
-      !hasKnownContentLanguage(element)
-    ) {
-      html.style.hyphens = "manual";
-      this.#warnOnce(
-        "HYPHENATION_FALLBACK",
-        constraint,
-        "Automatic hyphenation requires a known content language.",
-        "hyphens",
-        "auto",
-        "Used manual hyphenation because the content language is unknown.",
-      );
-    }
+    if (html === undefined) return;
+    html.style.hyphens = "manual";
+    this.#warnOnce(
+      "HYPHENATION_FALLBACK",
+      constraint,
+      "Automatic hyphenation requires a known content language.",
+      "hyphens",
+      "auto",
+      "Used manual hyphenation because the content language is unknown.",
+    );
   }
 
   #recoverInlineOverflow(
@@ -2943,6 +3101,12 @@ export async function buildGeneration(
       compiledPageMedia.publishingRules,
       settings.limits,
     );
+    // ASA-426: decided once per generation — every pass clones the same
+    // source flow and stylesheet set, so the verdict cannot change between
+    // passes. Inline styles are re-checked per subtree on the live pass DOM.
+    const atomicInteriorSkipEligible =
+      settings.experimental.forceFullConstraintCapture !== true &&
+      cssAllowsAtomicInteriorSkip(compiledPageMedia.css, sourceFlow);
     const probeCss = Object.freeze([FRAME_STYLE, ...compiledPageMedia.css]);
     const body = frameDocument.createDocumentFragment();
     const probeStyles = appendProbeStyles(frameDocument, probeCss);
@@ -2999,7 +3163,12 @@ export async function buildGeneration(
             }
           });
         };
-        const breakConstraints = await captureBreakConstraints(passSource, checkPagination);
+        const captured = await captureBreakConstraints(
+          passSource,
+          checkPagination,
+          atomicInteriorSkipEligible,
+        );
+        const breakConstraints = captured.constraints;
         const allocatePage = (name: string | undefined): PageParts => {
           throwIfAborted(signal);
           if (passPages.length >= settings.limits.maxPages) {
@@ -3023,6 +3192,7 @@ export async function buildGeneration(
         };
         const fragmenter = new RecursiveFragmenter({
           constraints: breakConstraints,
+          hyphenationFallbackTargets: captured.hyphenationFallbackTargets,
           checkpoint: checkPagination,
           signal,
           deadlineAt,
@@ -3054,7 +3224,10 @@ export async function buildGeneration(
           tableSplits: passTableSplits,
           overflowWarning: passOverflowWarning,
           publishing: finalized,
-          debugCounters: fragmenter.debugCounters,
+          debugCounters: Object.freeze({
+            ...fragmenter.debugCounters,
+            atomicSubtreeSkips: captured.atomicSubtreeSkips,
+          }),
         };
       };
 
