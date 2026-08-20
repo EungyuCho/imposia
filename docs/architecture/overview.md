@@ -819,13 +819,14 @@ these are code defects.
 5. **ADR 0010's status reads "accepted for the 0.1.x browser contract"** while
    the decision continues to govern 0.4.x and `docs/bundle-size.md` still defers
    to it.
-6. **`test:integration` targets a nonexistent `tests/integration/` directory.**
-   The script is vestigial; `pnpm test` covers all of `tests/**`.
-7. **`pixelmatch` and `pngjs` (and their `@types`) are unused devDependencies.**
-   No source file imports them; visual regression uses Playwright's built-in
-   `toHaveScreenshot`.
-8. **`tests/fixtures/{parity,pdf}` is an unreferenced legacy corpus** retained
-   from the removed Node-renderer parity gate. The live fixture mechanism is
-   `tests/e2e/conformance-performance-fixtures.ts`.
+6. **Resolved (ASA-432):** the vestigial `test:integration` script (targeting a
+   nonexistent `tests/integration/` directory) has been removed; `pnpm test`
+   covers all of `tests/**`.
+7. **Resolved (ASA-432):** the unused `pixelmatch` and `pngjs` devDependencies
+   (and their `@types`) have been removed; the visual snapshot comparison they
+   dated back to was replaced by structural geometry assertions.
+8. **Resolved (ASA-432):** the unreferenced `tests/fixtures/{parity,pdf}`
+   legacy corpus from the removed Node-renderer parity gate has been deleted.
+   The live fixture mechanism is `tests/e2e/conformance-performance-fixtures.ts`.
 9. **`RELEASING.md` documents a manual `pnpm publish` path** alongside the OIDC
    workflow that supersedes it.

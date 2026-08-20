@@ -287,25 +287,111 @@ test("spread presentation preserves canonical identity, cover parity, navigation
   }
 });
 
-test("spread and narrow fallback have stable Chromium visual snapshots", async ({
+test("spread cover geometry is symmetric and the narrow fallback fits one page", async ({
   page,
   browserName,
 }) => {
-  test.skip(browserName !== "chromium", "Chromium is the visual geometry reference.");
-  test.skip(process.platform !== "darwin", "The checked pixel baseline is validated on Darwin.");
+  // Structural geometry replaces the former platform-pinned pixel snapshots
+  // (ASA-432): every relationship below is asserted in-frame or as a ratio, so
+  // it holds on all engines and platforms without pixel baselines.
+  const { errors, pageErrors } = captureBrowserErrors(page, browserName);
   await mountSpreadFixture(page, 960);
-  const host = page.locator("#spread-fixture");
-  await expect(host).toHaveScreenshot("spread-cover-wide.png", { animations: "disabled" });
-  await host.evaluate((node) => {
-    (node as HTMLElement).style.width = "375px";
-  });
-  await page.evaluate(
-    () =>
-      new Promise<void>((resolve) =>
-        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
-      ),
-  );
-  await expect(host).toHaveScreenshot("spread-cover-narrow.png", { animations: "disabled" });
+
+  try {
+    const observation = await page.evaluate(async () => {
+      type SpreadViewer = {
+        readonly state: { page: number; mode: string; effectiveMode: string };
+      };
+      const viewer = Reflect.get(window, "spreadPageViewer") as SpreadViewer;
+      const host = document.querySelector<HTMLElement>("#spread-fixture");
+      const frame = host?.querySelector<HTMLIFrameElement>("iframe");
+      const frameDocument = frame?.contentDocument ?? null;
+      if (host === null || frame === null || frame === undefined || frameDocument === null) {
+        throw new Error("Missing spread geometry fixture.");
+      }
+      const settle = () =>
+        new Promise<void>((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+        );
+      const waitForEffectiveMode = async (expected: "single" | "spread") => {
+        for (let frameCount = 0; frameCount < 120; frameCount += 1) {
+          await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+          if (frameCount >= 2 && viewer.state.effectiveMode === expected) return;
+        }
+        throw new Error(
+          `Timed out waiting for ${expected} mode; received ${viewer.state.effectiveMode}.`,
+        );
+      };
+      // Measurements are taken inside the canonical iframe, so they are
+      // unaffected by the viewer's outer fit-to-stage scale transform.
+      const pageRect = (index: number) => {
+        const node = frameDocument.querySelectorAll<HTMLElement>("[data-imposia-page]")[index];
+        if (node === undefined) throw new Error(`Missing canonical page ${index + 1}.`);
+        const { left, right, top, width, height } = node.getBoundingClientRect();
+        return { left, right, top, width, height };
+      };
+      await settle();
+      const wide = { cover: pageRect(0), left: pageRect(1), right: pageRect(2) };
+      host.style.width = "375px";
+      await waitForEffectiveMode("single");
+      await settle();
+      const narrowPage = pageRect(viewer.state.page - 1);
+      const frameRect = frame.getBoundingClientRect();
+      const narrow = {
+        effectiveMode: viewer.state.effectiveMode,
+        presentation: frameDocument.documentElement.getAttribute(
+          "data-imposia-viewer-presentation",
+        ),
+        hostWidth: host.clientWidth,
+        // The outer transform scales the whole frame uniformly, so the
+        // on-screen page width is the in-frame width times that scale.
+        renderedPageWidth: narrowPage.width * (frameRect.width / frame.offsetWidth),
+        pageAspect: narrowPage.width / narrowPage.height,
+        wideAspect: wide.cover.width / wide.cover.height,
+      };
+      return { wide, narrow };
+    });
+
+    const tolerance = 1.5;
+    const { cover, left, right } = observation.wide;
+    const gap = right.left - left.right;
+    // Pages in a spread share one geometry: equal widths, pair on one row,
+    // non-overlapping with a consistent gutter.
+    expect(Math.abs(left.width - right.width)).toBeLessThanOrEqual(tolerance);
+    expect(Math.abs(cover.width - left.width)).toBeLessThanOrEqual(tolerance);
+    expect(Math.abs(left.top - right.top)).toBeLessThanOrEqual(tolerance);
+    expect(gap).toBeGreaterThanOrEqual(0);
+    expect(gap).toBeLessThan(left.width);
+    // The cover sits alone on the first row, in the right-hand slot, above the
+    // 2–3 pair.
+    expect(cover.top).toBeLessThan(left.top);
+    expect(Math.abs(cover.left - right.left)).toBeLessThanOrEqual(tolerance);
+    // Cover symmetry: the blank left slot mirrors exactly one page plus the
+    // gutter, so the cover's offset from the pair's left edge equals one page
+    // width plus the gap.
+    expect(Math.abs(cover.left - left.left - (left.width + gap))).toBeLessThanOrEqual(tolerance);
+    // Sheet width of the 2–3 pair is two page widths plus the gutter.
+    expect(Math.abs(right.right - left.left - (2 * cover.width + gap))).toBeLessThanOrEqual(
+      tolerance,
+    );
+
+    // Narrow fallback: at 375px the viewer degrades to a single fitted page
+    // that keeps its aspect ratio and fills the host without overflowing.
+    expect(observation.narrow.effectiveMode).toBe("single");
+    expect(observation.narrow.presentation).toBe("single");
+    expect(observation.narrow.renderedPageWidth).toBeLessThanOrEqual(
+      observation.narrow.hostWidth + tolerance,
+    );
+    expect(observation.narrow.renderedPageWidth).toBeGreaterThanOrEqual(
+      observation.narrow.hostWidth * 0.8,
+    );
+    expect(Math.abs(observation.narrow.pageAspect - observation.narrow.wideAspect)).toBeLessThan(
+      0.02,
+    );
+  } finally {
+    expect(errors).toEqual([]);
+    expect(pageErrors).toEqual([]);
+  }
 });
 
 test("spread survives generation refresh and restores all presentation state on destroy", async ({
