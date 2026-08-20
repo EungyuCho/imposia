@@ -229,11 +229,12 @@ test("isolates SVG fragments, raster blobs, and authored SVG URL schemes across 
       }
     });
 
+    // Within one generation, duplicate references to the same absolutized URL
+    // share one resolver call (within-generation memoization); an update still
+    // re-resolves everything, proving no cross-generation caching.
     expect(observation.requests.map(requestSignature)).toEqual([
       "image:raster.png:https://assets.example.test/svg/:true",
-      "image:raster.png:https://assets.example.test/svg/:true",
       "image:vector.svg:https://assets.example.test/svg/:true",
-      "image:texture.png:https://assets.example.test/svg/:true",
       "image:texture.png:https://assets.example.test/svg/:true",
       "image:vector.svg:https://assets.example.test/svg/:true",
     ]);
@@ -247,7 +248,9 @@ test("isolates SVG fragments, raster blobs, and authored SVG URL schemes across 
     for (const token of [...observation.before.tokens, ...observation.after.tokens]) {
       expect(token.startsWith("#") || observation.createdBlobUrls.includes(token)).toBe(true);
     }
-    expect(observation.createdBlobUrls.length).toBe(4);
+    // One blob per unique raster asset per generation: duplicate occurrences
+    // share the memoized outcome's blob URL.
+    expect(observation.createdBlobUrls.length).toBe(2);
     expect(opened.networkRequests).toEqual([]);
   } finally {
     await closeZeroNetworkPage(page, opened);
