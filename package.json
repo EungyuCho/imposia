@@ -32,6 +32,7 @@
     "check": "pnpm preflight && pnpm typecheck && pnpm lint && pnpm test && pnpm bundle:size && pnpm build && pnpm test:site && pnpm test:e2e && pnpm run audit:prod && pnpm run licenses"
   },
   "devDependencies": {
+    "@ampproject/remapping": "2.3.0",
     "@biomejs/biome": "2.5.4",
     "@imposia/react": "workspace:*",
     "@playwright/test": "1.61.1",
@@ -48,6 +49,7 @@
     "fumadocs-mdx": "15.2.0",
     "fumadocs-ui": "16.11.5",
     "lucide-react": "1.25.0",
+    "oxc-minify": "0.146.0",
     "pdfjs-dist": "5.4.530",
     "pixelmatch": "7.2.0",
     "playwright": "1.61.1",
