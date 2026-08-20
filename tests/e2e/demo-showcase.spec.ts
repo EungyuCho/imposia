@@ -331,9 +331,18 @@ test("React publishing lab switches sources and extension boundaries", async ({
         __imposiaDemoFrame: document.querySelector("[data-testid='demo-preview-surface'] iframe"),
       });
     });
+    // The compatibility sample also paginates to two pages, so waiting on the
+    // page count alone races the brief sample's commit. Wait for the committed
+    // generation to advance before reading it.
+    const compatibilityGeneration = Number(
+      await page.getByTestId("metric-generation").textContent(),
+    );
     await page.locator("[data-sample-id='brief']").click();
+    await expect(page.getByTestId("metric-generation")).toHaveText(
+      String(compatibilityGeneration + 1),
+    );
     await expect(page.getByTestId("metric-pages")).toHaveText("2");
-    const briefGeneration = Number(await page.getByTestId("metric-generation").textContent());
+    const briefGeneration = compatibilityGeneration + 1;
     expect(
       await page.evaluate(
         () =>
