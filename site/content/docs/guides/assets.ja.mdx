@@ -1,0 +1,122 @@
+---
+title: 画像とフォントを読み込む
+description: 外部リソースがページ分割済み文書に入る唯一の経路である assetResolver を実装します。
+---
+
+HTML に `<img>` を足しても、画像は読み込まれません。これは不具合ではなく、Imposia が前提として築いている境界です。その境界を意図して開く手段が `assetResolver` です。
+
+## 既定では何も読み込まれない理由
+
+ページを保持する iframe は、厳格な Content Security Policy でサンドボックス化されています。`connect-src` は `'none'` で、画像、フォント、メディアは Core 自身が作成した `blob:` URL からしか読み込めません。ソースに書かれた URL がネットワーク要求になることはありません。
+
+<Callout type="info" title="この方式で得られるもの">
+信頼できないマークアップは、フレームからネットワークへ到達できません。ページに届くすべてのバイトは先にアプリケーションを通過するため、何を許可するか、どこから取得するか、資格情報を付けるなら何を付けるかをアプリケーションが決められます。
+</Callout>
+
+Imposia は HTML と CSS からリソースを見つけ、その一つひとつをリゾルバーに問い合わせ、承認されたバイトを Core 所有の `blob:` URL にし、文書が置き換えられたとき、失敗したとき、破棄されたときに解放します。
+
+## リゾルバーを実装する
+
+リゾルバーは 1 つの非同期関数です。要求を受け取り、バイトまたは拒否で応答します。
+
+```ts title="app/asset-resolver.ts"
+import type { AssetResolver } from "@imposia/core";
+
+const ALLOWED = new Set(["https://cdn.example.com"]);
+
+export const assetResolver: AssetResolver = async ({ url, kind, baseUrl, signal }) => {
+  const target = new URL(url, baseUrl);
+
+  if (!ALLOWED.has(target.origin)) {
+    return { status: "blocked", reason: `Origin not allowed: ${target.origin}` };
+  }
+
+  const response = await fetch(target, { signal });
+  if (!response.ok) {
+    return { status: "blocked", reason: `HTTP ${response.status}` };
+  }
+
+  return {
+    status: "resolved",
+    bytes: new Uint8Array(await response.arrayBuffer()),
+    mimeType: response.headers.get("content-type") ?? "application/octet-stream",
+  };
+};
+```
+
+文書をマウントするときに、一度だけ渡します。
+
+```tsx title="app/preview.tsx"
+<ImposiaPageViewer
+  source={{ html, baseUrl: "https://cdn.example.com/docs/" }}
+  documentOptions={{ assetResolver }}
+/>
+```
+
+### 要求
+
+| フィールド | 意味 |
+| --- | --- |
+| `url` | ソースに書かれたままの URL。相対 URL の場合があります |
+| `kind` | `image`、`font`、`media`、`stylesheet` のいずれか |
+| `baseUrl` | ソースに指定されていた場合の、文書の基準 URL |
+| `signal` | 世代が追い越されたとき、失敗したとき、破棄されたときに中止されます |
+
+`url` は必ずリゾルバー側で `baseUrl` に対して解決し、`signal` は必ず `fetch` に渡してください。signal を無視するリゾルバーは、誰の目にも触れない世代のために働き続けることになります。
+
+### 応答
+
+リソースを受け入れるには `{ status: "resolved", bytes, mimeType }` を、拒否するには `{ status: "blocked", reason }` を返します。拒否はエラーではなく正常な結果の 1 つです。文書はそのまま確定し、Imposia は拒否した対象を示す `RESOURCE_BLOCKED` 警告を発します。
+
+## 返した後に拒否されるもの
+
+バイトを承認しても、それで決まりではありません。Core がバイトを検証し、不一致は拒否として扱います。
+
+| 検証 | 規則 |
+| --- | --- |
+| MIME 許可リスト | 画像は PNG、JPEG、GIF、WebP、AVIF。フォントは WOFF、WOFF2、TTF、OTF。スタイルシートは `text/css` |
+| マジックバイト | フォントコンテナーは宣言された型ではなく、実際のシグネチャ（`wOFF`、`wOF2`、`OTTO` など）で検証されます |
+| 上限 | 参照数、合計バイト数、ネストの深さのそれぞれに上限があります |
+
+実際は PNG のファイルに `application/octet-stream` を返すと画像がブロックされるのは、このためです。宣言する型は正しくなければなりません。
+
+<Callout type="warn" title="重複参照もバイト上限に数えられます">
+1 つの世代内では、同じ URL への複数の参照が 1 回のリゾルバー呼び出しと 1 つの `blob:` URL を共有します。それでもバイト集計は意図的に重複排除**しません**。すべての出現が `maxAssetBytes` に計上されるため、上限の意味はこの最適化が入る前と変わりません。
+</Callout>
+
+## スタイルシートは追加の処理を連れてくる
+
+スタイルシートを解決すると、Imposia はそれを解析し、そのスタイルシート*自身が*参照するリソース — `@font-face` のソース、`url()` の値、ネストされた `@import` 規則 — を見つけます。それぞれが独立した要求としてリゾルバーに届き、`baseUrl` にはそのスタイルシートの場所が入ります。深さには上限があるため、`@import` の連鎖が無限に再帰することはありません。
+
+## よくある問題
+
+<Accordions>
+
+<Accordion title="画像が表示されず、RESOURCE_BLOCKED 警告が出る">
+リゾルバーが拒否したか、バイトが検証に落ちています。警告のメッセージを確認し、返した `mimeType` が実際のファイル形式と一致しているか確かめてください。実際の画像に汎用の型を返すのが最も多い原因です。
+</Accordion>
+
+<Accordion title="相対 URL が一度も解決されない">
+ソースに `baseUrl` を設定し、リゾルバー内で `new URL(url, baseUrl)` で解決してください。Imposia はソースに書かれた文字列をそのまま渡します。基準 URL との結合はリゾルバーの判断です。文書が実際にどこにあるかを知っているのは、アプリケーションだけだからです。
+</Accordion>
+
+<Accordion title="Web フォントが無視される">
+フォントは MIME タイプに加えて、コンテナーのシグネチャでも検証されます。`font/woff` として配信された `.woff2` や、実体が zip のファイルは拒否されます。転送層に書き換えられていない、本物のバイトを送っているか確認してください。
+</Accordion>
+
+<Accordion title="そもそもリゾルバーは必要か">
+コンテンツが外部リソースを参照する場合だけ必要です。インライン SVG、CSS の色、システムフォントには何も要りません。リゾルバーがなければ、ソースの `<img src>` は単にブロックされ、文書はそのまま確定します。
+</Accordion>
+
+</Accordions>
+
+## 次のステップ
+
+<Cards>
+  <Card title="出版モデル" href="/ja/docs/concepts/publishing-model">
+    リゾルバーの出力が確定ライフサイクルのどこに位置するか、blob URL がいつ解放されるか。
+  </Card>
+  <Card title="Core API" href="/ja/docs/api/core">
+    `AssetResolver` の完全な型、上限オプション、警告コード。
+  </Card>
+</Cards>

@@ -1,70 +1,199 @@
 ---
-title: React에서 미리보고, 인쇄하고, PDF로 저장하기
-description: React 페이지 문서 하나를 앱에서 미리보고, 브라우저 기본 인쇄 창으로 보내거나 PDF로 저장합니다.
+title: 여러 문서를 함께 퍼블리싱하기
+description: 순서가 있는 원본들을 읽기 순서, outline, 전역 페이지 순서를 공유하는 하나의 Publication으로 조합합니다.
 ---
 
-첫 페이지가 보이는 상태에서 시작합니다. 같은 완성본을 앱에서 미리보고, 종이로 인쇄하거나 PDF로 저장합니다. EPUB도 이 문서와 함께 확정한 원본에서 만듭니다.
+페이지 문서 하나는 원본 하나를 페이지로 나눕니다. 그런데 책 모양의 산출물이 원본 하나인 경우는 드뭅니다. 표지, 앞부속, 각 장은 따로 작성되지만 하나의 문서처럼 동작해야 합니다. 하나의 읽기 순서, 하나의 전역 페이지 순서, 탐색을 위한 하나의 outline이 필요합니다. Imposia에서 이렇게 조합된 단위가 **Publication**이고, `ImposiaPublicationViewer`는 내장 Reader와 함께 이를 렌더링하는 React 컴포넌트입니다.
 
-## 시작하기
+<Callout type="info" title="시작하기 전에">
+[첫 페이지 만들기](/ko/docs/getting-started)를 먼저 완료하세요. Publication은 단일 페이지 문서와 같은 준비-확정 수명 주기를 사용하며, 이 가이드는 그 수명 주기가 동작하는 것을 한 번 본 적이 있다고 가정합니다.
+</Callout>
 
-React 18 이상을 사용하는 브라우저 앱에서 [첫 페이지 만들기](/ko/docs/getting-started)를 완료하세요.
+## Publication은 스냅샷입니다
 
-## 출력 버튼을 연결합니다
+Publication은 `PublicationSnapshot`으로 기술합니다. Publication 메타데이터에 순서가 있는 `entry` 목록을 더한 값입니다. 각 `entry`는 안정적인 `id`, `title`, 그리고 `html` 또는 `lightDom` 중 정확히 하나를 가진 의미 구조 원본 하나입니다. `entry`의 순서가 **곧** 읽기 순서입니다.
 
-Viewer 옆에 명령형 핸들을 둡니다. 각 작업이 끝날 때까지 기다리고, 실패하면 앱에서 쓰는 오류 처리 함수로 넘깁니다.
+스냅샷은 완전한 값으로 제출됩니다. Core는 Publication 전체 — 모든 `entry`, 페이지 범위, outline — 를 준비한 뒤, 단일 페이지 문서와 똑같이 원자적으로 확정합니다. 부분 갱신은 없습니다. 장 하나를 바꾸려면 바뀐 장을 포함한 완전한 스냅샷을 제출하고, 새 확정이 끝날 때까지 사용자는 이전에 확정된 문서를 계속 봅니다.
 
-```tsx
-import { ImposiaPageViewer, type ImposiaPageViewerHandle } from "@imposia/react";
+확정된 스냅샷 하나가 제공하는 것은 다음과 같습니다.
+
+- 하나의 **전역 페이지 순서** — 각 `entry`는 전역 페이지 번호의 포함 범위인 `pageRange`를 차지하고, 다음 `entry`는 그다음 페이지에서 시작합니다.
+- 하나의 **outline** — `entry` 제목을 뿌리로 하고 각 `entry` 안의 보이는 제목으로 확장되는 불변 탐색 트리입니다.
+- 탐색, 검색, 썸네일, 인쇄가 전부 정확히 그 확정 세대를 바라보는 하나의 표면입니다.
+
+<Steps>
+
+<Step>
+
+### 스냅샷을 기술합니다
+
+```tsx title="app/handbook-snapshot.ts"
+import type { PublicationSnapshot } from "@imposia/react";
+
+export const handbook: PublicationSnapshot = {
+  metadata: { title: "현장 안내서", language: "ko" },
+  entries: [
+    { id: "cover", title: "표지", html: "<h1>현장 안내서</h1>" },
+    {
+      id: "intro",
+      title: "소개",
+      html: "<h1>소개</h1><p>이 안내서를 만든 이유.</p>",
+    },
+    {
+      id: "survey",
+      title: "조사 방법",
+      html: "<h1>조사 방법</h1><h2>준비</h2><p>…</p><h2>현장에서</h2><p>…</p>",
+    },
+  ],
+};
+```
+
+`entry`의 `id`는 서로 달라야 하고 공백을 포함할 수 없습니다. 검증 실패는 나중에 조용히 나타나지 않고 스냅샷을 마운트하는 시점에 예외로 발생합니다. `id`는 딥 링크와 outline 목적지를 만드는 재료이기도 하므로 안정적인 공개 이름으로 다루세요. `entry`의 `id`를 바꾸면 그곳을 가리키던 링크가 무효가 됩니다.
+
+</Step>
+
+<Step>
+
+### ImposiaPublicationViewer로 렌더링합니다
+
+```tsx title="app/handbook-preview.tsx"
+import {
+  ImposiaPublicationViewer,
+  type ImposiaPublicationViewerHandle,
+} from "@imposia/react";
 import { useRef } from "react";
 import "@imposia/react/styles.css";
+import { handbook } from "./handbook-snapshot";
 
-type PublishingActionsProps = {
-  readonly html: string;
-  readonly onActionError: (error: unknown) => void;
-};
-
-export function PublishingActions({ html, onActionError }: PublishingActionsProps) {
-  const viewer = useRef<ImposiaPageViewerHandle>(null);
-
-  async function print(): Promise<void> {
-    try {
-      const current = viewer.current;
-      if (current === null) throw new DOMException("Viewer is not available", "InvalidStateError");
-      await current.print();
-    } catch (error) {
-      onActionError(error);
-    }
-  }
-
-  async function exportEpub(): Promise<void> {
-    try {
-      const current = viewer.current;
-      if (current === null) throw new DOMException("Viewer is not available", "InvalidStateError");
-      const blob = await current.exportEpub({
-        metadata: { title: "분기 보고서", language: "ko", identifier: "urn:report:quarterly" },
-      });
-
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = "report.epub";
-      link.click();
-      URL.revokeObjectURL(url);
-    } catch (error) {
-      onActionError(error);
-    }
-  }
+export function HandbookPreview() {
+  const viewer = useRef<ImposiaPublicationViewerHandle>(null);
 
   return (
     <>
-      <ImposiaPageViewer ref={viewer} source={{ html }} onError={onActionError} />
-      <button type="button" onClick={() => void print()}>인쇄 / PDF 저장</button>
-      <button type="button" onClick={() => void exportEpub()}>EPUB 내보내기</button>
+      <ImposiaPublicationViewer
+        ref={viewer}
+        snapshot={handbook}
+        publicationOptions={{ page: { size: "A4", margin: "18mm" } }}
+        viewerOptions={{ mode: "spread", spread: { cover: true } }}
+      />
+      <button type="button" onClick={() => void viewer.current?.print()}>
+        인쇄 / PDF 저장
+      </button>
     </>
   );
 }
 ```
 
-## 결과를 확인합니다
+이 컴포넌트는 Core `PublicationController` 하나와 canonical iframe 하나를 소유하고, Reader 연결까지 대신 처리합니다. 별도의 마운트 단계는 없습니다. `publicationOptions`는 단일 페이지 문서와 같은 페이지네이션 옵션을 받되, `extensions`에는 Publication 확장만 넣을 수 있습니다.
 
-새 원본을 준비하는 동안에도 지금 보이는 미리보기는 유지됩니다. 인쇄 버튼을 누르면 완성된 페이지로 브라우저의 기본 인쇄 창이 열립니다. 종이로 출력하려면 프린터를, 파일로 남기려면 **PDF로 저장**을 선택하세요. Imposia는 PDF 바이트를 직접 반환하지 않습니다. EPUB은 마지막으로 확정한 의미 구조를 리플로우형 EPUB 3.3 `Blob`으로 내보냅니다.
+</Step>
+
+<Step>
+
+### Reader를 열어 확인합니다
+
+브라우저에서 미리보기를 여세요. Viewer가 `entry`들을 하나의 연속된 페이지 순서로 보여줍니다. 표지, 다음 페이지의 소개, 그리고 조사 방법 장 순서입니다.
+
+Viewer 컨트롤에서 **CONTENTS**(목차) 패널을 여세요. 확정된 outline이 나타납니다. `entry`마다 항목이 하나씩 있고, 조사 방법 장 안의 `h2` 제목으로 확장됩니다. 항목을 선택하면 그 항목의 정확한 전역 페이지로 이동합니다. **인쇄 / PDF 저장**을 누르면 브라우저 인쇄 창에 같은 페이지가 같은 순서로 나타납니다.
+
+</Step>
+
+</Steps>
+
+## Reader가 제공하는 것
+
+Reader는 Page Viewer 셸에 내장된 패널 모음이며, canonical iframe 바깥에 렌더링됩니다. HTML을 다시 파싱하거나, 페이지를 래스터화하거나, 페이지네이션을 다시 실행하지 않습니다. 모든 패널은 확정된 세대의 투영입니다.
+
+| 패널 | 보여주는 것 |
+| --- | --- |
+| 목차(CONTENTS) | 확정된 outline의 계층형 목차입니다. 항목을 선택하면 해당 전역 페이지로 이동합니다. |
+| 검색 | 확정된 페이지의 보이는 텍스트에서 찾은 결과입니다. 결과마다 `entry`, 페이지, 일반 텍스트 발췌를 제공합니다. |
+| 썸네일 | 확정된 전역 페이지마다 하나씩 있는 추상적인 미리보기입니다. 올바른 용지 비율에 도식적인 줄 표시만 있으며, 렌더링된 복사본이 아닙니다. |
+| Inspector | 현재 세대의 경고와, 위치가 있는 발견으로의 이동입니다. `viewerOptions.inspector`로 켭니다. |
+
+패널은 키보드로 조작할 수 있고 상호 배타적입니다. 하나를 열면 나머지가 닫힙니다.
+
+패널이 하는 모든 일은 명령형 핸들에도 있습니다. `navigate()`, `search()`, `selectSearchResult()`, `getThumbnails()`, `selectThumbnail()`과 패널 열기·닫기·토글 메서드로 같은 동작을 앱의 UI에서 실행할 수 있습니다. 전체 목록은 [React API](/ko/docs/api/react)에 있습니다.
+
+검색은 정제된 보이는 텍스트만 색인합니다. 숨겨진 콘텐츠와 `inert`, `aria-hidden`, script, style, template 콘텐츠는 제외되며, 원시 DOM이나 마크업이 API를 건너오지 않습니다.
+
+## 탐색과 검색은 세대에 묶입니다
+
+Publication에서 이동 가능한 모든 위치는 `PublicationDestination`입니다: `{ id, entryId, page, generation }`. outline 항목도, 모든 검색 결과도 목적지를 하나씩 가집니다. 목적지는 특정한 확정 페이지 순서 하나에 대한 주장이고, `generation` 필드가 그 순서를 지정합니다. 목적지는 그 순서에 대해서만 유효합니다.
+
+```tsx title="app/find-in-handbook.ts"
+const results = viewer.current?.search("준비") ?? [];
+// 각 결과: { entry, page, excerpt, destination }
+if (results.length > 0) {
+  viewer.current?.selectSearchResult(results[0]);
+}
+```
+
+<Callout type="warn" title="목적지와 검색 결과를 갱신 이후까지 보관하지 마세요">
+새 스냅샷이 확정되면 이전 세대의 목적지와 검색 결과는 무효가 됩니다. `navigate()`는 이전 세대의 목적지에 예외를 발생시키고, 보관해 둔 옛 검색 결과의 선택도 같은 방식으로 거부됩니다. `resolveDestination(id)`로 다시 해석하거나 — ID는 새 세대에서도 같은 `entry`나 제목을 가리킵니다 — 검색을 다시 실행하세요.
+</Callout>
+
+이 엄격함이 탐색을 정직하게 유지합니다. 내용이 바뀌면 페이지 번호가 움직입니다. 옛 페이지 번호로 조용히 이동하는 목적지는 잘못된 내용을 가리키게 됩니다. 이전 세대의 값을 거부하면 조회가 현재 확정을 거치게 되고, 거기서는 `id`가 여전히 올바른 위치를 가리킵니다.
+
+## 스냅샷 전체를 갱신하세요
+
+다른 스냅샷 객체를 전달하면 컴포넌트가 새 세대를 준비합니다. 새 세대가 이길 때까지 확정된 페이지는 화면에 남습니다. 비교는 참조로 하므로, 같은 객체 안의 `entry`를 변경하는 것만으로는 아무 일도 일어나지 않습니다. 새 스냅샷 값을 만드세요. 새 참조를 보장할 수 없다면 `snapshotRevision`을 바꿔 갱신을 강제하세요. `publicationOptions` 변경은 페이지 문서와 같은 규칙을 따릅니다. `publicationOptionsRevision`을 바꿔 새 옵션으로 컨트롤러를 다시 마운트하세요.
+
+## 사용자에게 안정적인 링크를 제공하세요
+
+Reader는 목적지의 안정적인 ID로 만든 URL 안전 딥 링크 문자열로 현재 위치를 저장하고 복원할 수 있습니다.
+
+```tsx title="app/handbook-with-links.tsx"
+<ImposiaPublicationViewer
+  ref={viewer}
+  snapshot={handbook}
+  readerOptions={{
+    initialDeepLink: startLink,
+    onDeepLinkChange: (value) => {
+      // 값을 라우터나 URL 해시에 보관하세요.
+    },
+  }}
+/>
+```
+
+`onDeepLinkChange`는 사용자가 이동할 때마다 호출됩니다. 값을 앱이 URL 상태를 보관하는 곳에 저장하세요. 나중에 복원하려면 마운트 시 `initialDeepLink`로 전달하거나 핸들의 `restoreDeepLink(value)`를 호출하세요. 인코딩된 값은 페이지 번호가 아니라 안정적인 ID를 담으므로, 이전 세대에서 기록한 링크도 내용이 바뀐 뒤에 여전히 해석됩니다. 그 `entry`나 제목이 지금 있는 곳으로 이동합니다. 알 수 없거나 잘못된 값은 예외 대신 `undefined`로 해석됩니다.
+
+## 인쇄와 내보내기도 같은 순서를 따릅니다
+
+핸들의 `print()`는 확정된 전체 페이지 순서를 읽기 순서대로 담은 브라우저 기본 인쇄 창을 엽니다. Publication 전체에 인쇄 창 하나이며, 사용자는 거기서 프린터나 **PDF로 저장**을 선택합니다. 같은 확정된 스냅샷은 `exportEpub()`으로 `entry` 순서를 따르는 spine을 가진 리플로우형 EPUB 3.3 `Blob`도 만들 수 있습니다. 필수 메타데이터와 제한은 [Core API](/ko/docs/api/core)에 문서화되어 있습니다.
+
+## 자주 묻는 질문
+
+<Accordions>
+
+<Accordion title="React가 꼭 필요한가요?">
+아니요. `@imposia/core`의 `mountPublication()`이 같은 `PublicationController`를 만들고, `@imposia/viewer`의 `mountPageViewer()`는 같은 Reader 패널을 연결하는 `reader` 옵션을 받습니다. `ImposiaPublicationViewer`는 그 조합을 React 수명 주기에 연결한 것입니다.
+</Accordion>
+
+<Accordion title="entry 하나만 갱신할 수 있나요?">
+아니요. 스냅샷은 항상 완전한 값입니다. 바뀐 부분을 포함한 전체 `entry` 목록을 제출하세요. 내용이 바뀌지 않은 `entry`도 다시 준비되고, 확정은 전체 페이지 순서를 한 번에 교체합니다. 전역 페이지 번호, 범위, outline이 서로 일관되게 유지되는 이유입니다.
+</Accordion>
+
+<Accordion title="제목이 목차 패널에 나타나지 않습니다">
+outline에는 보이는 제목만 들어갑니다. `hidden`, `inert`, `aria-hidden="true"` 콘텐츠 안의 제목은 검색 색인과 같은 기준으로 제외됩니다. `entry`의 `title`은 HTML에 제목이 있든 없든 항상 나타납니다.
+</Accordion>
+
+<Accordion title="썸네일에는 실제로 무엇이 들어 있나요?">
+추상적인 미리보기입니다. 페이지의 용지 비율과, 보존된 페이지 메타데이터에서 얻은 최대 몇 개의 도식적인 텍스트 줄 표시가 전부입니다. 썸네일은 작성된 DOM을 복제하거나 페이지를 래스터화하거나 iframe을 추가로 만들지 않으므로 긴 Publication에서도 비용이 낮게 유지됩니다. 하나를 선택하면 그 전역 페이지로 이동합니다.
+</Accordion>
+
+</Accordions>
+
+## 다음 단계
+
+<Cards>
+  <Card title="React API" href="/ko/docs/api/react">
+    `ImposiaPublicationViewer`의 모든 prop과 핸들 메서드입니다.
+  </Card>
+  <Card title="Core API" href="/ko/docs/api/core">
+    `mountPublication`, `PublicationController`, 스냅샷 타입입니다.
+  </Card>
+  <Card title="퍼블리싱 모델" href="/ko/docs/concepts/publishing-model">
+    모든 Publication 세대가 거치는 확정 수명 주기입니다.
+  </Card>
+</Cards>

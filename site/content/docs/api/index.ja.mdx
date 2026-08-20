@@ -1,53 +1,56 @@
 ---
-title: APIリファレンス
-description: React、Core、Viewerから必要な契約を選び、パッケージの関係と共通ライフサイクルを確認します。
+title: API リファレンス
+description: React、Core、Viewer から必要な契約を選び、共通のパッケージ構成とライフサイクル指針を確認します。
 ---
 
-最初の文書を表示した後、必要なAPIを探すためのリファレンスです。パッケージ別のページで、コンポーネント、コントローラー、オプション、ライフサイクル上の制約を確認できます。
+最初の文書を表示した後に使うリファレンスです。パッケージ別のページで、正確なコンポーネント、コントローラー、オプション、ライフサイクル上の制約を確認してください。
 
 ## パッケージ構成
 
-| パッケージ | 主な用途 | スタイル |
+| パッケージ | 役割 | 主要 API |
 | --- | --- | --- |
-| `@imposia/react` | React コンポーネントと Hooks。`@imposia/client` の API も再エクスポートします。 | `@imposia/react/styles.css` |
-| `@imposia/client` | ブラウザー統合用の入口。Core と Viewer の主要 API を再エクスポートします。 | `@imposia/client/styles.css` |
-| `@imposia/core` | HTML/CSS のページ分割、Publication、印刷、EPUB 書き出し。 | 不要 |
-| `@imposia/viewer` | Core の `PageDocument` と PDF の表示 UI。Reader と Inspector を含みます。 | `@imposia/viewer/styles.css` |
+| `@imposia/react` | React 統合 | `ImposiaPageViewer`、`ImposiaDocument`、`ImposiaPublicationViewer`、2 つのライフサイクル Hook |
+| `@imposia/core` | フレームワーク非依存のページ分割と Publication | `mountPageDocument`、`mountPublication`、`prepareDocument` |
+| `@imposia/viewer` | 確定済みページの表示、または PDF の読み込み | `mountPageViewer`、`mountViewer`、ディープリンクヘルパー |
+| `@imposia/client` | フレームワーク非依存の統合エントリーポイント | Core と Viewer の主要統合 API を再エクスポート |
 
-すべてのマウント API はブラウザー DOM を必要とします。
+React パッケージを使う場合は、`@imposia/react/styles.css` を一度だけ読み込んでください。
 
-## APIを選ぶ
+## API を選ぶ
 
-- [React API](/ja/docs/api/react): Reactアプリ向けの<span style={{ whiteSpace: "nowrap" }}>コンポーネント</span>、Hooks、命令型ハンドルです。
-- [Core API](/ja/docs/api/core): フレームワーク非依存のページネーションとPublicationコントローラーです。
-- [Viewer API](/ja/docs/api/viewer): ページ、PDF、Reader、Inspector、ナビゲーションのコントローラーです。
+<Cards>
+  <Card title="React API" href="/ja/docs/api/react">
+    React アプリケーション向けのコンポーネント、Hook、命令型ハンドル。
+  </Card>
+  <Card title="Core API" href="/ja/docs/api/core">
+    フレームワーク非依存のページ文書と Publication のコントローラー。
+  </Card>
+  <Card title="Viewer API" href="/ja/docs/api/viewer">
+    ページ表示、Reader、Inspector、独立した PDF ビューアー。
+  </Card>
+</Cards>
 
 ## ライフサイクルとエラー
 
-Core は staging iframe で更新を完了してから canonical iframe を置き換えます。更新中や更新に失敗した場合も、直前に確定した文書を引き続き利用できます。`PageDocument`、`PublicationDocument`、移動先、警告、サムネイル、検索結果は特定の世代に結び付きます。更新後は `controller.current` と各解決 API から取得し直してください。
+| 状況 | 結果 |
+| --- | --- |
+| 最初の世代が処理中 | `current` は `undefined`、React の状態は `loading` です。 |
+| 確定後の更新が処理中 | 前回の確定が表示にも React の状態にも残ります。 |
+| より新しい更新が始まった | 進行中だった古い世代は `AbortError` で reject されます。 |
+| 呼び出し側が中止した | 対応する世代・書き出しが DOM の `AbortError` で reject されます。 |
+| 確定後の更新が失敗した | Promise が reject され、前回の確定が現在値のまま残ります。 |
+| コントローラーを破棄した | 処理は中止され、リソースとフレームが解放され、`current` は空になります。 |
 
-`ImposiaError` は `Error` を継承し、`code: string` を持ちます。
+`ImposiaError` は `Error` を継承し、`readonly code: string` を持ちます。中止は、報告すべき失敗と分けて処理してください。
 
 ```ts
 try {
-  await controller.update(nextSource);
+  await controller.update(nextSource, { signal });
 } catch (error) {
+  if (error instanceof DOMException && error.name === "AbortError") return;
   if (error instanceof ImposiaError) console.error(error.code, error.message);
-  else if (error instanceof DOMException && error.name === "AbortError") console.info("中止");
-  else throw error;
+  throw error;
 }
 ```
 
-代表的な失敗条件は次のとおりです。
-
-| 条件 | 結果 |
-| --- | --- |
-| 新しい update が開始された、または `AbortSignal` が中止された | 進行中の処理が `AbortError` で reject します。 |
-| リソース期限を超えた | `ImposiaError` の `RESOURCE_TIMEOUT` で reject します。 |
-| ページ寸法や余白が不正 | `INVALID_PAGE_GEOMETRY` を throw します。 |
-| Publication の構造または拡張機能が不正 | `INVALID_PUBLICATION` をスローするか、Promise を reject します。 |
-| 古い Publication destination を渡した | `STALE_PUBLICATION_DESTINATION` を throw します。 |
-| destination の DOM を見つけられない | `PUBLICATION_DESTINATION_NOT_FOUND` を throw します。 |
-| destroy 後に Core 操作を呼んだ | Promise が reject します。Reader/Inspector の操作は throw します。 |
-
-処理を終えたら、低レベル API では必ず `destroy()` を呼んでください。React コンポーネントと Hooks はアンマウント時に自動で破棄します。
+Viewer のメソッドは、現在の状態で実行できない呼び出しをおおむね無視します。所有権に関わる呼び出しは例外をスローします。ページ Viewer の mount と refresh は canonical iframe を検証し、Publication のナビゲーションは古い移動先を、Reader の選択は別の世代のサムネイルを、Inspector の選択は別の世代の警告を拒否します。

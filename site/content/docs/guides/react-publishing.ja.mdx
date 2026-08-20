@@ -1,70 +1,199 @@
 ---
-title: Reactでプレビュー・印刷・PDF保存
-description: ひとつのReactページ文書をアプリで確認し、ブラウザー標準印刷またはPDF保存へつなげます。
+title: 複数の文書をまとめて出版する
+description: 順序付きのソースを 1 つの Publication に構成し、読み順、アウトライン、グローバルなページ列を共有します。
 ---
 
-最初のページが表示できた状態から始めます。同じ完成済み文書をアプリで確認し、紙へ印刷またはPDFとして保存します。EPUBも、この文書とともに確定したソースから作ります。
+1 つのページ文書は 1 つのソースをページ分割します。しかし、本の形をした成果物が 1 つのソースであることはまれです。表紙、前付け、各章は別々に書かれながら、単一の文書 — 1 つの読み順、1 つのグローバルなページ列、ナビゲーション用の 1 つのアウトライン — としてふるまう必要があります。Imposia では、この構成単位が **Publication** で、それを組み込みの Reader とともに表示する React コンポーネントが `ImposiaPublicationViewer` です。
 
-## はじめに
+<Callout type="info" title="始める前に">
+まず[最初のページを作る](/ja/docs/getting-started)を完了してください。Publication は単一のページ文書と同じステージングと確定のライフサイクルを使います。このガイドは、そのライフサイクルの動きを一度見ていることを前提にします。
+</Callout>
 
-React 18以降のブラウザーアプリで[最初のページを作る](/ja/docs/getting-started)を完了してください。
+## Publication はスナップショットである
 
-## 出版操作を接続する
+Publication は `PublicationSnapshot` として記述します。出版メタデータと、順序付きのエントリー一覧です。各エントリーは 1 つの意味構造を保つソースで、安定した `id`、`title`、そして `html` または `lightDom` のどちらか一方だけを持ちます。エントリーの順序が、そのまま読み順です。
 
-Viewerの隣に命令型ハンドルを置きます。各操作の完了を待ち、失敗はアプリのエラー処理境界へ渡します。
+スナップショットは常に完全な値として提出します。Core は出版物の全体 — すべてのエントリー、ページ範囲、アウトライン — をステージングし、単一のページ文書とまったく同じように原子的に確定します。部分更新はありません。1 つの章を変えるには、変更した章を含む完全なスナップショットを提出します。新しい確定が終わるまで、読者には前回の確定が表示され続けます。
 
-```tsx
-import { ImposiaPageViewer, type ImposiaPageViewerHandle } from "@imposia/react";
+1 つの確定済みスナップショットから得られるものは次のとおりです。
+
+- 1 つの**グローバルなページ列** — 各エントリーはグローバルページ番号の閉区間 `pageRange` を占め、次のエントリーはその次のページから始まります。
+- 1 つの**アウトライン** — エントリーのタイトルを根とし、各エントリー内の可視の見出しで拡張される、不変のナビゲーションツリーです。
+- ナビゲーション、検索、サムネイル、印刷のための 1 つの面 — すべてが、まさにその確定済み世代を参照します。
+
+<Steps>
+
+<Step>
+
+### スナップショットを記述する
+
+```tsx title="app/handbook-snapshot.ts"
+import type { PublicationSnapshot } from "@imposia/react";
+
+export const handbook: PublicationSnapshot = {
+  metadata: { title: "フィールドハンドブック", language: "ja" },
+  entries: [
+    { id: "cover", title: "表紙", html: "<h1>フィールドハンドブック</h1>" },
+    {
+      id: "intro",
+      title: "はじめに",
+      html: "<h1>はじめに</h1><p>このハンドブックの目的。</p>",
+    },
+    {
+      id: "survey",
+      title: "調査の方法",
+      html: "<h1>調査の方法</h1><h2>準備</h2><p>…</p><h2>現地で</h2><p>…</p>",
+    },
+  ],
+};
+```
+
+エントリーの `id` は一意で、空白を含んではいけません。検証の失敗は後から黙って現れるのではなく、スナップショットのマウント時に例外をスローします。`id` はディープリンクとアウトラインの移動先の土台でもあるため、安定した公開名として扱ってください。エントリーの `id` を変えると、そこを指していたリンクは無効になります。
+
+</Step>
+
+<Step>
+
+### ImposiaPublicationViewer で表示する
+
+```tsx title="app/handbook-preview.tsx"
+import {
+  ImposiaPublicationViewer,
+  type ImposiaPublicationViewerHandle,
+} from "@imposia/react";
 import { useRef } from "react";
 import "@imposia/react/styles.css";
+import { handbook } from "./handbook-snapshot";
 
-type PublishingActionsProps = {
-  readonly html: string;
-  readonly onActionError: (error: unknown) => void;
-};
-
-export function PublishingActions({ html, onActionError }: PublishingActionsProps) {
-  const viewer = useRef<ImposiaPageViewerHandle>(null);
-
-  async function print(): Promise<void> {
-    try {
-      const current = viewer.current;
-      if (current === null) throw new DOMException("Viewer is not available", "InvalidStateError");
-      await current.print();
-    } catch (error) {
-      onActionError(error);
-    }
-  }
-
-  async function exportEpub(): Promise<void> {
-    try {
-      const current = viewer.current;
-      if (current === null) throw new DOMException("Viewer is not available", "InvalidStateError");
-      const blob = await current.exportEpub({
-        metadata: { title: "四半期レポート", language: "ja", identifier: "urn:report:quarterly" },
-      });
-
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = "report.epub";
-      link.click();
-      URL.revokeObjectURL(url);
-    } catch (error) {
-      onActionError(error);
-    }
-  }
+export function HandbookPreview() {
+  const viewer = useRef<ImposiaPublicationViewerHandle>(null);
 
   return (
     <>
-      <ImposiaPageViewer ref={viewer} source={{ html }} onError={onActionError} />
-      <button type="button" onClick={() => void print()}>印刷 / PDF保存</button>
-      <button type="button" onClick={() => void exportEpub()}>EPUBを出力</button>
+      <ImposiaPublicationViewer
+        ref={viewer}
+        snapshot={handbook}
+        publicationOptions={{ page: { size: "A4", margin: "18mm" } }}
+        viewerOptions={{ mode: "spread", spread: { cover: true } }}
+      />
+      <button type="button" onClick={() => void viewer.current?.print()}>
+        印刷 / PDF 保存
+      </button>
     </>
   );
 }
 ```
 
-## 結果を確認する
+このコンポーネントは 1 つの Core `PublicationController` と 1 つの canonical iframe を所有し、Reader の結び付けも引き受けます。別途マウントする手順はありません。`publicationOptions` は単一のページ文書と同じページ分割オプションを受け取りますが、`extensions` だけは Publication 拡張を受け取ります。
 
-新しいソースを準備している間も、現在のプレビューは表示されたままです。印刷ボタンを押すと、完成済みページを使ってブラウザー標準の印刷画面が開きます。プリンターまたは**PDFとして保存**を選んでください。ImposiaはPDFバイトを直接返しません。EPUBは最後に確定したソースの意味構造をリフロー型EPUB 3.3 `Blob`として出力します。
+</Step>
+
+<Step>
+
+### Reader を開いて確認する
+
+ブラウザーでプレビューを開くと、Viewer にエントリーが 1 つの連続したページ列として表示されます。表紙、次のページに「はじめに」、その後に調査の章が続きます。
+
+Viewer の操作バーから**目次**パネルを開くと、確定済みのアウトラインが表示されます。エントリーごとに 1 項目があり、調査の章の中の `h2` 見出しで拡張されています。項目を選ぶと、その項目のグローバルページへ正確に移動します。**印刷 / PDF 保存**をクリックすると、ブラウザーの印刷ダイアログに同じページが同じ順序で表示されます。
+
+</Step>
+
+</Steps>
+
+## Reader が提供するもの
+
+Reader は Page Viewer のシェルに組み込まれたパネル群で、canonical iframe の外側に描画されます。HTML を再解析することも、ページをラスタライズすることも、ページ分割をやり直すこともありません。すべてのパネルは確定済み世代の投影です。
+
+| パネル | 表示内容 |
+| --- | --- |
+| 目次 | 確定済みアウトラインを階層的な目次として表示します。項目を選ぶと、そのグローバルページへ移動します |
+| 検索 | 確定済みページの可視テキストへの一致。結果ごとにエントリー、ページ、プレーンテキストの抜粋を含みます |
+| サムネイル | 確定済みグローバルページごとの抽象的なプレビュー。正しい用紙の縦横比と模式的な行マークだけで、描画されたコピーではありません |
+| Inspector | 現在の世代の警告と、位置を特定できた指摘への移動。`viewerOptions.inspector` で有効化します |
+
+パネルはキーボードで操作でき、相互排他的です。1 つを開くと他は閉じます。
+
+パネルでできることは、すべて命令型ハンドルにもあります — `navigate()`、`search()`、`selectSearchResult()`、`getThumbnails()`、`selectThumbnail()`、そして各パネルの open・close・toggle メソッドです。同じ動作を独自の UI から実行できます。完全な一覧は [React API](/ja/docs/api/react) にあります。
+
+検索の索引はサニタイズ済みの可視テキストだけです。hidden、inert、`aria-hidden`、script、style、template の内容は除外され、生の DOM やマークアップが API を越えることはありません。
+
+## ナビゲーションと検索は世代に束縛される
+
+Publication 内の移動可能な場所は、すべて `PublicationDestination`（`{ id, entryId, page, generation }`）です。アウトラインの項目も、すべての検索結果もこれを持ちます。要点は `generation` フィールドです。移動先は特定の確定済みページ列についての主張であり、そのページ列に対してだけ有効です。
+
+```tsx title="app/find-in-handbook.ts"
+const results = viewer.current?.search("準備") ?? [];
+// 各結果: { entry, page, excerpt, destination }
+if (results.length > 0) {
+  viewer.current?.selectSearchResult(results[0]);
+}
+```
+
+<Callout type="warn" title="移動先と検索結果を、更新をまたいでキャッシュしないでください">
+新しいスナップショットが確定すると、前の世代の移動先と検索結果は古い値になります。古い移動先を渡すと `navigate()` は例外をスローし、保持していた古い検索結果を選んだ場合も同じように拒否されます。`resolveDestination(id)` で解決し直すか — `id` は新しい世代でも同じエントリーや見出しを指します — 検索をやり直してください。
+</Callout>
+
+この厳格さがナビゲーションの正しさを守ります。内容が変わればページ番号は動きます。黙って古いページ番号へ移動する移動先は、間違った内容を指すことになります。古い値を拒否することで参照は現在の確定を経由し直し、そこでは `id` が正しい場所を指し示します。
+
+## スナップショット全体を更新する
+
+別のスナップショットオブジェクトを渡すと、コンポーネントは新しい世代をステージングします。確定済みのページは、新しい世代が勝つまで表示され続けます。比較は参照によるため、同じオブジェクトの中のエントリーを書き換えても何も起きません。新しいスナップショット値を作ってください。新しい参照を保証できない場合は、`snapshotRevision` を変えて更新を強制します。`publicationOptions` の変更はページ文書と同じ規則に従います。`publicationOptionsRevision` を変えて、新しいオプションでコントローラーを再マウントしてください。
+
+## 読者に安定したリンクを渡す
+
+Reader は、移動先の安定した ID から作られる URL 安全なディープリンク文字列で、現在位置を往復できます。
+
+```tsx title="app/handbook-with-links.tsx"
+<ImposiaPublicationViewer
+  ref={viewer}
+  snapshot={handbook}
+  readerOptions={{
+    initialDeepLink: startLink,
+    onDeepLinkChange: (value) => {
+      // value をルーターまたは URL ハッシュに保存します。
+    },
+  }}
+/>
+```
+
+`onDeepLinkChange` は読者の移動に応じて呼ばれます。値は、アプリケーションが URL 状態を保持している場所に保存してください。復元するには、マウント時に `initialDeepLink` として渡すか、ハンドルの `restoreDeepLink(value)` を呼びます。エンコードされた値はページ番号ではなく安定した ID を指すため、古い世代で記録したリンクも内容の変更後に解決され、そのエントリーや見出しがいまある場所に着地します。不明な値や壊れた値は、例外をスローする代わりに `undefined` に解決されます。
+
+## 印刷と書き出しも同じページ列に従う
+
+ハンドルの `print()` は、確定済みのページ列全体を読み順のまま、ブラウザーのネイティブ印刷ダイアログで開きます。出版物全体に対して 1 つのダイアログで、読者はそこでプリンターまたは**PDF に保存**を選びます。同じ確定済みスナップショットから、`exportEpub()` でリフロー型 EPUB 3.3 `Blob` も作れます。spine はエントリーの順序に従います。必須のメタデータと上限は [Core API](/ja/docs/api/core) に記載しています。
+
+## よくある質問
+
+<Accordions>
+
+<Accordion title="React は必須か">
+いいえ。`@imposia/core` の `mountPublication()` が同じ `PublicationController` を作り、`@imposia/viewer` の `mountPageViewer()` は同じ Reader パネルを結び付ける `reader` オプションを受け取ります。`ImposiaPublicationViewer` は、その組み合わせを React のライフサイクルに接続したものです。
+</Accordion>
+
+<Accordion title="1 つのエントリーだけ更新できるか">
+できません。スナップショットは常に完全です。変更を 1 か所含む完全なエントリー一覧を提出してください。内容が変わっていないエントリーも再ステージングされ、確定はページ列全体を一度に置き換えます。これが、グローバルページ番号、ページ範囲、アウトラインの整合性を保ちます。
+</Accordion>
+
+<Accordion title="見出しが目次パネルに出ないのはなぜか">
+アウトラインに含まれるのは可視の見出しだけです。`hidden`、`inert`、`aria-hidden="true"` の中の見出しは、検索の索引と同じ基準で除外されます。エントリーのタイトルは、エントリーの HTML に見出しがあるかどうかにかかわらず常に表示されます。
+</Accordion>
+
+<Accordion title="サムネイルには実際に何が入っているのか">
+抽象的なプレビューです。用紙の縦横比と、保持されたページメタデータから導出した数本の模式的なテキスト行マークだけです。サムネイルがソースの DOM を複製したり、ページをラスタライズしたり、別の iframe を作ったりすることはないため、長い出版物でも軽いままです。選ぶと、そのグローバルページへ正確に移動します。
+</Accordion>
+
+</Accordions>
+
+## 次のステップ
+
+<Cards>
+  <Card title="React API" href="/ja/docs/api/react">
+    `ImposiaPublicationViewer` のすべての props とハンドルメソッド。
+  </Card>
+  <Card title="Core API" href="/ja/docs/api/core">
+    `mountPublication`、`PublicationController`、スナップショットの型。
+  </Card>
+  <Card title="出版モデル" href="/ja/docs/concepts/publishing-model">
+    すべての Publication 世代が通る確定ライフサイクル。
+  </Card>
+</Cards>

@@ -1,178 +1,188 @@
 ---
 title: Core API
-description: "@imposia/coreが提供する、フレームワーク非依存のページ文書とPublicationコントローラーです。"
+description: "@imposia/core が提供する、フレームワーク非依存のページ文書と Publication のコントローラーです。"
 ---
+
+`@imposia/core` はページ文書の本体となるランタイムです。ページ分割、ライフサイクル、リゾルバー境界、拡張機能、印刷、書き出しを React なしで提供します。ここにあるものは、すべてブラウザー内でのみ動作します。
 
 ## Core のページ文書
 
 ### `mountPageDocument`
 
 ```ts
-function mountPageDocument(container: HTMLElement, source: PageSource, options?: PageDocumentOptions): PageDocumentController;
-type PageSource =
-  | { html: string; baseUrl?: string }
-  | { lightDom: Element | DocumentFragment; baseUrl?: string };
+mountPageDocument(
+  container: HTMLElement,
+  source: PageSource,
+  options?: PageDocumentOptions,
+): PageDocumentController;
 ```
 
-マウント時に canonical iframe を `container` へ追加し、最初のページ分割を開始します。コントローラーはすぐに返ります。最初の結果は `ready` で待ってください。新しい更新が始まると、進行中の古い更新は `AbortError` で中止されます。更新が失敗しても、以前に確定した `current` は残ります。
+この関数はただちに canonical iframe を 1 つ追加し、ステージング世代を開始して、同期的に返ります。最初の文書を読む前に `ready` を待ってください。
 
-```ts
-const controller = mountPageDocument(host, { html: "<h1>Hello</h1>" });
-const document = await controller.ready;
-console.log(document.pageCount);
+```ts title="app/mount-page-document.ts"
+const controller = mountPageDocument(host, { html: "<article><h1>こんにちは</h1></article>" });
+const pageDocument = await controller.ready;
 ```
 
-`PageExtension` と `PublicationExtension` は、同期メソッド `finalizePage(page, context)` を実装できます。Core が装飾と margin box の処理を終え、結果を確定する前に実行されます。`page.element` は計測可能な実体のあるページ要素です。`page.tableFragments` には、元のテーブルと 1 から始まる継続インデックスを持つ分割片が入ります。`finalizePage` は `decorateBlankPages` の設定にかかわらず、意図的に挿入した空白ページを含むすべての割り当て済みページで実行されます。戻り値は使用できません。変更は確定後の iframe に保持されます。
+`PageSource` は `{ html: string; baseUrl?: string }` または `{ lightDom: Element | DocumentFragment; baseUrl?: string }` です。
+
+| `PageDocumentOptions` のフィールド | 型と役割 |
+| --- | --- |
+| `css` | `readonly string[]`。追加のソース CSS です。 |
+| `assetResolver` | フォント、画像、メディア、スタイルシート要求のための非同期リゾルバーです。 |
+| `page` | `{ size?, orientation?, margin? }`。size は `A4`、`Letter`、または任意の幅・高さを受け取ります。 |
+| `limits` | 入力、ノード、アセット、期限、ページ、レイアウトパス、生成出力の上限です（任意）。 |
+| `headerTemplate`、`footerTemplate` | 装飾マークアップです。 |
+| `decorateBlankPages` | 空白ページにも装飾を適用するかどうかです。 |
+| `experimental` | `{ footnotes?: boolean; pageFloats?: boolean }`。どちらも実験的機能で、制限の外では `FOOTNOTE_DEFERRED` または `PAGE_FLOAT_FALLBACK` 警告とともにフォールバックします。 |
+| `extensions` | 順序付きの `PageExtension` または `PublicationExtension` 値です。 |
+| `compose` | `{ yieldBudgetMs?: number; scheduler?: () => Promise<void> }`。メインスレッド上の協調的なページ分割で、既定の実行予算は 8 ms です。`Infinity` でスケジューラーへの移譲を無効にします。 |
+| `signal` | 初回の世代を中止します。 |
+| `onProgress` | ステージングがページを割り当てるたび、パス内の `{ completedPages, pass, provisional: true }` を受け取ります。後続の収束パスでカウントはリセットされます。 |
+
+スケジューラー、フォント、画像の待機は、実時間で測る `limits.resourceDeadlineMs` に計上されます。進捗は暫定的なステージング作業を表します。最新の確定済み世代は `controller.current` からだけ読み取ってください。
+
+`AssetResolver` は `{ url, kind, baseUrl, signal }` を受け取り、`{ status: "resolved", bytes, mimeType, resolvedUrl? }` または `{ status: "blocked", reason? }` に解決されます。実装方法は[画像とフォントを読み込む](/ja/docs/guides/assets)で説明しています。
+
+<Accordions>
+
+<Accordion title="既定の上限">
+
+`limits` の各フィールドは任意です。省略したフィールドには、次の既定値が適用されます。
+
+| フィールド | 既定値 |
+| --- | --- |
+| `maxInputBytes` | 5 MiB（`5 * 1024 * 1024`） |
+| `maxNodes` | 100,000 |
+| `maxAssetBytes` | 25 MiB（`25 * 1024 * 1024`） |
+| `maxAssetDepth` | 8 |
+| `maxAssetReferences` | 512 |
+| `resourceDeadlineMs` | 30,000 |
+| `maxPages` | 10,000 |
+| `maxLayoutPasses` | 8 |
+| `maxGeneratedFragments` | 400,000 |
+| `maxGeneratedRecords` | 10,000 |
+
+</Accordion>
+
+</Accordions>
+
+### 拡張機能
+
+`PageExtension` と `PublicationExtension` は、同期メソッド `finalizePage(page, context)` も実装できます。このフックは、Core が装飾と margin box を解決した後、確定の前に、受理された各ページに対して 1 回実行されます。このとき `page.element` は計測可能な実体のあるページ要素です。`page.tableFragments` には、分割されて続くテーブル片が、元のテーブルと 1 から始まる継続インデックスとともに入ります。加えた変更は確定後の iframe に残ります。フックは `decorateBlankPages` の設定にかかわらず、意図的に挿入された空白ページを含むすべての割り当て済みページで実行されます。
+
+<Callout type="warn" title="finalizePage は undefined を返さなければなりません">
+`finalizePage` が `undefined` 以外の値を返すと、その世代全体が reject されます。このフックは実体のあるページ要素を書き換えることで結果を伝えます。置き換えを返す仕組みではありません。
+</Callout>
+
+分割されたテーブルの継続片に、計測済みのピクセル列幅を固定したい場合は、明示的に有効化する拡張機能として `createTableColgroupExtension()` を使ってください。Core はソースの `<colgroup>` 要素を常に引き継ぎますが、既定で列幅を合成することはありません。
 
 ### `PageDocumentController`
 
-| メンバー | 戻り値 | 動作と制約 |
+| メンバー | 戻り値 | 準備状態とエラー |
 | --- | --- | --- |
-| `ready` | `Promise<PageDocument>` | 最初の世代を返します。 |
-| `current` | `PageDocument \| undefined` | 直近に確定した世代です。初回完了前と破棄後は `undefined` です。 |
-| `update(source, { signal? })` | `Promise<PageDocument>` | 次の世代を準備し、完成後に一度で置き換えます。新しい更新は古い処理を中止します。 |
-| `print()` | `Promise<void>` | 最新処理の完了を待って canonical iframe の印刷を開きます。確定済み文書がなければ reject します。 |
-| `destroy()` | `Promise<void>` | 処理と EPUB 書き出しを中止し、Blob URL と iframe を解放します。複数回呼べます。 |
-
-破棄後の `update()`、`print()` は reject します。
+| `ready` | `Promise<PageDocument>` | 最初の確定です。確定できない場合は reject されます。 |
+| `current` | `PageDocument \| undefined` | 更新の失敗中・失敗後も前回の確定が残ります。破棄でクリアされます。 |
+| `update(source, options?)` | `Promise<PageDocument>` | 世代を開始します。より新しい update は進行中の世代を中止します。`options.signal` を指定できます。 |
+| `print()` | `Promise<void>` | 最新の処理を待ってから、隔離されたトップレベル文書スナップショットで直近の確定を印刷します。確定がない場合と破棄後は reject されます。 |
+| `destroy()` | `Promise<void>` | 世代と書き出しの処理を中止し、iframe を取り除き、リソースを解放し、追跡中の処理を待ちます。何度でも呼べます。 |
 
 ### `PageDocument`
 
-| メンバー | 型 | 説明 |
+| メンバー | 型・戻り値 | 意味 |
 | --- | --- | --- |
-| `iframe` | `HTMLIFrameElement` | 確定済みページを保持する canonical iframe です。 |
-| `generation` | `number` | 確定ごとに増える世代番号です。 |
-| `pageCount` | `number` | ページ数です。 |
-| `pages` | `readonly PageMetadata[]` | ページ番号、左右、空白、寸法、本文テキストを含みます。 |
-| `warnings` | `readonly PageWarning[]` | ページ分割中に収集した警告です。 |
-| `timings` | `PageTimings` | `totalMs`、`resourceMs`、`paginationMs` です。 |
-| `exportEpub(options)` | `Promise<Blob>` | 最後に確定したソースの意味構造を EPUB 3.3 の Blob にします。 |
+| `iframe` | `HTMLIFrameElement` | Core が所有する canonical フレームです。 |
+| `generation`、`pageCount` | `number` | 確定番号とページ数です。 |
+| `pages` | `readonly PageMetadata[]` | ページ番号、左右、名前、空白かどうか、ジオメトリ、寸法、本文テキストです。 |
+| `warnings` | `readonly PageWarning[]` | 現在の世代の診断です。 |
+| `timings` | `{ totalMs; resourceMs; paginationMs }` | 世代のミリ秒単位の所要時間です。 |
+| `exportEpub(options)` | `Promise<Blob>` | 進行中の最新処理を待ち、最後に確定した意味構造を保つソースをリフロー型 EPUB 3.3 `Blob` として書き出します。 |
 
-`exportEpub()` の options は `metadata: { title, language, identifier, modified? }` が必須です。`signal` で中止でき、`limits: { maxEntries?, maxBytes? }` で出力上限を指定できます。コントローラーを破棄すると進行中の書き出しも中止されます。
+EPUB のオプションは `metadata: { title, language, identifier, modified? }` が必須で、任意で `signal` と `{ maxEntries?, maxBytes? }` の上限を指定できます。書き出しは意味構造ベースです。ページのラッパー、余白の装飾、生成されたカウンター、ページ限定の実験的な出力は含まれません。
 
-### `PageDocumentOptions`
+### 警告
 
-| option | 型 | 既定値 / 説明 |
-| --- | --- | --- |
-| `css` | `readonly string[]` | `[]`。ソースへ追加する CSS です。 |
-| `assetResolver` | `AssetResolver` | なし。font、image、media、stylesheet を `resolved` または `blocked` として返します。 |
-| `page` | `PageOptions` | A4、portrait 相当、各辺 20 mm。`size`、`orientation`、`margin` を上書きします。 |
-| `limits` | `PageLimits` | 各安全上限の既定値を必要な範囲で引き下げます。0 以下、整数でない値、既定上限を超える値はエラーです。 |
-| `headerTemplate` / `footerTemplate` | `string` | なし。`{{pageNumber}}` と `{{totalPages}}` を使用できます。 |
-| `decorateBlankPages` | `boolean` | `true`。空白ページにも装飾を出すか指定します。 |
-| `experimental` | `{ footnotes?: boolean; pageFloats?: boolean }` | `{}`。実験機能を個別に有効化します。 |
-| `extensions` | `readonly (PageExtension \| PublicationExtension)[]` | `[]`。変換、アセット許可、ページ装飾のフックです。 |
-| `compose` | `{ yieldBudgetMs?: number; scheduler?: () => Promise<void> }` | 既定の実行予算は 8 ms です。メインスレッド上のページ分割処理を協調的に分割します。`Infinity` を指定すると、スケジューラーへの移譲を無効にします。 |
-| `signal` | `AbortSignal` | なし。初回処理を中止します。 |
-| `onProgress` | `(progress: { completedPages: number; pass: number; provisional: true }) => void` | なし。準備中にページを割り当てるたび、その収束処理内での暫定的な進捗を通知します。次の収束処理では完了ページ数が 1 から始まることがあります。 |
+確定されたすべての `PageWarning` は、`code`、`message`、そして `generation`、`entryId`、`page`（それぞれ不明なら `undefined`）を持つ凍結された `location` を運びます。拡張機能の診断は名前空間付きの ``EXTENSION_${string}`` コードを使い、`extension` に拡張機能名を示します。
 
-スケジューラー、フォント、画像の待機時間も、実時間で測る
-`limits.resourceDeadlineMs` に含まれます。進捗は準備中の暫定的な作業のみを
-表し、確定済みの結果は `controller.current` から読み取ります。
+<Accordions>
 
-`PageOptions.size` は `"A4"`、`"Letter"`、または `{ width, height }` です。寸法と余白には `px`、`mm`、`cm`、`in`、`pt`、`pc` の正の絶対長を使います。`margin` は単一文字列、または `{ top, right, bottom, left }` です。余白を引いた内容領域が正でなければ `ImposiaError` をスローします。
+<Accordion title="Core の警告コード">
 
-`PageLimits` は `maxInputBytes`、`maxNodes`、`maxAssetBytes`、`maxAssetDepth`、`maxAssetReferences`、`resourceDeadlineMs`、`maxPages`、`maxLayoutPasses`、`maxGeneratedFragments`、`maxGeneratedRecords` を個別に指定できます。
+| コード | 発生条件 |
+| --- | --- |
+| `PAGE_OVERFLOW` | 内容が利用可能なページ領域を超え、それ以上分割できない。 |
+| `RESOURCE_BLOCKED` | リゾルバーがリソースを拒否したか、バイトが検証に落ちた。 |
+| `UNSUPPORTED_LAYOUT` | 制約付きサブセットの外のレイアウトが、分割されずにそのまま残った。 |
+| `UNSUPPORTED_DECORATION_TOKEN` | 装飾テンプレートが、Core の対応していないトークンを使った。 |
+| `PAGE_RULE_UNSUPPORTED` | ソースの `@page` 宣言が対応範囲の外にある。 |
+| `BREAK_CONSTRAINT_RELAXED` | 改ページ制約を守れず、決定的に緩和した。 |
+| `WIDOW_ORPHAN_RELAXED` | 成立し得ない widows/orphans の組み合わせを緩和した。 |
+| `WIDOW_ORPHAN_FALLBACK` | widows/orphans に、計算済みプロパティではなくインラインの整数宣言を使った。 |
+| `HYPHENATION_FALLBACK` | 言語コンテキストの欠落または不正により、`hyphens: auto` を `manual` にフォールバックした。 |
+| `UNBREAKABLE_CONTENT` | 長すぎるテキストランに、収めるための `overflow-wrap: anywhere` を適用した。 |
+| `UNSUPPORTED_FRAGMENTATION_CONTEXT` | あふれた縦書きテキストなどの内容が、分割されずに残った。 |
+| `REFERENCE_MISSING`、`REFERENCE_DUPLICATE` | ローカルの対象参照が、存在しない ID または重複した ID を指している。 |
+| `LAYOUT_NON_CONVERGENT` | 生成された出版レイアウトが循環したか、パス上限内で収束しなかった。 |
+| `FOOTNOTE_DEFERRED`、`PAGE_FLOAT_FALLBACK` | 実験的な脚注またはページフロートがフォールバックした。 |
+| `EPUB_RESOURCE_OMITTED` | EPUB 書き出しが、受け入れられないリソースを省いた。 |
+| `AVOID_RELAXED` | 成立し得ない `break-inside: avoid` を緩和した。 |
 
-`AssetResolver` は次の形です。呼び出し側の `signal` を尊重してください。
+</Accordion>
 
-```ts
-type AssetResolver = (request: {
-  url: string;
-  kind: "font" | "image" | "media" | "stylesheet";
-  baseUrl?: string;
-  signal: AbortSignal;
-}) => Promise<
-  | { status: "resolved"; bytes: Uint8Array; mimeType: string; resolvedUrl?: string }
-  | { status: "blocked"; reason?: string }
->;
-```
+</Accordions>
 
 ### Core ユーティリティ
 
-#### `prepareDocument`
-
 ```ts
-function prepareDocument(html: string, options?: PrepareDocumentOptions): PreparedDocument;
+prepareDocument(html: string, options?: PrepareDocumentOptions): PreparedDocument;
+pageWarningTargetBounds(document: PageDocument, warning: PageWarning): PageWarningTargetBounds | undefined;
+hasPageDocumentFrameSandbox(iframe: HTMLIFrameElement): boolean;
+selectBlankMarkers(markers: PageSideConstraint[], pages: Map<number, number>): number[];
 ```
 
-HTML を解析して危険なマークアップとリソースを処理し、CSS を正規化します。`data-page-header` / `data-page-footer` の template を抽出し、options の `headerTemplate` / `footerTemplate` があればそちらを優先します。`allowRemoteResources` の既定値は false 相当です。戻り値は `{ html, headerTemplate?, footerTemplate?, warnings }` です。ブラウザーのネイティブ HTML パーサーを使用するため、他の Core API と同様にブラウザー専用であり、警告はエラー回復後のドキュメント順に並びます。
-
-```ts
-const prepared = prepareDocument("<main>Hello</main>");
-```
-
-#### `pageWarningTargetBounds`
-
-```ts
-function pageWarningTargetBounds(
-  pageDocument: PageDocument,
-  warning: PageWarning,
-): PageWarningTargetBounds | undefined;
-```
-
-警告元の要素が現在も canonical iframe に存在するとき、その iframe 内の `{ left, top, width, height }` を返します。警告が文書に属さない場合、元の要素を特定できない場合、要素が接続されていない場合は `undefined` です。
-
-#### `hasPageDocumentFrameSandbox`
-
-```ts
-function hasPageDocumentFrameSandbox(iframe: HTMLIFrameElement): boolean;
-```
-
-iframe の sandbox token が公開定数 `PAGE_DOCUMENT_FRAME_SANDBOX` と完全に一致するか確認します。現在の定数は `allow-same-origin` と `allow-modals` です。
-
-#### `selectBlankMarkers`
-
-```ts
-function selectBlankMarkers(
-  markers: PageSideConstraint[],
-  pages: Map<number, number>,
-): number[];
-```
-
-`{ id, side: "left" | "right" }` の制約と、マーカー ID からページ番号への対応表を受け取ります。左右を合わせるために空白ページを挿入するマーカー ID を返します。対応表にマーカーがない場合は例外をスローします。
+- `prepareDocument` は HTML を同期的に正規化・サニタイズし、`{ html, headerTemplate?, footerTemplate?, warnings }` を返します。オプションは `headerTemplate`、`footerTemplate`、`allowRemoteResources` です。API の装飾オプションは、埋め込みテンプレートより優先されます。ブラウザーのネイティブ HTML パーサーで解析するため、他のすべての Core API と同じくブラウザー専用で、警告はエラー回復後の文書順に並びます。
+- `pageWarningTargetBounds` は、iframe ビューポート座標での実測の `{ left, top, width, height }` を返します。別の世代の警告や、位置を特定できない警告には `undefined` を返します。
+- `hasPageDocumentFrameSandbox` は、sandbox トークンが公開されたトークンの集合（`allow-same-origin` と `allow-modals`）と正確に一致する場合だけ `true` です。
+- `selectBlankMarkers` は、左右のページの偶奇を満たすために空白ページが必要なマーカー ID を、先行する選択も踏まえて返します。ページ対応のないマーカーには例外をスローします。
 
 ## Core の Publication
 
 ### `mountPublication`
 
 ```ts
-function mountPublication(container: HTMLElement, snapshot: PublicationSnapshot, options?: PublicationOptions): PublicationController;
+mountPublication(
+  container: HTMLElement,
+  snapshot: PublicationSnapshot,
+  options?: PublicationOptions,
+): PublicationController;
 ```
 
-複数のエントリーを 1 つの確定済みページ文書にまとめ、目次、検索、移動先を作ります。`PublicationOptions` は `PageDocumentOptions` の `extensions` だけを置き換え、`readonly PublicationExtension[]` を受け取ります。
+順序付きのエントリーを 1 つのページ列に構成し、同期的に返ります。不正なスナップショットや Publication 拡張は、マウント中に例外をスローすることがあります。
 
-```ts
+```ts title="app/mount-publication.ts"
 const controller = mountPublication(host, {
-  metadata: { title: "短編集", language: "ja", identifier: "urn:book:1" },
-  entries: [{ id: "one", title: "第一章", html: "<h1 id='start'>第一章</h1>" }],
+  metadata: { title: "ハンドブック", language: "ja" },
+  entries: [
+    { id: "cover", title: "表紙", html: "<h1>ハンドブック</h1>" },
+    { id: "start", title: "はじめに", html: "<h1>はじめに</h1><p>最初の一歩。</p>" },
+  ],
 });
 const publication = await controller.ready;
 ```
 
-`PublicationSnapshot.metadata` は `title` が必須で、`language` と `identifier` は任意です。各 entry は `id`、`title` と、`html` または `lightDom` のどちらか一方を持ちます。`baseUrl` は任意です。
+`PublicationSnapshot` は `metadata: { title, language?, identifier? }` と、順序付きのエントリーを持ちます。各エントリーには、空白と制御文字を含まない一意の `id`、`title`、任意の `baseUrl`、そして `html` または `lightDom` のどちらか一方だけが必要です。`PublicationOptions` は `PageDocumentOptions` と同じですが、`extensions` だけは `PublicationExtension[]` のみを受け取ります。
 
 ### `PublicationController`
 
-| メンバー | 戻り値 | 動作と制約 |
+| メンバー | 戻り値 | 準備状態とエラー |
 | --- | --- | --- |
-| `ready` | `Promise<PublicationDocument>` | 最初の確定済み Publication を返します。 |
-| `current` | `PublicationDocument \| undefined` | 初回完了前と破棄後は `undefined` です。 |
-| `resolveDestination(id)` | `PublicationDestination \| undefined` | 現在の世代の目次または検索対象 ID を解決します。 |
-| `search(query)` | `readonly PublicationSearchResult[]` | 準備前は空配列を、準備後は現在の世代の結果を返します。 |
-| `navigate(destination)` | `void` | canonical iframe 内の移動先へ移動します。ID、entry、page、generation が現在の文書と一致しない場合は `STALE_PUBLICATION_DESTINATION` をスローします。 |
-| `update(snapshot, { signal? })` | `Promise<PublicationDocument>` | 新しい snapshot をステージングして確定します。 |
-| `print()` | `Promise<void>` | 最新処理を待って印刷します。 |
-| `destroy()` | `Promise<void>` | Core コントローラーとリソースを破棄します。 |
+| `ready` | `Promise<PublicationDocument>` | 最初に確定した Publication です。 |
+| `current` | `PublicationDocument \| undefined` | 現在の確定です。 |
+| `resolveDestination(id)` | `PublicationDestination \| undefined` | 現在の世代で、アウトラインまたは検索の ID を解決します。 |
+| `search(query)` | `readonly PublicationSearchResult[]` | 確定前は空です。それ以降は現在の索引を検索します。 |
+| `navigate(destination)` | `void` | 完全な移動先が現在の世代と一致し、そこに存在する場合以外は例外をスローします。 |
+| `update(snapshot, options?)` | `Promise<PublicationDocument>` | 完全なスナップショットを検証してステージングします。`options.signal` を指定できます。 |
+| `print()` | `Promise<void>` | ページコントローラーと同じ、直近の確定を印刷する動作です。 |
+| `destroy()` | `Promise<void>` | 下層のページと Publication のリソースを破棄します。 |
 
-### `PublicationDocument`
-
-`PublicationDocument` は `PageDocument` の全フィールドと `exportEpub()` を継承し、次を追加します。
-
-| フィールド | 型 | 説明 |
-| --- | --- | --- |
-| `metadata` | `PublicationMetadata` | 確定済み title、language、identifier です。 |
-| `entries` | `readonly CommittedPublicationEntry[]` | 各 entry の `id`、`title`、`pageRange: { start, end }` です。 |
-| `outline` | `readonly PublicationOutlineItem[]` | `entry` または `heading` の階層です。各項目は title、level、destination、children を持ちます。 |
-
-`PublicationDestination` は `{ id, entryId, page, generation }` です。`PublicationSearchResult` は `{ entry, page, excerpt, destination }` です。更新後は古い destination を再利用せず、`resolveDestination(id)` で解決し直してください。
+`PublicationDocument` は `PageDocument` を拡張し、確定済みの `metadata`、`entries`、入れ子の `outline` を持ちます。各エントリーは閉区間のグローバル `pageRange` を持ちます。`PublicationDestination` は `{ id, entryId, page, generation }` で、世代に束縛されます。古い値を渡すと、`navigate` は型付きの `ImposiaError`（`STALE_PUBLICATION_DESTINATION`）をスローします。検索結果は `{ entry, page, excerpt, destination }` です。

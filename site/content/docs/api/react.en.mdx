@@ -46,14 +46,14 @@ Handle methods act on the latest committed generation. Methods that need the Vie
 | --- | --- | --- |
 | `current` | `PageDocument \| undefined` | Current commit while mounted; `undefined` otherwise. |
 | `viewerState` | `PageViewerState \| undefined` | Current presentation snapshot while ready. |
-| `goToPage(page)`, `nextPage()`, `previousPage()` | `void` | Move through the committed global page sequence; throw before ready/after unmount. |
-| `setZoom(zoom)` | `void` | Rounds and clamps the presentation zoom; throws before ready/after unmount. |
-| `setMode(mode)` | `void` | Accepts `continuous`, `single`, or `spread`; throws before ready/after unmount. |
-| `setSpreadCover(cover)` | `void` | Throws before ready/after unmount. |
+| `goToPage(page)`, `nextPage()`, `previousPage()` | `void` | Move through the committed global page sequence. |
+| `setZoom(zoom)` | `void` | Rounds and clamps the presentation zoom. |
+| `setMode(mode)` | `void` | Accepts `continuous`, `single`, or `spread`. |
+| `setSpreadCover(cover)` | `void` | Places page 1 alone, pairing 2–3 onward. |
 | `openInspector()`, `closeInspector()`, `toggleInspector()` | `void` | Require `viewerOptions.inspector: true`. |
 | `selectWarning(warning)` | `void` | Requires the inspector and a warning from its current generation. |
-| `print()` | `Promise<void>` | Opens native print for the latest completed pages. Readers can choose Save as PDF; the method does not return PDF bytes. Rejects before ready/after unmount. |
-| `exportEpub(options)` | `Promise<Blob>` | Exports the current commit as a reflowable EPUB; rejects before ready/after unmount. |
+| `print()` | `Promise<void>` | Opens native print for the latest completed pages. Readers can choose Save as PDF; the method does not return PDF bytes. |
+| `exportEpub(options)` | `Promise<Blob>` | Exports the current commit as a reflowable EPUB. |
 
 ## `ImposiaPublicationViewer`
 
@@ -92,8 +92,8 @@ All actions except `current` and `resolveDestination` throw after unmount. Reade
 | `setMode(mode)`, `setSpreadCover(cover)` | `void` | Control page presentation. |
 | `openInspector()`, `closeInspector()`, `toggleInspector()` | `void` | Require `viewerOptions.inspector: true`. |
 | `selectWarning(warning)` | `void` | Requires an inspector warning from the current generation. |
-| `print()` | `Promise<void>` | Opens native print for the latest commit, including the browser's Save as PDF option. Rejects before ready/after unmount. |
-| `exportEpub(options)` | `Promise<Blob>` | Exports the latest commit; rejects before ready/after unmount. |
+| `print()` | `Promise<void>` | Opens native print for the latest commit, including the browser's Save as PDF option. |
+| `exportEpub(options)` | `Promise<Blob>` | Exports the latest commit. |
 
 ## `useImposiaDocument` and `useImposiaPublication`
 

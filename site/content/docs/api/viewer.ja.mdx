@@ -1,128 +1,100 @@
 ---
 title: Viewer API
-description: "@imposia/viewerが提供するページ、PDF、Reader、Inspector、ナビゲーションのコントローラーです。"
+description: "@imposia/viewer が提供するページ表示、Reader、Inspector、PDF 表示のコントローラーです。"
 ---
 
-## Viewer のページ文書、PDF、Reader、Inspector
+`@imposia/viewer` は文書を表示します。`mountPageViewer` は確定済みの Core ページ文書の canonical iframe を表示し、`mountViewer` は既存の PDF ファイルのための独立した PDF.js ビューアーです。どちらもページ分割は実行しません。
 
-### `mountPageViewer`
-
-```ts
-function mountPageViewer(container: HTMLElement, pageDocument: PageDocument, options?: PageViewerOptions): PageViewerController;
-```
-
-Core の canonical iframe に表示ツールバーを追加します。`pageDocument.iframe.parentElement` は `container` と一致する必要があります。文書の iframe、sandbox、ページメタデータ、DOM マーカーが正しくなければ、同期的に例外をスローします。`validatePageViewerOptions(pageDocument, options?)` だけを呼ぶと、マウントせずに同じ検証を実行できます。
-
-| option | 型 | 既定値 / 説明 |
-| --- | --- | --- |
-| `mode` | `"continuous" \| "single" \| "spread"` | `"continuous"` |
-| `spread.cover` | `boolean` | `false` |
-| `zoom` | `number` | `1`。0.5〜2.5 に丸めて制限します。 |
-| `controls` | `boolean` | `true`。`false` にすると標準の操作バーを作らず、同じ表示コントローラーを維持します。 |
-| `theme` | `ViewerTheme` | なし。`--imposia-viewer-*` 形式の CSS カスタムプロパティだけを受け取ります。 |
-| `inspector` | `boolean` | false 相当。`true` で警告 Inspector を作ります。 |
-| `reader` | `PublicationReaderOptions` | なし。Publication Reader を作ります。 |
+## `mountPageViewer`
 
 ```ts
-const viewer = mountPageViewer(host, await documentController.ready, {
-  mode: "spread",
-  inspector: true,
-});
+mountPageViewer(container: HTMLElement, document: PageDocument, options?: PageViewerOptions): PageViewerController;
+validatePageViewerOptions(document: PageDocument, options?: PageViewerOptions): void;
 ```
+
+検証は、文書、sandbox、テーマ、任意の reader を同期的に確認します。`validatePageViewerOptions` は、マウントせずに同じ検証だけを実行します。
+
+<Callout type="warn" title="マウントは Core の確定後に、iframe 自身のコンテナーで">
+`mountPageViewer` には確定済みの `PageDocument` が必要で、`container` は canonical iframe の現在の親要素でなければなりません。他の要素を渡すと例外をスローします。Viewer は Core の iframe をその場で表示します。移動も複製も再作成もしません。
+</Callout>
+
+`PageViewerOptions` は `mode?: "continuous" | "single" | "spread"`、`spread?: { cover? }`、`zoom?`、`controls?`、`theme?`、`inspector?`、`reader?` を受け取ります。`controls` の既定値は `true` です。`false` にすると、組み込みの操作バーなしで表示コントローラーだけを保てます。テーマは、名前が `--imposia-viewer-` で始まる CSS プロパティのマップです。
 
 ### `PageViewerController`
 
-| メンバー | 戻り値 | 動作と制約 |
+| メンバー | 戻り値 | 効果と制約 |
 | --- | --- | --- |
-| `goToPage(page)` | `void` | 整数へ丸め、1〜pageCount に制限して移動します。有限値でなければ無視します。 |
-| `nextPage()` / `previousPage()` | `void` | 実際に適用されているモードに応じて、隣のページまたは見開きへ移動します。 |
-| `setZoom(zoom)` | `void` | 0.5〜2.5、0.1 刻みに丸めます。有限値でなければ無視します。 |
-| `setMode(mode)` | `void` | 指定モードを変更します。幅が 720 px 未満の場合、`spread` を指定しても実際には `single` で表示されます。 |
-| `setSpreadCover(cover)` | `void` | spread の先頭を単独の表紙として扱うか設定します。 |
-| `setTheme(theme?)` | `void` | Viewer 用 CSS custom property を差し替え、未指定で元の値へ戻します。 |
-| `subscribe(listener)` | `() => void` | 現在の state を即時通知し、以後の表示変更も通知します。戻り値で購読解除します。 |
-| `refresh(pageDocument)` | `void` | 同じ canonical iframe の、より新しい世代を反映します。別の iframe、同じ世代、古い世代を渡すと例外をスローします。 |
-| `print()` | `Promise<void>` | 現在の canonical ページをトップレベル文書の隔離されたスナップショットとして印刷します。破棄後は reject します。 |
-| `destroy()` | `void` | UI とイベントを外し、元の container/iframe 属性を復元します。複数回呼べます。 |
-| `state` | `PageViewerState` | page、pageCount、zoom、mode、effectiveMode、status、generation の snapshot です。 |
-| `reader` | `PublicationReaderController \| undefined` | `options.reader` を渡した場合だけ存在します。 |
-| `inspector` | `ViewerInspectorController \| undefined` | `options.inspector === true` の場合だけ存在します。 |
+| `goToPage(page)`、`nextPage()`、`previousPage()` | `void` | 現在のページまたは実効的な見開きの範囲内に収めて移動します。 |
+| `setZoom(zoom)` | `void` | 有限の入力を丸めて範囲内に収めます。 |
+| `setMode(mode)`、`setSpreadCover(cover)` | `void` | 要求する表示モードと表紙レイアウトを変更します。 |
+| `setTheme(theme?)` | `void` | Viewer 変数を差し替え、またはクリアします。 |
+| `subscribe(listener)` | `() => void` | まず現在の状態を即時に通知し、以後の表示変更を通知します。戻り値は購読解除関数です。 |
+| `refresh(document)` | `void` | 同じ iframe と、より新しい世代が必要です。破棄後や不正な入力には例外をスローします。 |
+| `print()` | `Promise<void>` | 破棄後や iframe を利用できない場合は reject されます。 |
+| `destroy()` | `void` | Viewer の結び付きと UI を取り除き、Core の iframe コンテナーを復元します。何度でも呼べます。 |
+| `state` | `PageViewerState` | ページ、ページ数、ズーム、要求モードと実効モード、`status`、世代です。 |
+| `reader` | `PublicationReaderController \| undefined` | reader オプションを渡した場合に存在します。 |
+| `inspector` | `ViewerInspectorController \| undefined` | `inspector: true` の場合に存在します。 |
 
-Viewer CSS は `.imposia-viewer` 内だけに適用され、ホスト文書の
-`body`、`:root`、外部要素、スクロールを変更しません。
+Viewer の CSS は `.imposia-viewer` にスコープされます。body のスタイル、プレビューの寸法、背景、周囲のスクロールはホストが所有します。
 
-### Publication Reader
+<Accordions>
 
-`PageViewerOptions.reader` は `{ controller, initialDeepLink?, onDeepLinkChange? }` です。`pageDocument` は `PublicationDocument` で、`controller.current` と同一でなければマウントまたは refresh が throw します。
+<Accordion title="spread を要求したのに単一ページで表示されるのはなぜか">
+幅 720 px 未満のコンテナーでは、要求された `mode: "spread"` と現在のグローバルページを保ったまま、ページを 1 枚ずつ表示し、state では `effectiveMode: "single"` を報告します。コンテナーを広げれば見開きに戻ります。再マウントは不要です。`spread.cover` は 1 ページ目を単独に置き、2〜3 ページ目以降を対にします。指定しない場合、対は 1〜2 ページ目から始まります。
+</Accordion>
 
-| メソッド / state | 戻り値 | 動作 |
-| --- | --- | --- |
-| `openTableOfContents()` / `closeTableOfContents()` / `toggleTableOfContents()` | `void` | 目次を操作します。開くと他の補助パネルを閉じます。 |
-| `openThumbnails()` / `closeThumbnails()` / `toggleThumbnails()` | `void` | サムネイルを操作します。 |
-| `selectThumbnail(thumbnail)` | `void` | 現在の世代のサムネイルへ移動し、ディープリンクを解除します。 |
-| `openSearch()` / `closeSearch()` / `toggleSearch()` | `void` | 検索を操作します。 |
-| `search(query)` | `readonly PublicationSearchResult[]` | query を設定し結果を返します。 |
-| `nextSearchResult()` / `previousSearchResult()` | `PublicationSearchResult \| undefined` | 結果間を移動します。 |
-| `selectSearchResult(result)` | `void` | 指定結果の destination へ移動します。 |
-| `navigate(destination)` | `void` | Core で検証して移動し、ディープリンクを通知します。 |
-| `restoreDeepLink(value)` | `PublicationDestination \| undefined` | 復元できれば移動します。 |
-| `state` | `PublicationReaderState` | 目次、サムネイル、検索パネルの開閉状態、サムネイル、移動先、ディープリンク、検索語、検索結果、選択中のインデックスです。 |
+</Accordions>
 
-Reader の公開メソッドは破棄後に throw します。`initialDeepLink` が有効ならマウント中に移動し、`onDeepLinkChange` は Reader が destination を設定または解除したときに呼ばれます。
+## Publication Reader とディープリンク
 
-### Viewer Inspector
+Reader オプションには、表示中の `PublicationDocument` そのものを所有する `PublicationController` が必要です。`initialDeepLink` と `onDeepLinkChange` を含められます。
 
-| メソッド / state | 戻り値 | 動作 |
-| --- | --- | --- |
-| `open()` / `close()` / `toggle()` | `void` | 警告パネルを操作します。 |
-| `select(warning)` | `void` | 警告のページへ移動し、対象要素またはページを強調します。現在の世代に属さない警告を渡すと例外をスローします。 |
-| `state` | `ViewerInspectorState` | `{ open, warnings, selected }` の snapshot です。 |
+| `PublicationReaderController` のメンバー | 戻り値・効果 |
+| --- | --- |
+| `openTableOfContents()`、`closeTableOfContents()`、`toggleTableOfContents()` | 目次パネルを操作します。 |
+| `openThumbnails()`、`closeThumbnails()`、`toggleThumbnails()` | サムネイルを操作します。 |
+| `selectThumbnail(thumbnail)` | 現在の世代のサムネイルへ移動します。別の世代のサムネイルには例外をスローします。 |
+| `openSearch()`、`closeSearch()`、`toggleSearch()` | 検索を操作します。 |
+| `search(query)` | `readonly PublicationSearchResult[]` です。 |
+| `nextSearchResult()`、`previousSearchResult()` | `PublicationSearchResult \| undefined` です。 |
+| `selectSearchResult(result)` | 結果を選択し、そこへ移動します。 |
+| `navigate(destination)` | 検証して移動し、ディープリンクを通知します。 |
+| `restoreDeepLink(value)` | `PublicationDestination \| undefined`。解決して移動します。 |
+| `state` | パネルの状態、サムネイル、移動先とディープリンク、検索語、結果、選択中の結果インデックスです。 |
 
-Inspector の公開メソッドは破棄後に throw します。
-
-### `mountViewer`（PDF）
+すべての Reader メソッドは、破棄後に例外をスローします。補助パネルは 1 つ開くと他が閉じます。`PublicationThumbnail` はページ、世代、寸法、`previewLineCount` を公開します。
 
 ```ts
-function mountViewer(container: HTMLElement, source: ViewerSource, options?: ViewerOptions): ViewerController;
+serializePublicationDeepLink(destination: PublicationDestination): string;
+restorePublicationDeepLink(value: string, controller: PublicationController): PublicationDestination | undefined;
+```
+
+シリアライズは、移動先の ID からバージョン付きの値を作ります。単体の復元ヘルパーは正規のエンコードだけを受け入れ、現在の世代に対して解決します。Reader のメソッドと違い、移動は行いません。
+
+## Viewer Inspector
+
+| `ViewerInspectorController` のメンバー | 戻り値・効果 |
+| --- | --- |
+| `open()`、`close()`、`toggle()` | 診断パネルを操作します。破棄後は例外をスローします。 |
+| `select(warning)` | 位置を特定できた警告へ移動して強調します。別の世代の警告には例外をスローします。 |
+| `state` | `{ open, warnings, selected }` です。 |
+
+Inspector パネルは、目次、検索、サムネイルと補助パネルの枠を共有します。どれか 1 つを開くと他は閉じます。印刷時には表示されず、EPUB 書き出しにも含まれません。
+
+## PDF 用の `mountViewer`
+
+```ts
+mountViewer(container: HTMLElement, source: ViewerSource, options?: ViewerOptions): ViewerController;
 type ViewerSource = Uint8Array | ArrayBuffer | string | { pdf: Uint8Array };
 ```
 
-PDF.js を使う独立した PDF Viewer です。文字列は PDF.js のソース URL として渡し、バイト形式のソースは内部でコピーします。`workerSrc` を指定すると、PDF.js のグローバルワーカー URL を設定します。`ready` Promise は返しません。`state.status` が `loading` から `ready` または `error` へ変わることで準備状態を確認できます。
+これは、PDF.js で PDF ページを読み込みラスタライズする、独立した Viewer です。アプリケーションがすでに持っている PDF ファイルを表示するためのもので、Core のページ文書の書き出し経路ではありません。ページ文書に PDF バイトの API はありません。オプションは `mode?: "continuous" | "single"`、`zoom?`、`workerSrc?`、`theme?` です。呼び出しは `loading` 状態で即座に返り、失敗すると `state.status` が `error` になり、`state.error` が設定されます。
 
-| option | 型 | 既定値 |
-| --- | --- | --- |
-| `mode` | `"continuous" \| "single"` | `"continuous"` |
-| `zoom` | `number` | `1`。0.5〜2.5 に制限します。 |
-| `workerSrc` | `string` | PDF.js の現在値を使用します。 |
-| `theme` | `ViewerTheme` | なし。 |
-
-| コントローラーメンバー | 戻り値 | 動作 |
-| --- | --- | --- |
-| `goToPage(page)` | `void` | ready 後だけ、整数へ丸めて範囲内へ移動します。 |
-| `nextPage()` / `previousPage()` | `void` | 隣のページへ移動します。 |
-| `setZoom(zoom)` | `void` | ready 後だけ有限値を 0.5〜2.5、0.1 刻みに丸めます。 |
-| `setMode(mode)` | `void` | ready 後に表示モードを変えます。 |
-| `setTheme(theme?)` | `void` | Viewer テーマを更新します。破棄後は何もしません。 |
-| `destroy()` | `void` | render/load を中止し、PDF と container を破棄します。 |
-| `state` | `ViewerState` | page、pageCount、zoom、mode、status と任意の error message の snapshot です。 |
-
-```ts
-const pdfViewer = mountViewer(host, pdfBytes, { mode: "single" });
-```
-
-### Publication ディープリンク
-
-```ts
-function serializePublicationDeepLink(destination: PublicationDestination): string;
-function restorePublicationDeepLink(
-  value: string,
-  controller: PublicationController,
-): PublicationDestination | undefined;
-```
-
-`serializePublicationDeepLink()` は移動先の ID に `v1.` プレフィックスを付け、URI エンコードした文字列を返します。`restorePublicationDeepLink()` はプレフィックスとエンコードを検証し、現在のコントローラーで ID を解決します。不正な値、空の ID、現在の世代に存在しない ID には `undefined` を返します。復元関数そのものは移動を行いません。必要に応じて戻り値を `controller.navigate()` に渡してください。
-
-```ts
-const restored = restorePublicationDeepLink(location.hash.slice(1), publicationController);
-if (restored) publicationController.navigate(restored);
-```
+| `ViewerController` のメンバー | 戻り値・効果 |
+| --- | --- |
+| `goToPage(page)`、`nextPage()`、`previousPage()` | ready の間だけ移動します。 |
+| `setZoom(zoom)`、`setMode(mode)` | ready の間だけ表示を更新します。 |
+| `setTheme(theme?)` | Viewer 変数を差し替え、またはクリアします。破棄後は何もしません。 |
+| `destroy()` | 処理を中止し、PDF.js のリソースを破棄し、コンテナーを空にします。 |
+| `state` | ページ、ページ数、ズーム、モード、loading・ready・error の状態、任意のエラーテキストです。 |

@@ -1,129 +1,188 @@
 ---
 title: Core API
-description: "@imposia/core 提供的框架无关分页文档与出版物控制器。"
+description: 来自 @imposia/core 的框架无关页面文档与 Publication 控制器。
 ---
+
+`@imposia/core` 是权威的页面文档运行时：分页、生命周期、解析器边界、扩展、打印和导出，全部不依赖 React。这里的一切都只在浏览器中运行。
 
 ## Core 页面文档
 
 ### `mountPageDocument`
 
 ```ts
-function mountPageDocument(
+mountPageDocument(
   container: HTMLElement,
   source: PageSource,
   options?: PageDocumentOptions,
 ): PageDocumentController;
-
-type PageSource =
-  | { html: string; baseUrl?: string }
-  | { lightDom: Element | DocumentFragment; baseUrl?: string };
 ```
 
-函数会立即创建 canonical iframe 并返回控制器；首个版本在临时 staging iframe 中准备。`baseUrl` 只提供解析基准，不会绕过 `assetResolver`。
+该函数立即追加一个 canonical iframe，启动一个暂存世代，并同步返回。读取第一份文档前，请先等待 `ready`。
 
-| `PageDocumentOptions` | 类型 / 默认值 | 说明 |
-| --- | --- | --- |
-| `css` | `readonly string[]` / `[]` | 与源一起分页的 CSS 文本。 |
-| `assetResolver` | `AssetResolver` / 无 | 唯一资源入口；接收 `{ url, kind, baseUrl?, signal }`，返回 resolved 字节或 blocked 原因。 |
-| `page` | `PageOptions` / A4、纵向、20 mm | `size` 为 A4、Letter 或自定义宽高；可设 orientation 和统一/四边 margin。 |
-| `limits` | `PageLimits` / 内置上限 | 输入、节点、资源、页数、轮次和生成记录限制；只能设为不超过内置上限的正整数。 |
-| `headerTemplate` / `footerTemplate` | `string` / 无 | 支持 `{{pageNumber}}` 与 `{{totalPages}}`。 |
-| `decorateBlankPages` | `boolean` / `true` | 是否装饰因左右页约束插入的空白页。 |
-| `experimental` | `{ footnotes?: boolean; pageFloats?: boolean }` / `{}` | 启用实验性脚注和页浮动。 |
-| `extensions` | `readonly (PageExtension \| PublicationExtension)[]` / `[]` | 按顺序执行转换、资源过滤和页面装饰。 |
-| `compose` | `{ yieldBudgetMs?: number; scheduler?: () => Promise<void> }` / 8 ms 执行预算 | 将主线程上的分页任务拆分执行；`Infinity` 会关闭向调度器让出执行权的行为。 |
-| `signal` | `AbortSignal` / 无 | 只连接首次生成。 |
-| `onProgress` | `({ completedPages, pass, provisional: true }) => void` / 无 | staging 每分配一页，就报告当前收敛轮次的临时进度；下一轮收敛时，已完成页数可以从 1 重新开始。 |
-
-调度器、字体和图像的等待时间都按实际经过时间计入
-`limits.resourceDeadlineMs`。进度只描述 staging 中的临时工作；已确认结果请从
-`controller.current` 读取。
-
-```ts
-const controller = mountPageDocument(host, { html }, {
-  page: { size: "A4", margin: "18mm" },
-});
+```ts title="app/mount-page-document.ts"
+const controller = mountPageDocument(host, { html: "<article><h1>你好</h1></article>" });
 const pageDocument = await controller.ready;
 ```
 
-`PageExtension` 公开 `transform(input, context)`、`allowAsset(request, context)` 和 `decoratePage(page, context)` 三个可选方法。异步 `transform` 返回 `{ html?, css? }`；`context` 提供 `signal`、`warn()` 和 `onCleanup()`。
+`PageSource` 为 `{ html: string; baseUrl?: string }` 或 `{ lightDom: Element | DocumentFragment; baseUrl?: string }`。
 
-`PageExtension` 和 `PublicationExtension` 也可以实现同步方法 `finalizePage(page, context)`。它在 Core 完成装饰和 margin box、确认结果之前运行。`page.element` 是可以测量的实际页面元素；`page.tableFragments` 包含原始表格和从 1 开始的续页索引。无论 `decorateBlankPages` 如何设置，`finalizePage` 都会在每个已分配页面上运行，包括有意插入的空白页。该方法不能返回值，所做修改会保留在确认后的 iframe 中。
+| `PageDocumentOptions` 字段 | 类型 / 用途 |
+| --- | --- |
+| `css` | `readonly string[]`；附加的作者 CSS。 |
+| `assetResolver` | 处理字体、图片、媒体和样式表请求的异步解析器。 |
+| `page` | `{ size?, orientation?, margin? }`；size 接受 `A4`、`Letter` 或自定义宽高。 |
+| `limits` | 可选的输入、节点、资源、期限、页数、布局轮次和生成产物上限。 |
+| `headerTemplate`、`footerTemplate` | 页面装饰标记。 |
+| `decorateBlankPages` | 空白页是否接受装饰。 |
+| `experimental` | `{ footnotes?: boolean; pageFloats?: boolean }`；两者都是实验性特性，超出各自限制时分别以 `FOOTNOTE_DEFERRED` 或 `PAGE_FLOAT_FALLBACK` 警告回退。 |
+| `extensions` | 有序的 `PageExtension` 或 `PublicationExtension` 值。 |
+| `compose` | `{ yieldBudgetMs?: number; scheduler?: () => Promise<void> }`；主线程协作式分页，默认预算 8 ms。传 `Infinity` 可关闭向调度器让出。 |
+| `signal` | 取消初始世代。 |
+| `onProgress` | staging 每分配一页就收到轮次内的 `{ completedPages, pass, provisional: true }`。之后的收敛轮次会重置计数。 |
 
-### `PageDocumentController` 与 `PageDocument`
+调度器、字体和图片的等待都计入按实际时间计算的 `limits.resourceDeadlineMs`。进度描述的是暂存中的临时工作；最新已提交的世代只从 `controller.current` 读取。
 
-| 控制器成员 | 返回值 | 行为与约束 |
+`AssetResolver` 接收 `{ url, kind, baseUrl, signal }`，解析为 `{ status: "resolved", bytes, mimeType, resolvedUrl? }` 或 `{ status: "blocked", reason? }`。实现方法见[加载图片与字体](/zh-CN/docs/guides/assets)。
+
+<Accordions>
+
+<Accordion title="默认上限">
+
+每个 `limits` 字段都可省略；下面是省略时适用的默认值。
+
+| 字段 | 默认值 |
+| --- | --- |
+| `maxInputBytes` | 5 MiB（`5 * 1024 * 1024`） |
+| `maxNodes` | 100,000 |
+| `maxAssetBytes` | 25 MiB（`25 * 1024 * 1024`） |
+| `maxAssetDepth` | 8 |
+| `maxAssetReferences` | 512 |
+| `resourceDeadlineMs` | 30,000 |
+| `maxPages` | 10,000 |
+| `maxLayoutPasses` | 8 |
+| `maxGeneratedFragments` | 400,000 |
+| `maxGeneratedRecords` | 10,000 |
+
+</Accordion>
+
+</Accordions>
+
+### 扩展
+
+`PageExtension` 和 `PublicationExtension` 还可以实现同步的 `finalizePage(page, context)`。它在 Core 解析完装饰和 margin box 之后、提交之前，对每个被接受的页面运行一次，因此 `page.element` 是可实际测量的页面元素。`page.tableFragments` 列出续排的表格片段，带原始表格与从 1 开始的续排索引。修改会保留进已提交的 iframe。无论 `decorateBlankPages` 如何设置，它都会在每个已分配页面上运行，包括有意插入的空白页。
+
+<Callout type="warn" title="finalizePage 必须返回 undefined">
+`finalizePage` 返回任何非 `undefined` 的值都会让整个世代被拒绝。该钩子通过修改活动页面元素来传达结果，绝不通过返回替代值。
+</Callout>
+
+拆分表格需要在续排片段中冻结实测像素列宽时，将 `createTableColgroupExtension()` 作为可选扩展启用。Core 始终携带作者的 `<colgroup>` 元素，但默认从不合成列宽。
+
+### `PageDocumentController`
+
+| 成员 | 返回值 | 就绪与错误 |
 | --- | --- | --- |
-| `ready` | `Promise<PageDocument>` | 首次提交后兑现；失败、取消或超时会拒绝。 |
-| `current` | `PageDocument \| undefined` | 首次提交前和销毁后为 `undefined`。 |
-| `update(source, { signal? }?)` | `Promise<PageDocument>` | 新 update 中止旧候选；失败时保留上一代。 |
-| `print()` | `Promise<void>` | 等待最新 update 稳定后原生打印；无提交或已销毁时拒绝。 |
-| `destroy()` | `Promise<void>` | 中止工作、移除 iframe、撤销 Blob URL；重复调用返回同一 Promise。 |
+| `ready` | `Promise<PageDocument>` | 首次提交；无法提交时拒绝。 |
+| `current` | `PageDocument \| undefined` | 更新失败期间和之后保留上一次提交；销毁后清空。 |
+| `update(source, options?)` | `Promise<PageDocument>` | 启动一个世代；更新的 update 会中止进行中的那个。支持 `options.signal`。 |
+| `print()` | `Promise<void>` | 等待最新工作完成，然后通过顶层文档中的隔离快照打印最近一次成功提交。无提交或销毁后拒绝。 |
+| `destroy()` | `Promise<void>` | 中止生成与导出工作，移除 iframe，释放资源，并等待被跟踪的工作。幂等。 |
 
-| `PageDocument` 成员 | 类型或返回值 | 说明 |
+### `PageDocument`
+
+| 成员 | 类型 / 返回值 | 含义 |
 | --- | --- | --- |
-| `iframe` | `HTMLIFrameElement` | 后续成功结果会继续复用的 canonical iframe。 |
-| `generation` / `pageCount` | `number` | 从 1 开始递增的确认版本号和页数。 |
-| `pages` | `readonly PageMetadata[]` | 页号、左右页、命名上下文、空白、几何和正文文本。 |
-| `warnings` | `readonly PageWarning[]` | 包含版本、条目和页面位置的警告。 |
-| `timings` | `{ totalMs, resourceMs, paginationMs }` | 本次提交耗时。 |
-| `exportEpub(options)` | `Promise<Blob>` | 根据控制器最后确认的源内容及其语义结构导出可重排 EPUB。 |
+| `iframe` | `HTMLIFrameElement` | Core 拥有的 canonical 框架。 |
+| `generation`、`pageCount` | `number` | 提交的世代号与页数。 |
+| `pages` | `readonly PageMetadata[]` | 页码、左右页、命名、空白状态、几何、尺寸和正文文本。 |
+| `warnings` | `readonly PageWarning[]` | 当前世代的诊断。 |
+| `timings` | `{ totalMs; resourceMs; paginationMs }` | 该世代的耗时，单位毫秒。 |
+| `exportEpub(options)` | `Promise<Blob>` | 等待最新活动工作完成，把最近一次提交的源内容导出为可重排 EPUB 3.3 `Blob`。 |
 
-`exportEpub` 要求 `metadata: { title, language, identifier, modified? }`，可传 `signal` 和 `{ maxEntries?, maxBytes? }`。无效元数据、取消、文档释放或超过上限时拒绝。
+EPUB 选项要求 `metadata: { title, language, identifier, modified? }`，并可选接受 `signal` 与 `{ maxEntries?, maxBytes? }` 上限。导出是语义性的：页面包装、页边装饰、生成的计数器和只存在于页面上的实验性产物都被排除。
+
+### 警告
+
+每个已提交的 `PageWarning` 携带 `code`、`message` 和冻结的 `location`（含 `generation`、`entryId` 与 `page`，未知时各自为 `undefined`）。扩展诊断使用带命名空间的 ``EXTENSION_${string}`` 代码，并注明其 `extension`。
+
+<Accordions>
+
+<Accordion title="Core 警告代码">
+
+| 代码 | 触发条件 |
+| --- | --- |
+| `PAGE_OVERFLOW` | 内容超出可用页面且无法继续分片。 |
+| `RESOURCE_BLOCKED` | 解析器拒绝了资源，或其字节未通过校验。 |
+| `UNSUPPORTED_LAYOUT` | 受限子集之外的布局保持原子，未被分片。 |
+| `UNSUPPORTED_DECORATION_TOKEN` | 装饰模板使用了 Core 不支持的令牌。 |
+| `PAGE_RULE_UNSUPPORTED` | 作者的 `@page` 声明在受支持集合之外。 |
+| `BREAK_CONSTRAINT_RELAXED` | 无法满足的分页约束被确定性放宽。 |
+| `WIDOW_ORPHAN_RELAXED` | 无法同时满足的 widows/orphans 组合被放宽。 |
+| `WIDOW_ORPHAN_FALLBACK` | widows/orphans 使用了行内整数声明，而非计算属性。 |
+| `HYPHENATION_FALLBACK` | 因语言上下文缺失或无效，`hyphens: auto` 回退为 `manual`。 |
+| `UNBREAKABLE_CONTENT` | 过长的文本串被施加 `overflow-wrap: anywhere` 以放入页面。 |
+| `UNSUPPORTED_FRAGMENTATION_CONTEXT` | 溢出的竖排文本等内容保持原子。 |
+| `REFERENCE_MISSING`、`REFERENCE_DUPLICATE` | 本地目标引用指向缺失或重复的 ID。 |
+| `LAYOUT_NON_CONVERGENT` | 生成的出版布局循环，或未能在轮次上限内收敛。 |
+| `FOOTNOTE_DEFERRED`、`PAGE_FLOAT_FALLBACK` | 实验性脚注或页浮动发生回退。 |
+| `EPUB_RESOURCE_OMITTED` | EPUB 导出省略了一个无法收录的资源。 |
+| `AVOID_RELAXED` | 无法满足的 `break-inside: avoid` 被放宽。 |
+
+</Accordion>
+
+</Accordions>
 
 ### Core 辅助函数
 
-| 函数签名 | 返回值与约束 | 最小示例 |
-| --- | --- | --- |
-| `prepareDocument(html, { headerTemplate?, footerTemplate?, allowRemoteResources? }?)` | 同步返回 `{ html, headerTemplate?, footerTemplate?, warnings }`；只清理和规范化输入，不执行分页。使用浏览器原生 HTML 解析器，因此与其他 Core API 一样仅限浏览器运行；警告按错误恢复后的文档顺序排列。 | `const prepared = prepareDocument(html);` |
-| `pageWarningTargetBounds(document, warning)` | 返回 `{ left, top, width, height }`；警告不属于文档或无法定位时为 `undefined`。 | `const bounds = pageWarningTargetBounds(doc, doc.warnings[0]);` |
-| `hasPageDocumentFrameSandbox(iframe)` | sandbox token 恰好为公开常量中的 `allow-same-origin` 和 `allow-modals` 时为 `true`。 | `hasPageDocumentFrameSandbox(doc.iframe);` |
-| `selectBlankMarkers(markers, pages)` | 返回需在前方插入空白页的 marker ID；缺少 marker 映射时同步抛错。 | `selectBlankMarkers([{ id: 1, side: "left" }], new Map([[1, 1]]));` |
+```ts
+prepareDocument(html: string, options?: PrepareDocumentOptions): PreparedDocument;
+pageWarningTargetBounds(document: PageDocument, warning: PageWarning): PageWarningTargetBounds | undefined;
+hasPageDocumentFrameSandbox(iframe: HTMLIFrameElement): boolean;
+selectBlankMarkers(markers: PageSideConstraint[], pages: Map<number, number>): number[];
+```
 
-## Core 出版物
+- `prepareDocument` 同步规范化并清理 HTML，返回 `{ html, headerTemplate?, footerTemplate?, warnings }`。其选项为 `headerTemplate`、`footerTemplate` 和 `allowRemoteResources`。API 装饰选项会覆盖内嵌模板。它使用浏览器原生 HTML 解析器，因此与其他所有 Core API 一样仅限浏览器运行，警告按错误恢复后的文档顺序排列。
+- `pageWarningTargetBounds` 返回 iframe 视口坐标下的实时 `{ left, top, width, height }`。对来自其他文档或无法定位的警告返回 `undefined`。
+- `hasPageDocumentFrameSandbox` 仅在 sandbox 令牌恰好是公开集合（`allow-same-origin` 与 `allow-modals`）时为 true。
+- `selectBlankMarkers` 返回为满足左右页奇偶而需要空白页的 marker ID，并考虑之前的选择。marker 没有页面映射时抛出。
+
+## Core Publication
 
 ### `mountPublication`
 
 ```ts
-function mountPublication(
+mountPublication(
   container: HTMLElement,
   snapshot: PublicationSnapshot,
   options?: PublicationOptions,
 ): PublicationController;
 ```
 
-`snapshot` 包含 `metadata: { title, language?, identifier? }` 和有序 `entries`。每个条目要求非空且唯一的 `id`、非空 `title`，并且只能提供 `html` 或 `lightDom`；ID 不能含空白或控制字符。无效 snapshot 会同步抛出 `INVALID_PUBLICATION`。
+它把有序条目组合成一个页面序列，并同步返回。无效的快照或 Publication 扩展可能在挂载期间抛出。
 
-`PublicationOptions` 继承页面选项，但 `extensions` 只能是 `PublicationExtension[]`。扩展使用 `transformEntry(input, context)`，也可实现 `allowAsset()` 和 `decoratePage()`；包含普通 `transform()` 会同步抛错。
-
-```ts
+```ts title="app/mount-publication.ts"
 const controller = mountPublication(host, {
-  metadata: { title: "札记", language: "zh-CN" },
-  entries: [{ id: "chapter-1", title: "第一章", html: "<h1>开始</h1>" }],
+  metadata: { title: "手册", language: "zh-CN" },
+  entries: [
+    { id: "cover", title: "封面", html: "<h1>手册</h1>" },
+    { id: "start", title: "开始", html: "<h1>开始</h1><p>第一步。</p>" },
+  ],
 });
 const publication = await controller.ready;
 ```
 
-### `PublicationController` 与 `PublicationDocument`
+`PublicationSnapshot` 包含 `metadata: { title, language?, identifier? }` 和有序条目。每个条目要求一个唯一且不含空白或控制字符的 `id`、一个 `title`、可选的 `baseUrl`，以及 `html` 或 `lightDom` 中恰好一个。`PublicationOptions` 与 `PageDocumentOptions` 相同，只是 `extensions` 只接受 `PublicationExtension[]`。
 
-| 控制器成员 | 返回值 | 行为与约束 |
+### `PublicationController`
+
+| 成员 | 返回值 | 就绪与错误 |
 | --- | --- | --- |
-| `ready` / `current` | `Promise<PublicationDocument>` / `PublicationDocument \| undefined` | 首次确认后就绪。 |
-| `resolveDestination(id)` | `PublicationDestination \| undefined` | 从当前目录或搜索索引解析。 |
-| `search(query)` | `readonly PublicationSearchResult[]` | 未就绪时返回空数组。 |
-| `navigate(destination)` | `void` | 传入旧版本目标时抛出 `STALE_PUBLICATION_DESTINATION`；无法定位时抛出 `PUBLICATION_DESTINATION_NOT_FOUND`。 |
-| `update(snapshot, { signal? }?)` | `Promise<PublicationDocument>` | 无效 snapshot 以拒绝 Promise 返回；失败保留上一代。 |
-| `print()` / `destroy()` | `Promise<void>` | 委托给底层页面控制器。 |
+| `ready` | `Promise<PublicationDocument>` | 首个已提交的 Publication。 |
+| `current` | `PublicationDocument \| undefined` | 当前提交。 |
+| `resolveDestination(id)` | `PublicationDestination \| undefined` | 在当前世代中解析大纲或搜索 ID。 |
+| `search(query)` | `readonly PublicationSearchResult[]` | 提交前为空；之后搜索当前索引。 |
+| `navigate(destination)` | `void` | 除非完整的导航目标匹配且存在于当前世代，否则抛出。 |
+| `update(snapshot, options?)` | `Promise<PublicationDocument>` | 校验并暂存一份完整快照；支持 `options.signal`。 |
+| `print()` | `Promise<void>` | 使用页面控制器打印最近一次成功提交的行为。 |
+| `destroy()` | `Promise<void>` | 销毁底层的页面与 Publication 资源。 |
 
-`PublicationDocument` 继承 `PageDocument`，增加 `metadata`、带 `{ start, end }` 全局页范围的 `entries`，以及分层 `outline`。目录与搜索结果中的目标为：
-
-```ts
-interface PublicationDestination {
-  readonly id: string;
-  readonly entryId: string;
-  readonly page: number;
-  readonly generation: number;
-}
-```
-
-目标和搜索结果只属于一次确认结果；更新后应通过 ID 重新解析。
+`PublicationDocument` 在 `PageDocument` 基础上增加已提交的 `metadata`、`entries` 和嵌套的 `outline`。每个条目有一段闭区间的全局 `pageRange`。`PublicationDestination` 为 `{ id, entryId, page, generation }`；它绑定到世代，对过期值 `navigate` 抛出类型化 `ImposiaError`（`STALE_PUBLICATION_DESTINATION`）。搜索结果为 `{ entry, page, excerpt, destination }`。

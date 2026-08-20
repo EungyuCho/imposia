@@ -1,5 +1,5 @@
 {
-  "title": "APIリファレンス",
+  "title": "API リファレンス",
   "defaultOpen": true,
   "pages": ["index", "react", "core", "viewer"]
 }

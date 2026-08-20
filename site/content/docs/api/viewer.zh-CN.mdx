@@ -1,111 +1,100 @@
 ---
 title: Viewer API
-description: "@imposia/viewer 提供的页面、PDF、Reader、Inspector 与导航控制器。"
+description: 来自 @imposia/viewer 的页面展示、Reader、Inspector 与 PDF 查看控制器。
 ---
 
-## Viewer 页面、PDF、Reader 与 Inspector
+`@imposia/viewer` 负责展示文档。`mountPageViewer` 展示已提交 Core 页面文档的 canonical iframe；`mountViewer` 是面向现有 PDF 文件的独立 PDF.js 查看器。两者都不运行分页。
 
-### `mountPageViewer` 与 `PageViewerController`
+## `mountPageViewer`
 
 ```ts
-function mountPageViewer(
-  container: HTMLElement,
-  pageDocument: PageDocument,
-  options?: PageViewerOptions,
-): PageViewerController;
+mountPageViewer(container: HTMLElement, document: PageDocument, options?: PageViewerOptions): PageViewerController;
+validatePageViewerOptions(document: PageDocument, options?: PageViewerOptions): void;
 ```
 
-`container` 必须是 canonical iframe 当前的父元素。函数会同步校验 iframe、sandbox、页面标记、主题和 Reader 所有权；校验失败时抛出错误，不会重新分页。选项包括 `mode?`、`spread.cover?`、`zoom?`、`controls?`、`theme?`、`inspector?` 和 `reader?`。`mode` 默认为 `continuous`，`zoom` 默认为 `1`，`controls` 默认为 `true`，`cover` 和 Inspector 默认为 `false`。`controls: false` 不会创建默认操作栏，但仍会保留同一个展示控制器。`zoom` 限制在 0.5–2.5 之间。宽度小于 720 px 时，即使指定 `spread`，实际也会以 `single` 模式展示。
+校验会同步检查文档、sandbox、主题和可选的 reader；`validatePageViewerOptions` 执行同样的检查，但不挂载。
 
-| 控制器成员 | 返回值 | 行为与约束 |
+<Callout type="warn" title="只在 Core 提交之后、在 iframe 自己的容器中挂载">
+`mountPageViewer` 要求一份已提交的 `PageDocument`，且 `container` 必须是 canonical iframe 当前的父元素——任何其他元素都会抛出。Viewer 就地展示 Core 的 iframe，从不移动、克隆或重建它。
+</Callout>
+
+`PageViewerOptions` 接受 `mode?: "continuous" | "single" | "spread"`、`spread?: { cover? }`、`zoom?`、`controls?`、`theme?`、`inspector?` 和 `reader?`。`controls` 默认为 `true`；设为 `false` 可在不使用内置操作栏的情况下保留展示控制器。主题是名称以 `--imposia-viewer-` 开头的 CSS 属性映射。
+
+### `PageViewerController`
+
+| 成员 | 返回值 | 行为与约束 |
 | --- | --- | --- |
-| `goToPage(page)` / `nextPage()` / `previousPage()` | `void` | 限制到有效全局页；spread 中前后移动一组。 |
-| `setZoom(zoom)` / `setMode(mode)` / `setSpreadCover(cover)` | `void` | 更新展示，不改变 Core 布局。 |
-| `setTheme(theme?)` | `void` | 主题值必须是 `--imposia-viewer-*` 字符串属性；省略时恢复原值。 |
-| `subscribe(listener)` | `() => void` | 立即发送当前 state，并在展示状态变化时继续发送；返回取消订阅函数。 |
-| `refresh(document)` | `void` | 只接受同一 iframe 的更新版本；否则抛出错误。 |
-| `print()` | `Promise<void>` | 把当前 canonical 页面复制到顶层文档中隔离的快照后打印；控制器已销毁时拒绝。 |
-| `destroy()` | `void` | 移除展示 UI 并恢复 DOM；不会销毁 Core 控制器。 |
-| `state` | `PageViewerState` | `{ page, pageCount, zoom, mode, effectiveMode, status: "ready", generation }`。 |
-| `reader` / `inspector` | 对应控制器或 `undefined` | 只在选项启用时存在。 |
+| `goToPage(page)`、`nextPage()`、`previousPage()` | `void` | 在当前页面或有效跨页范围内限制并推进。 |
+| `setZoom(zoom)` | `void` | 对有限输入取整并限制范围。 |
+| `setMode(mode)`、`setSpreadCover(cover)` | `void` | 更改请求的模式或封面布局。 |
+| `setTheme(theme?)` | `void` | 替换或清除 Viewer 变量。 |
+| `subscribe(listener)` | `() => void` | 立即发出当前状态，随后发出展示变化；返回取消订阅函数。 |
+| `refresh(document)` | `void` | 要求同一 iframe 和更新的世代；销毁后或输入无效时抛出。 |
+| `print()` | `Promise<void>` | 销毁后或 iframe 不可用时拒绝。 |
+| `destroy()` | `void` | 移除 Viewer 绑定与 UI，恢复 Core 的 iframe 容器。幂等。 |
+| `state` | `PageViewerState` | 页码、页数、缩放、请求模式与生效模式、`status` 和世代。 |
+| `reader` | `PublicationReaderController \| undefined` | 提供了 reader 选项时存在。 |
+| `inspector` | `ViewerInspectorController \| undefined` | `inspector: true` 时存在。 |
 
-Viewer CSS 只作用于 `.imposia-viewer` 内部，不会修改宿主文档的
-`body`、`:root`、外部元素或滚动。预览尺寸和背景由宿主应用控制。
+Viewer CSS 限定在 `.imposia-viewer` 内；body 样式、预览尺寸、背景和外围滚动由宿主拥有。
 
-```ts
-const viewer = mountPageViewer(host, await controller.ready, { mode: "spread" });
-viewer.goToPage(3);
-```
+<Accordions>
 
-`validatePageViewerOptions(document, options?)` 执行相同校验，但不改变 DOM，返回 `void`。
+<Accordion title="为什么请求了跨页却渲染单页？">
+容器窄于 720 px 时会保留请求的 `mode: "spread"` 和当前全局页，但一次只展示一页，并在状态中报告 `effectiveMode: "single"`。加宽容器即可恢复跨页；无需重新挂载。`spread.cover` 让第 1 页单独显示，从第 2–3 页开始配对；不设置时从第 1–2 页开始配对。
+</Accordion>
 
-### `PublicationReaderController`
+</Accordions>
 
-Reader 选项为 `{ controller, initialDeepLink?, onDeepLinkChange? }`。`controller` 必须拥有传给 Viewer 的当前 `PublicationDocument`。
+## Publication Reader 与深链接
 
-| 成员 | 返回值与约束 |
+Reader 选项要求传入拥有当前所展示 `PublicationDocument` 的那个 `PublicationController`；还可以包含 `initialDeepLink` 和 `onDeepLinkChange`。
+
+| `PublicationReaderController` 成员 | 返回值 / 效果 |
 | --- | --- |
-| `openTableOfContents()` / `closeTableOfContents()` / `toggleTableOfContents()` | 控制目录。 |
-| `openThumbnails()` / `closeThumbnails()` / `toggleThumbnails()` | 控制缩略图；`selectThumbnail(model)` 只接受当前版本的模型。 |
-| `openSearch()` / `closeSearch()` / `toggleSearch()` | 控制搜索。 |
-| `search(query)` | 返回当前版本的 `readonly PublicationSearchResult[]`。 |
-| `nextSearchResult()` / `previousSearchResult()` | 选择、导航并返回结果；无结果时 `undefined`。 |
-| `selectSearchResult(result)` | 选择当前结果并导航。 |
-| `navigate(destination)` | 经所属 Publication 控制器导航，并更新 Viewer 页和深链接。 |
-| `restoreDeepLink(value)` | 解析并导航，返回目标或 `undefined`。 |
-| `state` | 面板、缩略图、目标、深链接、查询与结果状态。 |
+| `openTableOfContents()`、`closeTableOfContents()`、`toggleTableOfContents()` | 控制大纲面板。 |
+| `openThumbnails()`、`closeThumbnails()`、`toggleThumbnails()` | 控制缩略图。 |
+| `selectThumbnail(thumbnail)` | 跳转到当前世代的缩略图；其他世代的缩略图抛出。 |
+| `openSearch()`、`closeSearch()`、`toggleSearch()` | 控制搜索。 |
+| `search(query)` | `readonly PublicationSearchResult[]`。 |
+| `nextSearchResult()`、`previousSearchResult()` | `PublicationSearchResult \| undefined`。 |
+| `selectSearchResult(result)` | 选择并导航到结果。 |
+| `navigate(destination)` | 校验、导航并发出深链接。 |
+| `restoreDeepLink(value)` | `PublicationDestination \| undefined`；解析并导航。 |
+| `state` | 面板状态、缩略图、导航目标与深链接、查询、结果与活动结果索引。 |
 
-打开目录、缩略图、搜索或 Inspector 时，其他面板会关闭。Viewer 销毁后，所有 Reader 操作都会抛出错误。`PublicationThumbnail` 仅包含 `page`、`generation`、页面宽高和 `previewLineCount`，不包含位图或源内容 DOM。
+所有 Reader 方法在销毁后抛出。打开一个辅助面板会关闭其他面板。`PublicationThumbnail` 暴露页码、世代、尺寸和 `previewLineCount`。
 
-### `ViewerInspectorController`
+```ts
+serializePublicationDeepLink(destination: PublicationDestination): string;
+restorePublicationDeepLink(value: string, controller: PublicationController): PublicationDestination | undefined;
+```
 
-| 成员 | 返回值与约束 |
+序列化从导航目标的 ID 生成带格式版本前缀的值。独立的恢复辅助函数只接受规范编码，并针对当前世代解析；与 Reader 方法不同，它不会导航。
+
+## Viewer Inspector
+
+| `ViewerInspectorController` 成员 | 返回值 / 效果 |
 | --- | --- |
-| `open()` / `close()` / `toggle()` | 控制诊断；Viewer 销毁后抛错。 |
-| `select(warning)` | 只接受 `state.warnings` 中的对象；可定位时跳页并短暂高亮。 |
-| `state` | `{ open, warnings, selected }`；销毁后为关闭、空列表、无选中项。 |
+| `open()`、`close()`、`toggle()` | 控制诊断面板；销毁后抛出。 |
+| `select(warning)` | 跳转并高亮已定位的警告；其他世代的警告抛出。 |
+| `state` | `{ open, warnings, selected }`。 |
 
-### 深链接辅助函数
+Inspector 面板与目录、搜索、缩略图共用辅助面板槽位：打开任意一个会关闭其他。打印时隐藏，EPUB 导出中不存在。
 
-```ts
-function serializePublicationDeepLink(destination: PublicationDestination): string;
-function restorePublicationDeepLink(
-  value: string,
-  controller: PublicationController,
-): PublicationDestination | undefined;
-```
-
-序列化结果由 `v1.` 和经过 URL 编码的稳定目标 ID 组成。恢复时只接受规范编码，并通过控制器的当前版本重新解析；恢复函数不会自动导航。
+## 面向 PDF 的 `mountViewer`
 
 ```ts
-const saved = serializePublicationDeepLink(destination);
-const restored = restorePublicationDeepLink(saved, controller);
-if (restored) controller.navigate(restored);
+mountViewer(container: HTMLElement, source: ViewerSource, options?: ViewerOptions): ViewerController;
+type ViewerSource = Uint8Array | ArrayBuffer | string | { pdf: Uint8Array };
 ```
 
-### `mountViewer`（独立 PDF）
+这个独立 Viewer 用 PDF.js 加载并光栅化 PDF 页面。它展示应用已经拥有的 PDF 文件；它不是 Core 页面文档的导出路径——Core 页面文档没有 PDF 字节 API。选项为 `mode?: "continuous" | "single"`、`zoom?`、`workerSrc?` 和 `theme?`。函数以 `loading` 状态立即返回；失败会把 `state.status` 置为 `error` 并填充 `state.error`。
 
-```ts
-function mountViewer(
-  container: HTMLElement,
-  source: Uint8Array | ArrayBuffer | string | { pdf: Uint8Array },
-  options?: ViewerOptions,
-): ViewerController;
-```
-
-它使用 PDF.js canvas，不接受 Core 文档，也不导出 PDF。选项包括 `mode?: continuous | single`、`zoom?`、`workerSrc?` 和 `theme?`。函数会立即返回。`state.status` 会从 `loading` 变为 `ready`；异步任务失败时，会把错误写入 `state.error` 并将状态设为 `error`。
-
-| 控制器成员 | 返回值与约束 |
+| `ViewerController` 成员 | 返回值 / 效果 |
 | --- | --- |
-| `goToPage()` / `nextPage()` / `previousPage()` | 只在 ready 时移动。 |
-| `setZoom()` / `setMode()` | 只在 ready 时更新并重新渲染。 |
-| `setTheme(theme?)` | 应用或恢复运行时主题。 |
-| `destroy()` | 取消任务、销毁 PDF.js 文档并清空 container；重复调用不执行。 |
-| `state` | `{ page, pageCount, zoom, mode, status, error? }` 的副本。 |
-
-```ts
-const pdf = mountViewer(host, "/book.pdf", {
-  mode: "single",
-  workerSrc: "/pdf.worker.min.mjs",
-});
-```
+| `goToPage(page)`、`nextPage()`、`previousPage()` | 仅在就绪时导航。 |
+| `setZoom(zoom)`、`setMode(mode)` | 仅在就绪时更新渲染。 |
+| `setTheme(theme?)` | 替换或清除 Viewer 变量；销毁后忽略。 |
+| `destroy()` | 取消工作，销毁 PDF.js 资源，并清空容器。 |
+| `state` | 页码、页数、缩放、模式、loading/ready/error 状态和可选的错误文本。 |

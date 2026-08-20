@@ -1,70 +1,199 @@
 ---
-title: React 文档的预览、打印与 PDF 保存
-description: 用同一份 React 分页文档完成应用内预览、浏览器原生打印与“保存为 PDF”。
+title: 将多份文档合并出版
+description: 把有序的源内容组合成一个 Publication，共用阅读顺序、大纲和全局页面序列。
 ---
 
-本指南从第一个分页文档已经正常显示的状态开始。同一份已完成文档可在应用中预览、打印到纸张或保存为 PDF。EPUB 也由与页面一同确认的源内容生成。
+一份页面文档只对一个源内容分页。书状的产物却很少只有一个源：封面、前言、各章分开撰写，但必须表现为一份文档——一个阅读顺序、一个全局页面序列、一个用于导航的大纲。在 Imposia 中，这个组合后的单元叫 **Publication**（出版物），`ImposiaPublicationViewer` 是渲染它并内置 Reader 的 React 组件。
 
-## 开始
+<Callout type="info" title="开始之前">
+请先完成[构建第一个页面](/zh-CN/docs/getting-started)。Publication 使用与单页文档相同的暂存与提交生命周期，本指南假定你已经见过一次该生命周期的运作。
+</Callout>
 
-请先在 React 18 或更高版本的浏览器应用中完成[创建第一个分页预览](/zh-CN/docs/getting-started)。
+## Publication 是一个快照
 
-## 连接出版操作
+你用 `PublicationSnapshot` 描述一个 Publication：出版元数据加一个有序的条目列表。每个条目是一个语义源，具有稳定的 `id`、一个 `title`，以及 `html` 或 `lightDom` 中恰好一个。条目顺序**就是**阅读顺序。
 
-将命令式句柄放在 Viewer 旁。等待每项操作完成，并把失败交给应用的错误处理边界。
+快照作为完整值提交。Core 把整个出版物——每个条目、页码范围、大纲——一起暂存并原子提交，与单页文档完全一致。不存在部分更新：要改一章，就提交一份包含改动章节的完整快照，在新提交完成之前，读者看到的仍是上一次提交。
 
-```tsx
-import { ImposiaPageViewer, type ImposiaPageViewerHandle } from "@imposia/react";
+一次提交的快照给你：
+
+- 一个**全局页面序列**——每个条目占据一段闭区间的全局页码 `pageRange`，下一个条目从下一页开始；
+- 一个**大纲**——不可变的导航树，以条目标题为根，由条目内可见标题延伸；
+- 一个统一入口：导航、搜索、缩略图和打印全部指向这同一个已提交的世代。
+
+<Steps>
+
+<Step>
+
+### 描述快照
+
+```tsx title="app/handbook-snapshot.ts"
+import type { PublicationSnapshot } from "@imposia/react";
+
+export const handbook: PublicationSnapshot = {
+  metadata: { title: "野外手册", language: "zh-CN" },
+  entries: [
+    { id: "cover", title: "封面", html: "<h1>野外手册</h1>" },
+    {
+      id: "intro",
+      title: "引言",
+      html: "<h1>引言</h1><p>这本手册为何存在。</p>",
+    },
+    {
+      id: "survey",
+      title: "调查方法",
+      html: "<h1>调查方法</h1><h2>准备</h2><p>…</p><h2>实地作业</h2><p>…</p>",
+    },
+  ],
+};
+```
+
+条目的 `id` 必须唯一且不含空白字符；校验失败会在挂载快照时抛出，而不是之后悄悄失败。`id` 也是深链接和大纲导航目标的构建基础，请把它当作稳定的公开名称——重命名条目的 `id` 会让指向它的链接失效。
+
+</Step>
+
+<Step>
+
+### 用 ImposiaPublicationViewer 渲染
+
+```tsx title="app/handbook-preview.tsx"
+import {
+  ImposiaPublicationViewer,
+  type ImposiaPublicationViewerHandle,
+} from "@imposia/react";
 import { useRef } from "react";
 import "@imposia/react/styles.css";
+import { handbook } from "./handbook-snapshot";
 
-type PublishingActionsProps = {
-  readonly html: string;
-  readonly onActionError: (error: unknown) => void;
-};
-
-export function PublishingActions({ html, onActionError }: PublishingActionsProps) {
-  const viewer = useRef<ImposiaPageViewerHandle>(null);
-
-  async function print(): Promise<void> {
-    try {
-      const current = viewer.current;
-      if (current === null) throw new DOMException("Viewer is not available", "InvalidStateError");
-      await current.print();
-    } catch (error) {
-      onActionError(error);
-    }
-  }
-
-  async function exportEpub(): Promise<void> {
-    try {
-      const current = viewer.current;
-      if (current === null) throw new DOMException("Viewer is not available", "InvalidStateError");
-      const blob = await current.exportEpub({
-        metadata: { title: "季度报告", language: "zh-CN", identifier: "urn:report:quarterly" },
-      });
-
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = "report.epub";
-      link.click();
-      URL.revokeObjectURL(url);
-    } catch (error) {
-      onActionError(error);
-    }
-  }
+export function HandbookPreview() {
+  const viewer = useRef<ImposiaPublicationViewerHandle>(null);
 
   return (
     <>
-      <ImposiaPageViewer ref={viewer} source={{ html }} onError={onActionError} />
-      <button type="button" onClick={() => void print()}>打印 / 保存为 PDF</button>
-      <button type="button" onClick={() => void exportEpub()}>导出 EPUB</button>
+      <ImposiaPublicationViewer
+        ref={viewer}
+        snapshot={handbook}
+        publicationOptions={{ page: { size: "A4", margin: "18mm" } }}
+        viewerOptions={{ mode: "spread", spread: { cover: true } }}
+      />
+      <button type="button" onClick={() => void viewer.current?.print()}>
+        打印 / 另存为 PDF
+      </button>
     </>
   );
 }
 ```
 
-## 检查结果
+组件拥有一个 Core `PublicationController` 和一个 canonical iframe，并替你接好 Reader——没有单独的挂载步骤。`publicationOptions` 接受与单页文档相同的分页选项，唯一区别是 `extensions` 接受 Publication 扩展。
 
-准备新源内容时，现有预览会继续显示。点击打印按钮后，浏览器会为已完成页面打开原生打印对话框；选择打印机或**保存为 PDF**即可。Imposia 不直接返回 PDF 字节。EPUB 则把最后确认的语义源导出为可重排 EPUB 3.3 `Blob`。
+</Step>
+
+<Step>
+
+### 打开 Reader 并确认
+
+在浏览器中打开预览。Viewer 把条目显示为一个连续页面序列：封面，下一页的引言，然后是调查章节。
+
+从 Viewer 控件打开**目录**面板。它显示已提交的大纲——每个条目一项，并由调查章节内的 `h2` 标题延伸。选中一项会跳到该项的确切全局页。点击**打印 / 另存为 PDF**，浏览器打印对话框会以相同顺序显示相同页面。
+
+</Step>
+
+</Steps>
+
+## Reader 提供什么
+
+Reader 是一组内置于 Page Viewer 外壳的面板，渲染在 canonical iframe 之外。它从不重新解析你的 HTML、光栅化页面或再次运行分页——每个面板都是已提交世代的投影。
+
+| 面板 | 显示内容 |
+| --- | --- |
+| 目录 | 已提交的大纲，以层级目录呈现；选中一项即跳转到其全局页 |
+| 搜索 | 已提交页面可见文本中的匹配项，每条结果带条目、页码和纯文本摘录 |
+| 缩略图 | 每个已提交全局页一张抽象预览——正确的纸张宽高比加示意线条，不是渲染副本 |
+| Inspector | 当前世代的警告，可跳转到已定位的发现；通过 `viewerOptions.inspector` 启用 |
+
+这些面板可用键盘操作，且互斥：打开一个会关闭其他。
+
+面板能做的事在命令式句柄上也都有——`navigate()`、`search()`、`selectSearchResult()`、`getThumbnails()`、`selectThumbnail()`，以及各面板的打开、关闭和切换方法——你可以用自己的 UI 驱动同样的行为。完整列表见 [React API](/zh-CN/docs/api/react)。
+
+搜索只索引经过清理的可见文本：hidden、inert、`aria-hidden`、script、style 和 template 内容被排除，原始 DOM 或标记不会跨越 API。
+
+## 导航与搜索绑定到世代
+
+Publication 中每个可导航的位置都是一个 `PublicationDestination`：`{ id, entryId, page, generation }`。大纲项带一个，每条搜索结果也带一个。`generation` 字段正是重点：导航目标是对某一个特定已提交页面序列的断言，也只对那个序列生效。
+
+```tsx title="app/find-in-handbook.ts"
+const results = viewer.current?.search("准备") ?? [];
+// 每条结果：{ entry, page, excerpt, destination }
+if (results.length > 0) {
+  viewer.current?.selectSearchResult(results[0]);
+}
+```
+
+<Callout type="warn" title="不要跨更新缓存导航目标或搜索结果">
+新快照提交后，来自上一个世代的导航目标和搜索结果就过期了。对过期目标调用 `navigate()` 会抛出，选择保留下来的旧搜索结果同样被拒绝。请用 `resolveDestination(id)` 重新解析——ID 在新世代中标识同一个条目或标题——或重新执行搜索。
+</Callout>
+
+这种严格正是导航保持可信的原因。内容变化时页码会移动；一个悄悄跳到旧页码的目标会指向错误的内容。拒绝过期值迫使查询回到当前提交，在那里 `id` 仍标识正确的位置。
+
+## 更新整个快照
+
+传入另一个快照对象，组件就会暂存一个新世代；已提交的页面在新世代胜出之前保持可见。比较按引用进行，因此在同一个对象内部修改条目不会有任何效果——请构建新的快照值。无法保证新引用时，递增 `snapshotRevision` 强制更新。改变 `publicationOptions` 遵循与页面文档相同的规则：递增 `publicationOptionsRevision`，以新选项重建控制器。
+
+## 给读者一个稳定链接
+
+Reader 可以把当前位置往返转换为 URL 安全的深链接字符串，该字符串由导航目标的稳定 ID 构建：
+
+```tsx title="app/handbook-with-links.tsx"
+<ImposiaPublicationViewer
+  ref={viewer}
+  snapshot={handbook}
+  readerOptions={{
+    initialDeepLink: startLink,
+    onDeepLinkChange: (value) => {
+      // 把 value 存入你的路由或 URL hash。
+    },
+  }}
+/>
+```
+
+`onDeepLinkChange` 随读者导航触发；把值存到应用保存 URL 状态的地方。之后要恢复时，挂载时作为 `initialDeepLink` 传入，或在句柄上调用 `restoreDeepLink(value)`。因为编码值记录的是稳定 ID 而不是页码，针对旧世代记录的链接在内容变化后仍能解析——它落在那个条目或标题现在所在的位置。未知或格式错误的值解析为 `undefined`，不会抛出。
+
+## 打印与导出遵循同一序列
+
+句柄上的 `print()` 按阅读顺序为整个已提交页面序列打开浏览器原生打印对话框——整个出版物一个对话框，读者在其中选择打印机或**另存为 PDF**。同一个已提交快照还能通过 `exportEpub()` 生成可重排 EPUB 3.3 `Blob`，其 spine 遵循条目顺序；必需的元数据和上限记录在 [Core API](/zh-CN/docs/api/core)。
+
+## 常见疑问
+
+<Accordions>
+
+<Accordion title="一定要用 React 吗？">
+不。`@imposia/core` 的 `mountPublication()` 创建同一个 `PublicationController`，`@imposia/viewer` 的 `mountPageViewer()` 接受 `reader` 选项来绑定同样的 Reader 面板。`ImposiaPublicationViewer` 就是这套组合接入 React 生命周期后的形态。
+</Accordion>
+
+<Accordion title="能只更新一个条目吗？">
+不能——快照永远是完整的。提交带着那一处改动的完整条目列表；内容没变的条目也会重新暂存，提交一次性替换整个页面序列。这正是全局页码、页码范围和大纲彼此一致的原因。
+</Accordion>
+
+<Accordion title="为什么我的标题没有出现在目录面板里？">
+大纲只包含可见标题。位于 `hidden`、`inert` 或 `aria-hidden="true"` 内容中的标题会被排除，与搜索的索引范围一致。条目标题总会出现，无论条目的 HTML 里有没有标题。
+</Accordion>
+
+<Accordion title="缩略图里实际是什么？">
+一张抽象预览：页面的纸张宽高比，加上最多几条由保留的页面元数据推导出的示意文本线。缩略图从不克隆作者 DOM、光栅化页面或创建另一个 iframe，因此长出版物的缩略图依然廉价。选中一张即跳转到那个确切的全局页。
+</Accordion>
+
+</Accordions>
+
+## 下一步
+
+<Cards>
+  <Card title="React API" href="/zh-CN/docs/api/react">
+    `ImposiaPublicationViewer` 的每个 prop 与句柄方法。
+  </Card>
+  <Card title="Core API" href="/zh-CN/docs/api/core">
+    `mountPublication`、`PublicationController` 与快照类型。
+  </Card>
+  <Card title="出版模型" href="/zh-CN/docs/concepts/publishing-model">
+    每个 Publication 世代都会经历的提交生命周期。
+  </Card>
+</Cards>

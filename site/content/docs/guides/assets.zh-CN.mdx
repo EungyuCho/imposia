@@ -1,0 +1,122 @@
+---
+title: 加载图片与字体
+description: 实现 assetResolver——外部资源进入分页文档的唯一通道。
+---
+
+在 HTML 里加一个 `<img>`，它不会加载。这不是缺陷——这正是 Imposia 围绕其构建的边界，而 `assetResolver` 是你有意打开这道边界的方式。
+
+## 为什么默认什么都不加载
+
+承载页面的 iframe 处于沙箱中，并施加严格的内容安全策略。`connect-src` 为 `'none'`，图片、字体和媒体只能来自 Core 自己创建的 `blob:` URL。作者书写的 URL 永远不会变成网络请求。
+
+<Callout type="info" title="这种方式带来什么">
+不受信任的标记无法让这个框架访问网络。到达页面的每一个字节都先经过你的应用，因此由你决定允许什么、来自哪里，以及附带哪些凭据（如果有的话）。
+</Callout>
+
+Imposia 在你的 HTML 和 CSS 中发现资源，为每一个资源询问你的解析器，把获准的字节变成 Core 拥有的 `blob:` URL，并在文档被替换、失败或销毁时撤销它们。
+
+## 实现解析器
+
+解析器就是一个异步函数。它接收请求，用字节或拒绝作答。
+
+```ts title="app/asset-resolver.ts"
+import type { AssetResolver } from "@imposia/core";
+
+const ALLOWED = new Set(["https://cdn.example.com"]);
+
+export const assetResolver: AssetResolver = async ({ url, kind, baseUrl, signal }) => {
+  const target = new URL(url, baseUrl);
+
+  if (!ALLOWED.has(target.origin)) {
+    return { status: "blocked", reason: `Origin not allowed: ${target.origin}` };
+  }
+
+  const response = await fetch(target, { signal });
+  if (!response.ok) {
+    return { status: "blocked", reason: `HTTP ${response.status}` };
+  }
+
+  return {
+    status: "resolved",
+    bytes: new Uint8Array(await response.arrayBuffer()),
+    mimeType: response.headers.get("content-type") ?? "application/octet-stream",
+  };
+};
+```
+
+挂载文档时传入一次：
+
+```tsx title="app/preview.tsx"
+<ImposiaPageViewer
+  source={{ html, baseUrl: "https://cdn.example.com/docs/" }}
+  documentOptions={{ assetResolver }}
+/>
+```
+
+### 请求
+
+| 字段 | 含义 |
+| --- | --- |
+| `url` | 与作者书写完全一致的 URL，可能是相对路径 |
+| `kind` | `image`、`font`、`media` 或 `stylesheet` |
+| `baseUrl` | 文档的基准 URL；仅在 source 上提供过时存在 |
+| `signal` | 该世代被取代、失败或销毁时中止 |
+
+请始终自己用 `baseUrl` 解析 `url`，并始终把 `signal` 转发给 `fetch`。忽略 signal 的解析器会继续为一个没有人会看到的世代工作。
+
+### 应答
+
+返回 `{ status: "resolved", bytes, mimeType }` 放行资源，或返回 `{ status: "blocked", reason }` 拒绝它。拒绝是正常结果，不是错误：文档照常提交，Imposia 会发出 `RESOURCE_BLOCKED` 警告并指明被拒的资源。
+
+## 返回之后仍会被拒的情况
+
+批准字节并不是最终裁定。Core 会校验它们，不匹配按拒绝处理。
+
+| 检查 | 规则 |
+| --- | --- |
+| MIME 白名单 | 图片必须是 PNG、JPEG、GIF、WebP 或 AVIF；字体为 WOFF、WOFF2、TTF 或 OTF；样式表为 `text/css` |
+| 魔数 | 字体容器按真实签名（`wOFF`、`wOF2`、`OTTO` 等）校验，而不是按声明的类型 |
+| 上限 | 引用数量、总字节数和嵌套深度都有上限 |
+
+这就是为什么对真实 PNG 返回 `application/octet-stream` 的解析器会看到图片被拦下：声明的类型必须正确。
+
+<Callout type="warn" title="重复引用仍计入字节上限">
+在同一个世代内，指向相同 URL 的多个引用共享一次解析器调用和一个 `blob:` URL。字节统计有意**不做**去重——每次出现都计入 `maxAssetBytes`，因此这个上限的含义与该优化出现之前完全相同。
+</Callout>
+
+## 样式表会带来更多工作
+
+当你放行一个样式表时，Imposia 会解析它，并发现*它*引用的资源——`@font-face` 来源、`url()` 值和嵌套的 `@import` 规则。每一个都会作为独立请求回到你的解析器，`baseUrl` 设为该样式表所在位置。深度有上限，`@import` 链不会无限递归。
+
+## 常见问题
+
+<Accordions>
+
+<Accordion title="图片缺失，并出现 RESOURCE_BLOCKED 警告">
+解析器拒绝了它，或字节未通过校验。查看警告消息，然后确认你返回的 `mimeType` 与真实文件类型一致。对真实图片返回泛型类型是最常见的原因。
+</Accordion>
+
+<Accordion title="相对 URL 始终解析不了">
+在 source 上设置 `baseUrl`，并在解析器内部用 `new URL(url, baseUrl)` 解析。Imposia 原样传递作者书写的字符串；是否拼接基准 URL 由你的解析器决定，因为只有你的应用知道文档实际位于哪里。
+</Accordion>
+
+<Accordion title="Web 字体被忽略">
+字体除了 MIME 类型之外，还要通过容器签名检查。以 `font/woff` 提供的 `.woff2`，或实际上是 zip 的文件，都会被拒绝。请确认发送的是真实字节，且没有被会改写内容的传输层压缩。
+</Accordion>
+
+<Accordion title="我到底需不需要解析器？">
+只有内容引用外部资源时才需要。内联 SVG、CSS 颜色和系统字体什么都不需要。没有解析器时，作者书写的任何 `<img src>` 都会被直接拦下，文档照常提交。
+</Accordion>
+
+</Accordions>
+
+## 下一步
+
+<Cards>
+  <Card title="出版模型" href="/zh-CN/docs/concepts/publishing-model">
+    解析器输出处于提交生命周期的哪个位置，以及 blob URL 何时被撤销。
+  </Card>
+  <Card title="Core API" href="/zh-CN/docs/api/core">
+    完整的 `AssetResolver` 类型、上限选项和警告代码。
+  </Card>
+</Cards>

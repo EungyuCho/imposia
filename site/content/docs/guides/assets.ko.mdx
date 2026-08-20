@@ -1,0 +1,122 @@
+---
+title: 이미지와 글꼴 불러오기
+description: 외부 리소스가 페이지 문서에 들어오는 유일한 경로인 assetResolver를 구현합니다.
+---
+
+HTML에 `<img>`를 추가해도 이미지는 로드되지 않습니다. 버그가 아니라 Imposia가 전제로 삼는 경계이며, `assetResolver`는 그 경계를 의도적으로 여는 방법입니다.
+
+## 기본적으로 아무것도 로드되지 않는 이유
+
+페이지를 담는 iframe은 엄격한 Content Security Policy로 샌드박스됩니다. `connect-src`는 `'none'`이고, 이미지·글꼴·미디어는 Core가 직접 만든 `blob:` URL에서만 올 수 있습니다. 문서에 작성된 URL은 네트워크 요청이 되지 않습니다.
+
+<Callout type="info" title="이 방식이 보장하는 것">
+신뢰할 수 없는 마크업이 프레임에서 네트워크에 접근하게 만들 수 없습니다. 페이지에 도달하는 모든 바이트는 먼저 앱을 거치므로, 무엇을 허용할지, 어디에서 가져올지, 자격 증명을 붙일지 여부를 앱이 결정합니다.
+</Callout>
+
+Imposia는 HTML과 CSS에서 리소스를 찾아내고, 각 리소스를 리졸버에 묻고, 승인된 바이트를 Core 소유의 `blob:` URL로 바꾸며, 문서가 교체되거나 실패하거나 제거될 때 그 URL을 폐기합니다.
+
+## 리졸버를 구현하세요
+
+리졸버는 비동기 함수 하나입니다. 요청을 받아 바이트 또는 거부로 응답합니다.
+
+```ts title="app/asset-resolver.ts"
+import type { AssetResolver } from "@imposia/core";
+
+const ALLOWED = new Set(["https://cdn.example.com"]);
+
+export const assetResolver: AssetResolver = async ({ url, kind, baseUrl, signal }) => {
+  const target = new URL(url, baseUrl);
+
+  if (!ALLOWED.has(target.origin)) {
+    return { status: "blocked", reason: `Origin not allowed: ${target.origin}` };
+  }
+
+  const response = await fetch(target, { signal });
+  if (!response.ok) {
+    return { status: "blocked", reason: `HTTP ${response.status}` };
+  }
+
+  return {
+    status: "resolved",
+    bytes: new Uint8Array(await response.arrayBuffer()),
+    mimeType: response.headers.get("content-type") ?? "application/octet-stream",
+  };
+};
+```
+
+리졸버는 문서를 마운트할 때 한 번 전달합니다.
+
+```tsx title="app/preview.tsx"
+<ImposiaPageViewer
+  source={{ html, baseUrl: "https://cdn.example.com/docs/" }}
+  documentOptions={{ assetResolver }}
+/>
+```
+
+### 요청
+
+| 필드 | 의미 |
+| --- | --- |
+| `url` | 작성된 그대로의 URL입니다. 상대 경로일 수 있습니다. |
+| `kind` | `image`, `font`, `media`, `stylesheet` 중 하나입니다. |
+| `baseUrl` | source에 지정했을 때 전달되는 문서의 기준 URL입니다. |
+| `signal` | 세대가 대체되거나 실패하거나 제거되면 중단됩니다. |
+
+`url`은 항상 리졸버 안에서 `baseUrl`에 대해 직접 해석하고, `signal`은 항상 `fetch`에 전달하세요. signal을 무시하는 리졸버는 아무도 보지 않을 세대를 위해 계속 일하게 됩니다.
+
+### 응답
+
+리소스를 허용하려면 `{ status: "resolved", bytes, mimeType }`을, 거부하려면 `{ status: "blocked", reason }`을 반환하세요. 거부는 오류가 아니라 정상적인 결과입니다. 문서는 그대로 확정되고, Imposia는 무엇이 거부됐는지 알리는 `RESOURCE_BLOCKED` 경고를 남깁니다.
+
+## 반환한 뒤에도 거부되는 경우
+
+바이트를 승인했다고 끝이 아닙니다. Core가 바이트를 검증하며, 불일치는 거부로 처리됩니다.
+
+| 검사 | 규칙 |
+| --- | --- |
+| MIME 허용 목록 | 이미지는 PNG·JPEG·GIF·WebP·AVIF, 글꼴은 WOFF·WOFF2·TTF·OTF, 스타일시트는 `text/css`여야 합니다. |
+| 매직 바이트 | 글꼴 컨테이너는 선언된 타입이 아니라 실제 시그니처(`wOFF`, `wOF2`, `OTTO` 등)로 확인합니다. |
+| 제한 | 참조 수, 총 바이트, 중첩 깊이에 모두 상한이 있습니다. |
+
+실제 PNG에 `application/octet-stream`을 반환하는 리졸버의 이미지가 차단되는 이유가 이것입니다. 선언한 타입이 정확해야 합니다.
+
+<Callout type="warn" title="중복 참조도 바이트 제한에 각각 계산됩니다">
+한 세대 안에서 같은 URL을 여러 번 참조하면 리졸버 호출 하나와 `blob:` URL 하나를 공유합니다. 그러나 바이트 계산은 의도적으로 중복을 제거하지 **않습니다**. 모든 참조가 `maxAssetBytes`에 각각 계산되므로, 이 제한의 의미는 해당 최적화가 생기기 전과 같습니다.
+</Callout>
+
+## 스타일시트는 추가 작업을 불러옵니다
+
+스타일시트를 허용하면 Imposia가 그것을 파싱해, 그 스타일시트가 참조하는 리소스 — `@font-face` 소스, `url()` 값, 중첩된 `@import` 규칙 — 를 다시 찾아냅니다. 각각이 별도의 요청으로 리졸버에 돌아오며, 이때 `baseUrl`은 그 스타일시트의 위치입니다. 깊이에는 상한이 있으므로 `@import` 사슬이 무한히 이어질 수는 없습니다.
+
+## 자주 겪는 문제
+
+<Accordions>
+
+<Accordion title="이미지가 안 보이고 RESOURCE_BLOCKED 경고가 남습니다">
+리졸버가 거부했거나 바이트가 검증에 실패했습니다. 경고의 메시지를 확인한 뒤, 반환한 `mimeType`이 실제 파일 타입과 일치하는지 확인하세요. 실제 이미지에 일반적인 타입을 반환하는 것이 가장 흔한 원인입니다.
+</Accordion>
+
+<Accordion title="상대 URL이 해석되지 않습니다">
+source에 `baseUrl`을 지정하고, 리졸버 안에서 `new URL(url, baseUrl)`로 해석하세요. Imposia는 작성된 문자열을 그대로 전달합니다. 기준 URL과 합치는 일은 리졸버의 결정입니다. 문서가 실제로 어디에 있는지는 앱만 알기 때문입니다.
+</Accordion>
+
+<Accordion title="웹 글꼴이 무시됩니다">
+글꼴은 MIME 타입과 함께 컨테이너 시그니처도 검사합니다. `font/woff`로 제공된 `.woff2` 파일이나 실제로는 zip인 파일은 거부됩니다. 바이트를 재작성하는 전송 계층을 거치지 않은 실제 글꼴 바이트를 그대로 보내고 있는지 확인하세요.
+</Accordion>
+
+<Accordion title="리졸버가 꼭 필요한가요?">
+콘텐츠가 외부 리소스를 참조할 때만 필요합니다. 인라인 SVG, CSS 색상, 시스템 글꼴에는 아무것도 필요 없습니다. 리졸버가 없으면 작성된 `<img src>`는 그저 차단되고, 문서는 그대로 확정됩니다.
+</Accordion>
+
+</Accordions>
+
+## 다음 단계
+
+<Cards>
+  <Card title="퍼블리싱 모델" href="/ko/docs/concepts/publishing-model">
+    리졸버 결과가 확정 수명 주기의 어디에 있고, Blob URL이 언제 폐기되는지 설명합니다.
+  </Card>
+  <Card title="Core API" href="/ko/docs/api/core">
+    `AssetResolver` 전체 타입, 제한 옵션, 경고 코드입니다.
+  </Card>
+</Cards>

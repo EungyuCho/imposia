@@ -1,141 +1,116 @@
 ---
 title: React API
-description: "@imposia/reactが提供するReactコンポーネント、Hooks、Props、命令型ハンドルです。"
+description: "@imposia/react が提供する React コンポーネント、Hook、props、命令型ハンドルです。"
 ---
 
-## React コンポーネントと Hooks
+`@imposia/react` は、1 つの Core コントローラーと 1 つの canonical iframe を React のライフサイクルに結び付けます。Core と Viewer の API も再エクスポートするため、React アプリケーションでは通常、他の Imposia パッケージを import する必要はありません。`@imposia/react/styles.css` は一度だけ読み込んでください。
 
-### `ImposiaPageViewer`
+## `ImposiaPageViewer` と `ImposiaDocument`
 
-単一の `PageSource` をページ分割し、その結果を Viewer に接続します。`ImposiaDocument` は同じ props とハンドルを持つ互換エイリアスです。シグネチャは `forwardRef<ImposiaPageViewerHandle, ImposiaPageViewerProps>` です。
+`ImposiaPageViewer` は Core のページ文書をマウントし、最初の確定後にページ Viewer を結び付けます。`ImposiaDocument` は同じ公開 props とハンドル型を持つ互換ラッパーです。`ImposiaDocumentProps = ImposiaPageViewerProps`、`ImposiaDocumentHandle = ImposiaPageViewerHandle` が成り立ちます。
 
-#### Props
-
-| prop | 型 | 必須 | 説明 |
-| --- | --- | --- | --- |
-| `source` | `PageSource` | はい | HTML 文字列、または light DOM を渡します。 |
-| `sourceRevision` | `string \| number` | いいえ | 同じソース値でも再ページ分割したいときに変更します。 |
-| `documentOptions` | `PageDocumentOptions` | いいえ | CSS、ページ寸法、アセット解決、上限などを指定します。 |
-| `documentOptionsRevision` | `string \| number` | いいえ | 変更すると Core コントローラーを作り直します。 |
-| `viewerOptions` | `PageViewerOptions` | いいえ | 表示モード、ズーム、テーマ、Inspector を指定します。 |
-| `onViewerStateChange` | `(state: PageViewerState) => void` | いいえ | ページ、ズーム、モード、実際に適用されたモード（effective mode）、世代（generation）の変更を受け取ります。 |
-| `className` | `string` | いいえ | ルート `div` のクラスです。 |
-| `style` | `CSSProperties` | いいえ | ルート `div` のインラインスタイルです。 |
-| `onReady` | `(document: PageDocument) => void` | いいえ | 文書と Viewer が同じ世代を表示できる状態になった後に呼ばれます。 |
-| `onError` | `(error: unknown) => void` | いいえ | ページ分割または Viewer のエラーを受け取ります。 |
-| `onStateChange` | `(state: ImposiaDocumentState) => void` | いいえ | `idle`、`loading`、`ready`、`error` の遷移を受け取ります。 |
-
-#### ハンドル
-
-| メンバー | 戻り値 | 利用条件と動作 |
-| --- | --- | --- |
-| `current` | `PageDocument \| undefined` | 未マウントまたは準備前は `undefined` です。 |
-| `viewerState` | `PageViewerState \| undefined` | 準備済み Viewer の現在の表示状態です。 |
-| `goToPage(page)` / `nextPage()` / `previousPage()` | `void` | 現在の確定済みグローバルページ列を移動します。 |
-| `setZoom(zoom)` | `void` | 表示倍率を対応範囲内で変更します。 |
-| `setMode(mode)` | `void` | `continuous`、`single`、`spread` を設定します。文書の準備が終わっていない場合は例外をスローします。 |
-| `setSpreadCover(cover)` | `void` | 見開きの先頭ページを表紙として単独表示するか切り替えます。準備が終わっていない場合は例外をスローします。 |
-| `openInspector()` | `void` | Inspector を開きます。`viewerOptions.inspector` が `true` でない場合は例外をスローします。 |
-| `closeInspector()` | `void` | Inspector を閉じます。同じ利用条件です。 |
-| `toggleInspector()` | `void` | Inspector を切り替えます。同じ利用条件です。 |
-| `selectWarning(warning)` | `void` | 現在の世代の警告へ移動して強調します。Inspector が無効な場合や、警告が現在の世代に属さない場合は例外をスローします。 |
-| `print()` | `Promise<void>` | 最新のページ分割処理が終わるのを待って、ブラウザー標準の印刷画面を開きます。ここで**PDFとして保存**を選べますが、メソッド自体はPDFバイトを返しません。未マウントの場合や文書の準備が終わっていない場合はrejectします。 |
-| `exportEpub(options)` | `Promise<Blob>` | 最後に確定したソースの意味構造から EPUB を返します。未マウントの場合や文書の準備が終わっていない場合は reject します。 |
-
-```tsx
-const ref = useRef<ImposiaPageViewerHandle>(null);
+```tsx title="app/report-preview.tsx"
+const viewer = useRef<ImposiaPageViewerHandle>(null);
 
 <ImposiaPageViewer
-  ref={ref}
-  source={{ html: "<article><h1>見出し</h1></article>" }}
-  viewerOptions={{ mode: "spread", inspector: true }}
+  ref={viewer}
+  source={{ html: "<main><h1>レポート</h1></main>" }}
+  documentOptions={{ page: { size: "A4", margin: "18mm" } }}
+  viewerOptions={{ mode: "single", inspector: true }}
+  onError={console.error}
 />;
-
-ref.current?.setSpreadCover(true);
 ```
 
-### `ImposiaPublicationViewer`
-
-複数エントリーの `PublicationSnapshot` をページ分割し、目次、サムネイル、検索、ディープリンクを備えた Reader に接続します。
-
-シグネチャは `forwardRef<ImposiaPublicationViewerHandle, ImposiaPublicationViewerProps>` です。
-
-#### Props
-
-| prop | 型 | 必須 | 説明 |
+| prop | 型 | 必須 | 役割 |
 | --- | --- | --- | --- |
-| `snapshot` | `PublicationSnapshot` | はい | メタデータと順序付きエントリーです。 |
-| `snapshotRevision` | `string \| number` | いいえ | 同じオブジェクトでも更新させたいときに変更します。 |
-| `publicationOptions` | `PublicationOptions` | いいえ | Publication のページ分割設定です。 |
-| `publicationOptionsRevision` | `string \| number` | いいえ | 変更すると Core コントローラーを作り直します。 |
-| `viewerOptions` | `Omit<PageViewerOptions, "reader">` | いいえ | Reader 以外の Viewer 設定です。 |
-| `readerOptions` | `Omit<PublicationReaderOptions, "controller">` | いいえ | 初期ディープリンクと変更通知を指定します。 |
-| `className` / `style` | `string` / `CSSProperties` | いいえ | ルート `div` の表示を設定します。 |
-| `onReady` | `(publication: PublicationDocument) => void` | いいえ | Publication と Reader の接続完了後に呼ばれます。 |
-| `onError` | `(error: unknown) => void` | いいえ | ページ分割または Viewer のエラーを受け取ります。 |
-| `onStateChange` | `(state: ImposiaPublicationState) => void` | いいえ | `idle`、`loading`、`ready`、`error` の遷移を受け取ります。 |
+| `source` | `PageSource` | はい | ページ分割する HTML または light DOM です。 |
+| `sourceRevision` | `string \| number` | いいえ | ソースの同一性・内容の比較では変化を検出できないときに、更新を強制します。 |
+| `documentOptions` | `PageDocumentOptions` | いいえ | Core のページ分割オプションです。 |
+| `documentOptionsRevision` | `string \| number` | いいえ | 新しい文書オプションで Core を再マウントします。 |
+| `viewerOptions` | `PageViewerOptions` | いいえ | ページ表示、Reader、Inspector のオプションです。 |
+| `onViewerStateChange` | `(state: PageViewerState) => void` | いいえ | ページ、ズーム、モード、実効モード、世代の変化を受け取ります。 |
+| `className`、`style` | `string`、`CSSProperties` | いいえ | ホスト `div` の表示です。 |
+| `onReady` | `(document: PageDocument) => void` | いいえ | 文書と Viewer の結び付けが準備できた後に実行されます。 |
+| `onError` | `(error: unknown) => void` | いいえ | Core または Viewer の結び付けの失敗を受け取ります。 |
+| `onStateChange` | `(state: ImposiaDocumentState) => void` | いいえ | `idle`、`loading`、`ready`、`error` を受け取ります。 |
 
-#### ハンドル
+<Callout type="warn" title="オプション props は revision が変わったときだけ読まれます">
+`documentOptions` はコントローラーのマウント時に取り込まれます。変更したオプションオブジェクト — 新しいリゾルバー、拡張機能の集合、ページジオメトリ — を渡すだけでは何も起きません。`documentOptionsRevision` を変えて、新しいオプションでコントローラーを再マウントしてください。下の `publicationOptions` と `publicationOptionsRevision` にも同じ規則が適用されます。単独で検出されるのは `source`（と `snapshot`）の変更だけです。
+</Callout>
 
-| メンバー | 戻り値 | 動作 |
+### `ImposiaPageViewerHandle`
+
+ハンドルのメソッドは、最後に確定した世代に作用します。Viewer または確定を必要とするメソッドは、最初の確定前とアンマウント後には例外をスローするか、Promise が reject されます。
+
+| メンバー | 戻り値 | 動作と制約 |
 | --- | --- | --- |
-| `current` | `PublicationDocument \| undefined` | 未マウントまたは準備前は `undefined` です。 |
-| `resolveDestination(id)` | `PublicationDestination \| undefined` | 現在の目次または検索インデックスから ID を解決します。未マウント時も `undefined` です。 |
-| `navigate(destination)` | `void` | 現在の世代に属する移動先へ移動します。 |
-| `openTableOfContents()` / `closeTableOfContents()` / `toggleTableOfContents()` | `void` | 目次パネルを操作します。 |
-| `openThumbnails()` / `closeThumbnails()` / `toggleThumbnails()` | `void` | サムネイルパネルを操作します。 |
-| `getThumbnails()` | `readonly PublicationThumbnail[]` | 現在のサムネイル一覧を返します。 |
-| `selectThumbnail(thumbnail)` | `void` | 現在の世代に属するサムネイルへ移動します。 |
-| `restoreDeepLink(value)` | `PublicationDestination \| undefined` | 有効な値なら復元して移動し、無効なら `undefined` を返します。 |
-| `openSearch()` / `closeSearch()` / `toggleSearch()` | `void` | 検索パネルを操作します。 |
-| `search(query)` | `readonly PublicationSearchResult[]` | 検索結果を更新して返します。 |
-| `nextSearchResult()` / `previousSearchResult()` | `PublicationSearchResult \| undefined` | 次または前の結果へ移動し、その結果を返します。 |
-| `selectSearchResult(result)` | `void` | 指定した検索結果へ移動します。 |
-| `setMode(mode)` / `setSpreadCover(cover)` | `void` | ページ表示を変更します。 |
-| `openInspector()` / `closeInspector()` / `toggleInspector()` | `void` | Inspector を操作します。有効にしていない場合は例外をスローします。 |
-| `selectWarning(warning)` | `void` | 現在の世代の警告へ移動して強調します。 |
-| `print()` | `Promise<void>` | 最新の確定済みPublicationをブラウザー標準の印刷画面へ送ります。**PDFとして保存**もここで選びます。 |
-| `exportEpub(options)` | `Promise<Blob>` | Publication のエントリーと目次を含む EPUB を返します。 |
+| `current` | `PageDocument \| undefined` | マウント中は現在の確定、それ以外は `undefined` です。 |
+| `viewerState` | `PageViewerState \| undefined` | 準備済みの間の、現在の表示スナップショットです。 |
+| `goToPage(page)`、`nextPage()`、`previousPage()` | `void` | 確定済みのグローバルページ列を移動します。 |
+| `setZoom(zoom)` | `void` | 表示ズームを丸めて範囲内に収めます。 |
+| `setMode(mode)` | `void` | `continuous`、`single`、`spread` を受け取ります。 |
+| `setSpreadCover(cover)` | `void` | 見開きの表紙レイアウトを切り替えます。 |
+| `openInspector()`、`closeInspector()`、`toggleInspector()` | `void` | `viewerOptions.inspector: true` が必要です。 |
+| `selectWarning(warning)` | `void` | Inspector と、現在の世代の警告が必要です。 |
+| `print()` | `Promise<void>` | 最後に完成したページのネイティブ印刷を開きます。読者はここで**PDF に保存**を選べます。PDF バイトは返しません。 |
+| `exportEpub(options)` | `Promise<Blob>` | 現在の確定をリフロー型 EPUB として書き出します。 |
 
-`current` と `resolveDestination` を除くハンドル操作は、未マウントの場合や Publication/Reader の準備が終わっていない場合に例外をスローするか、Promise を reject します。サムネイル、検索結果、警告、移動先には、現在確定している世代に属する値を渡してください。
+## `ImposiaPublicationViewer`
 
-```tsx
-const ref = useRef<ImposiaPublicationViewerHandle>(null);
+```tsx title="app/guide-preview.tsx"
+const publication = useRef<ImposiaPublicationViewerHandle>(null);
 
 <ImposiaPublicationViewer
-  ref={ref}
+  ref={publication}
   snapshot={{
-    metadata: { title: "短編集", language: "ja" },
-    entries: [{ id: "chapter-1", title: "第一章", html: "<h1>第一章</h1>" }],
+    metadata: { title: "ガイド", language: "ja" },
+    entries: [{ id: "intro", title: "はじめに", html: "<h1>はじめに</h1>" }],
   }}
-  readerOptions={{ onDeepLinkChange: (value) => history.replaceState(null, "", `#${value ?? ""}`) }}
 />;
 ```
 
-### `useImposiaDocument`
+必須の prop は `snapshot` で、`PublicationSnapshot` を受け取ります。任意の props は `snapshotRevision`、`publicationOptions`、`publicationOptionsRevision`、`viewerOptions`（`reader` を除く）、`readerOptions`（`controller` を除く）、`className`、`style`、`onReady`、`onError`、`onStateChange` です。revision 系の props は、名前のとおり更新と再マウントを強制します。Reader とコントローラーの結び付けはコンポーネント自身が用意します。`reader` と `controller` がオプション props から除かれているのは、そのためです。
 
-Core のマウント、更新、破棄だけを React のライフサイクルに接続する Hook です。表示 UI は作らないため、返された `hostRef` を空の `div` に付けます。
+### `ImposiaPublicationViewerHandle`
 
-シグネチャは `useImposiaDocument(props: UseImposiaDocumentProps): UseImposiaDocumentResult` です。戻り値は `hostRef`、`state`、準備前には `undefined` となる `controller` です。
+`current` と `resolveDestination` を除くすべての操作は、アンマウント後に例外をスローするか、Promise が reject されます。Reader に関わる操作と `print()`、`exportEpub()` は、Publication の Reader が準備できる前も同様です。
 
-props は `ImposiaPageViewer` の `source`、revision、`documentOptions`、コールバックと同じです。`state.document` は `loading` や `error` 中でも、直前の確定済み文書があれば保持されます。`documentOptionsRevision` が変わると再マウントし、`source` または `sourceRevision` が変わると `controller.update()` を呼びます。アンマウント時は `destroy()` を呼びます。
+| メンバー | 戻り値 | 動作と制約 |
+| --- | --- | --- |
+| `current` | `PublicationDocument \| undefined` | マウント中は現在の確定です。 |
+| `resolveDestination(id)` | `PublicationDestination \| undefined` | 確定前、アンマウント後、不明な ID には `undefined` です。 |
+| `navigate(destination)` | `void` | 古い移動先には例外をスローします。 |
+| `openTableOfContents()`、`closeTableOfContents()`、`toggleTableOfContents()` | `void` | 目次パネルを操作します。 |
+| `openThumbnails()`、`closeThumbnails()`、`toggleThumbnails()` | `void` | サムネイルパネルを操作します。 |
+| `getThumbnails()` | `readonly PublicationThumbnail[]` | 現在の世代のサムネイルです。 |
+| `selectThumbnail(thumbnail)` | `void` | 別の世代のサムネイルには例外をスローします。 |
+| `restoreDeepLink(value)` | `PublicationDestination \| undefined` | 有効な現在のリンクを解決し、そこへ移動します。 |
+| `openSearch()`、`closeSearch()`、`toggleSearch()` | `void` | 検索パネルを操作します。 |
+| `search(query)` | `readonly PublicationSearchResult[]` | 現在の確定を検索します。 |
+| `nextSearchResult()`、`previousSearchResult()` | `PublicationSearchResult \| undefined` | 結果間を移動します。 |
+| `selectSearchResult(result)` | `void` | 結果へ移動します。 |
+| `setMode(mode)`、`setSpreadCover(cover)` | `void` | ページ表示を変更します。 |
+| `openInspector()`、`closeInspector()`、`toggleInspector()` | `void` | `viewerOptions.inspector: true` が必要です。 |
+| `selectWarning(warning)` | `void` | 現在の世代の Inspector 警告が必要です。 |
+| `print()` | `Promise<void>` | 最新の確定のネイティブ印刷を開きます。ブラウザーの**PDF に保存**もここで選べます。 |
+| `exportEpub(options)` | `Promise<Blob>` | 最新の確定を書き出します。 |
 
-```tsx
-function BareDocument() {
-  const { hostRef, state } = useImposiaDocument({ source: { html: "<p>本文</p>" } });
-  return <div ref={hostRef} aria-busy={state.status === "loading"} />;
-}
+## `useImposiaDocument` と `useImposiaPublication`
+
+```ts
+useImposiaDocument(props: UseImposiaDocumentProps): UseImposiaDocumentResult;
+useImposiaPublication(props: UseImposiaPublicationProps): UseImposiaPublicationResult;
 ```
 
-### `useImposiaPublication`
+どちらの Hook も、`hostRef`、ライフサイクルの `state`、そしてマウントエフェクトが作るまで `undefined` のままの `controller` を返します。`hostRef` は 1 つの `div` に付けてください。`loading` や `error` の状態でも、最後に確定した文書・Publication は保持されることがあります。
 
-Publication のマウント、更新、破棄だけを React に接続します。
+`useImposiaDocument` は、ページコンポーネントと同じソース、revision、オプション、コールバックを受け取ります。HTML ソースは HTML または基準 URL が変わると更新され、light DOM ソースはノードの同一性が変わると更新されます。`sourceRevision` は更新を強制し、`documentOptionsRevision` はコントローラーを再マウントします。
 
-シグネチャは `useImposiaPublication(props: UseImposiaPublicationProps): UseImposiaPublicationResult` です。戻り値は `hostRef`、`state`、準備前には `undefined` となる `controller` です。
+`useImposiaPublication` は、Publication コンポーネントと同じスナップショット、revision、オプション、コールバックを受け取ります。スナップショットの参照または `snapshotRevision` が変わると更新し、`publicationOptionsRevision` はコントローラーを再マウントします。どちらの Hook もクリーンアップ時にコントローラーを破棄し、`AbortError` をライフサイクル上の中止として扱います。
 
-props は `ImposiaPublicationViewer` の `snapshot`、revision、`publicationOptions`、コールバックと同じです。`publicationOptionsRevision` が変わると再マウントし、`snapshot` の参照または `snapshotRevision` が変わると更新します。`state.publication` は新しい処理の `loading` や `error` 中も直前の確定済み値を保持できます。
-
-```tsx
-const { hostRef, state } = useImposiaPublication({ snapshot });
-return <div ref={hostRef} aria-busy={state.status === "loading"} />;
+```tsx title="app/article.tsx"
+function Article({ html }: { html: string }) {
+  const { hostRef, state } = useImposiaDocument({ source: { html } });
+  return <div ref={hostRef} aria-busy={state.status === "loading"} />;
+}
 ```

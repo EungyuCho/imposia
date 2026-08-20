@@ -1,25 +1,52 @@
 ---
 title: 첫 페이지 만들기
-description: React 앱에서 HTML을 A4 페이지로 미리보고, 인쇄하거나 PDF로 저장합니다.
+description: React 앱에 Imposia를 추가해 HTML을 A4 페이지로 표시하고, 인쇄하거나 PDF로 저장합니다.
 ---
 
-기존 React 앱에 페이지 미리보기를 붙여 봅니다. 이 문서를 마치면 HTML을 A4 페이지로 확인하고, 같은 결과를 브라우저 인쇄 창으로 보내 종이로 출력하거나 PDF로 저장할 수 있습니다.
+이 가이드는 기존 React 앱에 페이지 미리보기를 추가합니다. 다 마치면 같은 컴포넌트에서 HTML을 A4 페이지로 확인하고, 종이나 PDF 출력을 위해 브라우저의 기본 인쇄 흐름을 열 수 있습니다.
 
-## 시작하기 전에
+<Callout type="info" title="시작하기 전에">
+React 18 이상과 브라우저에서 실행되는 클라이언트 환경이 필요합니다. Imposia는 Node.js나 서버 사이드 렌더링에서는 페이지를 만들지 않으므로, 프레임워크의 클라이언트 경계 아래에 마운트하세요.
+</Callout>
 
-React 18 이상과 브라우저에서 실행되는 클라이언트 환경이 필요합니다. Imposia는 Node.js나 서버 사이드 렌더링 과정에서는 페이지를 만들지 않습니다.
+<Steps>
 
-## 1. React 패키지를 설치합니다
+<Step>
 
-```bash
-pnpm add @imposia/react react react-dom
-```
+### React 패키지를 설치합니다
 
-패키지 스타일시트는 컴포넌트나 앱의 클라이언트 진입 파일에서 한 번만 불러오세요.
+<Tabs items={["pnpm", "npm", "yarn", "bun"]}>
+  <Tab value="pnpm">
+    ```bash
+    pnpm add @imposia/react react react-dom
+    ```
+  </Tab>
+  <Tab value="npm">
+    ```bash
+    npm install @imposia/react react react-dom
+    ```
+  </Tab>
+  <Tab value="yarn">
+    ```bash
+    yarn add @imposia/react react react-dom
+    ```
+  </Tab>
+  <Tab value="bun">
+    ```bash
+    bun add @imposia/react react react-dom
+    ```
+  </Tab>
+</Tabs>
 
-## 2. 페이지 문서를 표시합니다
+패키지 스타일시트는 이 컴포넌트나 앱의 클라이언트 진입 파일에서 한 번 불러오세요. 여러 번 불러와도 문제는 없지만, 아예 빠뜨리면 Viewer에 스타일이 적용되지 않습니다.
 
-```tsx
+</Step>
+
+<Step>
+
+### 페이지 문서를 표시합니다
+
+```tsx title="app/preview.tsx"
 import { ImposiaPageViewer, type ImposiaPageViewerHandle } from "@imposia/react";
 import { useRef } from "react";
 import "@imposia/react/styles.css";
@@ -37,30 +64,76 @@ export function Preview() {
       <button type="button" onClick={() => void viewer.current?.print()}>
         인쇄 / PDF 저장
       </button>
-      <button
-        type="button"
-        onClick={() =>
-          void viewer.current?.exportEpub({
-            metadata: { title: "안녕하세요", language: "ko", identifier: "urn:example:hello" },
-          })
-        }
-      >
-        EPUB 내보내기
-      </button>
     </>
   );
 }
 ```
 
-`source.html`에는 페이지로 만들 내용을 넣고, `documentOptions.page`에는 용지 크기와 여백을 지정합니다. `viewer` 핸들은 가장 최근에 완성된 페이지 문서를 가리킵니다.
+`source.html`은 페이지로 나눌 내용이고, `documentOptions.page`는 용지 크기와 여백을 정합니다. 핸들은 항상 마지막으로 완성에 성공한 페이지 문서를 가리키며, 아직 만들어지는 중인 문서를 가리키는 일은 없습니다.
 
-## 3. 결과를 확인합니다
+</Step>
 
-브라우저에서 컴포넌트를 열고 HTML이 A4 페이지로 표시되는지 확인하세요.
+<Step>
 
-- **인쇄 / PDF 저장**을 누르면 Viewer에 보이는 페이지로 브라우저의 기본 인쇄 창이 열립니다. 종이로 출력하려면 프린터를, 파일로 남기려면 **PDF로 저장**을 선택하세요. 이 메서드는 PDF 바이트를 반환하지 않습니다.
-- **EPUB 내보내기**는 리플로우형 EPUB 3.3 `Blob`을 반환합니다. 위 예제는 내보내기 메서드까지만 호출하므로, 실제 앱에서는 반환된 `Blob`을 다운로드나 저장 흐름에 연결하세요.
+### 결과를 확인합니다
 
-`source`가 바뀌어도 다음 문서가 완성될 때까지 현재 페이지를 계속 보여줍니다. 에셋을 불러오거나 실제 출력 UI를 연결하기 전에 [미리보기와 출력이 일치하는 방식](/ko/docs/concepts/publishing-model)을 확인하세요.
+브라우저에서 컴포넌트를 여세요. HTML이 Viewer 안에서 A4 페이지로 표시됩니다.
 
-컴포넌트 props, ref 핸들, Core 컨트롤러와 Viewer 메서드를 더 자세히 보려면 [API 레퍼런스](/ko/docs/api)로 이어가세요.
+**인쇄 / PDF 저장**을 누르면 지금 보이는 페이지로 브라우저의 기본 인쇄 창이 열리고, 여기서 사용자가 프린터를 고르거나 **PDF로 저장**을 선택합니다. 이 메서드는 인쇄 창을 띄운 시점에 이행되며, PDF 바이트를 반환하지 않습니다.
+
+</Step>
+
+</Steps>
+
+## 진행 상태와 실패를 보여주세요
+
+위 예제는 정적 문자열을 렌더링하므로 거의 즉시 확정됩니다. 실제 원본은 시간이 걸립니다. 이미지가 자리를 잡고, 글꼴이 로드되고, 긴 문서는 여러 페이지로 나뉩니다. 이 과정을 보여줘야 한다면 `useImposiaDocument`를 사용하세요.
+
+```tsx title="app/preview-with-state.tsx"
+import { useImposiaDocument } from "@imposia/react";
+
+export function Preview({ html }: { html: string }) {
+  const { hostRef, state } = useImposiaDocument({ source: { html } });
+
+  return (
+    <>
+      {state.status === "loading" && <p role="status">페이지를 준비하는 중…</p>}
+      {state.status === "error" && <p role="alert">이 문서를 페이지로 나눌 수 없습니다.</p>}
+      <div ref={hostRef} />
+    </>
+  );
+}
+```
+
+`state.status`는 `idle`, `loading`, `ready`, `error` 중 하나입니다. 첫 성공 이후의 `loading`은 이전 페이지가 화면에 남은 채 다음 버전을 준비하고 있다는 뜻입니다. 따라서 스피너는 미리보기를 대체하지 말고 *옆에* 두세요. `state.status`가 `error`일 때도 화면에는 마지막으로 성공한 문서가 그대로 표시되고 있습니다.
+
+## 선택 사항: EPUB 내보내기
+
+제품에 의미 구조를 보존한 리플로우형 산출물도 필요하다면, 같은 확정된 문서에서 EPUB 3.3 `Blob`을 만들 수 있습니다. 이 출력은 부가 경로입니다. 위의 미리보기·인쇄 경로와는 별개이며, 필요 없으면 건너뛰어도 됩니다.
+
+메타데이터는 필수입니다. 제목, 언어, 식별자가 없으면 내보내기가 거부됩니다.
+
+```tsx title="app/export-epub.ts"
+const blob = await viewer.current?.exportEpub({
+  metadata: { title: "안녕하세요", language: "ko", identifier: "urn:example:hello" },
+});
+```
+
+이 메서드는 `Blob`을 반환합니다. 다운로드나 업로드에 연결하는 일은 앱의 몫입니다. EPUB은 페이지로 나뉜 DOM이 아니라 원본의 의미 구조에서 만들어지므로, 머리말·꼬리말 같은 페이지 장식과 생성된 페이지 번호는 의도적으로 제외됩니다.
+
+## 다음 단계
+
+<Cards>
+  <Card title="이미지와 글꼴 불러오기" href="/ko/docs/guides/assets">
+    HTML은 리소스를 직접 가져올 수 없습니다. `<img>`를 추가하기 전에 `assetResolver`를 구현하세요.
+  </Card>
+  <Card title="퍼블리싱 모델" href="/ko/docs/concepts/publishing-model">
+    실제 서비스의 인쇄·내보내기 컨트롤을 연결하기 전에 읽어 보세요.
+  </Card>
+  <Card title="React API" href="/ko/docs/api/react">
+    모든 컴포넌트, 훅, 명령형 핸들 메서드입니다.
+  </Card>
+  <Card title="여러 문서를 함께 퍼블리싱하기" href="/ko/docs/guides/react-publishing">
+    여러 `entry`가 하나의 읽기 순서, outline, 페이지 순서를 공유합니다.
+  </Card>
+</Cards>

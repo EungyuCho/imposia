@@ -1,125 +1,116 @@
 ---
 title: React API
-description: "@imposia/react 提供的 React 组件、Hook、Props 与命令式句柄。"
+description: 来自 @imposia/react 的 React 组件、Hook、props 与命令式句柄。
 ---
 
-## React 组件与 Hook
+`@imposia/react` 把一个 Core 控制器和一个 canonical iframe 绑进 React 生命周期。它还重新导出 Core 与 Viewer 的 API 表面，因此 React 应用通常不需要其他 Imposia 导入。导入一次 `@imposia/react/styles.css`。
 
-### `ImposiaPageViewer` 与 `ImposiaDocument`
+## `ImposiaPageViewer` 与 `ImposiaDocument`
 
-```tsx
-function ImposiaPageViewer(
-  props: ImposiaPageViewerProps & React.RefAttributes<ImposiaPageViewerHandle>,
-): React.ReactElement;
-```
+`ImposiaPageViewer` 挂载一份 Core 页面文档，并在首次提交后绑定页面 Viewer。`ImposiaDocument` 是公开 props 与句柄类型完全相同的兼容包装：`ImposiaDocumentProps = ImposiaPageViewerProps`，`ImposiaDocumentHandle = ImposiaPageViewerHandle`。
 
-组件会创建 Core 控制器，并把同一个 canonical iframe 交给 Page Viewer。`ImposiaDocument` 是它的兼容别名，props 和句柄完全相同：
-
-```ts
-type ImposiaDocumentProps = ImposiaPageViewerProps;
-type ImposiaDocumentHandle = ImposiaPageViewerHandle;
-```
-
-| prop | 类型 | 必填 | 说明 |
-| --- | --- | --- | --- |
-| `source` | `PageSource` | 是 | `{ html, baseUrl? }` 或 `{ lightDom, baseUrl? }`。变化时复用控制器并调用 `update()`。 |
-| `sourceRevision` | `string \| number` | 否 | 即使源相同也强制重新处理，不更换控制器。 |
-| `documentOptions` | `PageDocumentOptions` | 否 | 创建控制器时使用；单独改变对象不会重建控制器。 |
-| `documentOptionsRevision` | `string \| number` | 否 | 变化时用当前选项重建控制器和 canonical iframe。 |
-| `viewerOptions` | `PageViewerOptions` | 否 | 模式、缩放、主题、跨页和 Inspector。这里生成的是普通 `PageDocument`，传 Reader 会校验失败。 |
-| `onViewerStateChange` | `(state: PageViewerState) => void` | 否 | 报告页码、缩放、指定模式、实际生效模式和版本变化。 |
-| `className` / `style` | `string` / `CSSProperties` | 否 | 宿主 `<div>` 的展示属性。 |
-| `onReady` | `(document: PageDocument) => void` | 否 | 文档提交并绑定 Viewer 后调用。 |
-| `onError` | `(error: unknown) => void` | 否 | Core 或 Viewer 失败时调用。 |
-| `onStateChange` | `(state: ImposiaDocumentState) => void` | 否 | 报告 `idle \| loading \| ready \| error`。 |
-
-| 句柄成员 | 返回值 | 准备状态与错误 |
-| --- | --- | --- |
-| `current` | `PageDocument \| undefined` | 首次提交前和卸载后为 `undefined`。 |
-| `viewerState` | `PageViewerState \| undefined` | Viewer 就绪时的当前展示快照。 |
-| `goToPage(page)` / `nextPage()` / `previousPage()` | `void` | 在当前已确认的全局页序列中移动。 |
-| `setZoom(zoom)` | `void` | 在支持范围内调整展示缩放。 |
-| `setMode(mode)` | `void` | 接受 `continuous \| single \| spread`；文档未就绪时抛出错误。 |
-| `setSpreadCover(cover)` | `void` | 设置第 1 页是否单独显示；文档未就绪时抛出错误。 |
-| `openInspector()` / `closeInspector()` / `toggleInspector()` | `void` | `viewerOptions.inspector` 未启用时抛出错误。 |
-| `selectWarning(warning)` | `void` | 只接受当前版本的警告；旧版本警告会被拒绝。 |
-| `print()` | `Promise<void>` | 为最新已完成页面打开浏览器原生打印对话框，用户可在其中选择**保存为 PDF**；该方法不返回 PDF 字节。未就绪或卸载后拒绝。 |
-| `exportEpub(options)` | `Promise<Blob>` | 根据最后确认的源内容及其语义结构返回 EPUB Blob；未就绪或卸载后拒绝。 |
-
-```tsx
+```tsx title="app/report-preview.tsx"
 const viewer = useRef<ImposiaPageViewerHandle>(null);
+
 <ImposiaPageViewer
   ref={viewer}
-  source={{ html: "<article><h1>标题</h1></article>" }}
-  viewerOptions={{ mode: "spread", spread: { cover: true }, inspector: true }}
+  source={{ html: "<main><h1>报告</h1></main>" }}
+  documentOptions={{ page: { size: "A4", margin: "18mm" } }}
+  viewerOptions={{ mode: "single", inspector: true }}
+  onError={console.error}
 />;
-await viewer.current?.print();
 ```
 
-### `ImposiaPublicationViewer`
+| Prop | 类型 | 必填 | 用途 |
+| --- | --- | --- | --- |
+| `source` | `PageSource` | 是 | 要分页的 HTML 或 light DOM。 |
+| `sourceRevision` | `string \| number` | 否 | 源的标识或内容比较没有变化时强制更新。 |
+| `documentOptions` | `PageDocumentOptions` | 否 | Core 分页选项。 |
+| `documentOptionsRevision` | `string \| number` | 否 | 以新的文档选项重建 Core。 |
+| `viewerOptions` | `PageViewerOptions` | 否 | 页面展示、reader 与 inspector 选项。 |
+| `onViewerStateChange` | `(state: PageViewerState) => void` | 否 | 接收页码、缩放、模式、生效模式和世代变化。 |
+| `className`、`style` | `string`、`CSSProperties` | 否 | 宿主 `div` 的展示属性。 |
+| `onReady` | `(document: PageDocument) => void` | 否 | 在文档与 Viewer 绑定就绪后运行。 |
+| `onError` | `(error: unknown) => void` | 否 | 接收 Core 或 Viewer 绑定失败。 |
+| `onStateChange` | `(state: ImposiaDocumentState) => void` | 否 | 接收 `idle`、`loading`、`ready` 和 `error`。 |
 
-```tsx
-function ImposiaPublicationViewer(
-  props: ImposiaPublicationViewerProps & React.RefAttributes<ImposiaPublicationViewerHandle>,
-): React.ReactElement;
-```
+<Callout type="warn" title="选项 props 只在 revision 变化时读取">
+`documentOptions` 在控制器挂载时被捕获。仅传入变化后的选项对象——新的解析器、扩展集合或页面几何——本身不会有任何效果：请递增 `documentOptionsRevision`，以新选项重建控制器。下方的 `publicationOptions` 与 `publicationOptionsRevision` 遵循同一规则。只有 `source`（和 `snapshot`）的变化会被自动检测。
+</Callout>
 
-它组合有序条目，并自动把 Viewer Reader 连接到拥有该文档的 `PublicationController`。
+### `ImposiaPageViewerHandle`
 
-| prop | 类型 | 说明 |
+句柄方法作用于最近一次已提交的世代。需要 Viewer 或提交结果的方法在首次提交前和卸载后抛出（或拒绝）。
+
+| 成员 | 返回值 | 约束 |
 | --- | --- | --- |
-| `snapshot` | `PublicationSnapshot` | 必填；对象引用或 revision 变化时调用 `update()`。 |
-| `snapshotRevision` | `string \| number` | 强制重新处理当前 snapshot。 |
-| `publicationOptions` / `publicationOptionsRevision` | `PublicationOptions` / `string \| number` | 选项在一个控制器生命周期内固定；revision 变化时重建。 |
-| `viewerOptions` | `Omit<PageViewerOptions, "reader">` | Reader 由组件连接，不能在这里替换。 |
-| `readerOptions` | `Omit<PublicationReaderOptions, "controller">` | 可传 `initialDeepLink` 和 `onDeepLinkChange`。 |
-| `className` / `style` | `string` / `CSSProperties` | 宿主展示属性。 |
-| `onReady` / `onError` / `onStateChange` | Publication 回调 | `onReady` 在 Publication、Viewer 和 Reader 都就绪后调用。 |
+| `current` | `PageDocument \| undefined` | 挂载期间为当前提交；其余情况为 `undefined`。 |
+| `viewerState` | `PageViewerState \| undefined` | 就绪时的当前展示快照。 |
+| `goToPage(page)`、`nextPage()`、`previousPage()` | `void` | 在已提交的全局页面序列中移动；未就绪或卸载后抛出。 |
+| `setZoom(zoom)` | `void` | 对展示缩放取整并限制范围；未就绪或卸载后抛出。 |
+| `setMode(mode)` | `void` | 接受 `continuous`、`single` 或 `spread`；未就绪或卸载后抛出。 |
+| `setSpreadCover(cover)` | `void` | 未就绪或卸载后抛出。 |
+| `openInspector()`、`closeInspector()`、`toggleInspector()` | `void` | 需要 `viewerOptions.inspector: true`。 |
+| `selectWarning(warning)` | `void` | 需要 Inspector，且警告须来自其当前世代。 |
+| `print()` | `Promise<void>` | 为最新完成的页面打开原生打印。读者可以选择另存为 PDF；该方法不返回 PDF 字节。未就绪或卸载后拒绝。 |
+| `exportEpub(options)` | `Promise<Blob>` | 把当前提交导出为可重排 EPUB；未就绪或卸载后拒绝。 |
 
-| 句柄成员 | 返回值 | 行为与约束 |
-| --- | --- | --- |
-| `current` | `PublicationDocument \| undefined` | 当前已确认的 Publication。 |
-| `resolveDestination(id)` | `PublicationDestination \| undefined` | 从当前目录或搜索索引解析稳定 ID。 |
-| `navigate(destination)` | `void` | 通过 Reader 导航；旧版本或字段不匹配的目标会抛出错误。 |
-| `openTableOfContents()` / `closeTableOfContents()` / `toggleTableOfContents()` | `void` | 控制目录面板。 |
-| `openThumbnails()` / `closeThumbnails()` / `toggleThumbnails()` | `void` | 控制页面缩略图面板。 |
-| `getThumbnails()` | `readonly PublicationThumbnail[]` | 返回当前版本的不可变模型。 |
-| `selectThumbnail(thumbnail)` | `void` | 跳转到对应页面；传入旧版本模型时会抛出错误。 |
-| `restoreDeepLink(value)` | `PublicationDestination \| undefined` | 有效时解析并导航；无效或已移除时返回 `undefined`。 |
-| `openSearch()` / `closeSearch()` / `toggleSearch()` | `void` | 控制搜索面板。 |
-| `search(query)` | `readonly PublicationSearchResult[]` | 查询当前已确认文档中经过清理的可见文本。 |
-| `nextSearchResult()` / `previousSearchResult()` | `PublicationSearchResult \| undefined` | 选择并导航相邻结果。 |
-| `selectSearchResult(result)` | `void` | 选择当前版本的结果并导航。 |
-| `setMode(mode)` / `setSpreadCover(cover)` | `void` | 控制页面展示。 |
-| `openInspector()` / `closeInspector()` / `toggleInspector()` | `void` | Inspector 未启用时抛出错误。 |
-| `selectWarning(warning)` | `void` | 只接受当前版本的警告。 |
-| `print()` / `exportEpub(options)` | `Promise<void>` / `Promise<Blob>` | `print()` 会打开浏览器原生打印对话框，其中可选择**保存为 PDF**。未就绪或卸载后拒绝。 |
+## `ImposiaPublicationViewer`
 
-```tsx
+```tsx title="app/guide-preview.tsx"
+const publication = useRef<ImposiaPublicationViewerHandle>(null);
+
 <ImposiaPublicationViewer
+  ref={publication}
   snapshot={{
-    metadata: { title: "札记", language: "zh-CN" },
-    entries: [{ id: "chapter-1", title: "第一章", html: "<h1>开始</h1>" }],
+    metadata: { title: "指南", language: "zh-CN" },
+    entries: [{ id: "intro", title: "引言", html: "<h1>引言</h1>" }],
   }}
-  readerOptions={{ initialDeepLink: location.hash.slice(1) }}
 />;
 ```
 
-### `useImposiaDocument` 与 `useImposiaPublication`
+必需的 `snapshot` prop 接受 `PublicationSnapshot`。可选 props 为 `snapshotRevision`、`publicationOptions`、`publicationOptionsRevision`、`viewerOptions`（不含 `reader`）、`readerOptions`（不含 `controller`）、`className`、`style`、`onReady`、`onError` 和 `onStateChange`。各 revision prop 如其名称所示强制更新或重建。组件自己提供 reader 与控制器的绑定，这就是其选项 props 中排除 `reader` 和 `controller` 的原因。
+
+### `ImposiaPublicationViewerHandle`
+
+除 `current` 和 `resolveDestination` 之外的所有操作在卸载后抛出。Reader 相关操作在 Publication Reader 就绪之前同样抛出。
+
+| 成员 | 返回值 | 行为与约束 |
+| --- | --- | --- |
+| `current` | `PublicationDocument \| undefined` | 挂载期间为当前提交。 |
+| `resolveDestination(id)` | `PublicationDestination \| undefined` | 提交前、卸载后或 ID 未知时为 `undefined`。 |
+| `navigate(destination)` | `void` | 过期的导航目标抛出。 |
+| `openTableOfContents()`、`closeTableOfContents()`、`toggleTableOfContents()` | `void` | 控制大纲面板。 |
+| `openThumbnails()`、`closeThumbnails()`、`toggleThumbnails()` | `void` | 控制缩略图面板。 |
+| `getThumbnails()` | `readonly PublicationThumbnail[]` | 当前世代的缩略图。 |
+| `selectThumbnail(thumbnail)` | `void` | 其他世代的缩略图抛出。 |
+| `restoreDeepLink(value)` | `PublicationDestination \| undefined` | 解析并导航有效的当前链接。 |
+| `openSearch()`、`closeSearch()`、`toggleSearch()` | `void` | 控制搜索面板。 |
+| `search(query)` | `readonly PublicationSearchResult[]` | 搜索当前提交。 |
+| `nextSearchResult()`、`previousSearchResult()` | `PublicationSearchResult \| undefined` | 在结果间移动。 |
+| `selectSearchResult(result)` | `void` | 导航到结果。 |
+| `setMode(mode)`、`setSpreadCover(cover)` | `void` | 控制页面展示。 |
+| `openInspector()`、`closeInspector()`、`toggleInspector()` | `void` | 需要 `viewerOptions.inspector: true`。 |
+| `selectWarning(warning)` | `void` | 需要来自当前世代的 Inspector 警告。 |
+| `print()` | `Promise<void>` | 为最新提交打开原生打印，其中含浏览器的另存为 PDF 选项。未就绪或卸载后拒绝。 |
+| `exportEpub(options)` | `Promise<Blob>` | 导出最新提交；未就绪或卸载后拒绝。 |
+
+## `useImposiaDocument` 与 `useImposiaPublication`
 
 ```ts
-function useImposiaDocument(props: UseImposiaDocumentProps): UseImposiaDocumentResult;
-function useImposiaPublication(props: UseImposiaPublicationProps): UseImposiaPublicationResult;
+useImposiaDocument(props: UseImposiaDocumentProps): UseImposiaDocumentResult;
+useImposiaPublication(props: UseImposiaPublicationProps): UseImposiaPublicationResult;
 ```
 
-| Hook | 输入 | 返回值 |
-| --- | --- | --- |
-| `useImposiaDocument` | 组件的 source、revision、文档选项和回调 | `hostRef`、`state: { status, document?, error? }`、`controller` |
-| `useImposiaPublication` | 组件的 snapshot、revision、Publication 选项和回调 | `hostRef`、`state: { status, publication?, error? }`、`controller` |
+两个 Hook 都返回 `hostRef`、生命周期 `state`，以及一个在挂载 effect 创建之前为 `undefined` 的控制器。把 `hostRef` 挂到一个 `div` 上。`loading` 或 `error` 状态可以保留最后一次提交的文档或 Publication。
 
-把 `hostRef` 绑定到空的 `<div>`。更新期间，state 会保留上一份已确认文档；`AbortError` 不会触发 `onError`。选项只在创建控制器时读取。若要应用新选项，请修改对应的 options revision。组件卸载时会销毁控制器。
+`useImposiaDocument` 接受页面组件的 source、revision、选项和回调。HTML 源在 HTML 或基准 URL 变化时更新；light DOM 源在节点身份变化时更新。`sourceRevision` 强制更新，`documentOptionsRevision` 重建控制器。
 
-```tsx
-const { hostRef, state, controller } = useImposiaDocument({ source: { html } });
-return <><div ref={hostRef} /><button onClick={() => void controller?.print()}>打印</button></>;
+`useImposiaPublication` 接受出版组件的 snapshot、revision、选项和回调。它在快照引用或 `snapshotRevision` 变化时更新；`publicationOptionsRevision` 重建控制器。两个 Hook 都会在清理时销毁控制器，并把 `AbortError` 视为生命周期取消。
+
+```tsx title="app/article.tsx"
+function Article({ html }: { html: string }) {
+  const { hostRef, state } = useImposiaDocument({ source: { html } });
+  return <div ref={hostRef} aria-busy={state.status === "loading"} />;
+}
 ```

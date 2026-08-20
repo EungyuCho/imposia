@@ -1,25 +1,52 @@
 ---
 title: 最初のページを作る
-description: ReactアプリでHTMLをA4ページとして確認し、印刷またはPDFとして保存します。
+description: React アプリに Imposia を追加し、HTML を A4 ページとして表示して、印刷または PDF 保存までつなげます。
 ---
 
-既存のReactアプリにページプレビューを追加します。このガイドを終えると、HTMLをA4ページとして確認し、同じ結果をブラウザーの印刷画面から紙へ印刷またはPDFとして保存できます。
+このガイドでは、既存の React アプリにページ分割されたプレビューを追加します。終える頃には、同じコンポーネントで HTML を A4 ページとして表示し、紙または PDF への出力に向けてブラウザー標準の印刷フローを開けるようになります。
 
-## 始める前に
+<Callout type="info" title="始める前に">
+React 18 以降と、クライアントサイドのブラウザー環境が必要です。Imposia は Node.js やサーバーサイドレンダリング中にはページを生成しないため、フレームワークのクライアント境界より内側でマウントしてください。
+</Callout>
 
-React 18 以降と、ブラウザーで動作するクライアント環境が必要です。Imposia は Node.js やサーバーサイドレンダリングの処理中にはページを生成しません。
+<Steps>
 
-## 1. React パッケージをインストールする
+<Step>
 
-```bash
-pnpm add @imposia/react react react-dom
-```
+### React パッケージをインストールする
 
-パッケージのスタイルシートは、コンポーネントまたはアプリのクライアントエントリーファイルで一度だけ読み込んでください。
+<Tabs items={["pnpm", "npm", "yarn", "bun"]}>
+  <Tab value="pnpm">
+    ```bash
+    pnpm add @imposia/react react react-dom
+    ```
+  </Tab>
+  <Tab value="npm">
+    ```bash
+    npm install @imposia/react react react-dom
+    ```
+  </Tab>
+  <Tab value="yarn">
+    ```bash
+    yarn add @imposia/react react react-dom
+    ```
+  </Tab>
+  <Tab value="bun">
+    ```bash
+    bun add @imposia/react react react-dom
+    ```
+  </Tab>
+</Tabs>
 
-## 2. ページ文書を表示する
+パッケージのスタイルシートは、このコンポーネントまたはアプリのクライアントエントリーファイルで一度だけ読み込んでください。複数回読み込んでも害はありませんが、読み込みを忘れると Viewer にスタイルが当たりません。
 
-```tsx
+</Step>
+
+<Step>
+
+### ページ文書を表示する
+
+```tsx title="app/preview.tsx"
 import { ImposiaPageViewer, type ImposiaPageViewerHandle } from "@imposia/react";
 import { useRef } from "react";
 import "@imposia/react/styles.css";
@@ -35,32 +62,78 @@ export function Preview() {
         documentOptions={{ page: { size: "A4", margin: "18mm" } }}
       />
       <button type="button" onClick={() => void viewer.current?.print()}>
-        印刷 / PDF保存
-      </button>
-      <button
-        type="button"
-        onClick={() =>
-          void viewer.current?.exportEpub({
-            metadata: { title: "こんにちは", language: "ja", identifier: "urn:example:hello" },
-          })
-        }
-      >
-        EPUB を書き出す
+        印刷 / PDF 保存
       </button>
     </>
   );
 }
 ```
 
-`source.html` にはページにする内容を指定し、`documentOptions.page` には用紙サイズと余白を指定します。`viewer` ハンドルは、直近でページ分割に成功した文書を指します。
+`source.html` にはページ分割する内容を、`documentOptions.page` には用紙サイズと余白を指定します。ハンドルは常に、直近でページ分割に成功した文書を指します。作成途中の文書を指すことはありません。
 
-## 3. 結果を確認する
+</Step>
 
-ブラウザーでコンポーネントを開き、HTML が A4 ページとして表示されることを確認してください。
+<Step>
 
-- **印刷 / PDF保存**を押すと、Viewerに表示中のページを使ってブラウザー標準の印刷画面が開きます。紙に出す場合はプリンターを、ファイルに残す場合は**PDFとして保存**を選びます。このメソッドはPDFバイトを返しません。
-- **EPUB を書き出す**を押すと、リフロー型 EPUB 3.3 `Blob` が返ります。この例では書き出しメソッドを呼ぶところまでしか扱いません。実際のアプリでは、返された `Blob` をダウンロードまたは保存処理につないでください。
+### 結果を確認する
 
-`source` を更新しても、次の文書が完成するまでは現在のページが表示され続けます。アセットの読み込みや本番用の出力 UI を追加する前に、[プレビューと出力が一致する仕組み](/ja/docs/concepts/publishing-model)を確認してください。
+ブラウザーでコンポーネントを開くと、HTML が Viewer 内に A4 ページとして表示されます。
 
-コンポーネントの全 props、ハンドル、Core と Viewer の低レベル API は、[API リファレンス](/ja/docs/api)で確認できます。
+**印刷 / PDF 保存**をクリックすると、表示中のページに対してブラウザー自身の印刷ダイアログが開き、読者はそこでプリンターまたは**PDF に保存**を選びます。このメソッドはダイアログを起動した時点で解決し、PDF バイトは返しません。
+
+</Step>
+
+</Steps>
+
+## 進行状況と失敗を表示する
+
+上の例は静的な文字列を描画するため、ほぼ即座に確定します。実際のソースには時間がかかります。画像やフォントの読み込みが終わるのを待ち、長い文書は多くのページへ分割されます。その処理の進行を表示したいときは `useImposiaDocument` を使います。
+
+```tsx title="app/preview-with-state.tsx"
+import { useImposiaDocument } from "@imposia/react";
+
+export function Preview({ html }: { html: string }) {
+  const { hostRef, state } = useImposiaDocument({ source: { html } });
+
+  return (
+    <>
+      {state.status === "loading" && <p role="status">ページを準備しています…</p>}
+      {state.status === "error" && <p role="alert">この文書をページ分割できませんでした。</p>}
+      <div ref={hostRef} />
+    </>
+  );
+}
+```
+
+`state.status` は `idle`、`loading`、`ready`、`error` のいずれかです。初回成功後の `loading` は、次の版を準備しながら以前のページを表示し続けている状態を表します。スピナーはプレビューを置き換えるのではなく、プレビューの*横*に置いてください。`state.status` が `error` のときも、表示されているのは最後に成功した文書のままです。
+
+## EPUB の書き出し（任意）
+
+製品に意味構造を保ったリフロー型の成果物も必要なら、同じ確定済み文書から EPUB 3.3 `Blob` を作れます。これは副次的な出力で、上のプレビューと印刷の経路には含まれません。不要なら読み飛ばしてかまいません。
+
+メタデータは必須です。title、language、identifier がないと、書き出しは reject されます。
+
+```tsx title="app/export-epub.ts"
+const blob = await viewer.current?.exportEpub({
+  metadata: { title: "こんにちは", language: "ja", identifier: "urn:example:hello" },
+});
+```
+
+このメソッドは `Blob` を返します。ダウンロードやアップロードにつなぐのはアプリケーションの役割です。EPUB はページ分割後のページ DOM ではなく意味構造を保つソースから作られるため、ページ装飾と生成されたページ番号は意図的に含まれません。
+
+## 次のステップ
+
+<Cards>
+  <Card title="画像とフォントを読み込む" href="/ja/docs/guides/assets">
+    HTML は自力ではリソースを取得できません。`<img>` を足す前に `assetResolver` を実装してください。
+  </Card>
+  <Card title="出版モデル" href="/ja/docs/concepts/publishing-model">
+    本番の印刷・書き出し UI を接続する前に読んでください。
+  </Card>
+  <Card title="React API" href="/ja/docs/api/react">
+    すべてのコンポーネント、Hook、命令型ハンドルのメソッド。
+  </Card>
+  <Card title="複数の文書をまとめて出版する" href="/ja/docs/guides/react-publishing">
+    1 つの読み順、アウトライン、ページ列をエントリー間で共有します。
+  </Card>
+</Cards>
