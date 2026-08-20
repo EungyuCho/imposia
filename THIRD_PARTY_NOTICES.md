@@ -1,11 +1,9 @@
 # Third-party notices
 
-Imposia source distributions and package artifacts depend on the projects below. Their licenses remain controlling for their respective code. The `@imposia/core` browser artifact bundles parse5, entities, PostCSS, nanoid, and picocolors runtime code; its package notice carries the complete upstream texts for all five projects. PDF.js remains an external dependency of the Viewer package.
+Imposia source distributions and package artifacts depend on the projects below. Their licenses remain controlling for their respective code. The `@imposia/core` browser artifact bundles PostCSS, nanoid, and picocolors runtime code; its package notice carries the complete upstream texts for all three projects. PDF.js remains an external dependency of the Viewer package.
 
 | Component | Version | Use | License |
 | --- | --- | --- | --- |
-| parse5 | 8.0.0 | Bundled HTML parsing and serialization in `@imposia/core` | MIT |
-| entities | 6.0.1 | Bundled HTML entity support transitively used by parse5 in `@imposia/core` | BSD-2-Clause |
 | PostCSS | 8.5.20 | Bundled CSS declaration parsing in `@imposia/core` | MIT |
 | nanoid | 3.3.16 | Bundled CSS support transitively used by PostCSS in `@imposia/core` | MIT |
 | picocolors | 1.1.1 | Bundled CSS support transitively used by PostCSS in `@imposia/core` | ISC |
@@ -13,7 +11,7 @@ Imposia source distributions and package artifacts depend on the projects below.
 
 Package artifacts carry their own legal files:
 
-- `@imposia/core`: `packages/core/LICENSE` and `packages/core/THIRD_PARTY_NOTICES.md` (complete bundled parse5, entities, PostCSS, nanoid, and picocolors license texts).
+- `@imposia/core`: `packages/core/LICENSE` and `packages/core/THIRD_PARTY_NOTICES.md` (complete bundled PostCSS, nanoid, and picocolors license texts).
 - `@imposia/viewer`: `packages/viewer/LICENSE` and `packages/viewer/THIRD_PARTY_NOTICES.md` (PDF.js Apache-2.0 text; dependency remains external).
 - `@imposia/client`: `packages/client/LICENSE` and `packages/client/THIRD_PARTY_NOTICES.md`.
 - `@imposia/react`: `packages/react/LICENSE` and `packages/react/THIRD_PARTY_NOTICES.md`.

@@ -1,20 +1,16 @@
-import { type DefaultTreeAdapterTypes, parse, serialize } from "parse5";
 import { normalizeCss, normalizeInlineCss } from "./css-contracts.js";
 import {
+  assignNodeOrders,
   attribute,
   enforceResourcePolicy,
   isTemplate,
   nodeOrder,
-  removeNode,
+  parseHtmlDocument,
   sanitizeMarkup,
   visitElements,
 } from "./html-policy.js";
 
 import { createWarningCollector, type DocumentWarning, type WarningCollector } from "./warnings.js";
-
-type Document = DefaultTreeAdapterTypes.Document;
-type Element = DefaultTreeAdapterTypes.Element;
-type ParentNode = DefaultTreeAdapterTypes.ParentNode;
 
 export interface PrepareDocumentOptions {
   headerTemplate?: string;
@@ -40,15 +36,8 @@ export interface PreparedExtensionInput {
   warnings: DocumentWarning[];
 }
 
-function textContent(element: Element): string {
-  return element.childNodes
-    .filter((node): node is DefaultTreeAdapterTypes.TextNode => node.nodeName === "#text")
-    .map((node) => node.value)
-    .join("");
-}
-
-function setTextContent(element: Element, value: string): void {
-  element.childNodes = [{ nodeName: "#text", value, parentNode: element }];
+function serializeDocument(document: Document): string {
+  return `<!DOCTYPE html>${document.documentElement.outerHTML}`;
 }
 
 function decorationMarkup(
@@ -112,15 +101,15 @@ function extractDecorations(
 ): Pick<PreparedDocument, "headerTemplate" | "footerTemplate"> {
   let embeddedHeader: EmbeddedDecoration | undefined;
   let embeddedFooter: EmbeddedDecoration | undefined;
-  visitElements(document, (element, parent) => {
+  visitElements(document, (element) => {
     if (!isTemplate(element)) return;
     const isHeader = attribute(element, "data-page-header") !== undefined;
     const isFooter = attribute(element, "data-page-footer") !== undefined;
     if (!isHeader && !isFooter) return;
-    const decoration = { markup: serialize(element.content), order: nodeOrder(element) };
+    const decoration = { markup: element.innerHTML, order: nodeOrder(element) };
     if (isHeader && embeddedHeader === undefined) embeddedHeader = decoration;
     if (isFooter && embeddedFooter === undefined) embeddedFooter = decoration;
-    removeNode(parent, element);
+    element.remove();
   });
 
   if (options.headerTemplate !== undefined && embeddedHeader !== undefined) {
@@ -166,11 +155,13 @@ function extractDecorations(
 function normalizeStyles(document: ParentNode, warnings: WarningCollector): void {
   visitElements(document, (element) => {
     const order = nodeOrder(element);
-    if (element.tagName === "style") {
-      setTextContent(element, normalizeCss(textContent(element), warnings, order));
+    if (element.localName === "style") {
+      element.textContent = normalizeCss(element.textContent ?? "", warnings, order);
     }
-    const style = element.attrs.find((item) => item.name.toLowerCase() === "style");
-    if (style !== undefined) style.value = normalizeInlineCss(style.value, warnings, order);
+    const style = element.getAttribute("style");
+    if (style !== null) {
+      element.setAttribute("style", normalizeInlineCss(style, warnings, order));
+    }
   });
 }
 
@@ -179,12 +170,12 @@ export function prepareExtensionInput(
   css: readonly string[],
 ): PreparedExtensionInput {
   const warnings = createWarningCollector();
-  const document = parse(html, { sourceCodeLocationInfo: true });
+  const document = parseHtmlDocument(html);
+  assignNodeOrders(document);
   normalizeStyles(document, warnings);
   enforceResourcePolicy(document, { allowRemoteResources: true }, warnings);
-  const serialized = serialize(document);
   return {
-    html: /^<!doctype html>/i.test(serialized) ? serialized : `<!DOCTYPE html>${serialized}`,
+    html: serializeDocument(document),
     css: Object.freeze(css.map((value) => normalizeCss(value, warnings))),
     warnings: warnings.finish(),
   };
@@ -195,13 +186,10 @@ export function prepareDocument(
   options: PrepareDocumentOptions = {},
 ): PreparedDocument {
   const warnings = createWarningCollector();
-  const document = parse(html, { sourceCodeLocationInfo: true });
+  const document = parseHtmlDocument(html);
+  assignNodeOrders(document);
   const decorations = extractDecorations(document, options, warnings);
   normalizeStyles(document, warnings);
   enforceResourcePolicy(document, options, warnings);
-  const serialized = serialize(document);
-  const normalizedHtml = /^<!doctype html>/i.test(serialized)
-    ? serialized
-    : `<!DOCTYPE html>${serialized}`;
-  return { html: normalizedHtml, ...decorations, warnings: warnings.finish() };
+  return { html: serializeDocument(document), ...decorations, warnings: warnings.finish() };
 }

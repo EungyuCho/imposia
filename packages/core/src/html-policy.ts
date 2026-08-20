@@ -1,26 +1,56 @@
-import { type DefaultTreeAdapterTypes, parseFragment, serialize } from "parse5";
 import type { PrepareDocumentOptions } from "./document.js";
 import type { WarningCollector } from "./warnings.js";
 
-type Element = DefaultTreeAdapterTypes.Element;
-type ParentNode = DefaultTreeAdapterTypes.ParentNode;
-type ChildNode = DefaultTreeAdapterTypes.ChildNode;
-type Template = DefaultTreeAdapterTypes.Template;
+const ELEMENT_NODE = 1;
 
-export function isElement(node: ChildNode): node is Element {
-  return "tagName" in node;
+/**
+ * Spacing between consecutive element orders. Warning orders interleave an
+ * element's document-order slot with intra-element character offsets (CSS
+ * declaration offsets, decoration token offsets), so the stride must exceed
+ * any intra-element offset. It comfortably exceeds the 5 MiB default input
+ * ceiling while keeping the largest composed order far below
+ * Number.MAX_SAFE_INTEGER.
+ */
+const NODE_ORDER_STRIDE = 2 ** 24;
+
+const nodeOrders = new WeakMap<Element, number>();
+
+let cachedInertDocument: Document | undefined;
+
+/**
+ * A parser-created document without a browsing context: scripts never execute
+ * and subresources are never fetched while markup lives in it.
+ */
+function inertDocument(): Document {
+  cachedInertDocument ??= new DOMParser().parseFromString("", "text/html");
+  return cachedInertDocument;
 }
 
-export function isTemplate(node: Element): node is Template {
-  return node.tagName === "template" && "content" in node;
+export function parseHtmlDocument(html: string): Document {
+  return new DOMParser().parseFromString(html, "text/html");
+}
+
+/**
+ * Parses markup in a `<template>` context (matching how fragments were parsed
+ * before: parse5's context-free parseFragment also used a template context),
+ * so table fragments such as `<tr>`/`<td>` survive.
+ */
+export function parseInertFragment(markup: string): HTMLTemplateElement {
+  const template = inertDocument().createElement("template");
+  template.innerHTML = markup;
+  return template;
+}
+
+export function isElement(node: Node): node is Element {
+  return node.nodeType === ELEMENT_NODE;
+}
+
+export function isTemplate(element: Element): element is HTMLTemplateElement {
+  return element.localName === "template" && "content" in element;
 }
 
 export function attribute(element: Element, name: string): string | undefined {
-  return element.attrs.find((item) => item.name === name)?.value;
-}
-
-export function removeNode(parent: ParentNode, node: ChildNode): void {
-  parent.childNodes = parent.childNodes.filter((child) => child !== node);
+  return element.getAttribute(name) ?? undefined;
 }
 
 export function visitElements(
@@ -30,14 +60,33 @@ export function visitElements(
   for (const node of [...parent.childNodes]) {
     if (!isElement(node)) continue;
     visitor(node, parent);
-    if (!parent.childNodes.includes(node)) continue;
+    if (node.parentNode !== parent) continue;
     if (isTemplate(node)) visitElements(node.content, visitor);
     else visitElements(node, visitor);
   }
 }
 
+/**
+ * Assigns every element under the root (template contents included) its
+ * document-order slot. Orders survive later tree mutations, so they keep
+ * reflecting the authored order even after nodes move or leave the tree.
+ */
+export function assignNodeOrders(root: ParentNode): void {
+  let index = 0;
+  visitElements(root, (element) => {
+    nodeOrders.set(element, index * NODE_ORDER_STRIDE);
+    index += 1;
+  });
+}
+
+/**
+ * The element's authored document-order slot. Before the parse5 removal this
+ * was the element's source character offset; both keys produce the same
+ * ordering except for parser error-recovery moves (for example
+ * foster-parented table content), where document order after recovery wins.
+ */
 export function nodeOrder(element: Element, fallback = Number.MAX_SAFE_INTEGER): number {
-  return element.sourceCodeLocation?.startOffset ?? fallback;
+  return nodeOrders.get(element) ?? fallback;
 }
 
 export function enforceResourcePolicy(
@@ -47,12 +96,12 @@ export function enforceResourcePolicy(
   baseOrder = 0,
 ): void {
   let warningIndex = 0;
-  visitElements(root, (element, parent) => {
+  visitElements(root, (element) => {
     const order = baseOrder + nodeOrder(element, warningIndex);
     const refreshMeta =
-      element.tagName === "meta" &&
+      element.localName === "meta" &&
       attribute(element, "http-equiv")?.trim().toLowerCase() === "refresh";
-    if (["script", "iframe", "object", "embed"].includes(element.tagName) || refreshMeta) {
+    if (["script", "iframe", "object", "embed"].includes(element.localName) || refreshMeta) {
       if (
         warnings.add(
           {
@@ -66,13 +115,13 @@ export function enforceResourcePolicy(
       ) {
         warningIndex += 1;
       }
-      removeNode(parent, element);
+      element.remove();
       return;
     }
 
-    const retained = [];
-    for (const item of element.attrs) {
-      if (item.name.toLowerCase().startsWith("on")) {
+    for (const item of [...element.attributes]) {
+      const name = item.name.toLowerCase();
+      if (name.startsWith("on")) {
         if (
           warnings.add(
             {
@@ -86,10 +135,11 @@ export function enforceResourcePolicy(
         ) {
           warningIndex += 1;
         }
+        element.removeAttribute(item.name);
         continue;
       }
 
-      if (["href", "src", "poster", "action", "formaction"].includes(item.name.toLowerCase())) {
+      if (["href", "src", "poster", "action", "formaction"].includes(name)) {
         const value = item.value.trim();
         const unsafe = /^javascript:/i.test(value) || /^data:text\/html/i.test(value);
         const remote = /^https?:\/\//i.test(value);
@@ -108,12 +158,10 @@ export function enforceResourcePolicy(
           ) {
             warningIndex += 1;
           }
-          continue;
+          element.removeAttribute(item.name);
         }
       }
-      retained.push(item);
     }
-    element.attrs = retained;
   });
 }
 
@@ -123,7 +171,8 @@ export function sanitizeMarkup(
   warnings: WarningCollector,
   baseOrder: number,
 ): string {
-  const fragment = parseFragment(markup, { sourceCodeLocationInfo: true });
-  enforceResourcePolicy(fragment, options, warnings, baseOrder);
-  return serialize(fragment);
+  const template = parseInertFragment(markup);
+  assignNodeOrders(template.content);
+  enforceResourcePolicy(template.content, options, warnings, baseOrder);
+  return template.innerHTML;
 }

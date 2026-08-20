@@ -75,7 +75,7 @@ const pageDocument = await controller.ready;
 
 | 函数签名 | 返回值与约束 | 最小示例 |
 | --- | --- | --- |
-| `prepareDocument(html, { headerTemplate?, footerTemplate?, allowRemoteResources? }?)` | 同步返回 `{ html, headerTemplate?, footerTemplate?, warnings }`；只清理和规范化输入，不执行分页。 | `const prepared = prepareDocument(html);` |
+| `prepareDocument(html, { headerTemplate?, footerTemplate?, allowRemoteResources? }?)` | 同步返回 `{ html, headerTemplate?, footerTemplate?, warnings }`；只清理和规范化输入，不执行分页。使用浏览器原生 HTML 解析器，因此与其他 Core API 一样仅限浏览器运行；警告按错误恢复后的文档顺序排列。 | `const prepared = prepareDocument(html);` |
 | `pageWarningTargetBounds(document, warning)` | 返回 `{ left, top, width, height }`；警告不属于文档或无法定位时为 `undefined`。 | `const bounds = pageWarningTargetBounds(doc, doc.warnings[0]);` |
 | `hasPageDocumentFrameSandbox(iframe)` | sandbox token 恰好为公开常量中的 `allow-same-origin` 和 `allow-modals` 时为 `true`。 | `hasPageDocumentFrameSandbox(doc.iframe);` |
 | `selectBlankMarkers(markers, pages)` | 返回需在前方插入空白页的 marker ID；缺少 marker 映射时同步抛错。 | `selectBlankMarkers([{ id: 1, side: "left" }], new Map([[1, 1]]));` |

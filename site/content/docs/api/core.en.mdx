@@ -89,7 +89,7 @@ hasPageDocumentFrameSandbox(iframe: HTMLIFrameElement): boolean;
 selectBlankMarkers(markers: PageSideConstraint[], pages: Map<number, number>): number[];
 ```
 
-- `prepareDocument` synchronously normalizes/sanitizes HTML and returns `{ html, headerTemplate?, footerTemplate?, warnings }`. Its options are `headerTemplate`, `footerTemplate`, and `allowRemoteResources`. API decoration options override embedded templates.
+- `prepareDocument` synchronously normalizes/sanitizes HTML and returns `{ html, headerTemplate?, footerTemplate?, warnings }`. Its options are `headerTemplate`, `footerTemplate`, and `allowRemoteResources`. API decoration options override embedded templates. It parses with the browser's native HTML parser, so it is browser-only (like every other Core API) and warnings are ordered by post-recovery document order.
 - `pageWarningTargetBounds` returns live `{ left, top, width, height }` in iframe viewport coordinates. It returns `undefined` for a foreign/unlocated warning.
 - `hasPageDocumentFrameSandbox` is true only for the exact public sandbox token set (`allow-same-origin` and `allow-modals`).
 - `selectBlankMarkers` returns marker IDs needing a blank to satisfy left/right parity, accounting for prior selections. It throws when a marker has no page mapping.
