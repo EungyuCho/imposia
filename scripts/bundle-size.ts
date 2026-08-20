@@ -28,32 +28,41 @@ const SCENARIOS = Object.freeze([
   Object.freeze({
     name: "Core · PageDocument",
     source: 'export { mountPageDocument } from "@imposia/core";',
-    gzipBudgetBytes: 110 * KIBIBYTE,
+    // 56.8 KiB measured 2026-08-20 after the parse5 removal and oxc post-pass.
+    gzipBudgetBytes: 60 * KIBIBYTE,
   }),
   Object.freeze({
     name: "Core · Publication",
     source: 'export { mountPublication } from "@imposia/core";',
-    gzipBudgetBytes: 115 * KIBIBYTE,
+    // 60.8 KiB measured 2026-08-20; publication adds outline/search over PageDocument.
+    gzipBudgetBytes: 64 * KIBIBYTE,
   }),
   Object.freeze({
     name: "Viewer · PageDocument",
     source: 'export { mountPageViewer } from "@imposia/viewer";',
-    gzipBudgetBytes: 32 * KIBIBYTE,
+    // 28.2 KiB measured 2026-08-20; the route never included parse5, so only the
+    // minifier pipeline moved it.
+    gzipBudgetBytes: 30 * KIBIBYTE,
   }),
   Object.freeze({
     name: "Viewer · PDF",
     source: 'export { mountViewer } from "@imposia/viewer";',
+    // 120.1 KiB measured 2026-08-20. Dominated by PDF.js; the oxc pipeline
+    // measures this route 2.8 KiB gzip larger than esbuild did, so the budget
+    // stays at its previous value (4.1% headroom).
     gzipBudgetBytes: 125 * KIBIBYTE,
   }),
   Object.freeze({
     name: "Client · PageDocument",
     source: 'export { mountPageDocument, mountPageViewer } from "@imposia/client";',
-    gzipBudgetBytes: 120 * KIBIBYTE,
+    // 65.3 KiB measured 2026-08-20 (Core pagination + page viewer).
+    gzipBudgetBytes: 69 * KIBIBYTE,
   }),
   Object.freeze({
     name: "React · PageViewer",
     source: 'export { ImposiaPageViewer } from "@imposia/react";',
-    gzipBudgetBytes: 122 * KIBIBYTE,
+    // 67.0 KiB measured 2026-08-20; React/React DOM stay external.
+    gzipBudgetBytes: 71 * KIBIBYTE,
   }),
 ]) satisfies readonly BundleScenario[];
 

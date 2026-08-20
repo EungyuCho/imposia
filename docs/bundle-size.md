@@ -2,8 +2,11 @@
 
 This report is for maintainers reviewing the JavaScript cost of Imposia's
 consumer entry paths. It measures the current source on Node.js 22.12 or newer
-with the repository-pinned `esbuild` version. It does not measure runtime
-performance, CSS, source maps, the PDF.js worker, or React itself.
+with the repository-pinned `esbuild` version for bundling and the
+repository-pinned `oxc-minify` version for the minification post-pass — the
+same two-stage pipeline that produces the published Core browser artifact. It
+does not measure runtime performance, CSS, source maps, the PDF.js worker, or
+React itself.
 
 ## Run the report
 
@@ -26,17 +29,26 @@ All 6 consumer routes are within their gzip budgets.
 
 ## Current baseline
 
-Recorded on 2026-07-23 from `origin/main@be4c0bcd` plus the shared Viewer
-interface refactor in this change:
+Recorded on 2026-08-20 from the browser-native parsing change (ADR 0013,
+`d8e2638`) combined with the oxc-minify post-pass (`5d73b43`) on top of
+`origin/main@e929da8`:
 
 | Consumer route | Minified | Gzip | Gzip budget | Headroom |
 | --- | ---: | ---: | ---: | ---: |
-| Core · PageDocument | 355.0 KiB | 103.6 KiB | 110.0 KiB | 6.4 KiB |
-| Core · Publication | 370.2 KiB | 108.0 KiB | 115.0 KiB | 7.0 KiB |
-| Viewer · PageDocument | 89.8 KiB | 28.0 KiB | 32.0 KiB | 4.0 KiB |
-| Viewer · PDF | 399.6 KiB | 117.3 KiB | 125.0 KiB | 7.7 KiB |
-| Client · PageDocument | 386.5 KiB | 112.5 KiB | 120.0 KiB | 7.5 KiB |
-| React · PageViewer | 392.2 KiB | 114.2 KiB | 122.0 KiB | 7.8 KiB |
+| Core · PageDocument | 190.0 KiB | 56.8 KiB | 60.0 KiB | 3.2 KiB |
+| Core · Publication | 205.1 KiB | 60.8 KiB | 64.0 KiB | 3.2 KiB |
+| Viewer · PageDocument | 94.9 KiB | 28.2 KiB | 30.0 KiB | 1.8 KiB |
+| Viewer · PDF | 433.8 KiB | 120.1 KiB | 125.0 KiB | 4.9 KiB |
+| Client · PageDocument | 221.7 KiB | 65.3 KiB | 69.0 KiB | 3.7 KiB |
+| React · PageViewer | 228.0 KiB | 67.0 KiB | 71.0 KiB | 4.0 KiB |
+
+Compared with the 2026-07-23 baseline, the Core · PageDocument route dropped
+from 103.6 KiB to 56.8 KiB gzip: removing parse5 and its `entities` dependency
+accounts for roughly 47 KiB, and the oxc-minify post-pass for the remainder.
+Budgets were re-based with 4.1–6.4% headroom per route. `Viewer · PDF` is the
+one route the new minifier pipeline measures larger (117.3 → 120.1 KiB gzip);
+it is dominated by PDF.js, so its budget stays at 125 KiB rather than
+tightening.
 
 These are source-level consumer scenarios rather than package tarball sizes:
 
@@ -69,22 +81,30 @@ smaller.
 
 EPUB remains part of `@imposia/core`. The report's diagnostic build replaces the
 two EPUB export functions with throwing stubs while retaining their names and
-async contract. The current report measures a 17.1 KiB minified, 5.4 KiB gzip,
-and 4.5 KiB Brotli difference. The source implementation is large, but the
-compressed consumer cost is about five percent of the
+async contract. The current report measures a 17.0 KiB minified, 5.0 KiB gzip,
+and 4.2 KiB Brotli difference. The source implementation is large, but the
+compressed consumer cost is about nine percent of the re-based
 `Core · PageDocument` route.
 
 Moving EPUB into an optional package would require a new trusted interface to
 Core's retained semantic snapshot and resolver-owned asset bytes. It would also
 change `PageDocument.exportEpub()`, Publication export finalization, and the
 React imperative handles. That boundary cost is not justified by the current
-5.4 KiB gzip saving. [ADR 0010](architecture/0010-core-epub-bundle-boundary.md)
+5.0 KiB gzip saving. [ADR 0010](architecture/0010-core-epub-bundle-boundary.md)
 records the decision and the conditions for revisiting it.
+
+ADR 0010 revisit-trigger status after the 2026-08-20 re-base: none of the
+three triggers is met. (1) The EPUB implementation measures 5.0 KiB gzip,
+under the 10 KiB trigger. (2) The `Core · PageDocument` route is within its
+re-based budget — note the re-base makes this trigger strictly tighter, and
+EPUB is now the largest removable contributor of the smaller route, so a
+future overage should evaluate this trigger against the 60 KiB budget. (3) No
+second exporter needs the trusted semantic projection interface.
 
 ## Verification notes
 
 - **Verified:** `node --import tsx scripts/bundle-size.ts` produced the baseline
-  table and exited `0` on 2026-07-23.
+  table and exited `0` on 2026-08-20.
 - **Verified:** the same command's EPUB diagnostic measured the minified, gzip,
   and Brotli difference between the complete Core export and its EPUB-stubbed
   equivalent.
