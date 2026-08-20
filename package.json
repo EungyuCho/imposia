@@ -48,6 +48,7 @@
     "fumadocs-core": "16.11.5",
     "fumadocs-mdx": "15.2.0",
     "fumadocs-ui": "16.11.5",
+    "happy-dom": "20.11.2",
     "lucide-react": "1.25.0",
     "oxc-minify": "0.146.0",
     "pdfjs-dist": "5.4.530",

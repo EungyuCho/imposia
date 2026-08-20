@@ -96,7 +96,7 @@ type AssetResolver = (request: {
 function prepareDocument(html: string, options?: PrepareDocumentOptions): PreparedDocument;
 ```
 
-HTML を解析して危険なマークアップとリソースを処理し、CSS を正規化します。`data-page-header` / `data-page-footer` の template を抽出し、options の `headerTemplate` / `footerTemplate` があればそちらを優先します。`allowRemoteResources` の既定値は false 相当です。戻り値は `{ html, headerTemplate?, footerTemplate?, warnings }` です。
+HTML を解析して危険なマークアップとリソースを処理し、CSS を正規化します。`data-page-header` / `data-page-footer` の template を抽出し、options の `headerTemplate` / `footerTemplate` があればそちらを優先します。`allowRemoteResources` の既定値は false 相当です。戻り値は `{ html, headerTemplate?, footerTemplate?, warnings }` です。ブラウザーのネイティブ HTML パーサーを使用するため、他の Core API と同様にブラウザー専用であり、警告はエラー回復後のドキュメント順に並びます。
 
 ```ts
 const prepared = prepareDocument("<main>Hello</main>");
