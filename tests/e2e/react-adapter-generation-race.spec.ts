@@ -1,36 +1,37 @@
 import { expect, test } from "@playwright/test";
 import { captureBrowserErrors } from "./browser-core-support.js";
 
-// ASA-438 reproduction harness.
+// ASA-438 regression gate (originally the reproduction harness).
 //
 // Under full-suite load the React adapter test once observed an uncaught
 // "Invalid PageDocument: canonical page markers do not match pageCount." from
 // the Viewer. Core's commit is atomic (one synchronous replaceChildren), so no
-// mid-swap DOM state exists; the mismatch is the Viewer/React boundary gap:
+// mid-swap DOM state exists; the failure was the Viewer/React boundary gap:
 // between Core committing the next generation into the canonical iframe and
 // the React adapter's passive effect calling viewer.refresh(), the Viewer
-// still holds the previous generation's pageCount. Any Viewer entry point that
-// runs inside that gap — the ResizeObserver's rAF callback, a toolbar click, a
-// keyboard handler — measures the new iframe against the old pageCount and
-// throws. Under load the gap spans multiple frames, which is why the flake
-// only appeared in full-suite runs.
+// still held the previous generation's pageCount, and any Viewer entry point
+// running inside that gap — the ResizeObserver's rAF callback, a toolbar
+// click, a keyboard handler — measured the new iframe against the old
+// pageCount and threw. Under load the gap spans multiple frames, which is why
+// the flake only appeared in full-suite runs.
 //
-// This spec makes the gap deterministic instead of waiting for load: a
+// The barrier that closes the gap: Core stamps the committed generation on
+// the canonical frame's root at commit time, and the Viewer's ambient
+// synchronization defers whenever the frame's stamp is ahead of the Viewer's
+// committed document — a newer commit awaiting delivery is not an invariant
+// violation. Explicit APIs (mount, refresh) keep strict validation, and a
+// marker mismatch without a newer stamp still throws as real corruption.
+//
+// This spec drives the gap deterministically instead of waiting for load: a
 // MutationObserver on the canonical frame body is delivered in a microtask
 // queued during commitGeneration's replaceChildren, which the HTML event loop
 // guarantees to run before the update promise's own reaction microtasks — and
 // therefore before React can schedule the render whose passive effect calls
 // viewer.refresh(). A real user-equivalent interaction (the imperative
 // next-page handle, identical to a toolbar click) issued at that instant
-// dereferences the mixed pair {new iframe content, previous PageDocument}.
-//
-// The spec pins the CURRENT behavior: the interaction throws, and the
-// diagnostic carries the expected marker count, the found marker count, and
-// the generation. If a generation barrier lands for ASA-438, invert the
-// `threw` expectations below to pin the fixed behavior instead. It also
-// verifies the gap is observation-only: the committed generation still
-// replaces the previous one atomically afterwards, and nothing stale remains
-// visible.
+// exercises the barrier: it must NOT throw, and the adapter must still
+// converge atomically on the new generation. If the barrier regresses, the
+// interaction throws again and the `threw` expectation below fails.
 test("Viewer interaction between Core commit and adapter refresh observes the generation gap deterministically", async ({
   page,
   browserName,
@@ -115,15 +116,16 @@ test("Viewer interaction between Core commit and adapter refresh observes the ge
     // The canonical iframe already carried the next generation's markers…
     expect(observed.previousPageCount).toBe(1);
     expect(observed.markerCount).toBe(2);
-    // …while the Viewer still held the previous generation at that instant:
+    // …while the Viewer still held the previous generation at that instant —
+    // the ASA-438 gap really was open when the interaction ran:
     expect(observed.viewerGenerationAtObservation).toBe(observed.previousGeneration);
     expect(observed.viewerPageCountAtObservation).toBe(observed.previousPageCount);
-    // the mixed-pair dereference is the ASA-438 observation, and the
-    // diagnostic names both counts and the generation:
-    expect(observed.threw).toBe(true);
-    expect(observed.message).toBe(
-      `Invalid PageDocument: canonical page markers do not match pageCount (expected ${observed.previousPageCount}, found ${observed.markerCount}, generation ${observed.previousGeneration}).`,
-    );
+    // The generation barrier absorbs the transient: the interaction defers
+    // instead of throwing. (Before the barrier this threw "Invalid
+    // PageDocument: canonical page markers do not match pageCount (expected
+    // 1, found 2, generation 1)." — a regression here reintroduces ASA-438.)
+    expect(observed.threw).toBe(false);
+    expect(observed.message).toBe("");
 
     // The gap is observation-only: the commit itself stays atomic and the
     // adapter converges on the new generation with one canonical iframe.

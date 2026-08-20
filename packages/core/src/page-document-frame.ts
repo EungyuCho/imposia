@@ -73,10 +73,30 @@ export function destroyedError(): Error {
   return new Error("Page document controller has been destroyed.");
 }
 
+export const FRAME_GENERATION_ATTRIBUTE = "data-imposia-generation";
+
+/**
+ * The committed generation stamped on the canonical frame at commit time, or
+ * `undefined` when the frame has not committed a stamped generation yet.
+ *
+ * Presentation layers use this to recognize the transient window between a
+ * commit landing in the canonical frame and their own committed
+ * `PageDocument` reference being replaced (ASA-438): a frame whose stamp is
+ * ahead of the presenter's generation is a newer commit awaiting delivery,
+ * not an invariant violation.
+ */
+export function committedFrameGeneration(frameDocument: Document): number | undefined {
+  const value = frameDocument.documentElement.getAttribute(FRAME_GENERATION_ATTRIBUTE);
+  if (value === null) return undefined;
+  const generation = Number(value);
+  return Number.isInteger(generation) && generation > 0 ? generation : undefined;
+}
+
 export function commitGeneration(
   frameDocument: Document,
   body: DocumentFragment,
   css: readonly string[],
+  generation: number,
   documentLanguage?: string,
 ): void {
   const styles = css.map((value) => {
@@ -85,6 +105,7 @@ export function commitGeneration(
     return style;
   });
   frameDocument.documentElement.setAttribute("data-imposia-document", "v1");
+  frameDocument.documentElement.setAttribute(FRAME_GENERATION_ATTRIBUTE, String(generation));
   if (documentLanguage === undefined) frameDocument.documentElement.removeAttribute("lang");
   else frameDocument.documentElement.lang = documentLanguage;
   const meta = frameDocument.createElement("meta");

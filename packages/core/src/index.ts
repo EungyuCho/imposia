@@ -6,7 +6,11 @@ export {
   type PageWarningTargetBounds,
   pageWarningTargetBounds,
 } from "./page-document.js";
-export { hasPageDocumentFrameSandbox, PAGE_DOCUMENT_FRAME_SANDBOX } from "./page-document-frame.js";
+export {
+  committedFrameGeneration,
+  hasPageDocumentFrameSandbox,
+  PAGE_DOCUMENT_FRAME_SANDBOX,
+} from "./page-document-frame.js";
 export {
   PRINT_ROOT_ATTRIBUTE,
   PRINT_STYLE_ATTRIBUTE,

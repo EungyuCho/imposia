@@ -5,6 +5,7 @@ import {
   commitGeneration,
   destroyedError,
   FRAME_DOCUMENT,
+  FRAME_GENERATION_ATTRIBUTE,
   frameReady,
   linkSignal,
   PAGE_DOCUMENT_FRAME_SANDBOX,
@@ -361,11 +362,16 @@ function createPageDocumentController(
           const previousHead = [...frameDocument.head.childNodes];
           const previousBody = [...frameDocument.body.childNodes];
           const previousDocumentLanguage = frameDocument.documentElement.getAttribute("lang");
+          const previousFrameGeneration = frameDocument.documentElement.getAttribute(
+            FRAME_GENERATION_ATTRIBUTE,
+          );
+          const documentGeneration = (current?.generation ?? 0) + 1;
           let canonicalReplaced = false;
           commitGeneration(
             frameDocument,
             generation.body,
             generation.css,
+            documentGeneration,
             generation.documentLanguage,
           );
           canonicalReplaced = true;
@@ -386,7 +392,6 @@ function createPageDocumentController(
               });
             }),
           );
-          const documentGeneration = (current?.generation ?? 0) + 1;
           let committedDocument: PageDocument | undefined;
           const document = Object.freeze({
             iframe,
@@ -435,6 +440,14 @@ function createPageDocumentController(
                 frameDocument.documentElement.removeAttribute("lang");
               } else {
                 frameDocument.documentElement.lang = previousDocumentLanguage;
+              }
+              if (previousFrameGeneration === null) {
+                frameDocument.documentElement.removeAttribute(FRAME_GENERATION_ATTRIBUTE);
+              } else {
+                frameDocument.documentElement.setAttribute(
+                  FRAME_GENERATION_ATTRIBUTE,
+                  previousFrameGeneration,
+                );
               }
             }
             throw error;

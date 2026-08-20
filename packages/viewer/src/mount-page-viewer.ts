@@ -1,4 +1,5 @@
 import {
+  committedFrameGeneration,
   hasPageDocumentFrameSandbox,
   type PageDocument,
   printComposedPageDocument,
@@ -224,8 +225,27 @@ export function mountPageViewer(
     return mutableState.zoom * fitScale();
   }
 
+  // ASA-438 generation barrier. Core commits a new generation into the
+  // canonical iframe synchronously, while this viewer's committed
+  // `PageDocument` reference is only replaced when the consumer (for the
+  // React adapter: a passive effect) delivers `refresh()`. In that window the
+  // frame's stamped generation is ahead of `mutableState.generation`, and any
+  // ambient entrant — the ResizeObserver's rAF callback, toolbar clicks,
+  // keyboard handlers — would otherwise measure the new frame against the old
+  // pageCount and throw. A frame that is ahead is a newer commit awaiting
+  // delivery, not an invariant violation, so ambient synchronization defers
+  // until `refresh()` re-syncs. Frames without a stamp (or behind the viewer)
+  // keep the strict behavior: a marker mismatch there is real corruption.
+  function frameAheadOfCommitted(): boolean {
+    const frameDocument = elements.iframe.contentDocument;
+    if (frameDocument === null) return false;
+    const committed = committedFrameGeneration(frameDocument);
+    return committed !== undefined && committed > mutableState.generation;
+  }
+
   function syncInterface(revealModeControl = false): void {
     if (destroyed) return;
+    if (frameAheadOfCommitted()) return;
     mutableState.effectiveMode =
       mutableState.mode === "spread" && elements.stage.clientWidth < MIN_SPREAD_WIDTH
         ? "single"
@@ -355,7 +375,10 @@ export function mountPageViewer(
     if (destroyed || !Number.isFinite(page)) return;
     mutableState.page = clamp(Math.round(page), 1, mutableState.pageCount);
     syncInterface();
-    if (mutableState.effectiveMode === "continuous") {
+    // While the frame is ahead of the committed document (see the barrier
+    // above), the retained geometry belongs to the previous generation, so
+    // scrolling by it would target stale offsets; `refresh()` re-syncs.
+    if (mutableState.effectiveMode === "continuous" && !frameAheadOfCommitted()) {
       const rootBounds = elements.root.getBoundingClientRect();
       const iframeBounds = elements.iframe.getBoundingClientRect();
       const scale = elements.iframe.clientHeight <= 0 ? 1 : iframeBounds.height / geometry.height;
