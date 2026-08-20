@@ -936,16 +936,16 @@ export function preparePublishingContent(
   });
 }
 
-function elementBySourceKey(root: ParentNode, key: string): Element | undefined {
-  return [...root.querySelectorAll<Element>(`[${SOURCE_KEY}]`)].find(
-    (element) => element.getAttribute(SOURCE_KEY) === key,
-  );
-}
-
-function footnoteAnchor(root: ParentNode, value: string): Element | undefined {
-  return [...root.querySelectorAll<Element>("[data-footnote-anchor]")].find(
-    (element) => element.getAttribute("data-footnote-anchor") === value,
-  );
+function firstElementsByAttribute(
+  root: ParentNode,
+  attribute: string,
+): ReadonlyMap<string, Element> {
+  const elements = new Map<string, Element>();
+  for (const element of root.querySelectorAll<Element>(`[${attribute}]`)) {
+    const value = element.getAttribute(attribute);
+    if (value !== null && !elements.has(value)) elements.set(value, element);
+  }
+  return elements;
 }
 
 export function preparePublishingPass(
@@ -960,8 +960,9 @@ export function preparePublishingPass(
     generatedFragments += 1;
     if (generatedFragments > limits.maxGeneratedFragments) throw generatedLimitError("fragment");
   };
+  const hosts = firstElementsByAttribute(root, SOURCE_KEY);
   for (const binding of prepared.targets) {
-    const host = elementBySourceKey(root, binding.hostKey);
+    const host = hosts.get(binding.hostKey);
     if (host === undefined) continue;
     const marker = root.ownerDocument.createElement("span");
     marker.setAttribute("data-imposia-generated", binding.kind);
@@ -973,8 +974,9 @@ export function preparePublishingPass(
     generated();
   }
   if (experimental.footnotes !== true) return;
+  const anchors = firstElementsByAttribute(root, "data-footnote-anchor");
   for (const binding of prepared.footnotes) {
-    const anchor = footnoteAnchor(root, binding.value);
+    const anchor = anchors.get(binding.value);
     if (anchor === undefined) continue;
     const call = root.ownerDocument.createElement("sup");
     call.setAttribute("data-imposia-footnote-call", String(binding.number));
@@ -985,8 +987,37 @@ export function preparePublishingPass(
   }
 }
 
-function pagesElements(pages: readonly PublishingPage[]): readonly Element[] {
-  return Object.freeze(pages.flatMap((page) => [...page.page.querySelectorAll<Element>("*")]));
+type PublishingElementIndex = Readonly<{
+  bySourceKey: ReadonlyMap<string, readonly Element[]>;
+  byGeneratedKey: ReadonlyMap<string, readonly Element[]>;
+  byFootnoteCallKey: ReadonlyMap<string, readonly Element[]>;
+  byId: ReadonlyMap<string, Element>;
+}>;
+
+function appendIndexEntry(index: Map<string, Element[]>, key: string, element: Element): void {
+  const entries = index.get(key);
+  if (entries === undefined) index.set(key, [element]);
+  else entries.push(element);
+}
+
+function indexPagesElements(pages: readonly PublishingPage[]): PublishingElementIndex {
+  const bySourceKey = new Map<string, Element[]>();
+  const byGeneratedKey = new Map<string, Element[]>();
+  const byFootnoteCallKey = new Map<string, Element[]>();
+  const byId = new Map<string, Element>();
+  for (const page of pages) {
+    for (const element of page.page.querySelectorAll<Element>("*")) {
+      const sourceKey = element.getAttribute(SOURCE_KEY);
+      if (sourceKey !== null) appendIndexEntry(bySourceKey, sourceKey, element);
+      const generatedKey = element.getAttribute(GENERATED_KEY);
+      if (generatedKey !== null) appendIndexEntry(byGeneratedKey, generatedKey, element);
+      const footnoteCallKey = element.getAttribute(FOOTNOTE_CALL_KEY);
+      if (footnoteCallKey !== null) appendIndexEntry(byFootnoteCallKey, footnoteCallKey, element);
+      const id = element.getAttribute("id");
+      if (id !== null && !byId.has(id)) byId.set(id, element);
+    }
+  }
+  return Object.freeze({ bySourceKey, byGeneratedKey, byFootnoteCallKey, byId });
 }
 
 function pageIndexFor(element: Element | undefined): number | undefined {
@@ -1031,13 +1062,11 @@ function pageFirstLeafOrder(page: PublishingPage): number | undefined {
 function resolveNamedStrings(
   pages: readonly PublishingPage[],
   prepared: PreparedPublishingContent,
+  index: PublishingElementIndex,
 ): readonly ReadonlyMap<string, string>[] {
-  const elements = pagesElements(pages);
   const assignments = prepared.strings
     .map((binding) => {
-      const element = elements.find(
-        (candidate) => candidate.getAttribute(SOURCE_KEY) === binding.sourceKey,
-      );
+      const element = index.bySourceKey.get(binding.sourceKey)?.[0];
       const pageIndex = pageIndexFor(element);
       return pageIndex === undefined ? undefined : { ...binding, pageIndex };
     })
@@ -1120,15 +1149,12 @@ function placeFootnotes(
   prepared: PreparedPublishingContent,
   experimental: Readonly<ExperimentalPageFeatures>,
   warnings: { order: number; warning: PageWarning }[],
+  index: PublishingElementIndex,
 ): void {
   const usedHeight = new Map<number, number>();
   for (const binding of prepared.footnotes) {
-    const elements = pagesElements(pages).filter(
-      (element) => element.getAttribute(SOURCE_KEY) === binding.sourceKey,
-    );
-    const calls = pagesElements(pages).filter(
-      (element) => element.getAttribute(FOOTNOTE_CALL_KEY) === binding.key,
-    );
+    const elements = index.bySourceKey.get(binding.sourceKey) ?? [];
+    const calls = index.byFootnoteCallKey.get(binding.key) ?? [];
     const note = elements.length === 1 ? htmlElement(elements[0]) : undefined;
     const callPage = pageIndexFor(calls[0]);
     const notePage = pageIndexFor(note);
@@ -1174,12 +1200,11 @@ function placePageFloats(
   prepared: PreparedPublishingContent,
   experimental: Readonly<ExperimentalPageFeatures>,
   warnings: { order: number; warning: PageWarning }[],
+  index: PublishingElementIndex,
 ): void {
   const usedHeight = new Map<string, number>();
   for (const binding of prepared.pageFloats) {
-    const matches = pagesElements(pages).filter(
-      (element) => element.getAttribute(SOURCE_KEY) === binding.sourceKey,
-    );
+    const matches = index.bySourceKey.get(binding.sourceKey) ?? [];
     const element = matches.length === 1 ? htmlElement(matches[0]) : undefined;
     const pageIndex = pageIndexFor(element);
     const page = pageIndex === undefined ? undefined : pages[pageIndex];
@@ -1224,6 +1249,7 @@ function layoutSignature(
   generatedValues: ReadonlyMap<string, string>,
   namedStrings: readonly ReadonlyMap<string, string>[],
   prepared: PreparedPublishingContent,
+  index: PublishingElementIndex,
 ): string {
   const membership = pages.flatMap((page, pageIndex) =>
     [...page.page.querySelectorAll<Element>(`[${SOURCE_KEY}]`)].map(
@@ -1236,18 +1262,13 @@ function layoutSignature(
   const strings = namedStrings.map((values) =>
     [...values.entries()].sort(([left], [right]) => left.localeCompare(right)),
   );
-  const elements = pagesElements(pages);
   const placements = [
     ...prepared.footnotes.map((binding) => {
-      const element = elements.find(
-        (candidate) => candidate.getAttribute(SOURCE_KEY) === binding.sourceKey,
-      );
+      const element = index.bySourceKey.get(binding.sourceKey)?.[0];
       return `footnote:${binding.key}:${pageIndexFor(element) ?? -1}:${element?.hasAttribute("data-imposia-footnote") === true}`;
     }),
     ...prepared.pageFloats.map((binding) => {
-      const element = elements.find(
-        (candidate) => candidate.getAttribute(SOURCE_KEY) === binding.sourceKey,
-      );
+      const element = index.bySourceKey.get(binding.sourceKey)?.[0];
       return `page-float:${binding.key}:${pageIndexFor(element) ?? -1}:${element?.getAttribute("data-imposia-page-float") ?? "fallback"}`;
     }),
   ];
@@ -1259,17 +1280,12 @@ export function finalizePublishingPass(
   prepared: PreparedPublishingContent,
   experimental: Readonly<ExperimentalPageFeatures>,
 ): FinalizedPublishingContent {
-  const elements = pagesElements(pages);
+  const index = indexPagesElements(pages);
   const generatedValues = new Map<string, string>();
   const warnings: { order: number; warning: PageWarning }[] = [];
   for (const binding of prepared.targets) {
-    const markers = elements.filter(
-      (element) => element.getAttribute(GENERATED_KEY) === binding.key,
-    );
-    const target =
-      binding.targetId === undefined
-        ? undefined
-        : elements.find((element) => element.getAttribute("id") === binding.targetId);
+    const markers = index.byGeneratedKey.get(binding.key) ?? [];
+    const target = binding.targetId === undefined ? undefined : index.byId.get(binding.targetId);
     const value =
       target === undefined
         ? ""
@@ -1302,10 +1318,10 @@ export function finalizePublishingPass(
     });
   }
 
-  const namedStrings = resolveNamedStrings(pages, prepared);
-  placeFootnotes(pages, prepared, experimental, warnings);
-  placePageFloats(pages, prepared, experimental, warnings);
-  const signature = layoutSignature(pages, generatedValues, namedStrings, prepared);
+  const namedStrings = resolveNamedStrings(pages, prepared, index);
+  placeFootnotes(pages, prepared, experimental, warnings, index);
+  placePageFloats(pages, prepared, experimental, warnings, index);
+  const signature = layoutSignature(pages, generatedValues, namedStrings, prepared, index);
   const deduplicatedWarnings = new Map<string, { order: number; warning: PageWarning }>();
   for (const item of warnings) {
     const key = `${item.warning.code}\u0000${item.warning.sourceIdentity ?? ""}`;

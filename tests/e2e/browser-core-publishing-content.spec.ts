@@ -931,7 +931,11 @@ test("bounds non-convergent generated content and retains the previous committed
           "p{margin:0;font:16px/24px Arial,sans-serif}",
         ],
       };
-      Reflect.set(options, "limits", { maxLayoutPasses: 2 });
+      // A single allowed pass keeps this document genuinely unacceptable: the first
+      // pass injects empty generated values and computes non-empty ones, so neither
+      // the signature comparison nor the fixed-point short circuit can accept it.
+      // (With two passes the second pass reaches a real fixed point and converges.)
+      Reflect.set(options, "limits", { maxLayoutPasses: 1 });
       const stableHtml = "<article><p>Committed generation</p></article>";
       const unstableFiller = Array.from(
         { length: 46 },
