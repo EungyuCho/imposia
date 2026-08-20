@@ -3,13 +3,13 @@ title: React API
 description: React components, hooks, props, and imperative handles from @imposia/react.
 ---
 
-## React components and hooks
+`@imposia/react` binds one Core controller and one canonical iframe into the React lifecycle. It also re-exports the Core and Viewer API surface, so a React application usually needs no other Imposia import. Import `@imposia/react/styles.css` once.
 
-### `ImposiaPageViewer` and `ImposiaDocument`
+## `ImposiaPageViewer` and `ImposiaDocument`
 
 `ImposiaPageViewer` mounts a Core page document, then binds the page Viewer after the first commit. `ImposiaDocument` is a compatibility wrapper with the same public props and handle types: `ImposiaDocumentProps = ImposiaPageViewerProps` and `ImposiaDocumentHandle = ImposiaPageViewerHandle`.
 
-```tsx
+```tsx title="app/report-preview.tsx"
 const viewer = useRef<ImposiaPageViewerHandle>(null);
 
 <ImposiaPageViewer
@@ -34,24 +34,30 @@ const viewer = useRef<ImposiaPageViewerHandle>(null);
 | `onError` | `(error: unknown) => void` | No | Receives Core or Viewer binding failures. |
 | `onStateChange` | `(state: ImposiaDocumentState) => void` | No | Receives `idle`, `loading`, `ready`, and `error`. |
 
-#### `ImposiaPageViewerHandle`
+<Callout type="warn" title="Options props are read only when their revision changes">
+`documentOptions` is captured when the controller mounts. Passing a changed options object — a new resolver, extension set, or page geometry — does nothing by itself: bump `documentOptionsRevision` to remount the controller with the new options. The same rule applies to `publicationOptions` and `publicationOptionsRevision` below. Only `source` (and `snapshot`) changes are detected on their own.
+</Callout>
+
+### `ImposiaPageViewerHandle`
+
+Handle methods act on the latest committed generation. Methods that need the Viewer or a commit throw (or reject) before the first commit and after unmount.
 
 | Member | Returns | Constraint |
 | --- | --- | --- |
-| `current` | `PageDocument \| undefined` | Current commit while mounted. |
+| `current` | `PageDocument \| undefined` | Current commit while mounted; `undefined` otherwise. |
 | `viewerState` | `PageViewerState \| undefined` | Current presentation snapshot while ready. |
-| `goToPage(page)`, `nextPage()`, `previousPage()` | `void` | Move through the committed global page sequence. |
-| `setZoom(zoom)` | `void` | Rounds and clamps the presentation zoom. |
+| `goToPage(page)`, `nextPage()`, `previousPage()` | `void` | Move through the committed global page sequence; throw before ready/after unmount. |
+| `setZoom(zoom)` | `void` | Rounds and clamps the presentation zoom; throws before ready/after unmount. |
 | `setMode(mode)` | `void` | Accepts `continuous`, `single`, or `spread`; throws before ready/after unmount. |
 | `setSpreadCover(cover)` | `void` | Throws before ready/after unmount. |
 | `openInspector()`, `closeInspector()`, `toggleInspector()` | `void` | Require `viewerOptions.inspector: true`. |
 | `selectWarning(warning)` | `void` | Requires the inspector and a warning from its current generation. |
 | `print()` | `Promise<void>` | Opens native print for the latest completed pages. Readers can choose Save as PDF; the method does not return PDF bytes. Rejects before ready/after unmount. |
-| `exportEpub(options)` | `Promise<Blob>` | Rejects before ready/after unmount. |
+| `exportEpub(options)` | `Promise<Blob>` | Exports the current commit as a reflowable EPUB; rejects before ready/after unmount. |
 
-### `ImposiaPublicationViewer`
+## `ImposiaPublicationViewer`
 
-```tsx
+```tsx title="app/guide-preview.tsx"
 const publication = useRef<ImposiaPublicationViewerHandle>(null);
 
 <ImposiaPublicationViewer
@@ -63,9 +69,9 @@ const publication = useRef<ImposiaPublicationViewerHandle>(null);
 />;
 ```
 
-Its required `snapshot` prop accepts `PublicationSnapshot`. Optional props are `snapshotRevision`, `publicationOptions`, `publicationOptionsRevision`, `viewerOptions` (without `reader`), `readerOptions` (without `controller`), `className`, `style`, `onReady`, `onError`, and `onStateChange`. Revision props force updates/remounts as their names indicate. The component supplies the reader/controller binding.
+Its required `snapshot` prop accepts `PublicationSnapshot`. Optional props are `snapshotRevision`, `publicationOptions`, `publicationOptionsRevision`, `viewerOptions` (without `reader`), `readerOptions` (without `controller`), `className`, `style`, `onReady`, `onError`, and `onStateChange`. Revision props force updates/remounts as their names indicate. The component supplies the reader/controller binding itself, which is why `reader` and `controller` are excluded from its option props.
 
-#### `ImposiaPublicationViewerHandle`
+### `ImposiaPublicationViewerHandle`
 
 All actions except `current` and `resolveDestination` throw after unmount. Reader actions also throw before the Publication reader is ready.
 
@@ -89,7 +95,7 @@ All actions except `current` and `resolveDestination` throw after unmount. Reade
 | `print()` | `Promise<void>` | Opens native print for the latest commit, including the browser's Save as PDF option. Rejects before ready/after unmount. |
 | `exportEpub(options)` | `Promise<Blob>` | Exports the latest commit; rejects before ready/after unmount. |
 
-### `useImposiaDocument` and `useImposiaPublication`
+## `useImposiaDocument` and `useImposiaPublication`
 
 ```ts
 useImposiaDocument(props: UseImposiaDocumentProps): UseImposiaDocumentResult;
@@ -102,7 +108,7 @@ Both hooks return a `hostRef`, lifecycle `state`, and a controller that is `unde
 
 `useImposiaPublication` accepts the publication component's snapshot, revision, options, and callbacks. It updates when the snapshot reference or `snapshotRevision` changes; `publicationOptionsRevision` remounts the controller. Both hooks destroy their controller on cleanup and treat `AbortError` as lifecycle cancellation.
 
-```tsx
+```tsx title="app/article.tsx"
 function Article({ html }: { html: string }) {
   const { hostRef, state } = useImposiaDocument({ source: { html } });
   return <div ref={hostRef} aria-busy={state.status === "loading"} />;

@@ -1,70 +1,199 @@
 ---
-title: Preview, print, and save as PDF from React
-description: Connect one React page document to preview, native print, Save as PDF, and reflowable EPUB export.
+title: Publish several documents together
+description: Compose ordered sources into one Publication that shares a reading order, outline, and global page sequence.
 ---
 
-This guide starts after your first page is working. It keeps preview, native print, Save as PDF, and EPUB actions on the same completed document instead of creating a second rendering path.
+One page document paginates one source. A book-shaped artifact is rarely one source: a cover, front matter, and chapters are authored separately but must behave as a single document — one reading order, one global page sequence, one outline for navigation. In Imposia, that composed unit is a **Publication**, and `ImposiaPublicationViewer` is the React component that renders it with a built-in Reader.
 
-## Start here
+<Callout type="info" title="Before you begin">
+Complete [Build your first page](/en/docs/getting-started) first. A Publication uses the same staging-and-commit lifecycle as a single page document, and this guide assumes you have seen that lifecycle work once.
+</Callout>
 
-Complete [Build your first page](/en/docs/getting-started) in a React 18 or later browser application.
+## A Publication is a snapshot
 
-## Connect publishing actions
+You describe a Publication as a `PublicationSnapshot`: publication metadata plus an ordered list of entries. Each entry is one semantic source with a stable `id`, a `title`, and exactly one of `html` or `lightDom`. Entry order **is** the reading order.
 
-Keep the imperative handle beside the Viewer. Await each action and route failures to your application's error boundary.
+The snapshot is submitted as a complete value. Core stages the whole publication — every entry, the page ranges, the outline — and commits it atomically, exactly as it does for a single page document. There is no partial update: to change one chapter, you submit a complete snapshot containing the changed chapter, and readers keep seeing the previous commit until the new one finishes.
 
-```tsx
-import { ImposiaPageViewer, type ImposiaPageViewerHandle } from "@imposia/react";
+One committed snapshot gives you:
+
+- one **global page sequence** — each entry occupies an inclusive `pageRange` of global page numbers, and the next entry starts on the following page;
+- one **outline** — an immutable navigation tree rooted in entry titles and extended by the visible headings inside each entry;
+- one surface for navigation, search, thumbnails, and print, all addressing exactly that committed generation.
+
+<Steps>
+
+<Step>
+
+### Describe the snapshot
+
+```tsx title="app/handbook-snapshot.ts"
+import type { PublicationSnapshot } from "@imposia/react";
+
+export const handbook: PublicationSnapshot = {
+  metadata: { title: "Field Handbook", language: "en" },
+  entries: [
+    { id: "cover", title: "Cover", html: "<h1>Field Handbook</h1>" },
+    {
+      id: "intro",
+      title: "Introduction",
+      html: "<h1>Introduction</h1><p>Why this handbook exists.</p>",
+    },
+    {
+      id: "survey",
+      title: "Survey method",
+      html: "<h1>Survey method</h1><h2>Preparation</h2><p>…</p><h2>In the field</h2><p>…</p>",
+    },
+  ],
+};
+```
+
+Entry `id` values must be unique and free of whitespace; validation failures throw when the snapshot is mounted, not silently later. The `id` is also what deep links and outline destinations are built from, so treat it as a stable public name — renaming an entry's `id` invalidates links that pointed at it.
+
+</Step>
+
+<Step>
+
+### Render it with ImposiaPublicationViewer
+
+```tsx title="app/handbook-preview.tsx"
+import {
+  ImposiaPublicationViewer,
+  type ImposiaPublicationViewerHandle,
+} from "@imposia/react";
 import { useRef } from "react";
 import "@imposia/react/styles.css";
+import { handbook } from "./handbook-snapshot";
 
-type PublishingActionsProps = {
-  readonly html: string;
-  readonly onActionError: (error: unknown) => void;
-};
-
-export function PublishingActions({ html, onActionError }: PublishingActionsProps) {
-  const viewer = useRef<ImposiaPageViewerHandle>(null);
-
-  async function print(): Promise<void> {
-    try {
-      const current = viewer.current;
-      if (current === null) throw new DOMException("Viewer is not available", "InvalidStateError");
-      await current.print();
-    } catch (error) {
-      onActionError(error);
-    }
-  }
-
-  async function exportEpub(): Promise<void> {
-    try {
-      const current = viewer.current;
-      if (current === null) throw new DOMException("Viewer is not available", "InvalidStateError");
-      const blob = await current.exportEpub({
-        metadata: { title: "Quarterly report", language: "en", identifier: "urn:report:quarterly" },
-      });
-
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = "report.epub";
-      link.click();
-      URL.revokeObjectURL(url);
-    } catch (error) {
-      onActionError(error);
-    }
-  }
+export function HandbookPreview() {
+  const viewer = useRef<ImposiaPublicationViewerHandle>(null);
 
   return (
     <>
-      <ImposiaPageViewer ref={viewer} source={{ html }} onError={onActionError} />
-      <button type="button" onClick={() => void print()}>Print / Save as PDF</button>
-      <button type="button" onClick={() => void exportEpub()}>Export EPUB</button>
+      <ImposiaPublicationViewer
+        ref={viewer}
+        snapshot={handbook}
+        publicationOptions={{ page: { size: "A4", margin: "18mm" } }}
+        viewerOptions={{ mode: "spread", spread: { cover: true } }}
+      />
+      <button type="button" onClick={() => void viewer.current?.print()}>
+        Print / Save as PDF
+      </button>
     </>
   );
 }
 ```
 
-## Check the result
+The component owns one Core `PublicationController` and one canonical iframe, and it wires the Reader for you — there is no separate mount step. `publicationOptions` accepts the same pagination options as a single page document, except that `extensions` takes Publication extensions.
 
-Preview stays visible while a new source is staged. Print opens the browser's native dialog for the committed page document; choose a printer or **Save as PDF** there. Imposia does not return PDF bytes. EPUB exports the latest committed semantic source as a reflowable EPUB 3.3 `Blob`.
+</Step>
+
+<Step>
+
+### Open the Reader and confirm
+
+Open the preview in a browser. The Viewer shows the entries as one continuous page sequence: the cover, then the introduction on the next page, then the survey chapter.
+
+Open the **Contents** panel from the Viewer controls. It shows the committed outline — one item per entry, extended by the `h2` headings inside the survey chapter. Selecting an item jumps to that item's exact global page. Click **Print / Save as PDF** and the browser's print dialog shows the same pages in the same order.
+
+</Step>
+
+</Steps>
+
+## What the Reader gives you
+
+The Reader is a set of panels built into the Page Viewer shell, rendered outside the canonical iframe. It never reparses your HTML, rasterizes a page, or runs pagination again — every panel is a projection of the committed generation.
+
+| Panel | What it shows |
+| --- | --- |
+| Contents | The committed outline as a hierarchical table of contents; selecting an item navigates to its global page |
+| Search | Matches in the committed pages' visible text, with entry, page, and plain-text excerpt per result |
+| Thumbnails | One abstract preview per committed global page — correct sheet aspect ratio with schematic line marks, not a rendered copy |
+| Inspector | Current-generation warnings with navigation to located findings; opt in with `viewerOptions.inspector` |
+
+The panels are keyboard-operable and mutually exclusive: opening one closes the others.
+
+Everything the panels do is also on the imperative handle — `navigate()`, `search()`, `selectSearchResult()`, `getThumbnails()`, `selectThumbnail()`, and the open/close/toggle methods — so you can drive the same behavior from your own UI. The full list is in the [React API](/en/docs/api/react).
+
+Search only indexes sanitized visible text: hidden, inert, `aria-hidden`, script, style, and template content is excluded, and no raw DOM or markup crosses the API.
+
+## Navigation and search are bound to a generation
+
+Every navigable place in a Publication is a `PublicationDestination`: `{ id, entryId, page, generation }`. Outline items carry one, and so does every search result. The `generation` field is the point: a destination is a claim about one specific committed page sequence, and it is only honored against that sequence.
+
+```tsx title="app/find-in-handbook.ts"
+const results = viewer.current?.search("preparation") ?? [];
+// Each result: { entry, page, excerpt, destination }
+if (results.length > 0) {
+  viewer.current?.selectSearchResult(results[0]);
+}
+```
+
+<Callout type="warn" title="Do not cache destinations or search results across updates">
+After a new snapshot commits, destinations and search results from the previous generation are stale. `navigate()` throws for a stale destination, and selecting a retained old result is rejected the same way. Resolve again with `resolveDestination(id)` — the ID identifies the same entry or heading in the new generation — or run the search again.
+</Callout>
+
+This strictness is what keeps navigation honest. Page numbers move when content changes; a destination that silently jumped to an old page number would point at the wrong content. Rejecting stale values forces the lookup back through the current commit, where the `id` still identifies the right place.
+
+## Update the whole snapshot
+
+Pass a different snapshot object and the component stages a new generation; the committed pages stay visible until it wins. The comparison is by reference, so mutating an entry inside the same object does nothing — build a new snapshot value instead. When you cannot guarantee a new reference, bump `snapshotRevision` to force the update. Changing `publicationOptions` follows the same rule as page documents: bump `publicationOptionsRevision` to remount the controller with the new options.
+
+## Give readers a stable link
+
+The Reader can round-trip its position through a URL-safe deep-link string, built from the destination's stable ID:
+
+```tsx title="app/handbook-with-links.tsx"
+<ImposiaPublicationViewer
+  ref={viewer}
+  snapshot={handbook}
+  readerOptions={{
+    initialDeepLink: startLink,
+    onDeepLinkChange: (value) => {
+      // Persist value in your router or URL hash.
+    },
+  }}
+/>
+```
+
+`onDeepLinkChange` fires as the reader navigates; store the value wherever your application keeps URL state. To restore later, pass it as `initialDeepLink` on mount or call `restoreDeepLink(value)` on the handle. Because the encoded value names a stable ID rather than a page number, a link recorded against an older generation still resolves after content changes — it lands wherever that entry or heading lives now. An unknown or malformed value resolves to `undefined` instead of throwing.
+
+## Print and export follow the same sequence
+
+`print()` on the handle opens the browser's native print dialog for the entire committed page sequence in reading order — one dialog for the whole publication, where the reader picks a printer or **Save as PDF**. The same committed snapshot can also produce a reflowable EPUB 3.3 `Blob` through `exportEpub()`, with a spine that follows entry order; the required metadata and limits are documented in the [Core API](/en/docs/api/core).
+
+## Common questions
+
+<Accordions>
+
+<Accordion title="Do I need React for this?">
+No. `mountPublication()` from `@imposia/core` creates the same `PublicationController`, and `mountPageViewer()` from `@imposia/viewer` accepts a `reader` option that binds the same Reader panels. `ImposiaPublicationViewer` is that composition wired into the React lifecycle.
+</Accordion>
+
+<Accordion title="Can I update just one entry?">
+No — a snapshot is always complete. Submit the full entry list with the one change; entries whose content did not change still restage, and the commit replaces the whole page sequence at once. This is what keeps global page numbers, ranges, and the outline consistent with each other.
+</Accordion>
+
+<Accordion title="Why does my heading not appear in the Contents panel?">
+The outline includes visible headings only. A heading inside `hidden`, `inert`, or `aria-hidden="true"` content is excluded, matching what search indexes. Entry titles always appear, whether or not the entry's HTML contains a heading.
+</Accordion>
+
+<Accordion title="What do thumbnails actually contain?">
+An abstract preview: the page's sheet aspect ratio and at most a few schematic text-line marks derived from retained page metadata. Thumbnails never clone authored DOM, rasterize pages, or create another iframe, so they stay cheap for long publications. Selecting one navigates to that exact global page.
+</Accordion>
+
+</Accordions>
+
+## Next steps
+
+<Cards>
+  <Card title="React API" href="/en/docs/api/react">
+    Every `ImposiaPublicationViewer` prop and handle method.
+  </Card>
+  <Card title="Core API" href="/en/docs/api/core">
+    `mountPublication`, the `PublicationController`, and snapshot types.
+  </Card>
+  <Card title="How the output stays consistent" href="/en/docs/concepts/publishing-model">
+    The commit lifecycle every Publication generation goes through.
+  </Card>
+</Cards>

@@ -1,7 +1,9 @@
 ---
 title: Core API
-description: Framework-neutral page document and publication controllers from @imposia/core.
+description: Framework-neutral page document and Publication controllers from @imposia/core.
 ---
+
+`@imposia/core` is the canonical page-document runtime: pagination, lifecycle, resolver boundary, extensions, print, and export without React. Everything here runs in the browser only.
 
 ## Core page document
 
@@ -17,7 +19,7 @@ mountPageDocument(
 
 The function appends one canonical iframe immediately, starts a staged generation, and returns synchronously. Await `ready` before reading the first document.
 
-```ts
+```ts title="app/mount-page-document.ts"
 const controller = mountPageDocument(host, { html: "<article><h1>Hello</h1></article>" });
 const pageDocument = await controller.ready;
 ```
@@ -32,32 +34,50 @@ const pageDocument = await controller.ready;
 | `limits` | Optional input, node, asset, deadline, page, layout-pass, and generated-output limits. |
 | `headerTemplate`, `footerTemplate` | Decoration markup. |
 | `decorateBlankPages` | Whether blank pages receive decorations. |
-| `experimental` | `{ footnotes?: boolean; pageFloats?: boolean }`. |
+| `experimental` | `{ footnotes?: boolean; pageFloats?: boolean }`; both features are Experimental and fall back with `FOOTNOTE_DEFERRED` or `PAGE_FLOAT_FALLBACK` warnings outside their limits. |
 | `extensions` | Ordered `PageExtension` or `PublicationExtension` values. |
 | `compose` | `{ yieldBudgetMs?: number; scheduler?: () => Promise<void> }`; cooperative main-thread pagination with an 8 ms default budget. Use `Infinity` to disable scheduler handoffs. |
 | `signal` | Cancels the initial generation. |
 | `onProgress` | Receives pass-local `{ completedPages, pass, provisional: true }` whenever staging allocates a page. A later convergence pass resets the count. |
 
-Scheduler, font, and image waits count toward the wall-clock
-`limits.resourceDeadlineMs`. Progress describes provisional staging work; read
-`controller.current` only for the latest committed generation.
+Scheduler, font, and image waits count toward the wall-clock `limits.resourceDeadlineMs`. Progress describes provisional staging work; read `controller.current` only for the latest committed generation.
 
-An `AssetResolver` receives `{ url, kind, baseUrl, signal }` and resolves to `{ status: "resolved", bytes, mimeType, resolvedUrl? }` or `{ status: "blocked", reason? }`.
+An `AssetResolver` receives `{ url, kind, baseUrl, signal }` and resolves to `{ status: "resolved", bytes, mimeType, resolvedUrl? }` or `{ status: "blocked", reason? }`. Implementing one is covered in [Load images and fonts](/en/docs/guides/assets).
 
-`PageExtension` and `PublicationExtension` can also implement synchronous
-`finalizePage(page, context)`. It runs once per accepted page after Core has
-resolved decoration and margin boxes but before commit, so `page.element` is a
-live measurable page element. `page.tableFragments` lists continued table
-fragments with their origin and one-based continuation index. Mutations persist
-into the committed iframe; a non-`undefined` return rejects the generation.
-It runs for every allocated page, including intentionally inserted blank pages,
-regardless of `decorateBlankPages`.
+<Accordions>
 
-Use `createTableColgroupExtension()` as an opt-in extension when split tables
-need measured pixel column widths frozen in continuation fragments. Core always
-carries authored `<colgroup>` elements, but never synthesizes widths by default.
+<Accordion title="Default limits">
 
-#### `PageDocumentController`
+Every `limits` field is optional; these are the defaults that apply when a field is omitted.
+
+| Field | Default |
+| --- | --- |
+| `maxInputBytes` | 5 MiB (`5 * 1024 * 1024`) |
+| `maxNodes` | 100,000 |
+| `maxAssetBytes` | 25 MiB (`25 * 1024 * 1024`) |
+| `maxAssetDepth` | 8 |
+| `maxAssetReferences` | 512 |
+| `resourceDeadlineMs` | 30,000 |
+| `maxPages` | 10,000 |
+| `maxLayoutPasses` | 8 |
+| `maxGeneratedFragments` | 400,000 |
+| `maxGeneratedRecords` | 10,000 |
+
+</Accordion>
+
+</Accordions>
+
+### Extensions
+
+`PageExtension` and `PublicationExtension` can also implement synchronous `finalizePage(page, context)`. It runs once per accepted page after Core has resolved decoration and margin boxes but before commit, so `page.element` is a live measurable page element. `page.tableFragments` lists continued table fragments with their origin and one-based continuation index. Mutations persist into the committed iframe. It runs for every allocated page, including intentionally inserted blank pages, regardless of `decorateBlankPages`.
+
+<Callout type="warn" title="finalizePage must return undefined">
+A non-`undefined` return value from `finalizePage` rejects the whole generation. The hook communicates by mutating the live page element, never by returning a replacement.
+</Callout>
+
+Use `createTableColgroupExtension()` as an opt-in extension when split tables need measured pixel column widths frozen in continuation fragments. Core always carries authored `<colgroup>` elements, but never synthesizes widths by default.
+
+### `PageDocumentController`
 
 | Member | Returns | Readiness and errors |
 | --- | --- | --- |
@@ -76,9 +96,40 @@ carries authored `<colgroup>` elements, but never synthesizes widths by default.
 | `pages` | `readonly PageMetadata[]` | Page number, side, name, blank state, geometry, dimensions, and body text. |
 | `warnings` | `readonly PageWarning[]` | Current-generation diagnostics. |
 | `timings` | `{ totalMs; resourceMs; paginationMs }` | Generation timings in milliseconds. |
-| `exportEpub(options)` | `Promise<Blob>` | Waits for latest active work and exports the latest committed semantic source. |
+| `exportEpub(options)` | `Promise<Blob>` | Waits for latest active work and exports the latest committed semantic source as a reflowable EPUB 3.3 `Blob`. |
 
-EPUB options require `metadata: { title, language, identifier, modified? }` and optionally accept `signal` and `{ maxEntries?, maxBytes? }` limits.
+EPUB options require `metadata: { title, language, identifier, modified? }` and optionally accept `signal` and `{ maxEntries?, maxBytes? }` limits. The export is semantic: page wrappers, margin furniture, generated counters, and page-only experimental artifacts are excluded.
+
+### Warnings
+
+Every committed `PageWarning` carries a `code`, a `message`, and a frozen `location` with `generation`, `entryId`, and `page` (each `undefined` when unknown). Extension diagnostics use namespaced ``EXTENSION_${string}`` codes and name their `extension`.
+
+<Accordions>
+
+<Accordion title="Core warning codes">
+
+| Code | Emitted when |
+| --- | --- |
+| `PAGE_OVERFLOW` | Content exceeds the usable page and cannot fragment further. |
+| `RESOURCE_BLOCKED` | The resolver refused a resource or its bytes failed validation. |
+| `UNSUPPORTED_LAYOUT` | A layout outside a Constrained subset remained atomic instead of fragmenting. |
+| `UNSUPPORTED_DECORATION_TOKEN` | A decoration template used a token Core does not support. |
+| `PAGE_RULE_UNSUPPORTED` | An authored `@page` declaration is outside the supported set. |
+| `BREAK_CONSTRAINT_RELAXED` | A break constraint could not be honored and was deterministically relaxed. |
+| `WIDOW_ORPHAN_RELAXED` | An impossible widows/orphans combination was relaxed. |
+| `WIDOW_ORPHAN_FALLBACK` | Widows/orphans used inline integer declarations instead of computed properties. |
+| `HYPHENATION_FALLBACK` | `hyphens: auto` fell back to `manual` for missing or invalid language context. |
+| `UNBREAKABLE_CONTENT` | An overlong text run received `overflow-wrap: anywhere` to fit. |
+| `UNSUPPORTED_FRAGMENTATION_CONTEXT` | Content such as overflowing vertical text remained atomic. |
+| `REFERENCE_MISSING`, `REFERENCE_DUPLICATE` | A local target reference points at a missing or duplicated ID. |
+| `LAYOUT_NON_CONVERGENT` | Generated publishing layout cycled or failed to converge within the pass limit. |
+| `FOOTNOTE_DEFERRED`, `PAGE_FLOAT_FALLBACK` | An experimental footnote or page float fell back. |
+| `EPUB_RESOURCE_OMITTED` | An EPUB export omitted a resource it could not admit. |
+| `AVOID_RELAXED` | An impossible `break-inside: avoid` was relaxed. |
+
+</Accordion>
+
+</Accordions>
 
 ### Core utilities
 
@@ -108,7 +159,7 @@ mountPublication(
 
 It composes ordered entries into one page sequence and returns synchronously. Invalid snapshots or Publication extensions can throw during mounting.
 
-```ts
+```ts title="app/mount-publication.ts"
 const controller = mountPublication(host, {
   metadata: { title: "Handbook", language: "en" },
   entries: [
@@ -119,9 +170,9 @@ const controller = mountPublication(host, {
 const publication = await controller.ready;
 ```
 
-`PublicationSnapshot` contains `metadata: { title, language?, identifier? }` and ordered entries. Each entry requires `id`, `title`, optional `baseUrl`, and exactly one of `html` or `lightDom`. `PublicationOptions` contains `PageDocumentOptions` except that `extensions` accepts only `PublicationExtension[]`.
+`PublicationSnapshot` contains `metadata: { title, language?, identifier? }` and ordered entries. Each entry requires a unique `id` without whitespace or control characters, a `title`, optionally a `baseUrl`, and exactly one of `html` or `lightDom`. `PublicationOptions` contains `PageDocumentOptions` except that `extensions` accepts only `PublicationExtension[]`.
 
-#### `PublicationController`
+### `PublicationController`
 
 | Member | Returns | Readiness and errors |
 | --- | --- | --- |
@@ -134,4 +185,4 @@ const publication = await controller.ready;
 | `print()` | `Promise<void>` | Uses the page controller's latest-successful-commit behavior. |
 | `destroy()` | `Promise<void>` | Destroys underlying page and Publication resources. |
 
-`PublicationDocument` extends `PageDocument` with committed `metadata`, `entries`, and nested `outline`. Each entry has an inclusive global `pageRange`. A `PublicationDestination` is `{ id, entryId, page, generation }`; it is generation-bound. A search result is `{ entry, page, excerpt, destination }`.
+`PublicationDocument` extends `PageDocument` with committed `metadata`, `entries`, and nested `outline`. Each entry has an inclusive global `pageRange`. A `PublicationDestination` is `{ id, entryId, page, generation }`; it is generation-bound, and `navigate` rejects a stale value with a typed `ImposiaError` (`STALE_PUBLICATION_DESTINATION`). A search result is `{ entry, page, excerpt, destination }`.

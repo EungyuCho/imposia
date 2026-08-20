@@ -1,22 +1,26 @@
 ---
 title: Viewer API
-description: Page, PDF, Reader, Inspector, and navigation controllers from @imposia/viewer.
+description: Page presentation, Reader, Inspector, and PDF viewing controllers from @imposia/viewer.
 ---
 
-## Viewer page documents, PDF, reader, and inspector
+`@imposia/viewer` presents documents. `mountPageViewer` presents the canonical iframe of a committed Core page document; `mountViewer` is a separate PDF.js viewer for existing PDF files. Neither runs pagination.
 
-### `mountPageViewer`
+## `mountPageViewer`
 
 ```ts
 mountPageViewer(container: HTMLElement, document: PageDocument, options?: PageViewerOptions): PageViewerController;
 validatePageViewerOptions(document: PageDocument, options?: PageViewerOptions): void;
 ```
 
-Mount only after Core commits. `container` must be the canonical iframe's current parent. Validation checks the document, sandbox, theme, and optional reader synchronously.
+Validation checks the document, sandbox, theme, and optional reader synchronously; `validatePageViewerOptions` runs the same checks without mounting.
+
+<Callout type="warn" title="Mount only after Core commits, in the iframe's own container">
+`mountPageViewer` requires a committed `PageDocument`, and `container` must be the canonical iframe's current parent — any other element throws. The Viewer presents Core's iframe in place; it never moves, clones, or recreates it.
+</Callout>
 
 `PageViewerOptions` accepts `mode?: "continuous" | "single" | "spread"`, `spread?: { cover? }`, `zoom?`, `controls?`, `theme?`, `inspector?`, and `reader?`. `controls` defaults to `true`; set it to `false` to keep the presentation controller without the built-in brand rail. A theme is a map of CSS properties whose names begin `--imposia-viewer-`.
 
-#### `PageViewerController`
+### `PageViewerController`
 
 | Member | Returns | Effect or constraint |
 | --- | --- | --- |
@@ -32,11 +36,17 @@ Mount only after Core commits. `container` must be the canonical iframe's curren
 | `reader` | `PublicationReaderController \| undefined` | Present when reader options were supplied. |
 | `inspector` | `ViewerInspectorController \| undefined` | Present when `inspector: true`. |
 
-Narrow containers can report `mode: "spread"` with `effectiveMode: "single"`.
-Viewer CSS is scoped to `.imposia-viewer`; the host owns body styles, preview
-dimensions, background, and surrounding scrolling.
+Viewer CSS is scoped to `.imposia-viewer`; the host owns body styles, preview dimensions, background, and surrounding scrolling.
 
-### Publication reader and deep links
+<Accordions>
+
+<Accordion title="Why does a requested spread render single pages?">
+Containers narrower than 720 px keep the requested `mode: "spread"` and the current global page but present one page at a time, reporting `effectiveMode: "single"` in state. Widen the container and the spread returns; nothing needs remounting. `spread.cover` places page 1 alone and pairs 2–3 onward; without it, pairing starts at 1–2.
+</Accordion>
+
+</Accordions>
+
+## Publication Reader and deep links
 
 Reader options require the `PublicationController` that owns the exact displayed `PublicationDocument`; they may include `initialDeepLink` and `onDeepLinkChange`.
 
@@ -62,7 +72,7 @@ restorePublicationDeepLink(value: string, controller: PublicationController): Pu
 
 Serialization produces a versioned value from the destination ID. The standalone restore helper accepts only canonical encoding and resolves against the current generation; unlike the reader method, it does not navigate.
 
-### Viewer inspector
+## Viewer Inspector
 
 | `ViewerInspectorController` member | Returns / effect |
 | --- | --- |
@@ -70,14 +80,16 @@ Serialization produces a versioned value from the destination ID. The standalone
 | `select(warning)` | Goes to/highlights a located warning; foreign-generation warnings throw. |
 | `state` | `{ open, warnings, selected }`. |
 
-### `mountViewer` for PDF
+The Inspector panel shares the auxiliary-panel slot with Contents, Search, and Thumbnails: opening any one closes the others. It is hidden for print and absent from EPUB export.
+
+## `mountViewer` for PDF
 
 ```ts
 mountViewer(container: HTMLElement, source: ViewerSource, options?: ViewerOptions): ViewerController;
 type ViewerSource = Uint8Array | ArrayBuffer | string | { pdf: Uint8Array };
 ```
 
-This separate Viewer loads/rasterizes PDF pages with PDF.js. Options are `mode?: "continuous" | "single"`, `zoom?`, `workerSrc?`, and `theme?`. It returns immediately in `loading`; failures set `state.status` to `error` and populate `state.error`.
+This separate Viewer loads/rasterizes PDF pages with PDF.js. It presents PDF files your application already has; it is not an export path for Core page documents, which have no PDF-byte API. Options are `mode?: "continuous" | "single"`, `zoom?`, `workerSrc?`, and `theme?`. It returns immediately in `loading`; failures set `state.status` to `error` and populate `state.error`.
 
 | `ViewerController` member | Returns / effect |
 | --- | --- |

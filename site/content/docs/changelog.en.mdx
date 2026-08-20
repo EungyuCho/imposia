@@ -3,7 +3,28 @@ title: Changelog
 description: See what changed in each published Imposia package version.
 ---
 
-This page lists the versions published to npm. `@imposia/core`, `@imposia/viewer`, `@imposia/client`, and `@imposia/react` use the same version number.
+This page summarizes each versioned Imposia release. `@imposia/core`, `@imposia/viewer`, `@imposia/client`, and `@imposia/react` use the same version number; the complete record is the repository's [CHANGELOG.md](https://github.com/EungyuCho/imposia/blob/main/CHANGELOG.md).
+
+## 0.5.0 — August 20, 2026
+
+Core parses with the browser's native parser, and a pagination performance batch reduced layout-measurement work on long documents.
+
+- Replaced `parse5` with browser-native parsing (`DOMParser`, template fragment parsing, native serialization); malformed markup may parse differently than before, and `parse5` and `entities` left the Core bundle.
+- Patched the bundled `postcss` and transitive `nanoid` dependencies flagged by the production vulnerability audit.
+- Placed sibling runs as chunks and bisected only on overflow, removing a forced synchronous reflow and an inline-overflow check per node.
+- Derived page-crossing text splits from line-box rects instead of one measurement call per grapheme; on the project's long-paragraph fixtures, `getClientRects` calls fell 98.1% for English and 95.9% for CJK text.
+- Shared one resolver call, decode validation, and Blob URL for same-URL assets within a generation, without changing per-occurrence byte accounting or extension veto semantics.
+- Minified the browser bundles and re-based bundle-size budgets. Each new fast path ships beside a temporary internal fallback for one release, which is why the Core bundle grew this release.
+
+## 0.4.1 — July 27, 2026
+
+Multi-page printing became reliable under caller viewport constraints, and Viewer panels follow the responsive control rail.
+
+- Prevented caller-authored `html` and `body` viewport constraints from clipping the isolated native-print snapshot to one sheet while preserving the source document's print cascade.
+- Positioned Viewer TOC, search, thumbnail, and Inspector panels below the actual responsive control rail, including the wrapped 320 px layout.
+- Reorganized the localized documentation around getting started, concepts, publishing guides, package API references, and browser-native Save as PDF.
+
+[Read the 0.4.1 release notes](https://github.com/EungyuCho/imposia/releases/tag/v0.4.1).
 
 ## 0.4.0 — July 24, 2026
 
