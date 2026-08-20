@@ -1,5 +1,6 @@
 # Documentation routing
 
+- System architecture overview: [architecture/overview.md](architecture/overview.md). It maps the package topology, the staged-to-committed pagination pipeline, the security boundary, the extension runtime, Publication and output surfaces, the five integrity invariants and their mechanisms, verification layers, and the build-time enforcement scripts. It is descriptive; ADRs remain authoritative for decisions.
 - Product and public contracts: [domain/product.md](domain/product.md). It defines HTML/CSR pagination integrity as the primary product contract, the React-first browser package, framework-neutral Core/Client/Viewer contracts, canonical iframe lifecycle, and semantic EPUB export.
 - Product roadmap: [roadmap.md](roadmap.md). It orders post-`0.4.0` work by evidence and adoption risk, defines milestone exit criteria, and makes `0.5` the public React/CSR proof release.
 - Open-source launch work: [open-source-readiness.md](open-source-readiness.md). It separates the completed client release gate, post-release engineering follow-ups, and maintainer-controlled launch gates.
