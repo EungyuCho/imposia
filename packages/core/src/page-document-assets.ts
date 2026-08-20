@@ -62,6 +62,30 @@ function bytesError(): ImposiaError {
   return new ImposiaError("ASSET_BYTES_LIMIT", "Asset byte limit exceeded.");
 }
 
+interface MemoizedResolution {
+  readonly promise: Promise<AssetOutcome>;
+  bytesConsumed: number;
+}
+
+/**
+ * Memo key for a request whose outcome is safe to share between occurrences:
+ * image, font, and media outcomes are immutable (stylesheet outcomes carry a
+ * mutable postcss root that `apply` consumes, so they are never shared). The
+ * key uses the absolutized URL because nested CSS occurrences of the same
+ * resource carry different base URLs; a URL that cannot be absolutized is not
+ * memoized and takes the per-occurrence path.
+ */
+function resolutionMemoKey(request: AssetRequest): string | undefined {
+  if (request.kind === "stylesheet") return undefined;
+  try {
+    const absolute =
+      request.baseUrl === undefined ? new URL(request.url) : new URL(request.url, request.baseUrl);
+    return `${request.kind}\u0000${absolute.href}`;
+  } catch {
+    return undefined;
+  }
+}
+
 export async function resolvePageAssets(
   html: string,
   sourceBaseUrl: string | undefined,
@@ -105,6 +129,13 @@ export async function resolvePageAssets(
     blockedIdentity ??= request.sourceIdentity;
     return { status: "blocked" };
   };
+  const resolutionMemo = new Map<string, MemoizedResolution>();
+  const consumeBytes = (bytes: number): void => {
+    if (limits?.maxAssetBytes !== undefined && assetBytes + bytes > limits.maxAssetBytes) {
+      throw bytesError();
+    }
+    assetBytes += bytes;
+  };
 
   try {
     while (queue.length > 0) {
@@ -136,18 +167,38 @@ export async function resolvePageAssets(
                 return Promise.resolve(markBlocked(request));
               }
               if (blockedScheme(request.url)) return Promise.resolve(markBlocked(request));
-              return resolveOne(request, resolver, operation.signal, scope, (bytes) => {
-                if (
-                  limits?.maxAssetBytes !== undefined &&
-                  assetBytes + bytes > limits.maxAssetBytes
-                ) {
-                  throw bytesError();
-                }
-                assetBytes += bytes;
-              }).catch((error: unknown) => {
+              const remapAbort = (error: unknown): never => {
                 if (operation.signal.aborted) throw abortError();
                 throw error;
-              });
+              };
+              const memoKey = resolutionMemoKey(request);
+              const memoized = memoKey === undefined ? undefined : resolutionMemo.get(memoKey);
+              if (memoized !== undefined) {
+                // Occurrence-level semantics stay intact on a memo hit: the
+                // extension veto, scheme check, and reference/depth limits ran
+                // above, and the byte accounting charges every occurrence so
+                // the maxAssetBytes limit keeps its duplicate-inclusive sum.
+                return memoized.promise
+                  .then((outcome) => {
+                    consumeBytes(memoized.bytesConsumed);
+                    return outcome;
+                  })
+                  .catch(remapAbort);
+              }
+              if (memoKey === undefined) {
+                return resolveOne(request, resolver, operation.signal, scope, consumeBytes).catch(
+                  remapAbort,
+                );
+              }
+              const entry: MemoizedResolution = {
+                bytesConsumed: 0,
+                promise: resolveOne(request, resolver, operation.signal, scope, (bytes) => {
+                  entry.bytesConsumed = bytes;
+                  consumeBytes(bytes);
+                }),
+              };
+              resolutionMemo.set(memoKey, entry);
+              return entry.promise.catch(remapAbort);
             }),
           )),
         );
