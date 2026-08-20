@@ -202,6 +202,13 @@ export interface ExperimentalPageFeatures {
    */
   readonly forceFullConstraintCapture?: boolean;
   /**
+   * Forces the rendered-line-boundary scan used by the plain-text splitting
+   * path onto the per-grapheme legacy implementation. The default fast path
+   * derives line boundaries from the line-box rects plus a verified binary
+   * search; this escape hatch restores the previous per-grapheme behavior.
+   */
+  readonly forceLegacyLineEnds?: boolean;
+  /**
    * Internal debug channel: receives the engine's internal counters for the
    * accepted pagination pass. Only intended for equivalence tests and
    * instrumentation; the counter names and values are not a stable contract.
