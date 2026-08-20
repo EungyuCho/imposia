@@ -29,26 +29,39 @@ All 6 consumer routes are within their gzip budgets.
 
 ## Current baseline
 
-Recorded on 2026-08-20 from the browser-native parsing change (ADR 0013,
-`d8e2638`) combined with the oxc-minify post-pass (`5d73b43`) on top of
-`origin/main@e929da8`:
+Recorded on 2026-08-20 at the 0.5.0 release commit, after the browser-native
+parsing change (ADR 0013, `d8e2638`), the oxc-minify post-pass (`5d73b43`), and
+the pagination performance batch (ASA-424, ASA-425, ASA-426):
 
 | Consumer route | Minified | Gzip | Gzip budget | Headroom |
 | --- | ---: | ---: | ---: | ---: |
-| Core · PageDocument | 190.0 KiB | 56.8 KiB | 60.0 KiB | 3.2 KiB |
-| Core · Publication | 205.1 KiB | 60.8 KiB | 64.0 KiB | 3.2 KiB |
-| Viewer · PageDocument | 94.9 KiB | 28.2 KiB | 30.0 KiB | 1.8 KiB |
+| Core · PageDocument | 201.0 KiB | 60.0 KiB | 63.0 KiB | 3.0 KiB |
+| Core · Publication | 216.1 KiB | 64.1 KiB | 67.0 KiB | 2.9 KiB |
+| Viewer · PageDocument | 95.3 KiB | 28.3 KiB | 30.0 KiB | 1.7 KiB |
 | Viewer · PDF | 433.8 KiB | 120.1 KiB | 125.0 KiB | 4.9 KiB |
-| Client · PageDocument | 221.7 KiB | 65.3 KiB | 69.0 KiB | 3.7 KiB |
-| React · PageViewer | 228.0 KiB | 67.0 KiB | 71.0 KiB | 4.0 KiB |
+| Client · PageDocument | 232.6 KiB | 68.5 KiB | 72.0 KiB | 3.5 KiB |
+| React · PageViewer | 239.0 KiB | 70.3 KiB | 74.0 KiB | 3.7 KiB |
 
 Compared with the 2026-07-23 baseline, the Core · PageDocument route dropped
 from 103.6 KiB to 56.8 KiB gzip: removing parse5 and its `entities` dependency
 accounts for roughly 47 KiB, and the oxc-minify post-pass for the remainder.
-Budgets were re-based with 4.1–6.4% headroom per route. `Viewer · PDF` is the
-one route the new minifier pipeline measures larger (117.3 → 120.1 KiB gzip);
-it is dominated by PDF.js, so its budget stays at 125 KiB rather than
-tightening.
+`Viewer · PDF` is the one route the new minifier pipeline measures larger
+(117.3 → 120.1 KiB gzip); it is dominated by PDF.js, so its budget stays at
+125 KiB rather than tightening.
+
+The performance batch then moved Core · PageDocument back up from 56.8 KiB to
+60.0 KiB, and the four Core-bearing budgets were raised to restore roughly 5%
+headroom. The responsible source is the three escape hatches: ASA-424, ASA-425,
+and ASA-426 each keep the implementation they replace, selectable at runtime
+through `experimental.forceSequentialPlacement`, `experimental.forceLegacyLineEnds`,
+and `experimental.forceFullConstraintCapture`. Code splitting cannot preserve
+the previous limit, because the two paths are selected per element inside one
+hot pagination loop — a dynamic import boundary would have to be crossed per
+node. Tree shaking cannot drop either path either, since the choice is a
+runtime option rather than a build-time constant. This increase is therefore
+expected to be temporary: the hatches are scheduled for removal one release
+after they land, and these budgets should be tightened again at that point.
+Even at 60.0 KiB the route remains 43.6 KiB below its pre-ASA-404 size.
 
 These are source-level consumer scenarios rather than package tarball sizes:
 

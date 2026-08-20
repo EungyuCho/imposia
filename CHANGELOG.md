@@ -3,6 +3,84 @@
 All notable changes to Imposia are recorded here. The project follows semantic
 versioning for its published package interfaces.
 
+## 0.5.0 — 2026-08-20
+
+Minor release for browser-native parsing and a pagination performance batch.
+The version is a minor bump because Core's string-parsing domain changed
+observably; every behavior change below is covered by an equivalence oracle or
+a typed warning.
+
+### Security
+
+- Patched `postcss` to 8.5.26 and its transitive `nanoid` to 3.3.18. Both were
+  flagged by `pnpm audit --prod` and both are bundled into the `@imposia/core`
+  browser artifact, so the exposure reached consumers rather than staying in
+  the toolchain. (ASA-423)
+
+### Breaking
+
+- Core parses the string domain with the browser-native parser (`DOMParser`,
+  template fragment parsing, native serialization) instead of `parse5`, and
+  `nodeOrder` became a strided document-order slot. `parse5` and `entities`
+  left the Core bundle. Callers that depended on `parse5`-specific parse or
+  serialization details may observe different output for malformed markup.
+  See `docs/architecture/0013-browser-native-parsing.md`. (ASA-404)
+
+### Added
+
+- `experimental.forceSequentialPlacement` restores per-node placement.
+  (ASA-424)
+- `experimental.forceLegacyLineEnds` restores the per-grapheme rendered-line
+  scan. (ASA-425)
+- `experimental.forceFullConstraintCapture` restores the full break-constraint
+  sweep. (ASA-426)
+
+  These three escape hatches exist so the corresponding fast paths can be
+  disabled in the field for one release while they earn confidence. Each ships
+  alongside the implementation it replaces, which is why the Core bundle grew;
+  removing the hatches in a later release reclaims that size.
+
+### Performance
+
+- Sibling runs are placed as chunks and bisected only on overflow, replacing a
+  forced synchronous reflow and an inline-overflow check per node. The boundary
+  node re-enters the unchanged sequential path, so splitting, fresh-page retry,
+  and warnings keep their existing behavior. (ASA-424)
+- The page-crossing text split derives rendered-line boundaries from line-box
+  rects plus a verified search instead of one `Range.getClientRects()` call per
+  grapheme, and grapheme segmentation is cached per text node and reused across
+  page splits by offset shift. Measured on long-paragraph fixtures:
+  `getClientRects` calls fell 98.1% (English) and 95.9% (CJK). (ASA-425)
+- Break-constraint capture skips the interior of atomic subtrees when the
+  document's CSS and the subtree's inline styles provably contain no
+  fragmentation-relevant declarations, falling back silently otherwise. The
+  widows/orphans inline walk now runs only when the computed value reads 0,
+  source identity is memoized down the sweep instead of walking ancestors, and
+  the hyphenation sweep folded into capture. A heavy-SVG fixture skipped 21,240
+  interior captures per pass. (ASA-426)
+- Within one generation, image, font, and media requests that absolutize to the
+  same URL share a single resolver call, byte copy, decode validation, and blob
+  URL. Occurrence-level semantics — the extension `allowAsset` veto, scheme
+  check, byte accounting, and per-occurrence substitution — are unchanged.
+  (ASA-427)
+- Publishing-pass lookups are indexed and fixed-point passes are accepted
+  early. (ASA-406)
+
+### Changed
+
+- Browser bundles are minified with an `oxc-minify` post-pass. (ASA-405)
+- Bundle budgets were re-based twice: down after the `parse5` removal (ASA-407)
+  and up after the performance batch, which ships fast and legacy paths
+  together. Core · PageDocument is 60.0 KiB gzip — 43.6 KiB below the
+  pre-ASA-404 route. See `docs/bundle-size.md`.
+- The spread-cover visual gate compares structural geometry instead of checked-in
+  Chromium/Darwin PNG baselines. The old gate always skipped in CI (Ubuntu) and
+  always failed locally on Darwin, so it protected nothing and blocked the
+  release gate; the replacement runs on all three engines with no skip. Removed
+  with it: an unreferenced `tests/fixtures/{parity,pdf}` corpus left over from
+  the deleted Node renderer, the `test:integration` script, and the unused
+  `pixelmatch`/`pngjs` dev dependencies. (ASA-432)
+
 ## 0.4.1 — 2026-07-27
 
 Patch release for reliable multi-page printing and compact Viewer controls.

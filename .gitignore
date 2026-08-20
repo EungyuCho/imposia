@@ -20,3 +20,4 @@ site/.react-router/
 site/build/
 *.tsbuildinfo
 .agents/
+.claude/worktrees/

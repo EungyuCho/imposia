@@ -28,14 +28,22 @@ const SCENARIOS = Object.freeze([
   Object.freeze({
     name: "Core · PageDocument",
     source: 'export { mountPageDocument } from "@imposia/core";',
-    // 56.8 KiB measured 2026-08-20 after the parse5 removal and oxc post-pass.
-    gzipBudgetBytes: 60 * KIBIBYTE,
+    // 60.0 KiB measured 2026-08-20 after the pagination performance batch
+    // (ASA-424/425/426). Each of those tickets ships its fast path alongside
+    // the previous implementation behind an experimental escape hatch, so the
+    // route currently carries both; the hatches are scheduled for removal one
+    // release after they land, which reclaims the difference. Splitting the
+    // paths out is not available: they are selected per element mid-pagination
+    // inside one hot loop, so a dynamic import boundary would have to be
+    // crossed per node. Still 43.6 KiB below the 103.6 KiB pre-ASA-404 route.
+    gzipBudgetBytes: 63 * KIBIBYTE,
   }),
   Object.freeze({
     name: "Core · Publication",
     source: 'export { mountPublication } from "@imposia/core";',
-    // 60.8 KiB measured 2026-08-20; publication adds outline/search over PageDocument.
-    gzipBudgetBytes: 64 * KIBIBYTE,
+    // 64.1 KiB measured 2026-08-20; publication adds outline/search over
+    // PageDocument and inherits the same dual-path pagination cost.
+    gzipBudgetBytes: 67 * KIBIBYTE,
   }),
   Object.freeze({
     name: "Viewer · PageDocument",
@@ -55,14 +63,16 @@ const SCENARIOS = Object.freeze([
   Object.freeze({
     name: "Client · PageDocument",
     source: 'export { mountPageDocument, mountPageViewer } from "@imposia/client";',
-    // 65.3 KiB measured 2026-08-20 (Core pagination + page viewer).
-    gzipBudgetBytes: 69 * KIBIBYTE,
+    // 68.5 KiB measured 2026-08-20 (Core pagination + page viewer); tracks the
+    // Core · PageDocument dual-path increase.
+    gzipBudgetBytes: 72 * KIBIBYTE,
   }),
   Object.freeze({
     name: "React · PageViewer",
     source: 'export { ImposiaPageViewer } from "@imposia/react";',
-    // 67.0 KiB measured 2026-08-20; React/React DOM stay external.
-    gzipBudgetBytes: 71 * KIBIBYTE,
+    // 70.3 KiB measured 2026-08-20; React/React DOM stay external. Tracks the
+    // Core · PageDocument dual-path increase.
+    gzipBudgetBytes: 74 * KIBIBYTE,
   }),
 ]) satisfies readonly BundleScenario[];
 
