@@ -1,7 +1,9 @@
 # Changelog
 
 All notable changes to Imposia are recorded here. The project follows semantic
-versioning for its published package interfaces.
+versioning for its published package interfaces. What that means before `1.0`
+— what counts as public, and what a minor release is allowed to break — is in
+[`docs/api-policy.md`](docs/api-policy.md).
 
 ## 0.5.0 — 2026-08-20
 
@@ -24,7 +26,9 @@ a typed warning.
   `nodeOrder` became a strided document-order slot. `parse5` and `entities`
   left the Core bundle. Callers that depended on `parse5`-specific parse or
   serialization details may observe different output for malformed markup.
-  See `docs/architecture/0013-browser-native-parsing.md`. (ASA-404)
+  See [`docs/migrations/0.5.0.md`](docs/migrations/0.5.0.md) for the upgrade
+  path and `docs/architecture/0013-browser-native-parsing.md` for the
+  decision. (ASA-404)
 
 ### Added
 

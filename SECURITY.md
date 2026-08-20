@@ -8,7 +8,7 @@ can be prepared before exploit details are disclosed.
 
 | Version | Supported |
 | --- | --- |
-| Latest `0.1.x` release | Yes |
+| Latest `0.5.x` release | Yes |
 | Older releases | No |
 | Unreleased `main` | Best effort |
 
