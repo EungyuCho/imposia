@@ -266,6 +266,9 @@ function snapshotExperimental(
   ) {
     throw new TypeError("experimental.forceSequentialPlacement must be a boolean.");
   }
+  if (record.forceLegacyLineEnds !== undefined && typeof record.forceLegacyLineEnds !== "boolean") {
+    throw new TypeError("experimental.forceLegacyLineEnds must be a boolean.");
+  }
   if (record.onDebugCounters !== undefined && typeof record.onDebugCounters !== "function") {
     throw new TypeError("experimental.onDebugCounters must be a function.");
   }
@@ -278,6 +281,9 @@ function snapshotExperimental(
     ...(record.forceSequentialPlacement === undefined
       ? {}
       : { forceSequentialPlacement: record.forceSequentialPlacement }),
+    ...(record.forceLegacyLineEnds === undefined
+      ? {}
+      : { forceLegacyLineEnds: record.forceLegacyLineEnds }),
     ...(record.onDebugCounters === undefined
       ? {}
       : {
@@ -1255,17 +1261,73 @@ function collectWarningSourceLocations(
   return locations;
 }
 
+const CHECKPOINT_STRIDE = 64;
+
+interface GraphemeSegmentation {
+  readonly data: string;
+  readonly ends: readonly number[];
+}
+
+// Pass-lifetime segmentation cache: pass sources and their split fragments are
+// discarded with the pass, so entries are collected with their text nodes.
+const graphemeSegmentations = new WeakMap<Text, GraphemeSegmentation>();
+
+function isGraphemeBoundary(ends: readonly number[], offset: number): boolean {
+  let low = 0;
+  let high = ends.length - 1;
+  while (low <= high) {
+    const middle = Math.floor((low + high) / 2);
+    const end = ends[middle];
+    if (end === undefined) return false;
+    if (end === offset) return true;
+    if (end < offset) low = middle + 1;
+    else high = middle - 1;
+  }
+  return false;
+}
+
+/**
+ * Seeds the remainder's segmentation by shifting the source segmentation.
+ * A suffix that starts on a grapheme cluster boundary segments identically to
+ * the tail of the source segmentation (cluster state — including regional
+ * indicator pairing — resets at every boundary), so the shift is exact. When
+ * the offset is not a known boundary the remainder is simply re-segmented on
+ * first use.
+ */
+function seedGraphemeSuffix(
+  remainder: Text,
+  sourceData: string,
+  sourceEnds: readonly number[],
+  offset: number,
+): void {
+  if (offset <= 0 || remainder.data.length !== sourceData.length - offset) return;
+  if (!isGraphemeBoundary(sourceEnds, offset)) return;
+  const shifted: number[] = [];
+  for (const end of sourceEnds) {
+    if (end > offset) shifted.push(end - offset);
+  }
+  graphemeSegmentations.set(remainder, { data: remainder.data, ends: shifted });
+}
+
 async function graphemeEnds(
-  value: string,
+  text: Text,
   checkpoint: PaginationCheckpoint,
 ): Promise<readonly number[]> {
+  const value = text.data;
+  const cached = graphemeSegmentations.get(text);
+  if (cached !== undefined && cached.data === value) return cached.ends;
   const ends: number[] = [];
   const segmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" });
+  let iteration = 0;
   for (const segment of segmenter.segment(value)) {
-    const scheduled = checkpoint();
-    if (scheduled !== undefined) await scheduled;
+    if (iteration % CHECKPOINT_STRIDE === 0) {
+      const scheduled = checkpoint();
+      if (scheduled !== undefined) await scheduled;
+    }
+    iteration += 1;
     ends.push(segment.index + segment.segment.length);
   }
+  graphemeSegmentations.set(text, { data: value, ends });
   return ends;
 }
 
@@ -1276,7 +1338,7 @@ async function splitTextToFit(
   preferWhitespace = true,
 ): Promise<Text | undefined> {
   const value = text.data;
-  const ends = await graphemeEnds(value, checkpoint);
+  const ends = await graphemeEnds(text, checkpoint);
   if (ends.length === 0) return undefined;
 
   let low = 1;
@@ -1309,19 +1371,27 @@ async function splitTextToFit(
     text.data = value;
     return undefined;
   }
-  const fittingPrefix = value.slice(0, fittingEnd);
-  const whitespaceRuns = [...fittingPrefix.matchAll(/\s+/gu)];
-  const lastWhitespace = whitespaceRuns.at(-1);
-  const whitespaceEnd =
-    lastWhitespace?.index === undefined
-      ? undefined
-      : lastWhitespace.index + lastWhitespace[0].length;
+  const whitespaceEnd = lastWhitespaceEnd(value, fittingEnd);
   const end =
     preferWhitespace && whitespaceEnd !== undefined && whitespaceEnd > 0
       ? whitespaceEnd
       : fittingEnd;
   text.data = value.slice(0, end);
-  return text.ownerDocument.createTextNode(value.slice(end));
+  const remainder = text.ownerDocument.createTextNode(value.slice(end));
+  seedGraphemeSuffix(remainder, value, ends, end);
+  return remainder;
+}
+
+/**
+ * End offset of the last whitespace run within `value.slice(0, limit)` —
+ * the same result as scanning the prefix with /\s+/gu and taking the final
+ * match's end, found by walking backward instead of rescanning the prefix.
+ */
+function lastWhitespaceEnd(value: string, limit: number): number | undefined {
+  for (let index = limit - 1; index >= 0; index -= 1) {
+    if (/\s/u.test(value[index] ?? "")) return index + 1;
+  }
+  return undefined;
 }
 
 function hasKnownContentLanguage(element: Element): boolean {
@@ -1488,17 +1558,28 @@ function htmlElement(element: Element): HTMLElement | undefined {
     : undefined;
 }
 
-async function renderedLineEnds(
+/**
+ * The legacy per-grapheme line-boundary scan: a boundary is recorded between
+ * consecutive rect-bearing graphemes whose rect tops differ by more than the
+ * overflow tolerance. Kept verbatim (with a checkpoint stride) as the
+ * authoritative fallback and the experimental.forceLegacyLineEnds path.
+ */
+async function renderedLineEndsSequential(
   text: Text,
+  graphemes: readonly number[],
   checkpoint: PaginationCheckpoint,
 ): Promise<readonly number[]> {
   const ends: number[] = [];
   let previousEnd = 0;
   let previousTop: number | undefined;
   const range = text.ownerDocument.createRange();
-  for (const end of await graphemeEnds(text.data, checkpoint)) {
-    const scheduled = checkpoint();
-    if (scheduled !== undefined) await scheduled;
+  let iteration = 0;
+  for (const end of graphemes) {
+    if (iteration % CHECKPOINT_STRIDE === 0) {
+      const scheduled = checkpoint();
+      if (scheduled !== undefined) await scheduled;
+    }
+    iteration += 1;
     range.setStart(text, previousEnd);
     range.setEnd(text, end);
     const rects = range.getClientRects();
@@ -1518,6 +1599,311 @@ async function renderedLineEnds(
   return ends;
 }
 
+const RENDERED_LINE_PROBE_WALK_LIMIT = 64;
+const RENDERED_LINE_PREDICTION_BUDGET = 8;
+
+/**
+ * Fast line-boundary scan. The line tops come from the whole-node range's
+ * client rects (one rect per line-box fragment, deduplicated by top within the
+ * overflow tolerance). Each boundary's grapheme offset is then located by a
+ * predicted probe with galloping local correction — falling back to a bisection
+ * over the narrowed index range — using exactly the sequential scan's
+ * measurement (the last client rect of the single-grapheme range) and verified
+ * against the line tops: the found grapheme must sit on the target line and its
+ * nearest rect-bearing predecessor on the previous line. The fast path only
+ * accepts inputs whose measured structure is provably equivalent to the
+ * sequential scan — strictly separated, non-decreasing line tops with every
+ * probed grapheme matching a known line — and returns undefined otherwise so
+ * the caller falls back to the sequential path (vertical writing, non-monotone
+ * fragment tops, mixed-font blips, lines without rect-bearing graphemes).
+ */
+async function renderedLineEndsFast(
+  text: Text,
+  graphemes: readonly number[],
+  checkpoint: PaginationCheckpoint,
+): Promise<readonly number[] | undefined> {
+  const count = graphemes.length;
+  const lastGrapheme = graphemes[count - 1];
+  if (lastGrapheme === undefined) return [];
+  const data = text.data;
+  const range = text.ownerDocument.createRange();
+  try {
+    range.setStart(text, 0);
+    range.setEnd(text, lastGrapheme);
+    const lineTops: number[] = [];
+    const lineWidths: number[] = [];
+    for (const rect of range.getClientRects()) {
+      const previous = lineTops[lineTops.length - 1];
+      if (previous !== undefined && Math.abs(rect.top - previous) <= OVERFLOW_TOLERANCE_CSS_PX) {
+        lineWidths[lineWidths.length - 1] = (lineWidths[lineWidths.length - 1] ?? 0) + rect.width;
+        continue;
+      }
+      if (previous !== undefined && rect.top < previous) return undefined;
+      lineTops.push(rect.top);
+      lineWidths.push(rect.width);
+    }
+    if (lineTops.length === 0) return undefined;
+
+    // lineTops is strictly increasing with gaps above the tolerance, so the
+    // nearest top is found by binary search and checked against the tolerance.
+    const lineIndexOf = (top: number): number | undefined => {
+      let low = 0;
+      let high = lineTops.length - 1;
+      while (low <= high) {
+        const middle = Math.floor((low + high) / 2);
+        const lineTop = lineTops[middle];
+        if (lineTop === undefined) return undefined;
+        if (Math.abs(top - lineTop) <= OVERFLOW_TOLERANCE_CSS_PX) return middle;
+        if (lineTop < top) low = middle + 1;
+        else high = middle - 1;
+      }
+      return undefined;
+    };
+
+    // Memoized per-grapheme measurement using the sequential scan's exact
+    // metric: the last client rect of the single-grapheme range. null records
+    // a rect-less grapheme (e.g. collapsed whitespace), which the sequential
+    // scan skips over.
+    const measuredTops = new Map<number, number | null>();
+    const graphemeTop = (index: number): number | null => {
+      const cached = measuredTops.get(index);
+      if (cached !== undefined) return cached;
+      const start = index === 0 ? 0 : (graphemes[index - 1] ?? 0);
+      const end = graphemes[index] ?? lastGrapheme;
+      range.setStart(text, start);
+      range.setEnd(text, end);
+      const rects = range.getClientRects();
+      const rect = rects.item(rects.length - 1);
+      const top = rect === null ? null : rect.top;
+      measuredTops.set(index, top);
+      return top;
+    };
+
+    type Probe = Readonly<{ index: number; line: number }>;
+    // Resolves the first rect-bearing grapheme at or after `index`; undefined
+    // means everything up to `limit` is rect-less; null means the walk budget
+    // was exceeded or a probed top matched no line (whole-scan fallback).
+    const resolveForward = (index: number, limit: number): Probe | undefined | null => {
+      const walkLimit = Math.min(limit, index + RENDERED_LINE_PROBE_WALK_LIMIT);
+      for (let probe = index; probe <= walkLimit; probe += 1) {
+        const top = graphemeTop(probe);
+        if (top === null) continue;
+        const line = lineIndexOf(top);
+        if (line === undefined) return null;
+        return { index: probe, line };
+      }
+      return walkLimit < limit ? null : undefined;
+    };
+    // Resolves the last rect-bearing grapheme at or before `index`, walking no
+    // further back than `floor`; same null convention as resolveForward.
+    const resolveBackward = (index: number, floor: number): Probe | undefined | null => {
+      const walkFloor = Math.max(floor, index - RENDERED_LINE_PROBE_WALK_LIMIT);
+      for (let probe = index; probe >= walkFloor; probe -= 1) {
+        const top = graphemeTop(probe);
+        if (top === null) continue;
+        const line = lineIndexOf(top);
+        if (line === undefined) return null;
+        return { index: probe, line };
+      }
+      return walkFloor > floor ? null : undefined;
+    };
+
+    // Endpoint verification: the first and last rect-bearing graphemes must
+    // sit on the first and last measured lines (this rejects vertical writing,
+    // where all line boxes share one top but grapheme tops advance).
+    const first = resolveForward(0, count - 1);
+    if (first === null || first === undefined) return undefined;
+    if (first.line !== 0) return undefined;
+    const last = resolveBackward(count - 1, first.index);
+    if (last === null || last === undefined) return undefined;
+    if (last.line !== lineTops.length - 1) return undefined;
+
+    // A soft-wrapped line's first grapheme, by the sequential scan's last-rect
+    // metric, is the wrapping whitespace itself (its trailing rect sits on the
+    // new line), so predictions snap to the last whitespace grapheme before
+    // each word when the text has any.
+    let wordStarts: readonly number[] | undefined;
+    if (/\s/u.test(data)) {
+      const starts: number[] = [];
+      for (let index = 2; index < count; index += 1) {
+        const boundary = graphemes[index - 1];
+        if (
+          boundary !== undefined &&
+          boundary > 0 &&
+          /\s/u.test(data[boundary - 1] ?? "") &&
+          !/\s/u.test(data[boundary] ?? "")
+        ) {
+          starts.push(index - 1);
+        }
+      }
+      if (starts.length > 0) wordStarts = starts;
+    }
+    const snapToWordStart = (target: number, low: number, high: number): number | undefined => {
+      if (wordStarts === undefined) return undefined;
+      let lowIdx = 0;
+      let highIdx = wordStarts.length - 1;
+      while (lowIdx <= highIdx) {
+        const middle = Math.floor((lowIdx + highIdx) / 2);
+        const value = wordStarts[middle];
+        if (value === undefined) return undefined;
+        if (value < target) lowIdx = middle + 1;
+        else highIdx = middle - 1;
+      }
+      const after = wordStarts[lowIdx];
+      const before = wordStarts[lowIdx - 1];
+      const afterValid = after !== undefined && after > low && after <= high;
+      const beforeValid = before !== undefined && before > low && before <= high;
+      if (afterValid && beforeValid && after !== undefined && before !== undefined) {
+        return after - target <= target - before ? after : before;
+      }
+      if (afterValid) return after;
+      if (beforeValid) return before;
+      return undefined;
+    };
+
+    const ends: number[] = [];
+    let anchor = first.index;
+    // Predict each line's grapheme count from its measured line-box width and
+    // a running pixels-per-grapheme estimate; width variation between lines is
+    // measured directly, so only the character-width mix contributes error.
+    const totalWidth = lineWidths.reduce((sum, width) => sum + width, 0);
+    let pixelsPerGrapheme = totalWidth > 0 ? totalWidth / count : 0;
+    for (let line = 1; line < lineTops.length; line += 1) {
+      const scheduled = checkpoint();
+      if (scheduled !== undefined) await scheduled;
+      // Invariants: `low` is rect-bearing with a line below `line` (starting
+      // at the previous boundary's grapheme on line - 1) and every rect-bearing
+      // grapheme at or after `high` known so far is on `line` or later.
+      let low = anchor;
+      let lowLine = line - 1;
+      let high = count - 1;
+      let found: Probe | undefined;
+      const previousWidth = lineWidths[line - 1] ?? 0;
+      const step =
+        pixelsPerGrapheme > 0
+          ? Math.max(1, Math.round(previousWidth / pixelsPerGrapheme))
+          : Math.max(1, Math.round(count / lineTops.length));
+
+      // Prediction with galloping local correction: probe near the projected
+      // boundary and hop by doubling distances (snapped to word starts when the
+      // text has whitespace) until the boundary is pinned or the budget runs
+      // out; the bisection below then works on the narrowed range.
+      let gallop = Math.max(1, Math.round(step / 8));
+      let target: number | undefined = Math.min(high, anchor + step);
+      for (let attempt = 0; attempt < RENDERED_LINE_PREDICTION_BUDGET; attempt += 1) {
+        if (target === undefined || found !== undefined) break;
+        const clamped = Math.max(low + 1, Math.min(target, high));
+        const snapped = snapToWordStart(clamped, low, high) ?? clamped;
+        const probe = resolveForward(snapped, high);
+        if (probe === null) return undefined;
+        if (probe === undefined) {
+          // Everything from the probe position onward is rect-less, so the
+          // boundary sits earlier; retreat by the current gallop distance.
+          high = Math.max(low + 1, snapped - 1);
+          target = Math.max(low + 1, snapped - gallop);
+          gallop *= 2;
+          continue;
+        }
+        if (probe.line < line) {
+          low = probe.index;
+          lowLine = probe.line;
+          target = probe.index + gallop;
+          gallop *= 2;
+          continue;
+        }
+        high = probe.index;
+        const before = resolveBackward(probe.index - 1, low);
+        if (before === null) return undefined;
+        if (before === undefined || before.index <= low) {
+          // No rect-bearing grapheme between `low` and the probe: the probe is
+          // the transition the sequential scan sees, provided the lines align.
+          if (lowLine === line - 1 && probe.line === line) found = probe;
+          else return undefined;
+        } else if (before.line === line - 1) {
+          if (probe.line === line) found = probe;
+          else return undefined;
+        } else if (before.line >= line) {
+          high = before.index;
+          target = Math.max(low + 1, before.index - gallop);
+          gallop *= 2;
+        } else {
+          // before.line < line - 1 with a grapheme after `low`: the previous
+          // line has no rect-bearing grapheme, which the sequential scan would
+          // fold into a single transition — not representable here.
+          return undefined;
+        }
+      }
+
+      if (found === undefined) {
+        // Bisect the narrowed range for the first rect-bearing grapheme on a
+        // line at or beyond `line`.
+        let bisectLow = low + 1;
+        let bisectHigh = high;
+        let candidate: Probe | undefined;
+        while (bisectLow <= bisectHigh) {
+          const middle = Math.floor((bisectLow + bisectHigh) / 2);
+          const resolved = resolveForward(middle, bisectHigh);
+          if (resolved === null) return undefined;
+          if (resolved === undefined) {
+            bisectHigh = middle - 1;
+            continue;
+          }
+          if (resolved.line < line) {
+            low = resolved.index;
+            lowLine = resolved.line;
+            bisectLow = resolved.index + 1;
+          } else {
+            candidate = resolved;
+            bisectHigh = middle - 1;
+          }
+        }
+        if (candidate === undefined || candidate.line !== line) return undefined;
+        const before = resolveBackward(candidate.index - 1, low);
+        if (before === null) return undefined;
+        if (before === undefined || before.index <= low) {
+          if (lowLine !== line - 1) return undefined;
+        } else if (before.line !== line - 1) {
+          return undefined;
+        }
+        found = candidate;
+      }
+
+      if (found.index === 0) return undefined;
+      const boundary = graphemes[found.index - 1];
+      if (boundary === undefined) return undefined;
+      ends.push(boundary);
+      const placed = found.index - anchor;
+      if (previousWidth > 0 && placed > 0) {
+        pixelsPerGrapheme =
+          pixelsPerGrapheme <= 0
+            ? previousWidth / placed
+            : pixelsPerGrapheme * 0.5 + (previousWidth / placed) * 0.5;
+      }
+      anchor = found.index;
+    }
+    if (ends.at(-1) !== lastGrapheme) ends.push(lastGrapheme);
+    return ends;
+  } finally {
+    range.detach();
+  }
+}
+
+/**
+ * Internal test-only surface for the ASA-425 line-ends equivalence oracle.
+ * Not re-exported from the package entry point and not a stable contract:
+ * browser specs import this module's compiled output directly to prove the
+ * fast line-boundary scan and the grapheme-segmentation cache byte-identical
+ * to the sequential implementations.
+ */
+export const internalTextSplitTestApi = Object.freeze({
+  graphemeEnds,
+  renderedLineEndsSequential,
+  renderedLineEndsFast,
+  splitTextToFit,
+  seedGraphemeSuffix,
+  isGraphemeBoundary,
+});
+
 interface RecursiveFragmenterOptions {
   readonly constraints: ReadonlyMap<Element, BreakConstraint>;
   readonly checkpoint: PaginationCheckpoint;
@@ -1530,6 +1916,7 @@ interface RecursiveFragmenterOptions {
   readonly warnings: PageWarning[];
   readonly tableSplits: TableSplitRecord[];
   readonly forceSequentialPlacement: boolean;
+  readonly forceLegacyLineEnds: boolean;
 }
 
 interface PlacementRun {
@@ -1551,11 +1938,14 @@ class RecursiveFragmenter {
   readonly #warned = new Set<string>();
   readonly #pageContent = new Map<PageParts, number>();
   readonly #forceSequentialPlacement: boolean;
+  readonly #forceLegacyLineEnds: boolean;
   #generatedFragments = 0;
   #generatedRecords = 0;
   #chunksPlaced = 0;
   #chunkFallbacks = 0;
   #chunkCapacityEstimate = PLACEMENT_CHUNK_INITIAL_CAPACITY;
+  #lineEndsFastPath = 0;
+  #lineEndsFallbacks = 0;
 
   constructor(options: RecursiveFragmenterOptions) {
     this.#constraints = options.constraints;
@@ -1569,13 +1959,34 @@ class RecursiveFragmenter {
     this.#warnings = options.warnings;
     this.#tableSplits = options.tableSplits;
     this.#forceSequentialPlacement = options.forceSequentialPlacement;
+    this.#forceLegacyLineEnds = options.forceLegacyLineEnds;
   }
 
   get debugCounters(): Readonly<Record<string, number>> {
     return Object.freeze({
       chunksPlaced: this.#chunksPlaced,
       chunkFallbacks: this.#chunkFallbacks,
+      lineEndsFastPath: this.#lineEndsFastPath,
+      lineEndsFallbacks: this.#lineEndsFallbacks,
     });
+  }
+
+  /**
+   * Rendered line boundaries for a text node: the fast path when it can prove
+   * equivalence, the sequential per-grapheme scan otherwise (and always under
+   * experimental.forceLegacyLineEnds).
+   */
+  async #renderedLineEnds(text: Text): Promise<readonly number[]> {
+    const graphemes = await graphemeEnds(text, this.#checkpoint);
+    if (!this.#forceLegacyLineEnds) {
+      const fast = await renderedLineEndsFast(text, graphemes, this.#checkpoint);
+      if (fast !== undefined) {
+        this.#lineEndsFastPath += 1;
+        return fast;
+      }
+      this.#lineEndsFallbacks += 1;
+    }
+    return await renderedLineEndsSequential(text, graphemes, this.#checkpoint);
   }
 
   async prepare(): Promise<void> {
@@ -2536,7 +2947,7 @@ class RecursiveFragmenter {
       if (scheduled !== undefined) await scheduled;
       this.check();
       const value = currentText.data;
-      const lineEnds = await renderedLineEnds(currentText, this.#checkpoint);
+      const lineEnds = await this.#renderedLineEnds(currentText);
       const fittingRemainder = await splitTextToFit(
         currentText,
         () => this.#cursorOverflows(shellCursor),
@@ -2566,13 +2977,7 @@ class RecursiveFragmenter {
         );
       }
       const renderedEnd = lineEnds[selectedLines - 1] ?? fittingEnd;
-      const renderedPrefix = value.slice(0, renderedEnd);
-      const whitespaceRuns = [...renderedPrefix.matchAll(/\s+/gu)];
-      const lastWhitespace = whitespaceRuns.at(-1);
-      const whitespaceEnd =
-        lastWhitespace?.index === undefined
-          ? undefined
-          : lastWhitespace.index + lastWhitespace[0].length;
+      const whitespaceEnd = lastWhitespaceEnd(value, renderedEnd);
       const previousRenderedEnd = lineEnds[selectedLines - 2] ?? 0;
       const selectedEnd =
         whitespaceEnd !== undefined && whitespaceEnd > previousRenderedEnd
@@ -2580,6 +2985,10 @@ class RecursiveFragmenter {
           : renderedEnd;
       currentText.data = value.slice(0, selectedEnd);
       const remainder = currentText.ownerDocument.createTextNode(value.slice(selectedEnd));
+      const segmentation = graphemeSegmentations.get(currentText);
+      if (segmentation !== undefined && segmentation.data === value) {
+        seedGraphemeSuffix(remainder, value, segmentation.ends, selectedEnd);
+      }
       this.#generatedFragment();
       this.#markPageContent(shellCursor.page, selectedLines);
       continueShell(shellCursor.page.name);
@@ -3033,6 +3442,7 @@ export async function buildGeneration(
           warnings: passFragmentationWarnings,
           tableSplits: passTableSplits,
           forceSequentialPlacement: settings.experimental.forceSequentialPlacement === true,
+          forceLegacyLineEnds: settings.experimental.forceLegacyLineEnds === true,
         });
         await fragmenter.prepare();
         const initialPage = allocatePage(undefined);
