@@ -178,6 +178,13 @@ export interface PageContext {
 export interface ExperimentalPageFeatures {
   readonly footnotes?: boolean;
   readonly pageFloats?: boolean;
+  /**
+   * Forces every convergence-requiring generation to run the full verification
+   * pass even when the injected generated values already form a fixed point.
+   * The default fast path skips that redundant pass; this escape hatch restores
+   * the previous always-verify behavior.
+   */
+  readonly forceConvergencePasses?: boolean;
 }
 
 export interface EpubMetadata {

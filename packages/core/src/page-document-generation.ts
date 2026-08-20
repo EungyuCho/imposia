@@ -245,9 +245,18 @@ function snapshotExperimental(
   if (record.pageFloats !== undefined && typeof record.pageFloats !== "boolean") {
     throw new TypeError("experimental.pageFloats must be a boolean.");
   }
+  if (
+    record.forceConvergencePasses !== undefined &&
+    typeof record.forceConvergencePasses !== "boolean"
+  ) {
+    throw new TypeError("experimental.forceConvergencePasses must be a boolean.");
+  }
   return Object.freeze({
     ...(record.footnotes === undefined ? {} : { footnotes: record.footnotes }),
     ...(record.pageFloats === undefined ? {} : { pageFloats: record.pageFloats }),
+    ...(record.forceConvergencePasses === undefined
+      ? {}
+      : { forceConvergencePasses: record.forceConvergencePasses }),
   });
 }
 
@@ -2734,9 +2743,34 @@ export async function buildGeneration(
       const signatures = new Set<string>();
       let accepted: Awaited<ReturnType<typeof paginate>> | undefined;
       const passLimit = publishing.requiresConvergence ? settings.limits.maxLayoutPasses : 1;
+      const allowFixedPointAcceptance = settings.experimental.forceConvergencePasses !== true;
+      const generatedValuesAreFixedPoint = (
+        injected: ReadonlyMap<string, string>,
+        computed: ReadonlyMap<string, string>,
+      ): boolean => {
+        for (const [key, value] of computed) {
+          if ((injected.get(key) ?? "") !== value) return false;
+        }
+        return true;
+      };
       for (let pass = 0; pass < passLimit; pass += 1) {
         const result = await paginate(generatedValues, pass + 1);
         if (!publishing.requiresConvergence || result.publishing.signature === previousSignature) {
+          accepted = result;
+          break;
+        }
+        if (
+          allowFixedPointAcceptance &&
+          generatedValuesAreFixedPoint(generatedValues, result.publishing.generatedValues)
+        ) {
+          // Each layout pass is a deterministic function of the injected generated
+          // values: the pass source is re-cloned from the same flow, and only the
+          // injected marker text differs between passes. When every marker already
+          // carries the value the pass computed back, a verification pass would
+          // reproduce this exact layout (same membership, generated values, named
+          // strings, and footnote/float placements), so its signature would match
+          // and this result would be accepted unchanged. Accept it now instead of
+          // paying for the redundant pass.
           accepted = result;
           break;
         }
