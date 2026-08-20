@@ -19,3 +19,7 @@ export const i18nUI = defineI18nUI(i18n, {
   "zh-CN": { displayName: "简体中文" },
   ja: { displayName: "日本語" },
 });
+
+export function isSupportedLocale(value: string): value is Locale {
+  return (LOCALES as readonly string[]).includes(value);
+}

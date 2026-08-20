@@ -7,13 +7,13 @@ function assertNoBrowserErrors(errors: ReturnType<typeof captureBrowserErrors>) 
   expect(errors.pageErrors).toEqual([]);
 }
 
-test("root redirects to the default English landing page", async ({ page, browserName }) => {
+test("root redirects to the default English documentation", async ({ page, browserName }) => {
   const captured = captureBrowserErrors(page, browserName);
 
   await page.goto("/");
 
   try {
-    await expect(page).toHaveURL(/\/en\/?$/, { timeout: 15_000 });
+    await expect(page).toHaveURL(/\/en\/docs\/?$/, { timeout: 15_000 });
     await expect(page.locator("html")).toHaveAttribute("lang", "en");
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
   } finally {
@@ -21,28 +21,16 @@ test("root redirects to the default English landing page", async ({ page, browse
   }
 });
 
-test("localized landing pages expose docs and demo calls to action", async ({
-  page,
-  browserName,
-}) => {
-  test.skip(browserName !== "chromium", "Landing-page copy is Chromium-reference only.");
+test("each locale root forwards to that locale's documentation", async ({ page, browserName }) => {
+  test.skip(browserName !== "chromium", "Locale routing is Chromium-reference only.");
   const captured = captureBrowserErrors(page, browserName);
 
   try {
     for (const locale of LOCALES) {
       await page.goto(`/${locale}`);
-      await expect(page).toHaveURL(new RegExp(`/${locale}/?$`));
+      await expect(page).toHaveURL(new RegExp(`/${locale}/docs/?$`), { timeout: 15_000 });
       await expect(page.locator("html")).toHaveAttribute("lang", locale);
       await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
-
-      const landing = page.getByRole("main");
-      const docsCta = landing.locator(`.hero-actions a[href="/${locale}/docs"]`);
-      await expect(docsCta).toBeVisible();
-
-      const demoCta = landing.locator('.hero-actions a[href="/examples/demo/index.html"]');
-      await expect(demoCta).toBeVisible();
-      await expect(landing.locator(".outcome-section .outcome-card")).toHaveCount(3);
-      await expect(landing.locator(".outcome-section h2")).toHaveCount(3);
     }
   } finally {
     assertNoBrowserErrors(captured);
@@ -50,10 +38,10 @@ test("localized landing pages expose docs and demo calls to action", async ({
 });
 
 test("the GNB demo link loads the standalone demo document", async ({ page, browserName }) => {
-  test.skip(browserName !== "chromium", "Landing-page navigation is Chromium-reference only.");
+  test.skip(browserName !== "chromium", "Navigation chrome is Chromium-reference only.");
   const captured = captureBrowserErrors(page, browserName);
 
-  await page.goto("/en");
+  await page.goto("/en/docs");
 
   try {
     const demoLink = page.locator("#nd-nav").getByRole("link", { name: "Demo", exact: true });
@@ -74,10 +62,10 @@ test("the GNB exposes the GitHub repository next to the locale control", async (
   page,
   browserName,
 }) => {
-  test.skip(browserName !== "chromium", "Landing-page navigation is Chromium-reference only.");
+  test.skip(browserName !== "chromium", "Navigation chrome is Chromium-reference only.");
   const captured = captureBrowserErrors(page, browserName);
 
-  await page.goto("/en");
+  await page.goto("/en/docs");
 
   try {
     const navigation = page.locator("#nd-nav");

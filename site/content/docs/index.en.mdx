@@ -1,9 +1,13 @@
 ---
 title: Imposia Documentation
-description: Turn React HTML into browser pages you can preview, print, and save as PDF, with EPUB export when you need it.
+description: Turn React HTML into browser pages you can preview, print, and save as PDF.
 ---
 
-Imposia turns the HTML and CSS you already have into pages inside the browser. Preview those pages in your React app, send them to native print, or choose **Save as PDF** in the print dialog. EPUB export uses the semantic source committed with the same pages.
+Build a feature where people edit content and print it, and you usually end up with three documents claiming to be the same one: the editor renders the content, the preview clones it, and the print path reconstructs it somewhere else. Then the preview says 12 pages and the PDF has 13, and nobody can say which one is correct — because nothing decided which one was authoritative.
+
+Imposia removes that question. It turns the HTML and CSS you already have into one paginated document inside the browser, and every surface — preview, native print, **Save as PDF** — observes that same finished document.
+
+[Why Imposia exists →](/en/docs/concepts/why-imposia)
 
 <Cards>
   <Card title="Build your first page" href="/en/docs/getting-started">
@@ -13,7 +17,7 @@ Imposia turns the HTML and CSS you already have into pages inside the browser. P
     Implement `assetResolver`, the only path external resources can take.
   </Card>
   <Card title="How the output stays consistent" href="/en/docs/concepts/publishing-model">
-    Why preview, print, and EPUB always agree with each other.
+    Why the preview, the printed page, and the PDF always agree with each other.
   </Card>
   <Card title="API reference" href="/en/docs/api">
     React handles, Core controllers, Viewer navigation, and lifecycle rules.
@@ -28,13 +32,13 @@ Imposia turns the HTML and CSS you already have into pages inside the browser. P
 
 If pagination fails or a newer update arrives first, readers keep seeing the last completed document. They never see a half-finished layout.
 
-## Use one committed source in three ways
+## What one committed source can produce
 
 | Output | How you get it | What you receive |
 | --- | --- | --- |
 | Preview | The React Viewer | The completed pages, presented from the canonical iframe |
 | Print or PDF | `print()` | The browser's native print dialog, where the reader picks a printer or **Save as PDF** |
-| EPUB | `exportEpub()` | A reflowable EPUB 3.3 `Blob` built from the committed semantic source |
+| EPUB | `exportEpub()` | Optional. A reflowable EPUB 3.3 `Blob` built from the committed semantic source |
 
 ## Know the boundary
 

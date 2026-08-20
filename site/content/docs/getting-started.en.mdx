@@ -11,7 +11,9 @@ You need React 18 or later and a client-side browser environment. Imposia does n
 
 <Steps>
 
-<Step title="Install the React package">
+<Step>
+
+### Install the React package
 
 <Tabs items={["pnpm", "npm", "yarn", "bun"]}>
   <Tab value="pnpm">
@@ -40,7 +42,9 @@ Import the package stylesheet once — in this component or in your application'
 
 </Step>
 
-<Step title="Render a page document">
+<Step>
+
+### Render a page document
 
 ```tsx title="app/preview.tsx"
 import { ImposiaPageViewer, type ImposiaPageViewerHandle } from "@imposia/react";
@@ -69,7 +73,9 @@ export function Preview() {
 
 </Step>
 
-<Step title="Confirm the result">
+<Step>
+
+### Confirm the result
 
 Open the component in a browser. Your HTML should appear as an A4 page inside the Viewer.
 
@@ -101,9 +107,11 @@ export function Preview({ html }: { html: string }) {
 
 `state.status` is `idle`, `loading`, `ready`, or `error`. The important detail is what `loading` means after a first success: the previous pages stay on screen while the next version is prepared, so a spinner should sit *beside* the preview rather than replace it. When `state.status` is `error`, the last document that succeeded is still the one being displayed.
 
-## Export an EPUB
+## Optional: export an EPUB
 
-The same committed document can produce a reflowable EPUB 3.3 `Blob`. Metadata is required — the export rejects without a title, language, and identifier.
+If your product also needs a semantic, reflowable artifact, the same committed document can produce an EPUB 3.3 `Blob`. This is a side output — it is not part of the preview-and-print path above, and you can skip it entirely.
+
+Metadata is required; the export rejects without a title, language, and identifier.
 
 ```tsx title="app/export-epub.ts"
 const blob = await viewer.current?.exportEpub({

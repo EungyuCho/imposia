@@ -2,7 +2,7 @@ import { DocsLayout } from "fumadocs-ui/layouts/docs";
 import { DocsBody, DocsDescription, DocsPage, DocsTitle } from "fumadocs-ui/layouts/docs/page";
 import type { MetaFunction } from "react-router";
 import { Link, Navigate, useParams } from "react-router";
-import { isSupportedLocale } from "../../components/marketing-copy";
+import { isSupportedLocale } from "../../lib/i18n";
 import { baseOptions } from "../../lib/layout.shared";
 import { source } from "../../lib/source";
 import { getMDXComponents } from "../../mdx-components";

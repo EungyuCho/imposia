@@ -1,8 +1,5 @@
 {
   "title": "使用指南",
   "defaultOpen": false,
-  "pages": [
-    "assets",
-    "react-publishing"
-  ]
+  "pages": ["assets", "react-publishing"]
 }

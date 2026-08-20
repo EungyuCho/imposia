@@ -3,6 +3,7 @@ import { LOCALES } from "./lib/i18n";
 export const SITE_DOC_PATHS = [
   "docs",
   "docs/getting-started",
+  "docs/concepts/why-imposia",
   "docs/concepts/publishing-model",
   "docs/guides/assets",
   "docs/guides/react-publishing",

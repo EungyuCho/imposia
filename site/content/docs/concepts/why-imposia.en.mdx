@@ -1,0 +1,81 @@
+---
+title: Why Imposia exists
+description: The problem browser publishing keeps running into, and the design bet Imposia makes in response.
+---
+
+Imposia started from a failure that is easy to reproduce and hard to fix: build an app where people edit content and print it, and you will end up with three documents that all claim to be the same one.
+
+## Three documents pretending to be one
+
+A typical browser publishing feature grows in this order.
+
+First the **editor** renders the content so people can work on it. Then someone asks for a preview of the printed result, so a **preview** is added — usually by cloning the content into a different container with different CSS. Then printing has to actually work, so a **print path** appears, which reconstructs the content again, often on a server or in a headless browser.
+
+Each surface now measures its own tree. Nothing forces them to agree, and they drift:
+
+- The preview says 12 pages. The PDF has 13.
+- A table header repeats correctly on screen and not on paper.
+- "See page 7" points at page 7 in one artifact and page 8 in another.
+- A bug reproduces for one user and not another, because the drift depends on fonts, timing, and which surface rendered first.
+
+None of these are layout bugs. They are consequences of having three layout authorities and no rule about which one is true.
+
+## The usual answers, and what each one costs
+
+There are good tools in this space. They mostly resolve the conflict by picking one authority and giving up something for it.
+
+| Approach | What it does | What you give up |
+| --- | --- | --- |
+| Server renderer (headless browser, or a dedicated engine) | One authoritative renderer, off the client | The preview is a picture of a result produced elsewhere, so it can still disagree with what the user is editing |
+| A separate document renderer with its own components | Deterministic output from a layout tree you control | Your existing HTML and CSS do not apply; the content is authored twice |
+| Rasterizing the screen | Whatever is on screen becomes the artifact | Not real pagination; text stops being text |
+
+These are reasonable trades, and for many products they are the right one. If what you need is PDF bytes generated on a server, a headless browser is a better answer than Imposia and we will say so.
+
+## The bet
+
+Imposia takes a different trade: **one document, owned by the browser, that every surface has to observe.**
+
+The consequence is that Imposia does not contain a typesetting engine. Typesetting has roughly four layers:
+
+1. **Glyph shaping** — kerning, ligatures, script-specific joining
+2. **Line breaking** — where a line ends, hyphenation, CJK rules
+3. **Block layout** — margins, floats, flex, grid, tables
+4. **Page fragmentation** — where content is cut when the sheet runs out
+
+Layers 1 through 3 are what browsers are extraordinarily good at, after decades of work. Layer 4 is the one browsers barely implement, because it only exists when paper does.
+
+So Imposia implements layer 4 and delegates the rest. It renders your content in a real browser frame, measures what the browser actually produced, and cuts pages from those measurements.
+
+<Callout type="info" title="What this buys you">
+Korean and Japanese line-breaking rules, Arabic shaping, emoji sequences, variable fonts, and every CSS layout feature your browser supports all work — not because they were implemented here, but because they were never taken away from the browser.
+</Callout>
+
+## What it costs
+
+This choice has real downsides, and pretending otherwise would make the rest of these docs less trustworthy.
+
+- **Measurement is not free.** Deciding where to cut means appending content, asking the browser for its geometry, and sometimes undoing it. That is slower than computing a layout in a closed model.
+- **The engine is the browser's.** Line breaking differs between Chromium, Firefox, and WebKit, so page counts can differ too. Chromium is the structural reference; the others are exercised for API, isolation, lifecycle, and export behavior, not for identical output.
+- **CSS fragmentation is not fully solved.** Tables, flex, grid, and multi-column layout are supported as documented subsets. Content outside a subset stays intact and emits a typed warning rather than being silently approximated.
+
+## What Imposia refuses to do
+
+The boundary is part of the product, not a gap in it.
+
+- **No PDF bytes.** `print()` hands the completed pages to the browser's own print dialog, where the reader chooses a printer or **Save as PDF**. Adding a PDF renderer would create a fourth document that can disagree with the other three, which is the problem this library exists to remove.
+- **No Node or CLI renderer, no server export.** The runtime boundary is the browser.
+- **No promise of identical page counts across engines.** That promise cannot be kept while the browser owns layers 1 through 3, so it is not made.
+
+## Is this the right tool for you?
+
+<Cards>
+  <Card title="Probably yes">
+    You have a React app where people see and edit content, and the printed or PDF result must match what they are looking at.
+  </Card>
+  <Card title="Probably not">
+    You need PDF bytes produced on a server, from content nobody is previewing in a browser.
+  </Card>
+</Cards>
+
+If the first one describes your product, the next step is [Build your first page](/en/docs/getting-started). If you want to see how the single-document rule is actually enforced at runtime, read [How preview and output stay consistent](/en/docs/concepts/publishing-model).

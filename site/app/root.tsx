@@ -11,8 +11,7 @@ import {
   ScrollRestoration,
   useLocation,
 } from "react-router";
-import { isSupportedLocale } from "../components/marketing-copy";
-import { i18nUI, type Locale } from "../lib/i18n";
+import { i18nUI, isSupportedLocale, type Locale } from "../lib/i18n";
 import stylesHref from "../styles.css?url";
 
 export const links: LinksFunction = () => [{ href: stylesHref, rel: "stylesheet" }];
