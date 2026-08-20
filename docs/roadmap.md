@@ -39,7 +39,7 @@ ships work out of milestone order, exactly as `0.5.0` just did.
 ## Current position
 
 Imposia `0.5.0` is prepared at commit `364e491` (2026-08-20) but is **not yet
-public**: local `main` is 24 commits ahead of `origin/main`, and none of the
+public**: local `main` is 3 commits ahead of `origin/main`, and none of the
 four packages has been published to npm. The release contains a security patch
 (bundled `postcss`/`nanoid`, ASA-423), a breaking replacement of `parse5` with
 the browser-native parser (ASA-404, ADR 0013), four fragmenter optimizations
@@ -140,11 +140,13 @@ bundles is removed on the schedule the repository itself recorded.
    a declared Stable boundary and ranks first under the prioritization rule;
    it must be root-caused or demonstrated pre-existing, not retried away.
 4. **Release-state documentation sweep** (ASA-445). The drift Appendix B of
-   the architecture overview already records — a `SECURITY.md`-adjacent
-   supported-version story, `open-source-readiness.md` frozen at `0.4.0`,
-   overview sections still describing bundled `parse5`, stale ADR status
-   lines, and the superseded manual publish path — stops being rediscovered
-   and starts being owned.
+   the architecture overview recorded — the `SECURITY.md` supported-version
+   table, `open-source-readiness.md` frozen at `0.4.0`, overview sections
+   still describing bundled `parse5`, stale ADR status lines, and the
+   superseded manual publish path — is swept and each item marked resolved in
+   place, so it stops being rediscovered. What remains open in that appendix
+   is genuinely open work, not drift: the missing evidence artifacts (ASA-429)
+   and the committed demo-bundle churn (ASA-448).
 5. **Published-surface hygiene** (ASA-447). The test-only
    `internalTextSplitTestApi` reaches the public tarball through the
    per-module `dist` files that `files: ["dist"]` publishes, and the
@@ -383,7 +385,8 @@ an unreachable release fail item 2 for every prospective adopter at once.
 ## Verification notes
 
 - **Verified from this repository:** the `0.5.0` release commit `364e491`,
-  the 21-commit gap to `origin/main`, the absence of any npm publication
+  the commit gap to `origin/main` (re-checked 2026-08-21), the absence of any
+  npm publication
   attempt for `0.5.0`, the escape-hatch and budget state recorded in
   [`bundle-size.md`](bundle-size.md), the product contract, the
   compatibility matrix, and the release-gate structure.

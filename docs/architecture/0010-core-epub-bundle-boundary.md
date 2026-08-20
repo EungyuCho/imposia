@@ -1,6 +1,6 @@
 # ADR 0010: keep EPUB export in Core behind bundle budgets
 
-Status: accepted for the 0.1.x browser contract.
+Status: accepted for the browser contract; unchanged through 0.5.x.
 
 ## Context
 

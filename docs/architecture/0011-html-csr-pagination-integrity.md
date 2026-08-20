@@ -147,7 +147,9 @@ the required navigation contract without making an invalid geometry promise.
 - **Verified:** [`docs/compatibility.md`](../compatibility.md) limits structural
   pagination to a Chromium reference and identifies constrained overflow and
   unsupported layout behavior.
-- **Required follow-up:** extend the public proof from fixture marker membership
-  to explicit source-range continuity at page boundaries and publish a rapid
-  CSR update walkthrough before using stronger "no missing content" language in
-  launch material.
+- **Required follow-up (delivered in 0.1.3):** the public proof was extended
+  from fixture marker membership to explicit source-range continuity at page
+  boundaries, and the rapid CSR update walkthrough was published. Stronger "no
+  missing content" language in launch material is unblocked to the extent the
+  continuity ledger covers; the representative fixture set that would widen
+  that coverage is a Proof-milestone deliverable (ASA-433).

@@ -58,7 +58,7 @@ Apache-2.0.
 ```
                          ┌───────────────────────────┐
                          │  @imposia/core            │  pagination engine
-                         │  parse5 + postcss         │  owns the canonical iframe
+                         │  native parser + postcss  │  owns the canonical iframe
                          │  (bundled)                │  browser-only, no DOM outside the frame
                          └────────────┬──────────────┘
                                       │
@@ -128,7 +128,7 @@ term's whole point (`CONTEXT.md`).
         │
   [2] extension transform / transformEntry     ← re-sanitized + re-limited after EACH
         │
-  [3] prepareDocument (parse5, string domain)  ← script/handler/URL policy, break-contract normalization
+  [3] prepareDocument (string domain)          ← DOMParser; script/handler/URL policy, break-contract normalization
         │                                        extracts <template data-page-header/footer>
   [4] asset resolution                          ← the ONLY gate for external bytes
         │                                        MIME allowlist → magic bytes → decode proof → blob:
@@ -258,7 +258,7 @@ and `blob:` URLs minted by the resolver.
 
 Defense is layered, and every transition re-sanitizes:
 
-1. **String-domain policy** (parse5, before any DOM exists) — removes
+1. **String-domain policy** (`DOMParser`, before the staging iframe) — removes
    `script`/`iframe`/`object`/`embed` and `meta http-equiv=refresh`, strips
    `on*` handlers, blocks `javascript:` and `data:text/html` unconditionally.
 2. **Resolver-input sanitization** — narrows HTML to resource attributes the
@@ -633,7 +633,7 @@ clean-package-dists      remove dist/ + tsbuildinfo (no stale incremental state)
       ↓
 tsc -b                   project references: core → viewer → client → react
       ↓
-build-core-browser       esbuild core to ONE browser ESM bundle (inlines parse5/postcss),
+build-core-browser       esbuild core to ONE browser ESM bundle (inlines postcss),
                          then fail if the metafile shows a Node builtin, Playwright, or pdfjs
       ↓
 build-demo               bundle examples/demo + examples/react to committed .js
@@ -758,8 +758,8 @@ ADRs, contracts, and the CHANGELOG are intentionally English-only.
 
 ## 15. Governance
 
-- **License** — Apache-2.0 throughout. Core bundles parse5, entities, PostCSS,
-  nanoid, picocolors; `pdfjs-dist` stays an external Viewer dependency. Every
+- **License** — Apache-2.0 throughout. Core bundles PostCSS, nanoid, and
+  picocolors; `pdfjs-dist` stays an external Viewer dependency. Every
   tarball carries its own LICENSE and notices.
 - **Clean-room** — Independently authored from repository requirements and
   cited public specifications only (W3C CSS break/page/content/GCPM/page-floats/
@@ -791,15 +791,22 @@ Release history: `0.1.0` initial family → `0.1.1–0.1.3` (trusted publishing,
 security fixes, repositioning integrity as the primary contract) → `0.2.0`
 (headless Viewer controls, scoped Viewer CSS) → `0.3.0` (`finalizePage`,
 table-colgroup preset, isolated top-document print) → `0.4.0` (cooperative
-pagination) → `0.4.1` (multi-page print fix, responsive Viewer panels).
+pagination) → `0.4.1` (multi-page print fix, responsive Viewer panels) →
+`0.5.0` (browser-native parsing, fragmenter performance batch, bundled
+dependency security patch) — prepared but **not yet published**.
 
-Milestones: `0.4.x` baseline alignment → **`0.5` the public React/CSR proof
-release** (proof lab from *packed* packages, comparison protocol against
-Vivliostyle and Paged.js at exact versions, ≥3 representative fixtures with ≥1
-externally supplied) → `0.6` adoption-blocker-driven compatibility and
-performance → `0.7–0.8` integration hardening → `1.0`, which "must not be
-declared from internal scenario count or feature breadth alone" but only from
-external production evidence.
+Milestones are named by outcome and are **decoupled from package version
+numbers** — a milestone may span several releases, and a release may carry
+work from several milestones. See [`../roadmap.md`](../roadmap.md), which is
+authoritative for ordering: **Publish** (`0.5.0` actually reaches consumers
+and its recorded debts are settled) → **Proof** (an adopter can reproduce the
+CSR publishing advantage from packed artifacts, a comparison protocol, and
+representative fixtures) → **Adoption** (accepted real-document blockers drive
+compatibility and performance work) → **Contract** (migration policy,
+deprecation rules, extension guidance, operational diagnostics) → **`1.0`**,
+the one milestone that keeps its number, which "must not be declared from
+internal scenario count or feature breadth alone" but only from external
+production evidence.
 
 Prioritization order: integrity defects inside a declared boundary > adopter
 reproducibility > accepted real-document blockers > maintenance > new
@@ -841,17 +848,18 @@ these are code defects.
    records). The executable suites all exist; the recorded artifacts do not, so
    the artifact-backed half of the verification story is not reproducible from a
    fresh clone.
-2. **`SECURITY.md` supported-versions table is stale** — it still lists "Latest
-   `0.1.x` release" while packages are at `0.4.1`, which by its own wording
-   would leave every 0.2–0.4 release unsupported.
-3. **`docs/roadmap.md` and `docs/open-source-readiness.md` still describe 0.4.0
-   as current**, while the CHANGELOG and all four manifests are at 0.4.1.
-4. **ADR 0011's "required follow-up" appears delivered but unmarked.** The
-   source-range continuity ledger and rapid-CSR walkthrough match what shipped
-   in 0.1.3; the ADR text was never updated to record completion.
-5. **ADR 0010's status reads "accepted for the 0.1.x browser contract"** while
-   the decision continues to govern 0.4.x and `docs/bundle-size.md` still defers
-   to it.
+2. **Resolved (ASA-445):** `SECURITY.md`'s supported-versions table listed
+   "Latest `0.1.x` release" and now reads `0.5.x`. Whether an older line also
+   receives a security backport is a separate, still-open decision on ASA-443,
+   not a documentation defect.
+3. **Resolved (ASA-445):** `docs/roadmap.md` was reset for the post-`0.5.0`
+   world, and `docs/open-source-readiness.md` now states which release its
+   launch boundary was proven by and that those gates must be re-run on the
+   `0.5.0` commit.
+4. **Resolved (ASA-445):** ADR 0011's required follow-up is now recorded as
+   delivered in 0.1.3.
+5. **Resolved (ASA-445):** ADR 0010's status no longer scopes itself to the
+   `0.1.x` browser contract.
 6. **Resolved (ASA-432):** the vestigial `test:integration` script (targeting a
    nonexistent `tests/integration/` directory) has been removed; `pnpm test`
    covers all of `tests/**`.
@@ -861,5 +869,11 @@ these are code defects.
 8. **Resolved (ASA-432):** the unreferenced `tests/fixtures/{parity,pdf}`
    legacy corpus from the removed Node-renderer parity gate has been deleted.
    The live fixture mechanism is `tests/e2e/conformance-performance-fixtures.ts`.
-9. **`RELEASING.md` documents a manual `pnpm publish` path** alongside the OIDC
-   workflow that supersedes it.
+9. **Resolved (ASA-445):** `RELEASING.md`'s manual `pnpm publish` path is
+   removed; the OIDC `Release` workflow is documented as the only publish
+   path, and the per-package `pack --dry-run` inspection it superseded is kept
+   as pre-release inspection.
+10. **Still open (ASA-448):** `pnpm build` regenerates the committed minified
+    demo bundles, so the release gate's `git diff --exit-code` couples to that
+    churn and any unrelated Core change rewrites a few hundred lines of
+    generated `.js`.

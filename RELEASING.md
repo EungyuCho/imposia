@@ -69,30 +69,25 @@ waits for approval from the protected `release` environment.
 
 ## Publish order
 
-Publish dependencies before dependents:
+The `Release` workflow is the only supported publish path. It authenticates
+through npm OIDC from a GitHub-hosted runner, which is why no npm write token
+exists in GitHub secrets — and why a manual `pnpm publish` from a maintainer
+laptop is not part of this guide. Publishing by hand would produce release
+artifacts without provenance and outside the protected `release` environment's
+approval.
+
+The workflow packs and publishes dependencies before dependents:
 
 1. `@imposia/core`
 2. `@imposia/viewer`
 3. `@imposia/client`
-4. `@imposia/react`
-
-Use a dry run first, then publish each approved package:
-
-```bash
-pnpm --dir packages/core publish --access public --dry-run
-pnpm --dir packages/viewer publish --access public --dry-run
-pnpm --dir packages/client publish --access public --dry-run
-pnpm --dir packages/react publish --access public --dry-run
-```
-
-After the dry run, repeat the commands without `--dry-run` only from an
-authenticated maintainer account that owns the scope. Verify the installed
-tarballs in a clean browser application before announcing the release.
-
-The automated workflow packs and publishes in the same dependency order. A
+4. `@imposia/react` A
 retry checks every existing npm version against the local tarball's SHA-512
 integrity and skips only an exact match. It fails on a version collision. After
 all four publishes succeed, it creates the annotated `v<version>` tag and the
 GitHub Release, attaching the four package tarballs and `SHA256SUMS`. An
 existing tag must resolve to the workflow commit; the workflow never moves or
 replaces a release tag.
+
+Verify the installed tarballs in a clean browser application before announcing
+the release.

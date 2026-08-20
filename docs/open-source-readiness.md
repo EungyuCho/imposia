@@ -1,7 +1,10 @@
 # Open-source readiness
 
 This list records the launch boundary proven by Imposia `0.4.0`, published on
-2026-07-24. Repository rules, the protected release environment, private
+2026-07-24, and last exercised by the `0.4.1` patch on 2026-07-27. `0.5.0` is
+prepared but **not yet published**, so every gate below is a gate that must be
+re-run on the `0.5.0` commit rather than a property the current tree already
+has (ASA-443). Repository rules, the protected release environment, private
 vulnerability reporting, dependency alerts, code scanning, secret scanning,
 and automatic pull-request review are enabled. npm trusted publishing and the
 protected release workflow were proven by the synchronized package releases.
@@ -60,7 +63,7 @@ These refinements are useful, but they do not block the `0.4.0` release:
    opt-in policy; Core must retain authored structure without silently adopting
    layout heuristics.
 
-## Completed `0.4.0` launch gates
+## Launch gates, last completed for `0.4.0`
 
 - Run `CI=true pnpm check` on the exact public commit with all three Playwright
   browser projects and the production registry audit available.
