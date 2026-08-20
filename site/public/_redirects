@@ -1,4 +1,8 @@
-/ /en 302
+/ /en/docs 302
+/en /en/docs 302
+/ko /ko/docs 302
+/ja /ja/docs 302
+/zh-CN /zh-CN/docs 302
 /:lang/docs/api-reference /:lang/docs/api 301
 /:lang/docs/api-reference/ /:lang/docs/api 301
 /:lang/docs/publishing-contract /:lang/docs/concepts/publishing-model 301

@@ -14,7 +14,11 @@ export const SITE_DOC_PATHS = [
   "docs/changelog",
 ] as const;
 
-export const SITE_PRERENDER_ROUTES = LOCALES.flatMap((locale) => [
-  `/${locale}`,
-  ...SITE_DOC_PATHS.map((path) => `/${locale}/${path}`),
-]);
+/** `/:lang` forwards to that locale's documentation; it renders no content of its own. */
+export const SITE_LOCALE_ROOT_ROUTES = LOCALES.map((locale) => `/${locale}`);
+
+export const SITE_DOC_ROUTES = LOCALES.flatMap((locale) =>
+  SITE_DOC_PATHS.map((path) => `/${locale}/${path}`),
+);
+
+export const SITE_PRERENDER_ROUTES = [...SITE_LOCALE_ROOT_ROUTES, ...SITE_DOC_ROUTES];

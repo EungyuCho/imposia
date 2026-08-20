@@ -1,10 +1,23 @@
-import { expect, test } from "@playwright/test";
+import { expect, type Page, test } from "@playwright/test";
 import { LOCALES } from "../../site/lib/i18n";
 import { captureBrowserErrors } from "./browser-core-support.js";
 
 function assertNoBrowserErrors(errors: ReturnType<typeof captureBrowserErrors>) {
   expect(errors.errors).toEqual([]);
   expect(errors.pageErrors).toEqual([]);
+}
+
+/**
+ * Documentation pages repeat identifiers across package-manager tabs and keep
+ * some occurrences inside collapsed accordions, so DOM order alone does not
+ * find a rendered one. Match the first occurrence the reader can actually see.
+ */
+function visibleInPage(page: Page, text: string) {
+  return page
+    .locator("#nd-page")
+    .getByText(text, { exact: true })
+    .filter({ visible: true })
+    .first();
 }
 
 test("root redirects to the default English documentation", async ({ page, browserName }) => {
@@ -44,7 +57,7 @@ test("the GNB demo link loads the standalone demo document", async ({ page, brow
   await page.goto("/en/docs");
 
   try {
-    const demoLink = page.locator("#nd-nav").getByRole("link", { name: "Demo", exact: true });
+    const demoLink = page.locator("#nd-sidebar").getByRole("link", { name: "Demo", exact: true });
     await expect(demoLink).toHaveAttribute("href", "/examples/demo/index.html");
     await demoLink.click();
 
@@ -68,11 +81,10 @@ test("the GNB exposes the GitHub repository next to the locale control", async (
   await page.goto("/en/docs");
 
   try {
-    const navigation = page.locator("#nd-nav");
-    const languageTrigger = navigation
+    const languageTrigger = page
       .getByRole("button", { name: /choose a language|language|locale/i })
       .first();
-    const githubLink = navigation.getByRole("link", { name: "GitHub", exact: true });
+    const githubLink = page.getByRole("link", { name: "GitHub", exact: true }).first();
 
     await expect(languageTrigger).toBeVisible();
     await expect(githubLink).toBeVisible();
@@ -142,7 +154,7 @@ test("localized getting-started docs render through the public route", async ({
       await expect(page).toHaveURL(new RegExp(`/${locale}/docs/getting-started/?$`));
       await expect(page.locator("html")).toHaveAttribute("lang", locale);
       await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
-      await expect(page.getByText("@imposia/react", { exact: true })).toBeVisible();
+      await expect(visibleInPage(page, "@imposia/react")).toBeVisible();
     }
   } finally {
     assertNoBrowserErrors(captured);
@@ -183,15 +195,15 @@ test("localized API references expose separate React, Core, and Viewer pages", a
     for (const locale of LOCALES) {
       await page.goto(`/${locale}/docs/api/react`);
       await expect(page).toHaveURL(new RegExp(`/${locale}/docs/api/react/?$`));
-      await expect(page.getByText("ImposiaPageViewer", { exact: true }).first()).toBeVisible();
+      await expect(visibleInPage(page, "ImposiaPageViewer")).toBeVisible();
 
       await page.goto(`/${locale}/docs/api/core`);
       await expect(page).toHaveURL(new RegExp(`/${locale}/docs/api/core/?$`));
-      await expect(page.getByText("mountPageDocument", { exact: true }).first()).toBeVisible();
+      await expect(visibleInPage(page, "mountPageDocument")).toBeVisible();
 
       await page.goto(`/${locale}/docs/api/viewer`);
       await expect(page).toHaveURL(new RegExp(`/${locale}/docs/api/viewer/?$`));
-      await expect(page.getByText("mountPageViewer", { exact: true }).first()).toBeVisible();
+      await expect(visibleInPage(page, "mountPageViewer")).toBeVisible();
     }
   } finally {
     assertNoBrowserErrors(captured);
