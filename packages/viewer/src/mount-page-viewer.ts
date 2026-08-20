@@ -75,17 +75,28 @@ function validatePageDocument(pageDocument: PageDocument): void {
   if (pageDocument.pageCount < 1 || pageDocument.pages.length !== pageDocument.pageCount) {
     invalidPageDocument("page metadata does not match pageCount.");
   }
-  if (frameDocument.querySelectorAll("[data-imposia-page]").length !== pageDocument.pageCount) {
-    invalidPageDocument("canonical page markers do not match pageCount.");
+  const markerCount = frameDocument.querySelectorAll("[data-imposia-page]").length;
+  if (markerCount !== pageDocument.pageCount) {
+    invalidPageDocument(
+      markerMismatchDetail(pageDocument.pageCount, markerCount, pageDocument.generation),
+    );
   }
 }
 
-function measureFrame(iframe: HTMLIFrameElement, pageCount: number): FrameGeometry {
+function markerMismatchDetail(expected: number, actual: number, generation: number): string {
+  return `canonical page markers do not match pageCount (expected ${expected}, found ${actual}, generation ${generation}).`;
+}
+
+function measureFrame(
+  iframe: HTMLIFrameElement,
+  pageCount: number,
+  generation: number,
+): FrameGeometry {
   const frameDocument = iframe.contentDocument;
   if (frameDocument === null) invalidPageDocument("iframe content document is unavailable.");
   const pages = [...frameDocument.querySelectorAll<HTMLElement>("[data-imposia-page]")];
   if (pages.length !== pageCount)
-    invalidPageDocument("canonical page markers do not match pageCount.");
+    invalidPageDocument(markerMismatchDetail(pageCount, pages.length, generation));
   const bodyStyle = getComputedStyle(frameDocument.body);
   const paddingRight = Number.parseFloat(bodyStyle.paddingRight) || 0;
   const paddingBottom = Number.parseFloat(bodyStyle.paddingBottom) || 0;
@@ -156,7 +167,7 @@ export function mountPageViewer(
 
   let destroyed = false;
   let currentDocument = pageDocument;
-  let geometry = measureFrame(elements.iframe, pageDocument.pageCount);
+  let geometry = measureFrame(elements.iframe, pageDocument.pageCount, pageDocument.generation);
   let spreadCover = options.spread?.cover ?? false;
   const mutableState: PageViewerState = {
     page: 1,
@@ -220,7 +231,7 @@ export function mountPageViewer(
         ? "single"
         : mutableState.mode;
     applyFramePresentation(mutableState.effectiveMode);
-    geometry = measureFrame(elements.iframe, mutableState.pageCount);
+    geometry = measureFrame(elements.iframe, mutableState.pageCount, mutableState.generation);
     const scale = presentationScale();
     const range =
       mutableState.effectiveMode === "spread"

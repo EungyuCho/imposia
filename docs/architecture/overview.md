@@ -650,7 +650,7 @@ its `.d.ts` files survive from `tsc -b`.
 
 | Script | Invariant |
 |---|---|
-| `check-core-package-boundary` / `core-package-boundary` | Published core is browser-only and clean-room-safe: no Node builtins, no Playwright, no pdfjs — plus a **legacy renderer blocklist** so remnants of the pre-clean-room Node renderer can never resurface |
+| `check-core-package-boundary` / `core-package-boundary` | Published core is browser-only and clean-room-safe: no Node builtins, no Playwright, no pdfjs — plus a **legacy renderer blocklist** so remnants of the pre-clean-room Node renderer can never resurface — and the package entry (`dist/index.js` / `dist/index.d.ts`) never exports an `internal*TestApi` test seam (§13.5) |
 | `check-site-prerender` | All 40 routes (4 locales × 10 paths) truly prerendered — Fumadocs shell present, `<html lang>` matches the path locale, no `hydrate-fallback` — and `_redirects` matches exactly |
 | `bundle-size` / `bundle-size-report` | Six consumer routes stay under gzip budgets; overage is a hard failure naming the route and the excess |
 | `preflight` | Node ≥22, lockfile, full Apache-2.0 text, third-party notices, all three Playwright browsers installed — fails fast before expensive steps |
@@ -693,6 +693,39 @@ version already exists on npm its `dist.integrity` must match the local
 tarball's sha512 or the job fails. Publish order follows the dependency graph:
 core → viewer → client → react. Tags are immutable (an existing tag must resolve
 to the same SHA and is never moved).
+
+### 13.5 Test seams and the published dist
+
+Core occasionally needs a test-only seam so an e2e oracle spec can drive an
+internal function directly (today: `internalTextSplitTestApi` in
+`packages/core/src/page-document-generation.ts`, consumed by
+`tests/e2e/browser-core-line-ends-oracle.spec.ts` through a deep URL import of
+the compiled `dist/page-document-generation.js`). The convention:
+
+- **Naming.** A test seam is a frozen namespace whose name follows the
+  `internal*TestApi` pattern. Nothing else may use that name shape.
+- **Never on the entry surface.** A seam is never exported from the package
+  entry (`src/index.ts`, and therefore `dist/index.js` / `dist/index.d.ts`).
+  `check-core-package-boundary` enforces this: it extracts every exported name
+  from both built entry artifacts and fails on any `internal*TestApi` match; a
+  wildcard re-export on the entry also fails, since it would make the export
+  surface unverifiable.
+- **Lifetime.** A seam lives exactly as long as the oracle spec that consumes
+  it — they are added and removed together. In particular, the sequential
+  line-ends path remains the authoritative fallback even after ASA-444 removes
+  the `forceLegacyLineEnds` hatch, so ASA-444 must not delete the seam or its
+  oracle spec as "legacy".
+- **dist internals are not a contract.** Only the `"."` entry of the exports
+  map is public API. The per-module `dist/*.js` files (tsc output left in
+  place next to the bundled `index.js`) do ship in the tarball and are
+  reachable through CDN deep URLs, but they are unsupported internals that may
+  change or disappear in any release without notice. They are currently kept
+  in the tarball because `tests/core/packed-publication-adapters.test.ts`
+  packs the workspace in the tsc-only dist state (before `build-core-browser`
+  has overwritten `dist/index.js`), where the entry still resolves its
+  per-module siblings; pruning per-module `.js`/`.js.map` from the tarball
+  (~54% of its unpacked bytes as of 2026-08-21) is a known follow-up once
+  packing is guaranteed to happen only after the browser bundle build.
 
 ---
 

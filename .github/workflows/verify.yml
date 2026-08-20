@@ -5,6 +5,11 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+  schedule:
+    # ASA-449: weekly trigger for the darwin lane (verify-darwin job below).
+    # The scheduled run also executes the ubuntu verify job, giving a
+    # same-commit baseline for comparing darwin pass/skip counts.
+    - cron: "17 6 * * 1" # Mondays 06:17 UTC
 
 permissions:
   contents: read
@@ -32,6 +37,51 @@ jobs:
         uses: actions/cache@v5
         with:
           path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-${{ runner.arch }}-playwright-${{ steps.playwright.outputs.version }}
+      - run: pnpm exec playwright install --with-deps chromium firefox webkit
+      - run: CI=true pnpm check
+      - run: git diff --exit-code
+
+  # ASA-449: darwin lane. The gate (CI=true pnpm check) is developed and
+  # released from macOS but CI only verified it on ubuntu; before ASA-432
+  # (a71957a), platform-gated pixel snapshot tests kept the gate permanently
+  # red on darwin with no CI signal. This job runs weekly (schedule) and on
+  # manual dispatch -- deliberately not on every PR, to conserve macOS runner
+  # queue/cost on a solo project. A parallel darwin verify also runs in
+  # release.yml.
+  #
+  # Policy when this job is red: suite/platform defect => file a ticket
+  # immediately; layout-output divergence => hand the evidence to ASA-435
+  # (measurement-environment axis), it is not a gate defect.
+  #
+  # NOTE: webkit's macOS run may have a different skip set than linux. On the
+  # first run, compare pass/skip counts against the ubuntu record
+  # (354 passed / 120 skipped, docs/verification.md).
+  verify-darwin:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: macos-latest
+    # UNMEASURED: the macOS duration of CI=true pnpm check has never been
+    # observed on a GitHub runner (ubuntu uses 45). 90 is a provisional
+    # ceiling; calibrate it from the first green run's duration.
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Resolve Playwright version
+        id: playwright
+        run: echo "version=$(pnpm exec playwright --version | sed 's/^Version //')" >> "$GITHUB_OUTPUT"
+      - name: Restore Playwright browsers
+        uses: actions/cache@v5
+        with:
+          # Playwright's browser cache lives under ~/Library/Caches on macOS
+          # (~/.cache/ms-playwright is linux-only); the os/arch cache key from
+          # the ubuntu job already namespaces this correctly.
+          path: ~/Library/Caches/ms-playwright
           key: ${{ runner.os }}-${{ runner.arch }}-playwright-${{ steps.playwright.outputs.version }}
       - run: pnpm exec playwright install --with-deps chromium firefox webkit
       - run: CI=true pnpm check

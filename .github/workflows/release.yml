@@ -145,3 +145,39 @@ jobs:
               --notes-file "$notes"
           fi
           gh release view "$tag" --json url --jq .url
+
+  # ASA-449: darwin lane for the release gate -- proves CI=true pnpm check is
+  # green on the maintainer's daily platform (where RELEASING.md's local gate
+  # runs) at release time. Runs in parallel with verify; publish deliberately
+  # does NOT depend on it (advisory signal), so a darwin-only divergence cannot
+  # block an ubuntu-green release. Red-darwin policy: suite/platform defect =>
+  # file a ticket immediately; layout-output divergence => hand the evidence to
+  # ASA-435 (measurement-environment axis), it is not a gate defect.
+  verify-darwin:
+    runs-on: macos-latest
+    # UNMEASURED on macOS runners (the ubuntu verify job uses 30); 90 is a
+    # provisional ceiling -- calibrate it from the first green run's duration.
+    timeout-minutes: 90
+    steps:
+      - name: Require the default branch
+        run: test "$GITHUB_REF" = "refs/heads/main"
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22.14.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Resolve Playwright version
+        id: playwright
+        run: echo "version=$(pnpm exec playwright --version | sed 's/^Version //')" >> "$GITHUB_OUTPUT"
+      - name: Restore Playwright browsers
+        uses: actions/cache@v5
+        with:
+          # Playwright's browser cache lives under ~/Library/Caches on macOS
+          # (~/.cache/ms-playwright is linux-only).
+          path: ~/Library/Caches/ms-playwright
+          key: ${{ runner.os }}-${{ runner.arch }}-playwright-${{ steps.playwright.outputs.version }}
+      - run: pnpm exec playwright install --with-deps chromium firefox webkit
+      - run: CI=true pnpm check
+      - run: git diff --exit-code
