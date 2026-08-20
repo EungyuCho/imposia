@@ -3,7 +3,7 @@
 The browser bundle in this package contains code from the following projects. The license texts below are copied verbatim from the installed upstream distributions.
 
 
-## PostCSS 8.5.20 — MIT (bundled)
+## PostCSS 8.5.26 — MIT (bundled)
 
 The MIT License (MIT)
 
@@ -26,7 +26,7 @@ COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
 IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-## nanoid 3.3.16 — MIT (bundled)
+## nanoid 3.3.18 — MIT (bundled)
 
 The MIT License (MIT)
 
