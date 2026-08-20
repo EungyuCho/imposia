@@ -1,31 +1,70 @@
 # Product roadmap
 
-This roadmap defines how Imposia should progress from the current `0.4.0`
-browser publishing release to a stable public contract. It is for maintainers
-and contributors deciding what to build next and what evidence must exist before
-a milestone is complete.
+This roadmap defines how Imposia should progress from the current `0.5.0`
+release commit to a stable public contract. It is for maintainers and
+contributors deciding what to build next and what evidence must exist before a
+milestone is complete.
 
 The roadmap is ordered by product risk, not by feature count or target date.
 Each milestone ends when its exit criteria are satisfied. Calendar estimates
 require maintainer capacity and are intentionally outside this document.
+Work items reference their Linear issues by `ASA-` identifier; the issue is
+the authoritative scope statement, and this document is the authoritative
+ordering.
+
+## Milestones are named by outcome, not by version
+
+Earlier revisions of this roadmap labeled milestones with version numbers:
+`0.5` meant "a prospective adopter can reproduce Imposia's CSR publishing
+advantage". The package version `0.5.0` has now shipped as a security patch, a
+breaking parser replacement, and a pagination performance batch — none of
+which is that milestone. The two numbering schemes collided, and one of them
+had to lose.
+
+The version numbers lose. From this revision on:
+
+- **Milestones are named by outcome** — Publish, Proof, Adoption, Contract —
+  and end only when their exit criteria are met.
+- **Package versions are release events**, assigned by semantic versioning
+  over the public package interfaces and recorded in the CHANGELOG. A
+  milestone may span several releases, and a release may carry work from
+  several milestones. Neither schedule constrains the other.
+- The single exception is `1.0`, which keeps its number because that
+  milestone's outcome *is* a version act: declaring the stability contract.
+
+The alternative — renumbering the milestones to chase the released versions —
+was rejected because it would repeat this collision every time a release
+ships work out of milestone order, exactly as `0.5.0` just did.
 
 ## Current position
 
-Imposia `0.4.0` is a React-first, browser-only HTML/CSS pagination and
-publishing library. Core prepares one candidate generation in a temporary
-noncanonical staging iframe and atomically commits a successful result into one
-persistent canonical iframe. Viewer presentation, Reader navigation,
-diagnostics, native print, and semantic EPUB export address that committed
-generation.
+Imposia `0.5.0` is prepared at commit `364e491` (2026-08-20) but is **not yet
+public**: local `main` is 21 commits ahead of `origin/main`, and none of the
+four packages has been published to npm. The release contains a security patch
+(bundled `postcss`/`nanoid`, ASA-423), a breaking replacement of `parse5` with
+the browser-native parser (ASA-404, ADR 0013), four fragmenter optimizations
+(ASA-424, ASA-425, ASA-426, ASA-427), publishing-pass indexing (ASA-406), and
+a rebuilt cross-engine visual gate (ASA-432). Until publication happens, the
+only consumers are on `0.4.1` and are still shipping the dependency versions
+the security patch fixes.
 
-The repository has a documented compatibility boundary and an artifact-backed
-browser release matrix. This proves the behavior of the declared fixtures; it
-does not prove broad compatibility with arbitrary production documents or
-long-term external adoption. Imposia should therefore be treated as a
-feature-complete early `0.x` release, not as a mature replacement for every CSS
-typesetting or PDF generation workflow.
+Three of the optimizations ship both the fast path and the implementation it
+replaced, selectable through `experimental.forceSequentialPlacement`,
+`experimental.forceLegacyLineEnds`, and
+`experimental.forceFullConstraintCapture`. The bundle budgets were raised to
+absorb the duplication, on the recorded condition that the hatches are removed
+one release after they land and the budgets are tightened again
+([`bundle-size.md`](bundle-size.md)). That removal is now owned by ASA-444.
 
-The primary product position is:
+The repository has a documented compatibility boundary and an executable
+release gate, but its evidence story has known holes: the cited verification
+artifacts do not exist in the repo (ASA-429), the performance baseline was
+produced by the deleted Node renderer (ASA-428), and no comparison protocol or
+representative fixture set exists yet (ASA-433). Imposia should therefore
+still be treated as a feature-complete early `0.x` release, not as a mature
+replacement for every CSS typesetting or PDF generation workflow.
+
+The primary product position is unchanged:
 
 > Imposia is an embedded browser publishing runtime for React and CSR
 > applications that need one completed page document to remain authoritative
@@ -33,9 +72,9 @@ The primary product position is:
 
 Vivliostyle Core and Viewer are the primary architecture and publishing
 comparison. Paged.js is the primary browser pagination comparison.
-`@react-pdf/renderer`, headless-browser PDF generation, and server renderers are
-substitutes when PDF bytes or a separate output tree are more important than a
-committed browser page document.
+`@react-pdf/renderer`, headless-browser PDF generation, and server renderers
+are substitutes when PDF bytes or a separate output tree are more important
+than a committed browser page document.
 
 ## Product constraints
 
@@ -43,9 +82,9 @@ Every milestone must preserve these constraints:
 
 - Core remains the only pagination and committed-document authority.
 - React, Viewer, Reader, print, and export do not create a second layout path.
-- Browser ESM remains the runtime boundary. A Node renderer, CLI, server export,
-  and PDF-byte API remain unsupported unless a later ADR explicitly changes the
-  product contract.
+- Browser ESM remains the runtime boundary. A Node renderer, CLI, server
+  export, and PDF-byte API remain unsupported unless a later ADR explicitly
+  changes the product contract.
 - Compatibility claims remain fixture-scoped. Unsupported input warns or
   remains atomic instead of being silently approximated.
 - New CSS support, presets, and extension capabilities require a documented
@@ -57,130 +96,162 @@ Every milestone must preserve these constraints:
 
 | Milestone | Product outcome | Exit signal |
 | --- | --- | --- |
-| `0.4.x` | The released baseline and public documentation agree | Release state, package versions, localized facts, and verification commands are consistent |
-| `0.5` | A prospective adopter can reproduce Imposia's CSR publishing advantage | Public proof lab, representative fixtures, comparison protocol, and integration paths pass from packed packages |
-| `0.6` | Real adoption blockers drive compatibility and performance work | Accepted external fixtures produce explicit support decisions and regression coverage |
-| `0.7–0.8` | The public contract becomes predictable to integrate and extend | Migration policy, deprecation rules, extension guidance, and operational diagnostics are proven |
+| Publish | The `0.5.0` release actually reaches consumers, and its recorded debts are settled | Packages public on npm with a migration path; escape hatches removed and budgets re-tightened in the following minor; known failure-visibility gaps warn instead of staying silent |
+| Proof | A prospective adopter can reproduce Imposia's CSR publishing advantage | Public proof lab from packed artifacts, representative fixtures, comparison protocol, and reproducible evidence lanes pass independently of this repository's history |
+| Adoption | Real adoption blockers drive compatibility and performance work | Accepted external fixtures produce explicit support decisions and regression coverage |
+| Contract | The public contract becomes predictable to integrate and extend | Migration policy, deprecation rules, extension guidance, and operational diagnostics are proven |
 | `1.0` | Stable API and compatibility boundaries are justified by use | External production evidence, stable upgrade history, and the full release gate support a stability declaration |
 
-## `0.4.x`: align the released baseline
+## Publish: ship what was built, then settle its debts
+
+Publish is first because every later milestone assumes a public package. The
+comparison protocol compares a version people can install; the escape-hatch
+clock starts at exposure, not at commit; and an unpublished security patch
+protects nobody.
 
 ### Outcome
 
-Public documentation describes the released `0.4.0` packages rather than a
-pre-release state, and automated checks prevent the same facts from drifting
-across languages and package entry points.
+`0.5.0` is public, consumers on `0.4.1` have a documented path through the
+breaking parser change, the security fix has a delivery decision for every
+supported line, and the temporary weight the performance batch added to the
+bundles is removed on the schedule the repository itself recorded.
 
 ### Deliverables
 
-1. Record `0.4.0` as released in the open-source readiness document and preserve
-   the completed launch checks as release evidence.
-2. Automate the existing README and site audit for package identifiers, links,
-   supported lifecycle claims, and version-independent public facts.
-3. Define a short `0.x` API change and migration policy. A breaking change must
-   identify the affected package, replacement path, and release note.
-4. Extract scheduler bookkeeping only if the change removes duplication without
-   adding another rendering authority or weakening abort and cleanup behavior.
+1. **Publication** (ASA-443). Re-run the release gate on the exact public
+   commit, write the ASA-404 migration note and the short `0.x` API change
+   policy that the previous baseline milestone promised and never delivered,
+   decide the 0.4.2 security-backport question on measured advisory severity,
+   fix the `SECURITY.md` supported-versions table, push, and publish through
+   the OIDC workflow.
+2. **Escape-hatch retirement** (ASA-444, in the first minor release after
+   publication). Remove `forceSequentialPlacement`, `forceLegacyLineEnds`,
+   and `forceFullConstraintCapture` once each hatch's retirement evidence is
+   met — equivalence oracles green at the removal commit, no field report
+   that needed the hatch during the exposure window, and an ASA-438 outcome
+   that does not implicate the fast paths. Re-measure the four Core-bearing
+   routes and tighten the budgets back to roughly 5% headroom.
+3. **Failure visibility inside the shipped surface.** RTL documents currently
+   paginate with the wrong page progression and *no warning* (ASA-434,
+   stage 1) — that contradicts the constraint that unsupported input warns
+   rather than being silently approximated, so the warning ships ahead of any
+   proof claims. The load-dependent Viewer observation of a mid-swap
+   generation (ASA-438) is a potential breach of generation integrity inside
+   a declared Stable boundary and ranks first under the prioritization rule;
+   it must be root-caused or demonstrated pre-existing, not retried away.
+4. **Release-state documentation sweep** (ASA-445). The drift Appendix B of
+   the architecture overview already records — a `SECURITY.md`-adjacent
+   supported-version story, `open-source-readiness.md` frozen at `0.4.0`,
+   overview sections still describing bundled `parse5`, stale ADR status
+   lines, and the superseded manual publish path — stops being rediscovered
+   and starts being owned.
 
 ### Exit criteria
 
-- The root and package manifests expose one released version.
-- English, Korean, Japanese, and Simplified Chinese public entry points pass the
-  same structural documentation audit.
-- The exact public commit passes the complete release gate in
-  [`verification.md`](verification.md).
-- No documentation describes an already published release as pending.
+- All four packages at `0.5.0` are on npm with matching tarball integrity,
+  an immutable tag, and a GitHub Release; a cold `npm install` smoke passes.
+- A consumer on `0.4.1` can find the migration note and the security-fix
+  path for their line without reading commit history.
+- The first minor release after publication contains no
+  `experimental.force*` hatch, and the four raised budgets are tightened to
+  the newly measured sizes.
+- An RTL document produces a typed warning naming the recovery taken.
+- ASA-438 has a recorded root cause or a recorded pre-existence proof, and
+  the diagnostic message carries expected/actual counts and the generation.
 
-## `0.5`: prove the React and CSR position
+## Proof: prove the React and CSR position
 
-`0.5` is the next product milestone. It is an evidence and adoption release,
-not a general CSS feature release.
+Proof is an evidence and adoption milestone, not a general CSS feature
+release. Its deliverables are unchanged from the previous roadmap revision;
+what has changed is that most of them now have owners.
 
 ### Outcome
 
 A developer can install packed or published packages, run a documented
 client-side update scenario, and verify that Imposia keeps the previous
-committed generation visible until one complete winning generation replaces it.
-The same scenario proves that Viewer navigation and native print target the
-winning global page sequence.
+committed generation visible until one complete winning generation replaces
+it. The same scenario proves that Viewer navigation and native print target
+the winning global page sequence — and every number the project cites in
+support is reproducible from a fresh clone.
 
 ### Deliverables
 
-1. **Public CSR proof lab**
-   - Run at least three rapid source revisions through the React adapter.
-   - Expose the committed generation, provisional progress, canonical iframe
-     identity, page count, and flattened source-continuity ledger.
-   - Provide a deterministic failure or supersession case that leaves the prior
-     commit visible.
-2. **Comparison protocol**
-   - Publish inputs and observation steps that can be run independently with
-     Imposia, Vivliostyle, and Paged.js.
-   - Record the exact compared versions and distinguish observed results from
-     documented product contracts.
-   - Do not present absence from another project's documentation as proof that a
-     behavior is impossible.
-3. **Representative document fixtures**
-   - Cover at least three document classes, such as an invoice or report, a
-     manual, and a multi-entry long-form publication.
-   - Include at least one fixture supplied or materially adapted from outside
-     the maintainer-authored showcase.
-   - Record expected content continuity, known constrained behavior, warnings,
-     and print observations for every fixture.
-4. **Adoption paths**
-   - Provide a React/Vite path and a client-only React framework path.
-   - Explain browser-only boundaries, asset resolution, source revisions,
-     failure handling, native print, and EPUB export.
-   - Add an issue intake template that captures a minimal source, browser,
-     expected page behavior, actual page behavior, and emitted warnings.
-
-### Work in progress
-
-As of 2026-07-25, the public React demo's pressure run records requested,
-committed, and superseded revisions; exact content continuity; blank-page
-checks; provisional progress; and canonical iframe identity. The Chromium
-showcase test verifies those observations against the workspace build.
-
-This is the first `0.5` proof-lab slice, not the milestone exit. The next slice
-must add a deterministic failed or superseded-generation procedure that proves
-the prior commit remains visible. The complete lab must then run from packed
-package artifacts before it can satisfy the `0.5` exit criteria.
+1. **Comparison protocol and first representative fixture** (ASA-433).
+   Reproducible inputs and observation steps across Imposia, Vivliostyle, and
+   Paged.js at exact pinned versions; a report/invoice-class fixture with a
+   content-continuity ledger; an intake path for externally supplied
+   fixtures. Observed results stay distinct from documented product
+   contracts, and absence from another project's documentation is never
+   presented as proof of impossibility.
+2. **Proof lab completion** (ASA-446). The lab runs from packed package
+   artifacts rather than workspace aliases; the public demo gains a
+   deterministic failed and superseded-generation procedure that leaves the
+   prior commit visible; the manual and long-form publication fixture
+   classes join the representative set. The externally supplied fixture can
+   only arrive through the intake — until it does, that exit item is
+   recorded as unmet rather than papered over.
+3. **Reproducible evidence lanes.** The twelve cited-but-missing verification
+   artifacts are replaced with re-runnable commands and a regeneration script
+   (ASA-429); the performance baseline is re-captured by a browser-core
+   benchmark harness that lives in the repository (ASA-428).
+4. **Measured claims where the docs currently only disclaim.** The
+   cross-browser page-structure divergence report turns "parity is not
+   promised" into a versioned measurement (ASA-431), and the
+   measurement-environment axis — DPR, zoom, headless — is measured against
+   the 0.5 px overflow tolerance (ASA-435).
+5. **Boundary honesty.** The vertical-writing position is decided and stated
+   rather than buried in a Constrained row (ASA-437); fragmentation feedback
+   into browser layout (`::first-line`, `text-wrap`, margin collapse) is
+   reproduced and classified (ASA-436, stage 1); the untested limit ceilings
+   and error paths that implement "warns or remains atomic" gain coverage,
+   and warning codes with no emission site are removed (ASA-430).
 
 ### Exit criteria
 
-- The proof lab runs from packed package artifacts rather than workspace-only
-  aliases.
-- Its successful, failed, and superseded revisions retain one canonical iframe
-  and never expose a partial generation as current.
-- Each representative fixture passes its declared content-continuity ledger and
-  records every recovery warning.
-- Comparison claims link to a reproducible input, command or browser procedure,
-  exact dependency version, and observed result.
+- The proof lab runs from packed package artifacts rather than
+  workspace-only aliases.
+- Its successful, failed, and superseded revisions retain one canonical
+  iframe and never expose a partial generation as current.
+- Each representative fixture passes its declared content-continuity ledger
+  and records every recovery warning.
+- Comparison claims link to a reproducible input, command or browser
+  procedure, exact dependency version, and observed result.
 - A cold-start adopter can complete one supported integration path without an
   undocumented repository-only step.
+- Every performance and parity number the documentation cites is
+  reproducible from a fresh clone by a named command.
 
-## `0.6`: expand from observed adoption blockers
+## Adoption: expand from observed adoption blockers
 
 ### Outcome
 
-Compatibility and performance work responds to accepted real-document evidence
-instead of pursuing CSS specification breadth without a user boundary.
+Compatibility and performance work responds to accepted real-document
+evidence instead of pursuing CSS specification breadth without a user
+boundary.
 
 ### Candidate work
 
-- Promote constrained behavior only when an accepted fixture and cross-browser
-  contract justify the change.
+- Promote constrained behavior only when an accepted fixture and
+  cross-browser contract justify the change.
 - Add opt-in host presets only for repeated, documented recovery policies.
-- Profile long documents for main-thread slice duration, total completion time,
-  retained memory, abort latency, and cleanup.
-- Improve warning recovery text and Inspector navigation when external reports
-  show that the current diagnostic does not support a decision.
-- Extend tables, flex, grid, multi-column flow, CJK typography, references, or
-  publishing content in the order demonstrated by accepted blockers.
+- Take up incremental prefix reuse (ASA-408) only on top of the resident
+  benchmark harness (ASA-428) and after the escape hatches are gone
+  (ASA-444) — it is explicitly sequenced last among fragmenter changes and
+  requires its own ADR.
+- Extend RTL from warning to supported page progression (ASA-434, stage 2)
+  and mitigate reproduced fragmentation-feedback cases (ASA-436, stage 2)
+  when accepted fixtures demonstrate demand.
+- Profile long documents for main-thread slice duration, total completion
+  time, retained memory, abort latency, and cleanup.
+- Improve warning recovery text and Inspector navigation when external
+  reports show that the current diagnostic does not support a decision.
+- Extend tables, flex, grid, multi-column flow, CJK typography, references,
+  or publishing content in the order demonstrated by accepted blockers.
 
 ### Exit criteria
 
-- Every compatibility addition has a public fixture, status classification, and
-  failure or recovery assertion.
+- Every compatibility addition has a public fixture, status classification,
+  and failure or recovery assertion.
 - Performance changes preserve uninterrupted structural parity and atomic
   supersession.
 - No promoted capability relies on silent approximation.
@@ -188,23 +259,24 @@ instead of pursuing CSS specification breadth without a user boundary.
   [`bundle-size.md`](bundle-size.md), or the responsible change records an
   approved budget decision.
 
-## `0.7–0.8`: harden the integration contract
+## Contract: harden the integration contract
 
 ### Outcome
 
-Applications can upgrade, extend, observe, and operate Imposia without relying
-on private lifecycle details.
+Applications can upgrade, extend, observe, and operate Imposia without
+relying on private lifecycle details.
 
 ### Candidate work
 
-- Publish deprecation periods and package-by-package migration guides.
-- Validate extension examples against sanitizer, resolver, abort, cleanup, and
-  immutable metadata boundaries.
+- Publish deprecation periods and package-by-package migration guides,
+  extending the `0.x` policy written for the `0.5.0` publication.
+- Validate extension examples against sanitizer, resolver, abort, cleanup,
+  and immutable metadata boundaries.
 - Add operational guidance for progress, timings, warning collection, and
-  destroyed-controller failures without introducing a logging authority inside
-  Core.
-- Expand accessibility evidence for Reader panels, responsive spread behavior,
-  keyboard movement, focus restoration, and print exclusion.
+  destroyed-controller failures without introducing a logging authority
+  inside Core.
+- Expand accessibility evidence for Reader panels, responsive spread
+  behavior, keyboard movement, focus restoration, and print exclusion.
 - Add ecosystem adapters only when they retain the same Core controller and
   canonical iframe.
 
@@ -222,14 +294,22 @@ on private lifecycle details.
 
 ### Required evidence
 
-- A stable public API with an exercised deprecation and migration history.
-- Multiple independently supplied production-shaped fixtures across the primary
-  document classes.
-- A compatibility matrix whose Stable claims are backed by public fixtures and
-  whose browser split remains explicit.
-- Reproducible security, package, bundle, browser, print, and EPUB release gates.
-- No unresolved ownership ambiguity between Core, React, Viewer, Reader, print,
-  and export.
+- A stable public API with an exercised deprecation and migration history —
+  including the completed removal of the temporary `experimental.force*`
+  surface.
+- Multiple independently supplied production-shaped fixtures across the
+  primary document classes.
+- A compatibility matrix whose Stable claims are backed by public fixtures
+  and whose browser split remains explicit. Constrained rows do not need to
+  become full CSS parity — they need their declared subsets to be
+  evidence-backed, stable across releases, and honest about the fallback
+  outside them. Experimental rows (footnotes, page floats) are either
+  promoted on evidence or removed; `1.0` ships no permanently experimental
+  behavior.
+- Reproducible security, package, bundle, browser, print, and EPUB release
+  gates.
+- No unresolved ownership ambiguity between Core, React, Viewer, Reader,
+  print, and export.
 - A maintained path for reporting private vulnerabilities and public
   compatibility failures.
 
@@ -249,32 +329,44 @@ The following work remains outside the accepted product direction:
 - complete CSS fragmentation parity;
 - a second preview, print, export, or framework-owned pagination authority.
 
-Reconsidering any item requires a product decision and an ADR that explains why
-the browser-only committed-document contract is no longer sufficient.
+Vertical writing (縦書き) pagination is pending the ASA-437 product decision;
+until that decision records otherwise, it should be treated as outside the
+roadmap and stated as such wherever Japanese-language support is described.
+
+Reconsidering any item requires a product decision and an ADR that explains
+why the browser-only committed-document contract is no longer sufficient.
 
 ## Prioritization rule
 
-When two tasks compete, choose the first task that satisfies the highest item in
-this list:
+When two tasks compete, choose the first task that satisfies the highest item
+in this list:
 
-1. fixes loss, duplication, reordering, stale-generation exposure, or ownership
-   drift inside a declared compatibility boundary;
-2. enables an external adopter to reproduce, integrate, or diagnose the current
-   product;
+1. fixes loss, duplication, reordering, stale-generation exposure, or
+   ownership drift inside a declared compatibility boundary;
+2. enables an external adopter to reproduce, integrate, or diagnose the
+   current product;
 3. resolves an accepted real-document compatibility or performance blocker;
 4. reduces maintenance cost without changing the product contract;
 5. adds a new capability with no demonstrated adoption blocker.
 
+Under this rule, ASA-438 (potential stale-generation exposure under load)
+outranks every open feature and evidence task, and the publication work
+(ASA-443) outranks new capability outright: an unpublished security fix and
+an unreachable release fail item 2 for every prospective adopter at once.
+
 ## Verification notes
 
-- **Verified from this repository:** the `0.4.0` package versions, product
-  contract, compatibility matrix, release gate, canonical iframe lifecycle,
-  Reader surface, native print boundary, and semantic EPUB boundary.
-- **Roadmap decision:** `0.5` prioritizes public proof and adoption paths over
-  general CSS expansion.
+- **Verified from this repository:** the `0.5.0` release commit `364e491`,
+  the 21-commit gap to `origin/main`, the absence of any npm publication
+  attempt for `0.5.0`, the escape-hatch and budget state recorded in
+  [`bundle-size.md`](bundle-size.md), the product contract, the
+  compatibility matrix, and the release-gate structure.
+- **Roadmap decision:** milestones are named by outcome and decoupled from
+  package versions; `1.0` alone keeps its number. Publish precedes Proof
+  because exposure, not commit, starts every downstream clock.
 - **Not yet verified:** external production adoption, independent comparison
-  results, and the proposed representative fixture set. They are milestone
-  deliverables, not current claims.
+  results, the representative fixture set, and the post-removal bundle
+  sizes. They are milestone deliverables, not current claims.
 - **Revisit condition:** update this roadmap when a milestone exit criterion
-  changes, a product-boundary ADR is accepted, or external evidence invalidates
-  the current priority order.
+  changes, a product-boundary ADR is accepted, or external evidence
+  invalidates the current priority order.
