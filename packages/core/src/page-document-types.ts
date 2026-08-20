@@ -185,6 +185,19 @@ export interface ExperimentalPageFeatures {
    * the previous always-verify behavior.
    */
   readonly forceConvergencePasses?: boolean;
+  /**
+   * Forces the fragmenter to place every flow sibling through the per-node
+   * sequential path. The default fast path places eligible sibling runs as
+   * chunks and bisects only on overflow; this escape hatch restores the
+   * previous per-node placement behavior.
+   */
+  readonly forceSequentialPlacement?: boolean;
+  /**
+   * Internal debug channel: receives the engine's internal counters for the
+   * accepted pagination pass. Only intended for equivalence tests and
+   * instrumentation; the counter names and values are not a stable contract.
+   */
+  readonly onDebugCounters?: (counters: Readonly<Record<string, number>>) => void;
 }
 
 export interface EpubMetadata {
