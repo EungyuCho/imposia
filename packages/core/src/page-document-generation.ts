@@ -151,8 +151,13 @@ interface BreakConstraint {
   contributesToFlow: boolean;
   readonly layout: FragmentationLayout;
   readonly atomic: boolean;
+  readonly hasDirectText: boolean;
+  readonly overflowXVisible: boolean;
+  readonly horizontalWriting: boolean;
+  readonly authoredName: string | undefined;
   hasForcedDescendant: boolean;
   hasUnbreakableDescendant: boolean;
+  hasDirectLineBreak: boolean;
 }
 
 const PUBLICATION_ENTRY_MARKER = "data-imposia-publication-entry";
@@ -196,6 +201,10 @@ const ATOMIC_ELEMENT_NAMES = new Set([
 
 const NON_FLOW_ELEMENT_NAMES = new Set(["style", "template"]);
 const OVERFLOW_TOLERANCE_CSS_PX = 0.5;
+const PLACEMENT_CHUNK_INITIAL_CAPACITY = 16;
+const PLACEMENT_CHUNK_MINIMUM_BUDGET = 4;
+const PLACEMENT_CHUNK_MINIMUM_RUN = 2;
+const PLACEMENT_CHUNK_MAXIMUM = 96;
 const PAGE_BREAK_VALUES = new Set<PageBreak>(["auto", "page", "left", "right"]);
 
 function limitError(name: keyof PageLimits, maximum: number): Error {
@@ -251,12 +260,31 @@ function snapshotExperimental(
   ) {
     throw new TypeError("experimental.forceConvergencePasses must be a boolean.");
   }
+  if (
+    record.forceSequentialPlacement !== undefined &&
+    typeof record.forceSequentialPlacement !== "boolean"
+  ) {
+    throw new TypeError("experimental.forceSequentialPlacement must be a boolean.");
+  }
+  if (record.onDebugCounters !== undefined && typeof record.onDebugCounters !== "function") {
+    throw new TypeError("experimental.onDebugCounters must be a function.");
+  }
   return Object.freeze({
     ...(record.footnotes === undefined ? {} : { footnotes: record.footnotes }),
     ...(record.pageFloats === undefined ? {} : { pageFloats: record.pageFloats }),
     ...(record.forceConvergencePasses === undefined
       ? {}
       : { forceConvergencePasses: record.forceConvergencePasses }),
+    ...(record.forceSequentialPlacement === undefined
+      ? {}
+      : { forceSequentialPlacement: record.forceSequentialPlacement }),
+    ...(record.onDebugCounters === undefined
+      ? {}
+      : {
+          onDebugCounters: record.onDebugCounters as (
+            counters: Readonly<Record<string, number>>,
+          ) => void,
+        }),
   });
 }
 
@@ -1040,8 +1068,13 @@ async function captureBreakConstraints(
         contributesToFlow: false,
         layout: "normal",
         atomic: true,
+        hasDirectText: directUnbreakableText(element),
+        overflowXVisible: false,
+        horizontalWriting: true,
+        authoredName: undefined,
         hasForcedDescendant: false,
         hasUnbreakableDescendant: false,
+        hasDirectLineBreak: false,
       });
       continue;
     }
@@ -1070,8 +1103,13 @@ async function captureBreakConstraints(
       contributesToFlow,
       layout,
       atomic: atomicElement(element, style, layout),
+      hasDirectText: directUnbreakableText(element),
+      overflowXVisible: style.overflowX === "visible",
+      horizontalWriting: style.writingMode === "horizontal-tb",
+      authoredName: authoredPageName(element),
       hasForcedDescendant: false,
       hasUnbreakableDescendant: false,
+      hasDirectLineBreak: false,
     });
   }
 
@@ -1088,7 +1126,8 @@ async function captureBreakConstraints(
         constraint.after !== "auto" ||
         constraint.hasForcedDescendant;
       parentConstraint.hasUnbreakableDescendant ||=
-        directUnbreakableText(element) || constraint.hasUnbreakableDescendant;
+        constraint.hasDirectText || constraint.hasUnbreakableDescendant;
+      parentConstraint.hasDirectLineBreak ||= element.localName.toLowerCase() === "br";
     }
   }
   return constraints;
@@ -1490,6 +1529,12 @@ interface RecursiveFragmenterOptions {
   readonly reportOverflow: () => void;
   readonly warnings: PageWarning[];
   readonly tableSplits: TableSplitRecord[];
+  readonly forceSequentialPlacement: boolean;
+}
+
+interface PlacementRun {
+  readonly nodes: readonly Node[];
+  readonly endBreakAfter: PageBreak;
 }
 
 class RecursiveFragmenter {
@@ -1505,8 +1550,12 @@ class RecursiveFragmenter {
   readonly #tableSplits: TableSplitRecord[];
   readonly #warned = new Set<string>();
   readonly #pageContent = new Map<PageParts, number>();
+  readonly #forceSequentialPlacement: boolean;
   #generatedFragments = 0;
   #generatedRecords = 0;
+  #chunksPlaced = 0;
+  #chunkFallbacks = 0;
+  #chunkCapacityEstimate = PLACEMENT_CHUNK_INITIAL_CAPACITY;
 
   constructor(options: RecursiveFragmenterOptions) {
     this.#constraints = options.constraints;
@@ -1519,6 +1568,14 @@ class RecursiveFragmenter {
     this.#reportOverflow = options.reportOverflow;
     this.#warnings = options.warnings;
     this.#tableSplits = options.tableSplits;
+    this.#forceSequentialPlacement = options.forceSequentialPlacement;
+  }
+
+  get debugCounters(): Readonly<Record<string, number>> {
+    return Object.freeze({
+      chunksPlaced: this.#chunksPlaced,
+      chunkFallbacks: this.#chunkFallbacks,
+    });
   }
 
   async prepare(): Promise<void> {
@@ -1631,6 +1688,30 @@ class RecursiveFragmenter {
     const bounds = multicol.getBoundingClientRect();
     const availableWidth = Math.max(multicol.clientWidth, bounds.width);
     return multicol.scrollWidth > availableWidth + OVERFLOW_TOLERANCE_CSS_PX;
+  }
+
+  /**
+   * The same predicate as `#inlineOverflows`, but with the writing mode taken
+   * from the constraint captured for the element instead of a live computed
+   * style read. Pagination never mutates writing-mode, so both agree.
+   */
+  #chunkInlineOverflows(
+    element: HTMLElement,
+    cursor: FragmentCursor,
+    constraint: BreakConstraint,
+  ): boolean {
+    const bounds = element.getBoundingClientRect();
+    if (!constraint.horizontalWriting) {
+      const inlineExtent = Math.max(element.scrollHeight, bounds.height);
+      const blockExtent = Math.max(element.scrollWidth, bounds.width);
+      return (
+        inlineExtent > cursor.page.geometry.contentHeightCssPx + OVERFLOW_TOLERANCE_CSS_PX ||
+        blockExtent > cursor.page.geometry.contentWidthCssPx + OVERFLOW_TOLERANCE_CSS_PX
+      );
+    }
+    const ownWidth = Math.max(element.clientWidth, bounds.width);
+    const availableWidth = Math.min(ownWidth, cursor.page.geometry.contentWidthCssPx);
+    return element.scrollWidth > availableWidth + OVERFLOW_TOLERANCE_CSS_PX;
   }
 
   #inlineOverflows(element: HTMLElement, cursor: FragmentCursor): boolean {
@@ -1773,6 +1854,291 @@ class RecursiveFragmenter {
       updatePageMedia(current.page, this.#pageMedia, requestedName, false);
     }
     return current;
+  }
+
+  /**
+   * Chunk eligibility gate. Eligible elements are exactly the elements whose
+   * sequential placement is a plain append with no break, name, layout, or
+   * forced-descendant interaction: `placeNode` would append them, find no
+   * overflow, and mark page content. Everything else stays on the per-node
+   * sequential path.
+   */
+  #chunkEligibleElement(constraint: BreakConstraint): boolean {
+    return (
+      constraint.before === "auto" &&
+      constraint.layout === "normal" &&
+      !constraint.hasForcedDescendant &&
+      !constraint.hasDirectLineBreak &&
+      constraint.authoredName === undefined
+    );
+  }
+
+  /**
+   * Collects the longest eligible sibling run starting at `start`. A run may
+   * contain inert nodes (comments, whitespace text), flow text nodes, and
+   * chunk-eligible elements. The run ends before any node that needs the
+   * sequential path, or right after a member with a forced break-after.
+   */
+  #collectPlacementRun(
+    nodes: readonly Node[],
+    start: number,
+    cursor: FragmentCursor,
+    pendingBreakAfter: PageBreak,
+  ): PlacementRun | undefined {
+    if (
+      this.#forceSequentialPlacement ||
+      pendingBreakAfter !== "auto" ||
+      cursor.overflowRoot !== undefined ||
+      cursor.page.name !== undefined
+    ) {
+      return undefined;
+    }
+    // Budget the run with the observed page capacity so a chunk overshoots the
+    // page boundary by only a handful of nodes. When the estimate proves low
+    // (this page already holds more than the estimate without overflowing),
+    // ramp geometrically instead of degrading to per-node placement.
+    const placedOnPage = this.#pageContent.get(cursor.page) ?? 0;
+    let budget = this.#chunkCapacityEstimate - placedOnPage + 1;
+    if (budget < PLACEMENT_CHUNK_MINIMUM_BUDGET && placedOnPage >= this.#chunkCapacityEstimate) {
+      budget = placedOnPage;
+    }
+    budget = Math.min(budget, PLACEMENT_CHUNK_MAXIMUM);
+    if (budget < PLACEMENT_CHUNK_MINIMUM_BUDGET) return undefined;
+    const run: Node[] = [];
+    let contributing = 0;
+    let endBreakAfter: PageBreak = "auto";
+    for (let index = start; index < nodes.length && contributing < budget; index += 1) {
+      const node = nodes[index];
+      if (node === undefined) break;
+      if (isNonFlowNode(node)) {
+        // Style and template elements can restyle already-placed content, so
+        // they must be appended at the same relative moment as the sequential
+        // path measures around them.
+        if (node.nodeType === Node.ELEMENT_NODE) break;
+        run.push(node);
+        continue;
+      }
+      if (node.nodeType === Node.TEXT_NODE) {
+        run.push(node);
+        contributing += 1;
+        continue;
+      }
+      if (node.nodeType !== Node.ELEMENT_NODE) break;
+      const constraint = this.#constraints.get(node as Element);
+      if (constraint === undefined || !this.#chunkEligibleElement(constraint)) break;
+      run.push(node);
+      if (constraint.contributesToFlow) {
+        contributing += 1;
+        if (constraint.after !== "auto") {
+          endBreakAfter = constraint.after;
+          break;
+        }
+      }
+    }
+    if (contributing < PLACEMENT_CHUNK_MINIMUM_RUN) return undefined;
+    return { nodes: run, endBreakAfter };
+  }
+
+  /**
+   * Estimates how many run nodes fit above the page's usable bottom from the
+   * rects of the already-appended run. The estimate is only a search hint; the
+   * accepted boundary is always verified with the authoritative overflow
+   * predicate.
+   */
+  #fittingPrefixHint(run: readonly Node[], cursor: FragmentCursor): number {
+    const contentBounds = cursor.page.content.getBoundingClientRect();
+    const availableHeight = Math.max(cursor.page.content.clientHeight, contentBounds.height);
+    const limit = contentBounds.top + availableHeight + OVERFLOW_TOLERANCE_CSS_PX;
+    let bottom = Number.NEGATIVE_INFINITY;
+    let hint = 0;
+    for (const [index, node] of run.entries()) {
+      if (node.nodeType === Node.ELEMENT_NODE) {
+        bottom = Math.max(bottom, (node as Element).getBoundingClientRect().bottom);
+      } else if (node.nodeType === Node.TEXT_NODE && (node.textContent ?? "").trim() !== "") {
+        const range = node.ownerDocument?.createRange();
+        if (range !== undefined) {
+          range.selectNodeContents(node);
+          bottom = Math.max(bottom, range.getBoundingClientRect().bottom);
+          range.detach();
+        }
+      }
+      if (bottom > limit) break;
+      hint = index + 1;
+    }
+    return Math.min(hint, run.length - 1);
+  }
+
+  /**
+   * Places a run with one append and one overflow measurement. On vertical
+   * overflow the largest fitting prefix is found by bisection; on a per-member
+   * inline-overflow hit the members from the hit onward are handed back to the
+   * sequential path, which re-applies the exact recovery and warning behavior.
+   * Returns the number of run nodes that were accepted and marked.
+   */
+  async #placeChunkRun(
+    run: readonly Node[],
+    cursor: FragmentCursor,
+  ): Promise<Readonly<{ consumed: number; contributed: boolean }>> {
+    const scheduled = this.#checkpoint();
+    if (scheduled !== undefined) await scheduled;
+    this.check();
+    cursor.container.append(...run);
+    let appended = run.length;
+    const setAppended = (count: number): void => {
+      if (count < appended) {
+        for (let index = count; index < appended; index += 1) {
+          const node = run[index];
+          node?.parentNode?.removeChild(node);
+        }
+      } else {
+        for (let index = appended; index < count; index += 1) {
+          const node = run[index];
+          if (node !== undefined) cursor.container.append(node);
+        }
+      }
+      appended = count;
+    };
+
+    let accepted = run.length;
+    if (this.#cursorOverflows(cursor)) {
+      this.#chunkFallbacks += 1;
+      // The layout is already flushed by the overflow read, so the rect scan
+      // costs no further reflow; the hint is then walked to the exact boundary
+      // with the authoritative overflow predicate.
+      let best = this.#fittingPrefixHint(run, cursor);
+      setAppended(best);
+      if (best > 0 && this.#cursorOverflows(cursor)) {
+        // Walk down to the largest prefix that fits (or to an empty prefix).
+        do {
+          this.check();
+          best -= 1;
+          setAppended(best);
+        } while (best > 0 && this.#cursorOverflows(cursor));
+      } else if (best > 0 || !this.#cursorOverflows(cursor)) {
+        // The hinted prefix fits; walk up while the next prefix also fits.
+        while (best + 1 < run.length) {
+          this.check();
+          setAppended(best + 1);
+          if (this.#cursorOverflows(cursor)) {
+            setAppended(best);
+            break;
+          }
+          best += 1;
+        }
+      }
+      accepted = best;
+    }
+
+    // Sequential placement runs `#recoverInlineOverflow` (and the
+    // `hasUnbreakableDescendant` inline inspection) per element. Both act only
+    // when the element itself overflows its inline size, so re-checking the
+    // accepted members here — reads only, layout already clean — preserves the
+    // exact behavior. A hit sends the member and its followers back through
+    // `placeNode`, which performs the authored recovery and warnings.
+    for (let index = 0; index < accepted; index += 1) {
+      const node = run[index];
+      if (node === undefined || node.nodeType !== Node.ELEMENT_NODE) continue;
+      const element = node as Element;
+      const constraint = this.#constraints.get(element);
+      if (constraint === undefined || constraint.atomic) continue;
+      const needsInlineCheck =
+        (constraint.hasDirectText && constraint.overflowXVisible) ||
+        constraint.hasUnbreakableDescendant;
+      if (!needsInlineCheck) continue;
+      const html = htmlElement(element);
+      if (html === undefined) continue;
+      if (this.#chunkInlineOverflows(html, cursor, constraint)) {
+        this.#chunkFallbacks += 1;
+        setAppended(index);
+        accepted = index;
+        break;
+      }
+    }
+
+    let contributed = false;
+    for (let index = 0; index < accepted; index += 1) {
+      const node = run[index];
+      if (node === undefined) continue;
+      if (node.nodeType === Node.ELEMENT_NODE) {
+        this.#markPageContent(cursor.page);
+        contributed ||= this.#constraints.get(node as Element)?.contributesToFlow === true;
+      } else if (node.nodeType === Node.TEXT_NODE && (node.textContent ?? "").trim() !== "") {
+        this.#markPageContent(cursor.page);
+        contributed = true;
+      }
+    }
+    if (accepted > 0) this.#chunksPlaced += 1;
+    return { consumed: accepted, contributed };
+  }
+
+  /**
+   * Places a sibling node list, replicating the sequential per-node loop and
+   * fast-pathing eligible runs as chunked appends. `mode` selects the small
+   * differences between the root flow loop and the shell child loop.
+   */
+  async placeFlowChildren(
+    nodes: readonly Node[],
+    initialCursor: FragmentCursor,
+    continueParent: ContinueFragment,
+    mode: "root" | "shell",
+  ): Promise<Readonly<{ cursor: FragmentCursor; placedChild: boolean }>> {
+    let cursor = initialCursor;
+    let pendingBreakAfter: PageBreak = "auto";
+    let placedChild = false;
+    let index = 0;
+    let observedPage = cursor.page;
+    while (index < nodes.length) {
+      if (cursor.page !== observedPage) {
+        // A completed page is the best available capacity observation for
+        // budgeting the next chunk. Blank or empty pages carry no signal.
+        const observation = this.#pageContent.get(observedPage) ?? 0;
+        if (observation > 0) {
+          this.#chunkCapacityEstimate = Math.min(observation, PLACEMENT_CHUNK_MAXIMUM);
+        }
+        observedPage = cursor.page;
+      }
+      const run = this.#collectPlacementRun(nodes, index, cursor, pendingBreakAfter);
+      if (run !== undefined) {
+        const { consumed, contributed } = await this.#placeChunkRun(run.nodes, cursor);
+        placedChild ||= contributed;
+        index += consumed;
+        if (consumed === run.nodes.length) {
+          pendingBreakAfter = run.endBreakAfter;
+          continue;
+        }
+        // The boundary node and its followers take the sequential path below.
+      }
+      const node = nodes[index];
+      index += 1;
+      if (node === undefined) continue;
+      const scheduled = this.#checkpoint();
+      if (scheduled !== undefined) await scheduled;
+      this.check();
+      const contributesToFlow = nodeContributesToFlow(node, this.#constraints);
+      const constraint = breakConstraintFor(node, this.#constraints);
+      if (contributesToFlow) {
+        const requestedName =
+          node.nodeType === Node.ELEMENT_NODE
+            ? authoredPageName(node as Element)
+            : mode === "root"
+              ? undefined
+              : cursor.page.name;
+        let requestedBreak = combinedBreak(pendingBreakAfter, constraint.before);
+        if (
+          mode === "root" &&
+          requestedBreak === "auto" &&
+          flowHasContent(cursor.page.flow) &&
+          cursor.page.name !== requestedName
+        ) {
+          requestedBreak = "page";
+        }
+        cursor = this.startForBreak(cursor, requestedBreak, continueParent, requestedName);
+        placedChild = true;
+      }
+      cursor = await this.placeNode(node, cursor, continueParent);
+      if (contributesToFlow) pendingBreakAfter = constraint.after;
+    }
+    return { cursor, placedChild };
   }
 
   async placeNode(
@@ -2062,31 +2428,8 @@ class RecursiveFragmenter {
       return shellCursor;
     };
 
-    let pendingBreakAfter: PageBreak = "auto";
-    let placedChild = false;
-    for (const child of children) {
-      const scheduled = this.#checkpoint();
-      if (scheduled !== undefined) await scheduled;
-      this.check();
-      const childContributes = nodeContributesToFlow(child, this.#constraints);
-      const childConstraint = breakConstraintFor(child, this.#constraints);
-      if (childContributes) {
-        const requestedName =
-          child.nodeType === Node.ELEMENT_NODE
-            ? authoredPageName(child as Element)
-            : shellCursor.page.name;
-        shellCursor = this.startForBreak(
-          shellCursor,
-          combinedBreak(pendingBreakAfter, childConstraint.before),
-          continueShell,
-          requestedName,
-        );
-        placedChild = true;
-      }
-      shellCursor = await this.placeNode(child, shellCursor, continueShell);
-      if (childContributes) pendingBreakAfter = childConstraint.after;
-    }
-    if (!placedChild) this.#markPageContent(shellCursor.page);
+    const placed = await this.placeFlowChildren(children, shellCursor, continueShell, "shell");
+    if (!placed.placedChild) this.#markPageContent(placed.cursor.page);
     return parentAtFragment;
   }
 
@@ -2689,45 +3032,21 @@ export async function buildGeneration(
           reportOverflow,
           warnings: passFragmentationWarnings,
           tableSplits: passTableSplits,
+          forceSequentialPlacement: settings.experimental.forceSequentialPlacement === true,
         });
         await fragmenter.prepare();
         const initialPage = allocatePage(undefined);
-        let currentCursor: FragmentCursor = { page: initialPage, container: initialPage.flow };
+        const currentCursor: FragmentCursor = { page: initialPage, container: initialPage.flow };
         const continueRoot: ContinueFragment = (name) => {
           const page = nextContentPage(name);
           return { page, container: page.flow };
         };
-        let pendingBreakAfter: PageBreak = "auto";
-        for (const node of [...passSource.childNodes]) {
-          const scheduled = checkPagination();
-          if (scheduled !== undefined) {
-            await scheduled;
-          }
-          fragmenter.check();
-          const contributesToFlow = nodeContributesToFlow(node, breakConstraints);
-          const constraint = breakConstraintFor(node, breakConstraints);
-          if (contributesToFlow) {
-            const requestedName =
-              node.nodeType === Node.ELEMENT_NODE ? authoredPageName(node as Element) : undefined;
-            let requestedBreak =
-              constraint.before === "auto" ? pendingBreakAfter : constraint.before;
-            if (
-              requestedBreak === "auto" &&
-              flowHasContent(currentCursor.page.flow) &&
-              currentCursor.page.name !== requestedName
-            ) {
-              requestedBreak = "page";
-            }
-            currentCursor = fragmenter.startForBreak(
-              currentCursor,
-              requestedBreak,
-              continueRoot,
-              requestedName,
-            );
-          }
-          currentCursor = await fragmenter.placeNode(node, currentCursor, continueRoot);
-          if (contributesToFlow) pendingBreakAfter = constraint.after;
-        }
+        await fragmenter.placeFlowChildren(
+          [...passSource.childNodes],
+          currentCursor,
+          continueRoot,
+          "root",
+        );
         const finalized = finalizePublishingPass(passPages, publishing, settings.experimental);
         return {
           pages: passPages,
@@ -2735,6 +3054,7 @@ export async function buildGeneration(
           tableSplits: passTableSplits,
           overflowWarning: passOverflowWarning,
           publishing: finalized,
+          debugCounters: fragmenter.debugCounters,
         };
       };
 
@@ -2794,6 +3114,7 @@ export async function buildGeneration(
       fragmentationWarnings = accepted.fragmentationWarnings;
       publishingWarnings = accepted.publishing.warnings;
       overflowWarning = accepted.overflowWarning;
+      settings.experimental.onDebugCounters?.(accepted.debugCounters);
       for (const [index, page] of pages.entries()) {
         resourceBlocked =
           decoratePage(

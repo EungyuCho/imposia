@@ -4,8 +4,8 @@ Imposia source distributions and package artifacts depend on the projects below.
 
 | Component | Version | Use | License |
 | --- | --- | --- | --- |
-| PostCSS | 8.5.20 | Bundled CSS declaration parsing in `@imposia/core` | MIT |
-| nanoid | 3.3.16 | Bundled CSS support transitively used by PostCSS in `@imposia/core` | MIT |
+| PostCSS | 8.5.26 | Bundled CSS declaration parsing in `@imposia/core` | MIT |
+| nanoid | 3.3.18 | Bundled CSS support transitively used by PostCSS in `@imposia/core` | MIT |
 | picocolors | 1.1.1 | Bundled CSS support transitively used by PostCSS in `@imposia/core` | ISC |
 | pdfjs-dist (PDF.js) | 5.4.530 | Browser PDF rendering in `@imposia/viewer` | Apache-2.0 |
 
