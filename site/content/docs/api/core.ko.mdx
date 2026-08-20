@@ -137,12 +137,14 @@ EPUB 옵션에는 `metadata: { title, language, identifier, modified? }`가 필�
 prepareDocument(html: string, options?: PrepareDocumentOptions): PreparedDocument;
 pageWarningTargetBounds(document: PageDocument, warning: PageWarning): PageWarningTargetBounds | undefined;
 hasPageDocumentFrameSandbox(iframe: HTMLIFrameElement): boolean;
+committedFrameGeneration(frameDocument: Document): number | undefined;
 selectBlankMarkers(markers: PageSideConstraint[], pages: Map<number, number>): number[];
 ```
 
 - `prepareDocument`는 HTML을 동기적으로 정규화·정제해 `{ html, headerTemplate?, footerTemplate?, warnings }`를 반환합니다. 옵션은 `headerTemplate`, `footerTemplate`, `allowRemoteResources`입니다. API 장식 옵션이 내장 템플릿보다 우선합니다. 브라우저 네이티브 HTML 파서로 파싱하므로 다른 Core API처럼 브라우저 전용이며, 경고는 오류 복구 후의 문서 순서로 정렬됩니다.
 - `pageWarningTargetBounds`는 iframe 뷰포트 좌표 기준의 실시간 `{ left, top, width, height }`를 반환합니다. 다른 세대의 경고나 위치가 없는 경고에는 `undefined`를 반환합니다.
 - `hasPageDocumentFrameSandbox`는 sandbox 토큰이 정확히 공개 토큰 집합(`allow-same-origin`, `allow-modals`)일 때만 `true`입니다.
+- `committedFrameGeneration`은 Core가 커밋 시점에 canonical frame에 찍은 세대를 반환하며, 스탬프된 세대를 아직 커밋하지 않은 프레임에는 `undefined`입니다. 아직 전달되지 않은 더 새 커밋과 실제 손상을 구분하는 데 씁니다. 페이지 marker를 읽거나 검증하지는 않습니다.
 - `selectBlankMarkers`는 이전 선택을 반영해, 좌우 면 배치를 맞추는 데 빈 페이지가 필요한 marker ID를 반환합니다. 페이지 매핑이 없는 marker에는 예외가 발생합니다.
 
 ## Core Publication

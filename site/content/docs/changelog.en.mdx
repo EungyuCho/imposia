@@ -15,6 +15,7 @@ Core parses with the browser's native parser, and a pagination performance batch
 - Derived page-crossing text splits from line-box rects instead of one measurement call per grapheme; on the project's long-paragraph fixtures, `getClientRects` calls fell 98.1% for English and 95.9% for CJK text.
 - Shared one resolver call, decode validation, and Blob URL for same-URL assets within a generation, without changing per-occurrence byte accounting or extension veto semantics.
 - Minified the browser bundles and re-based bundle-size budgets. Each new fast path ships beside a temporary internal fallback for one release, which is why the Core bundle grew this release.
+- Fixed a Viewer error that could surface when a host updated a document under load: the Viewer's ambient synchronization now waits out the brief window between a commit landing in the canonical frame and the host delivering the new `PageDocument`, instead of reporting that transient as page-marker corruption. Explicit calls still validate, and real corruption is still reported.
 
 ## 0.4.1 — July 27, 2026
 

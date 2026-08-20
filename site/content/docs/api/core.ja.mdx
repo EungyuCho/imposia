@@ -137,12 +137,14 @@ EPUB のオプションは `metadata: { title, language, identifier, modified? }
 prepareDocument(html: string, options?: PrepareDocumentOptions): PreparedDocument;
 pageWarningTargetBounds(document: PageDocument, warning: PageWarning): PageWarningTargetBounds | undefined;
 hasPageDocumentFrameSandbox(iframe: HTMLIFrameElement): boolean;
+committedFrameGeneration(frameDocument: Document): number | undefined;
 selectBlankMarkers(markers: PageSideConstraint[], pages: Map<number, number>): number[];
 ```
 
 - `prepareDocument` は HTML を同期的に正規化・サニタイズし、`{ html, headerTemplate?, footerTemplate?, warnings }` を返します。オプションは `headerTemplate`、`footerTemplate`、`allowRemoteResources` です。API の装飾オプションは、埋め込みテンプレートより優先されます。ブラウザーのネイティブ HTML パーサーで解析するため、他のすべての Core API と同じくブラウザー専用で、警告はエラー回復後の文書順に並びます。
 - `pageWarningTargetBounds` は、iframe ビューポート座標での実測の `{ left, top, width, height }` を返します。別の世代の警告や、位置を特定できない警告には `undefined` を返します。
 - `hasPageDocumentFrameSandbox` は、sandbox トークンが公開されたトークンの集合（`allow-same-origin` と `allow-modals`）と正確に一致する場合だけ `true` です。
+- `committedFrameGeneration` は、Core がコミット時に canonical frame へ刻んだ世代を返します。スタンプされた世代をまだコミットしていないフレームでは `undefined` です。まだ配達されていない新しいコミットと、実際の破損とを区別するために使います。ページマーカーの読み取りや検証は行いません。
 - `selectBlankMarkers` は、左右のページの偶奇を満たすために空白ページが必要なマーカー ID を、先行する選択も踏まえて返します。ページ対応のないマーカーには例外をスローします。
 
 ## Core の Publication

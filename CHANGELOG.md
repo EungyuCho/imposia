@@ -40,6 +40,13 @@ a typed warning.
   alongside the implementation it replaces, which is why the Core bundle grew;
   removing the hatches in a later release reclaims that size.
 
+- `committedFrameGeneration(frameDocument)` reports the generation Core
+  stamped on the canonical frame at commit time, or `undefined` for a frame
+  that has not committed a stamped generation. Presentation layers use it to
+  recognize the window between a commit landing in the frame and their own
+  `PageDocument` reference being replaced. Core remains the only authority for
+  what that generation means. (ASA-438)
+
 ### Performance
 
 - Sibling runs are placed as chunks and bisected only on overflow, replacing a
@@ -80,6 +87,22 @@ a typed warning.
   with it: an unreferenced `tests/fixtures/{parity,pdf}` corpus left over from
   the deleted Node renderer, the `test:integration` script, and the unused
   `pixelmatch`/`pngjs` dev dependencies. (ASA-432)
+
+### Fixed
+
+- Viewer no longer throws `canonical page markers do not match pageCount` when
+  a host application updates a document under load. Core commits a generation
+  into the canonical frame synchronously, but a host that refreshes the Viewer
+  from a passive effect leaves a brief window in which the frame carries the
+  new generation's markers while the Viewer still holds the previous
+  `PageDocument`. Ambient synchronization — the resize-driven interface sync
+  and the stale-geometry scroll step — now defers while the frame's stamp is
+  ahead, instead of surfacing that transient as an uncaught error. Explicit
+  calls (`mountPageViewer`, `refresh`) still validate and throw, and a marker
+  mismatch without a newer stamp is still reported as corruption. The commit
+  itself was always atomic and no stale generation was ever rendered; the
+  defect was in how the transient was classified. Present since at least
+  `0.4.1` and reproduced there. (ASA-438)
 
 ## 0.4.1 — 2026-07-27
 

@@ -137,12 +137,14 @@ EPUB 选项要求 `metadata: { title, language, identifier, modified? }`，并�
 prepareDocument(html: string, options?: PrepareDocumentOptions): PreparedDocument;
 pageWarningTargetBounds(document: PageDocument, warning: PageWarning): PageWarningTargetBounds | undefined;
 hasPageDocumentFrameSandbox(iframe: HTMLIFrameElement): boolean;
+committedFrameGeneration(frameDocument: Document): number | undefined;
 selectBlankMarkers(markers: PageSideConstraint[], pages: Map<number, number>): number[];
 ```
 
 - `prepareDocument` 同步规范化并清理 HTML，返回 `{ html, headerTemplate?, footerTemplate?, warnings }`。其选项为 `headerTemplate`、`footerTemplate` 和 `allowRemoteResources`。API 装饰选项会覆盖内嵌模板。它使用浏览器原生 HTML 解析器，因此与其他所有 Core API 一样仅限浏览器运行，警告按错误恢复后的文档顺序排列。
 - `pageWarningTargetBounds` 返回 iframe 视口坐标下的实时 `{ left, top, width, height }`。对来自其他文档或无法定位的警告返回 `undefined`。
 - `hasPageDocumentFrameSandbox` 仅在 sandbox 令牌恰好是公开集合（`allow-same-origin` 与 `allow-modals`）时为 true。
+- `committedFrameGeneration` 返回 Core 在提交时刻印在 canonical frame 上的世代；若该帧尚未提交带标记的世代，则为 `undefined`。用于区分尚未送达的较新提交与真正的损坏。它不读取也不校验页面 marker。
 - `selectBlankMarkers` 返回为满足左右页奇偶而需要空白页的 marker ID，并考虑之前的选择。marker 没有页面映射时抛出。
 
 ## Core Publication
