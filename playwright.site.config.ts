@@ -16,7 +16,12 @@ export default defineConfig({
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: {
-    command: `cd site && ../node_modules/.bin/react-router dev --port ${sitePort}`,
+    // Serve the built client, not the dev server: these specs assert
+    // prerendered routes and deployed navigation, and Vite's dev-time
+    // dependency optimizer re-runs when route prefetching discovers a
+    // documentation component, invalidating already-served module URLs with
+    // 504 "Outdated Optimize Dep". `pnpm check` builds before this stage.
+    command: `cd site && ../node_modules/.bin/vite preview --port ${sitePort} --strictPort`,
     port: sitePort,
     reuseExistingServer: false,
   },

@@ -55,6 +55,20 @@ export default defineConfig({
       collections: `${siteRoot}.source`,
     },
   },
+  // Every documentation component reachable from MDX is pre-bundled at startup.
+  // Vite discovers these lazily otherwise — the first page that renders one
+  // re-runs the optimizer mid-session, which invalidates already-served dep
+  // URLs and fails in-flight requests with 504 "Outdated Optimize Dep".
+  optimizeDeps: {
+    include: [
+      "fumadocs-ui/components/accordion",
+      "fumadocs-ui/components/callout",
+      "fumadocs-ui/components/card",
+      "fumadocs-ui/components/steps",
+      "fumadocs-ui/components/tabs",
+      "fumadocs-ui/mdx",
+    ],
+  },
   ssr: {
     noExternal: ["fumadocs-core", "fumadocs-mdx", "fumadocs-ui"],
   },
