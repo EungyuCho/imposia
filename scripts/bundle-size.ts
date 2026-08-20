@@ -8,6 +8,7 @@ import {
   renderBundleSizeReport,
   renderEpubImpactReport,
 } from "./bundle-size-report.js";
+import { minifyBrowserBundle } from "./minify-browser-bundle.js";
 
 interface BundleScenario {
   readonly name: string;
@@ -79,7 +80,7 @@ function bundleOptions(source: string, sourcefile: string): BuildOptions {
     bundle: true,
     external: ["react", "react-dom"],
     format: "esm",
-    minify: true,
+    minify: false,
     platform: "browser",
     sourcemap: false,
     stdin: {
@@ -93,16 +94,37 @@ function bundleOptions(source: string, sourcefile: string): BuildOptions {
   };
 }
 
+interface MinifiedOutputs {
+  readonly minifiedBytes: number;
+  readonly gzipBytes: number;
+  readonly brotliBytes: number;
+}
+
+async function minifyOutputs(
+  outputFiles: readonly { readonly path: string; readonly text: string }[],
+): Promise<MinifiedOutputs> {
+  const minified = await Promise.all(
+    outputFiles.map(async (output) => {
+      const result = await minifyBrowserBundle(output.path, output.text);
+      return Buffer.from(result.code, "utf8");
+    }),
+  );
+  return Object.freeze({
+    minifiedBytes: minified.reduce((total, contents) => total + contents.byteLength, 0),
+    gzipBytes: minified.reduce(
+      (total, contents) => total + gzipSync(contents, { level: 9 }).byteLength,
+      0,
+    ),
+    brotliBytes: minified.reduce(
+      (total, contents) => total + brotliCompressSync(contents).byteLength,
+      0,
+    ),
+  });
+}
+
 async function measureScenario(scenario: BundleScenario): Promise<BundleMeasurement> {
   const result = await build(bundleOptions(scenario.source, `${scenario.name}.ts`));
-  const minifiedBytes = result.outputFiles.reduce(
-    (total, output) => total + output.contents.byteLength,
-    0,
-  );
-  const gzipBytes = result.outputFiles.reduce(
-    (total, output) => total + gzipSync(output.contents, { level: 9 }).byteLength,
-    0,
-  );
+  const { minifiedBytes, gzipBytes } = await minifyOutputs(result.outputFiles);
   return Object.freeze({
     name: scenario.name,
     minifiedBytes,
@@ -116,20 +138,7 @@ async function measureCoreBundle(epubStubbed: boolean) {
     ...bundleOptions('export * from "@imposia/core";', "Core.ts"),
     plugins: epubStubbed ? [EPUB_STUB_PLUGIN] : [],
   });
-  return Object.freeze({
-    minifiedBytes: result.outputFiles.reduce(
-      (total, output) => total + output.contents.byteLength,
-      0,
-    ),
-    gzipBytes: result.outputFiles.reduce(
-      (total, output) => total + gzipSync(output.contents, { level: 9 }).byteLength,
-      0,
-    ),
-    brotliBytes: result.outputFiles.reduce(
-      (total, output) => total + brotliCompressSync(output.contents).byteLength,
-      0,
-    ),
-  });
+  return minifyOutputs(result.outputFiles);
 }
 
 async function measureEpubImpact(): Promise<EpubImpactMeasurement> {
