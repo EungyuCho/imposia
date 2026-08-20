@@ -39,7 +39,7 @@ ships work out of milestone order, exactly as `0.5.0` just did.
 ## Current position
 
 Imposia `0.5.0` is prepared at commit `364e491` (2026-08-20) but is **not yet
-public**: local `main` is 21 commits ahead of `origin/main`, and none of the
+public**: local `main` is 24 commits ahead of `origin/main`, and none of the
 four packages has been published to npm. The release contains a security patch
 (bundled `postcss`/`nanoid`, ASA-423), a breaking replacement of `parse5` with
 the browser-native parser (ASA-404, ADR 0013), four fragmenter optimizations
@@ -145,6 +145,22 @@ bundles is removed on the schedule the repository itself recorded.
    overview sections still describing bundled `parse5`, stale ADR status
    lines, and the superseded manual publish path — stops being rediscovered
    and starts being owned.
+5. **Published-surface hygiene** (ASA-447). The test-only
+   `internalTextSplitTestApi` reaches the public tarball through the
+   per-module `dist` files that `files: ["dist"]` publishes, and the
+   single-entry `exports` map does not cover CDN or direct-file consumers.
+   `0.4.1` already ships that shape, so this does not block publication — but
+   the decision is cheapest before exposure grows, and the package-boundary
+   gate must assert the test-seam convention before ASA-444 mistakes the seam
+   for legacy code it may delete. The sequential line-ends path stays as the
+   authoritative fallback even after the hatch is gone.
+6. **Release-gate coverage** (ASA-449). The gate runs on `ubuntu-latest`
+   only, so a darwin-only breakage stays invisible until the maintainer runs
+   the local release gate — which is exactly the ASA-432 failure mode,
+   already observed once. A scheduled and dispatchable darwin lane lands
+   before the first publication so it covers every release after it. Output
+   divergence found on that lane is evidence handed to ASA-435, not a gate
+   defect.
 
 ### Exit criteria
 
@@ -158,6 +174,11 @@ bundles is removed on the schedule the repository itself recorded.
 - An RTL document produces a typed warning naming the recovery taken.
 - ASA-438 has a recorded root cause or a recorded pre-existence proof, and
   the diagnostic message carries expected/actual counts and the generation.
+- The published core tarball's non-contract deep-module surface has a
+  recorded decision, and the package-boundary gate asserts the test-seam
+  convention under a mutation check.
+- A darwin gate lane exists with a recorded trigger, a first green run with
+  pass/skip counts and duration, and no change to the ubuntu lane.
 
 ## Proof: prove the React and CSR position
 
@@ -189,7 +210,12 @@ support is reproducible from a fresh clone.
    prior commit visible; the manual and long-form publication fixture
    classes join the representative set. The externally supplied fixture can
    only arrive through the intake — until it does, that exit item is
-   recorded as unmet rather than papered over.
+   recorded as unmet rather than papered over. Settle the committed-demo-
+   artifact question (ASA-448) first: the checked-in minified bundles turn
+   every unrelated Core change into a few hundred lines of diff and couple
+   the release gate to that churn, in the same `examples/` tree ASA-446 is
+   about to edit. Keeping the commit practice is a valid close, provided the
+   no-build browsing benefit is evidenced rather than assumed.
 3. **Reproducible evidence lanes.** The twelve cited-but-missing verification
    artifacts are replaced with re-runnable commands and a regeneration script
    (ASA-429); the performance baseline is re-captured by a browser-core
@@ -364,6 +390,11 @@ an unreachable release fail item 2 for every prospective adopter at once.
 - **Roadmap decision:** milestones are named by outcome and decoupled from
   package versions; `1.0` alone keeps its number. Publish precedes Proof
   because exposure, not commit, starts every downstream clock.
+- **Ticket sweep (2026-08-21):** every `ASA-` identifier this document cites
+  exists in Linear. The three open Imposia tickets filed after the roadmap
+  reset are now placed: ASA-447 and ASA-449 under Publish, ASA-448 ahead of
+  ASA-446 under Proof. None of the three blocks the ASA-443 publication
+  itself.
 - **Not yet verified:** external production adoption, independent comparison
   results, the representative fixture set, and the post-removal bundle
   sizes. They are milestone deliverables, not current claims.
