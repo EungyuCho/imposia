@@ -5,21 +5,44 @@ description: Add Imposia to a React app, render HTML as A4 pages, then print or 
 
 This guide adds a paginated preview to an existing React app. When you finish, the same component will show your HTML as A4 pages and open the browser's native print flow for paper or PDF output.
 
-## Before you begin
+<Callout type="info" title="Before you begin">
+You need React 18 or later and a client-side browser environment. Imposia does not render pages in Node.js or during server-side rendering, so mount it below your framework's client boundary.
+</Callout>
 
-You need React 18 or later and a client-side browser environment. Imposia does not render pages in Node.js or during server-side rendering.
+<Steps>
 
-## 1. Install the React package
+<Step title="Install the React package">
 
-```bash
-pnpm add @imposia/react react react-dom
-```
+<Tabs items={["pnpm", "npm", "yarn", "bun"]}>
+  <Tab value="pnpm">
+    ```bash
+    pnpm add @imposia/react react react-dom
+    ```
+  </Tab>
+  <Tab value="npm">
+    ```bash
+    npm install @imposia/react react react-dom
+    ```
+  </Tab>
+  <Tab value="yarn">
+    ```bash
+    yarn add @imposia/react react react-dom
+    ```
+  </Tab>
+  <Tab value="bun">
+    ```bash
+    bun add @imposia/react react react-dom
+    ```
+  </Tab>
+</Tabs>
 
-Import the package stylesheet once in the component or in your application's client entry file.
+Import the package stylesheet once — in this component or in your application's client entry file. Importing it more than once is harmless, but forgetting it entirely leaves the Viewer unstyled.
 
-## 2. Render a page document
+</Step>
 
-```tsx
+<Step title="Render a page document">
+
+```tsx title="app/preview.tsx"
 import { ImposiaPageViewer, type ImposiaPageViewerHandle } from "@imposia/react";
 import { useRef } from "react";
 import "@imposia/react/styles.css";
@@ -37,30 +60,72 @@ export function Preview() {
       <button type="button" onClick={() => void viewer.current?.print()}>
         Print / Save as PDF
       </button>
-      <button
-        type="button"
-        onClick={() =>
-          void viewer.current?.exportEpub({
-            metadata: { title: "Hello", language: "en", identifier: "urn:example:hello" },
-          })
-        }
-      >
-        Export EPUB
-      </button>
     </>
   );
 }
 ```
 
-`source.html` is the content to paginate. `documentOptions.page` sets the page size and margin. The handle always points to the latest page document that finished successfully.
+`source.html` is the content to paginate, and `documentOptions.page` sets the sheet size and margin. The handle always points at the latest page document that finished successfully — never at one still being built.
 
-## 3. Check the result
+</Step>
 
-Open the component in a browser and confirm that the HTML appears as an A4 page.
+<Step title="Confirm the result">
 
-- **Print / Save as PDF** opens the browser's native print dialog for the page currently shown in the Viewer. Choose a printer or **Save as PDF** there. The method does not return PDF bytes.
-- **Export EPUB** returns a reflowable EPUB 3.3 `Blob`. The example calls the export method; connect the returned `Blob` to your app's download or storage flow.
+Open the component in a browser. Your HTML should appear as an A4 page inside the Viewer.
 
-If you update `source`, Imposia keeps the current page visible until the next version is ready. Read [How preview and output stay consistent](/en/docs/concepts/publishing-model) before adding asset loading or production export controls.
+Click **Print / Save as PDF**. The browser's own print dialog opens for the pages currently shown, where the reader chooses a printer or **Save as PDF**. The method resolves once the dialog has been dispatched; it does not return PDF bytes.
 
-Use the [API reference](/en/docs/api) when you need every React handle method, Core controller option, Publication reader action, or Viewer lifecycle constraint.
+</Step>
+
+</Steps>
+
+## Show progress and failures
+
+The example above renders a static string, so it commits almost immediately. Real sources take time — images settle, fonts load, long documents paginate across many pages. Use `useImposiaDocument` when you need to show that work.
+
+```tsx title="app/preview-with-state.tsx"
+import { useImposiaDocument } from "@imposia/react";
+
+export function Preview({ html }: { html: string }) {
+  const { hostRef, state } = useImposiaDocument({ source: { html } });
+
+  return (
+    <>
+      {state.status === "loading" && <p role="status">Preparing pages…</p>}
+      {state.status === "error" && <p role="alert">Could not paginate this document.</p>}
+      <div ref={hostRef} />
+    </>
+  );
+}
+```
+
+`state.status` is `idle`, `loading`, `ready`, or `error`. The important detail is what `loading` means after a first success: the previous pages stay on screen while the next version is prepared, so a spinner should sit *beside* the preview rather than replace it. When `state.status` is `error`, the last document that succeeded is still the one being displayed.
+
+## Export an EPUB
+
+The same committed document can produce a reflowable EPUB 3.3 `Blob`. Metadata is required — the export rejects without a title, language, and identifier.
+
+```tsx title="app/export-epub.ts"
+const blob = await viewer.current?.exportEpub({
+  metadata: { title: "Hello", language: "en", identifier: "urn:example:hello" },
+});
+```
+
+The method returns the `Blob`; connecting it to a download or upload is your application's job. EPUB output is built from the semantic source, not from the paginated page DOM, so page furniture and generated page numbers are deliberately absent.
+
+## Next steps
+
+<Cards>
+  <Card title="Load images and fonts" href="/en/docs/guides/assets">
+    Your HTML cannot fetch its own resources. Implement `assetResolver` before adding an `<img>`.
+  </Card>
+  <Card title="How the output stays consistent" href="/en/docs/concepts/publishing-model">
+    Read this before wiring production print or export controls.
+  </Card>
+  <Card title="React API" href="/en/docs/api/react">
+    Every component, hook, and imperative handle method.
+  </Card>
+  <Card title="Publish several documents together" href="/en/docs/guides/react-publishing">
+    Share one reading order, outline, and page sequence across entries.
+  </Card>
+</Cards>

@@ -4,6 +4,7 @@ export const SITE_DOC_PATHS = [
   "docs",
   "docs/getting-started",
   "docs/concepts/publishing-model",
+  "docs/guides/assets",
   "docs/guides/react-publishing",
   "docs/api",
   "docs/api/react",

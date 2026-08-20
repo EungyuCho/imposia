@@ -1,0 +1,122 @@
+---
+title: Load images and fonts
+description: Implement assetResolver, the only path external resources can take into a paginated document.
+---
+
+Add an `<img>` to your HTML and it will not load. This is not a bug — it is the boundary Imposia is built around, and `assetResolver` is how you open it deliberately.
+
+## Why nothing loads by default
+
+The iframe holding your pages is sandboxed with a strict Content Security Policy. `connect-src` is `'none'`, and images, fonts, and media may only come from `blob:` URLs that Core itself created. Authored URLs never become network requests.
+
+<Callout type="info" title="What this buys you">
+Untrusted markup cannot make the frame reach the network. Every byte that reaches a page passed through your application first, so you decide what is allowed, where it comes from, and what credentials — if any — are attached.
+</Callout>
+
+Imposia discovers resources in your HTML and CSS, asks your resolver for each one, turns approved bytes into Core-owned `blob:` URLs, and revokes them when the document is replaced, fails, or is destroyed.
+
+## Implement the resolver
+
+A resolver is one async function. It receives a request and answers with bytes or a refusal.
+
+```ts title="app/asset-resolver.ts"
+import type { AssetResolver } from "@imposia/core";
+
+const ALLOWED = new Set(["https://cdn.example.com"]);
+
+export const assetResolver: AssetResolver = async ({ url, kind, baseUrl, signal }) => {
+  const target = new URL(url, baseUrl);
+
+  if (!ALLOWED.has(target.origin)) {
+    return { status: "blocked", reason: `Origin not allowed: ${target.origin}` };
+  }
+
+  const response = await fetch(target, { signal });
+  if (!response.ok) {
+    return { status: "blocked", reason: `HTTP ${response.status}` };
+  }
+
+  return {
+    status: "resolved",
+    bytes: new Uint8Array(await response.arrayBuffer()),
+    mimeType: response.headers.get("content-type") ?? "application/octet-stream",
+  };
+};
+```
+
+Pass it once, when you mount the document:
+
+```tsx title="app/preview.tsx"
+<ImposiaPageViewer
+  source={{ html, baseUrl: "https://cdn.example.com/docs/" }}
+  documentOptions={{ assetResolver }}
+/>
+```
+
+### The request
+
+| Field | Meaning |
+| --- | --- |
+| `url` | The URL exactly as authored, which may be relative |
+| `kind` | `image`, `font`, `media`, or `stylesheet` |
+| `baseUrl` | The document's base, when one was supplied on the source |
+| `signal` | Aborts when the generation is superseded, fails, or is destroyed |
+
+Always resolve `url` against `baseUrl` yourself, and always forward `signal` to `fetch`. A resolver that ignores the signal keeps working for a generation nobody will ever see.
+
+### The answer
+
+Return `{ status: "resolved", bytes, mimeType }` to admit the resource, or `{ status: "blocked", reason }` to refuse it. A refusal is a normal outcome, not an error: the document still commits, and Imposia emits a `RESOURCE_BLOCKED` warning naming what was refused.
+
+## What gets rejected after you return it
+
+Approving bytes is not the last word. Core validates them, and a mismatch is treated as a refusal.
+
+| Check | Rule |
+| --- | --- |
+| MIME allowlist | Images must be PNG, JPEG, GIF, WebP, or AVIF; fonts WOFF, WOFF2, TTF, or OTF; stylesheets `text/css` |
+| Magic bytes | Font containers are verified against their real signature (`wOFF`, `wOF2`, `OTTO`, …), not the declared type |
+| Limits | Reference count, total bytes, and nesting depth all have ceilings |
+
+This is why a resolver that returns `application/octet-stream` for a real PNG will see the image blocked: the declared type has to be right.
+
+<Callout type="warn" title="Duplicate references still count toward the byte limit">
+Within one generation, several references to the same URL share a single resolver call and one `blob:` URL. Byte accounting is deliberately **not** deduplicated — every occurrence is charged against `maxAssetBytes`, so the limit means the same thing it did before that optimization existed.
+</Callout>
+
+## Stylesheets pull in more work
+
+When you resolve a stylesheet, Imposia parses it and discovers the resources *it* references — `@font-face` sources, `url()` values, and nested `@import` rules. Each one comes back to your resolver as its own request, with `baseUrl` set to that stylesheet's location. Depth is bounded, so an `@import` chain cannot recurse forever.
+
+## Common problems
+
+<Accordions>
+
+<Accordion title="My image is missing and I see a RESOURCE_BLOCKED warning">
+The resolver refused it, or the bytes failed validation. Check the warning's message, then confirm the `mimeType` you returned matches the real file type. Returning a generic type for a real image is the most frequent cause.
+</Accordion>
+
+<Accordion title="My relative URLs never resolve">
+Set `baseUrl` on the source, and resolve against it inside the resolver with `new URL(url, baseUrl)`. Imposia passes the authored string through untouched; joining it to a base is your resolver's decision, because only your application knows where the document really lives.
+</Accordion>
+
+<Accordion title="My web font is ignored">
+Fonts are checked against their container signature as well as their MIME type. A `.woff2` served as `font/woff` — or a file that is actually a zip — is refused. Confirm you are sending the real bytes, uncompressed by any transport layer that rewrites them.
+</Accordion>
+
+<Accordion title="Do I need a resolver at all?">
+Only if your content references external resources. Inline SVG, CSS colors, and system fonts need nothing. Without a resolver, any authored `<img src>` is simply blocked, and the document still commits.
+</Accordion>
+
+</Accordions>
+
+## Next steps
+
+<Cards>
+  <Card title="How the output stays consistent" href="/en/docs/concepts/publishing-model">
+    Where resolver output sits in the commit lifecycle, and when blob URLs are revoked.
+  </Card>
+  <Card title="Core API" href="/en/docs/api/core">
+    The full `AssetResolver` type, limit options, and warning codes.
+  </Card>
+</Cards>

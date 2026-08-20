@@ -1,5 +1,8 @@
 {
   "title": "사용 가이드",
   "defaultOpen": false,
-  "pages": ["react-publishing"]
+  "pages": [
+    "assets",
+    "react-publishing"
+  ]
 }
