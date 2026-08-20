@@ -82,3 +82,10 @@ recorded in [`SECURITY.md`](../SECURITY.md); assume no backport unless one is
 announced. Because Core bundles its dependencies into the browser artifact, a
 consumer cannot patch a bundled dependency through their own lockfile —
 upgrading Imposia is the delivery mechanism.
+
+The first recorded instance: the `0.5.0` postcss/nanoid patch is **not**
+backported to `0.4.x` (ASA-443, 2026-08-21) — both advisories' vulnerable
+paths were measured as unreachable in the published `0.4.1` browser artifact,
+and `0.4.x` remains unsupported in `SECURITY.md`'s table. The evidence and the
+revisit condition are recorded in the
+[0.5.0 migration note](migrations/0.5.0.md#upgrade-for-the-security-patch).

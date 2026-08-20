@@ -12,6 +12,12 @@ can be prepared before exploit details are disclosed.
 | Older releases | No |
 | Unreleased `main` | Best effort |
 
+Backport decisions are per advisory. Recorded so far: the `0.5.0`
+postcss/nanoid patch (GHSA-fxqj-rqcc-2cmp, GHSA-2v37-7h3g-55p8) is not
+backported to `0.4.x` — measured as unreachable in the published `0.4.1`
+browser artifact (ASA-443; evidence in
+[docs/migrations/0.5.0.md](docs/migrations/0.5.0.md#upgrade-for-the-security-patch)).
+
 ## Reporting a vulnerability
 
 Use GitHub's **Security > Report a vulnerability** form for this repository.

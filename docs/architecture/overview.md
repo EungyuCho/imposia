@@ -849,9 +849,11 @@ these are code defects.
    the artifact-backed half of the verification story is not reproducible from a
    fresh clone.
 2. **Resolved (ASA-445):** `SECURITY.md`'s supported-versions table listed
-   "Latest `0.1.x` release" and now reads `0.5.x`. Whether an older line also
-   receives a security backport is a separate, still-open decision on ASA-443,
-   not a documentation defect.
+   "Latest `0.1.x` release" and now reads `0.5.x`. The `0.4.2`
+   security-backport question was decided on ASA-443 (2026-08-21): **no
+   backport** — both advisories' vulnerable paths measured unreachable in the
+   published `0.4.1` browser artifact; evidence in the 0.5.0 migration note's
+   security-patch section.
 3. **Resolved (ASA-445):** `docs/roadmap.md` was reset for the post-`0.5.0`
    world, and `docs/open-source-readiness.md` now states which release its
    launch boundary was proven by and that those gates must be re-run on the
