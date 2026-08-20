@@ -1,6 +1,6 @@
 ---
 title: The publishing model
-description: Understand how Imposia keeps preview, print, and semantic export aligned to one committed document.
+description: Understand how Imposia keeps preview, print, and export aligned to one committed document.
 ---
 
 Pagination takes time, especially when a document contains images, tables, or many pages. Imposia keeps the last completed document visible while it prepares the next one, so readers never see an unfinished layout.
@@ -22,17 +22,19 @@ The staging iframe is never used for preview, presentation, or print.
 
 ## How each output is made
 
+Preview and native print are the two everyday outputs, and both address the canonical iframe. Because a commit also retains its semantic source, the same generation can additionally produce a reflowable EPUB when you need a semantic artifact.
+
 | Output | Source | Result |
 | --- | --- | --- |
 | Preview | Canonical iframe | The completed paginated pages shown by the Viewer |
 | Print | Isolated top-document snapshot of canonical pages through `Window.print()` | The browser's native print flow; Imposia does not return PDF bytes |
 | EPUB | Latest committed semantic source | A reflowable EPUB 3.3 `Blob`, not a fixed-layout copy of the page DOM |
 
-`PageDocument.exportEpub()` does not rerun extensions or serialize the fixed page layout.
+`PageDocument.exportEpub()` does not rerun extensions or serialize the fixed page layout. That distinction matters: the EPUB is a semantic projection for reflowable readers, not a PDF-like snapshot of the preview.
 
 ## Why Viewer and native print stay aligned
 
-First, inspect pages 2 and 3 of the committed generation in the Viewer. Then select `Save to PDF` in browser print preview. The same content and page order appear there.
+Open pages 2 and 3 of the committed generation in the Viewer, then select **Save as PDF** in the browser's print preview. The same content and page order appear in both places.
 
 ![The same second page displayed inside the Imposia Viewer](/images/publishing-contract/committed-page-viewer.png)
 
@@ -42,15 +44,17 @@ First, inspect pages 2 and 3 of the committed generation in the Viewer. Then sel
 
 *Viewer page 3 continues with rows 23–36 and the `RIGHT / 3` page furniture.*
 
-![The same document in browser print preview with Save to PDF selected](/images/publishing-contract/native-print-save-pdf.png)
+![The same document in browser print preview with Save as PDF selected](/images/publishing-contract/native-print-save-pdf.png)
 
-*The Save to PDF preview contains the same page 2 and 3 table content, page order, repeated heading, and page furniture shown above.*
+*The Save as PDF preview contains the same page 2 and 3 table content, page order, repeated heading, and page furniture shown above.*
 
-Imposia does not rerun layout or create a PDF renderer for print. `print()` clones the accepted canonical pages and generation styles into a transient isolated shadow root in the top document, then calls the top `Window.print()`. This avoids Chromium's unreliable iframe print snapshot while preserving the committed page sequence. Within the documented support boundary, orientation, margin boxes, repeated table headings, page numbers, and content order therefore stay aligned between the Viewer and browser print or Save to PDF output.
+Imposia does not rerun layout or create a PDF renderer for print. `print()` clones the accepted canonical pages and generation styles into a transient isolated shadow root in the top document, then calls the top `Window.print()`. This avoids Chromium's unreliable iframe print snapshot while preserving the committed page sequence. Within the documented support boundary, orientation, margin boxes, repeated table headings, page numbers, and content order therefore stay aligned between the Viewer and browser print or Save as PDF output.
 
-The print host isolates page content and generation styles, but CSS `@page` rules are document-level. Avoid a competing unnamed top-level `@page` rule in the host application while printing, because it can interact with Imposia's hoisted print-page rules.
+<Callout type="warn" title="Avoid a competing top-level @page rule while printing">
+The print host isolates page content and generation styles, but CSS `@page` rules are document-level. An unnamed top-level `@page` rule in the host application can interact with the print-page rules Imposia hoists for its own pages, so remove or scope such a rule before calling `print()`.
+</Callout>
 
-The Viewer and Save to PDF preview match because both paths observe the same committed generation. This does not mean that Imposia returns PDF bytes. Printer-driver margins, scaling, color correction, and browser-specific font metrics can still affect the final result.
+The Viewer and Save as PDF preview match because both paths observe the same committed generation. This does not mean that Imposia returns PDF bytes. Printer-driver margins, scaling, color correction, and browser-specific font metrics can still affect the final result.
 
 ## Control external resources
 
@@ -66,3 +70,17 @@ Sanitized input, resolver output, and extensions remain subject to documented li
 - **Not supported:** Node or CLI rendering, server export, PDF bytes, fixed-layout EPUB, arbitrary CSS fragmentation, and identical page counts across browsers.
 
 Use Chromium as the structural pagination reference. Firefox and WebKit support the public API and lifecycle, but measurements and line breaks can differ.
+
+## Next steps
+
+<Cards>
+  <Card title="Load images and fonts" href="/en/docs/guides/assets">
+    Where resolver output sits in the commit lifecycle, and when blob URLs are revoked.
+  </Card>
+  <Card title="Publish several documents together" href="/en/docs/guides/react-publishing">
+    Share one reading order, outline, and page sequence across ordered entries.
+  </Card>
+  <Card title="API reference" href="/en/docs/api">
+    React handles, Core controllers, Viewer navigation, and lifecycle rules.
+  </Card>
+</Cards>
