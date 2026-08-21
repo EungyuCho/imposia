@@ -209,9 +209,11 @@ test("runs asset policies before the resolver and freezes namespaced warnings", 
     expect(observation.warnings).toEqual([
       {
         code: "RESOURCE_BLOCKED",
-        message: "Resource was blocked by the loading policy.",
+        message: "Blocked image: a page extension refused this resource.",
         sourceIdentity: "resource-0",
         location: { generation: 1, entryId: undefined, page: undefined },
+        property: "image",
+        recovery: "a page extension refused this resource",
       },
       {
         code: "EXTENSION_POLICY",

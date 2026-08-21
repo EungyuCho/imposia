@@ -12,6 +12,7 @@ import {
   resolveOne,
   unsafeAuthoredUrl,
 } from "./page-document-assets-resolver.js";
+import { BLOCKED_REASON, type BlockedReason } from "./page-document-blocked-reasons.js";
 import { abortError } from "./page-document-frame.js";
 import type { ResolvedSemanticAsset } from "./page-document-semantic.js";
 import {
@@ -28,11 +29,16 @@ import {
  * A single aggregate "something was blocked" flag tells a caller that their document is
  * wrong but not which resource or why, and the most confusing case -- Core overruling a
  * resolver that reported success -- is invisible in it.
+ *
+ * The resource is identified by its `sourceIdentity` marker, never by its URL: an
+ * authored URL is source content, and blocked-resource diagnostics must stay free of
+ * source content and of resolver text so a document's warnings are safe to publish
+ * (docs/architecture/0005-core-extension-contract.md). The `BlockedReason` brand keeps
+ * the reason Core-authored by construction.
  */
 export type BlockedResource = {
   readonly kind: AssetRequest["kind"];
-  readonly url: string;
-  readonly reason: string;
+  readonly reason: BlockedReason;
   readonly sourceIdentity: string;
 };
 
@@ -57,9 +63,10 @@ export type ResolvedPageAssets = {
 /**
  * The `RESOURCE_BLOCKED` warnings a generation should carry for these assets.
  *
- * One warning per blocked resource, naming the URL (`value`), its kind (`property`), and
- * why it was refused (`recovery`) through the existing optional warning fields, so the
- * shape stays non-breaking. When nothing was recorded individually -- a block that predates
+ * One warning per blocked resource, naming its kind (`property`) and why it was refused
+ * (`recovery`) through the existing optional warning fields, so the shape stays
+ * non-breaking; the `sourceIdentity` marker names which resource. The authored URL is
+ * deliberately absent -- see `BlockedResource`. When nothing was recorded individually -- a block that predates
  * asset resolution, such as the sanitizer's -- the single aggregate warning is kept, but
  * only if an equivalent warning is not already present. The aggregate-presence guard must
  * never suppress the per-resource reports: a `javascript:` href elsewhere in the document
@@ -78,7 +85,6 @@ export function resourceBlockedWarnings(
         sourceIdentity: resource.sourceIdentity,
         location: UNLOCATED_PAGE_WARNING_LOCATION,
         property: resource.kind,
-        value: resource.url,
         recovery: resource.reason,
       }),
     );
@@ -189,22 +195,24 @@ export async function resolvePageAssets(
   const contexts: readonly CssContext[] = discovery.contexts;
   const outputCss = discovery.outputCss;
   const blockedResources: BlockedResource[] = [];
-  const recordBlocked = (request: AssetRequest, reason: string | undefined): void => {
+  const recordBlocked = (request: AssetRequest, reason: BlockedReason | undefined): void => {
     blocked = true;
     blockedIdentity ??= request.sourceIdentity;
     if (blockedResources.length >= MAX_REPORTED_BLOCKED_RESOURCES) return;
     blockedResources.push(
       Object.freeze({
         kind: request.kind,
-        url: request.url,
-        reason: reason ?? "blocked by the loading policy",
+        reason: reason ?? BLOCKED_REASON.loadingPolicy,
         sourceIdentity: request.sourceIdentity,
       }),
     );
   };
   // Recording happens once, when the outcome loop applies the blocked outcome. A preflight
   // block must not record here as well, or a vetoed resource would be reported twice.
-  const preflightBlocked = (reason: string): AssetOutcome => ({ status: "blocked", reason });
+  const preflightBlocked = (reason: BlockedReason): AssetOutcome => ({
+    status: "blocked",
+    reason,
+  });
   const resolutionMemo = new Map<string, MemoizedResolution>();
   const consumeBytes = (bytes: number): void => {
     if (limits?.maxAssetBytes !== undefined && assetBytes + bytes > limits.maxAssetBytes) {
@@ -240,14 +248,14 @@ export async function resolvePageAssets(
                 sourceIdentity: request.sourceIdentity,
               });
               if (allowAsset !== undefined && !allowAsset(extensionRequest)) {
-                return Promise.resolve(preflightBlocked("a page extension refused this resource"));
+                return Promise.resolve(preflightBlocked(BLOCKED_REASON.extensionVeto));
               }
               if (blockedScheme(request.url)) {
                 return Promise.resolve(
                   preflightBlocked(
                     request.url.trim() === ""
-                      ? "URL is empty"
-                      : "URL uses a scheme that can execute script",
+                      ? BLOCKED_REASON.emptyUrl
+                      : BLOCKED_REASON.unsafeScheme,
                   ),
                 );
               }

@@ -9,6 +9,12 @@ export type AssetResolution =
       mimeType: string;
       resolvedUrl?: string;
     }
+  /**
+   * `reason` is accepted for the resolver author's own bookkeeping, but Core never reads
+   * it into documents or diagnostics: `RESOURCE_BLOCKED` warnings carry only Core-authored
+   * text, so a blocked result cannot leak credentials, private URLs, or proxy errors
+   * through `document.warnings`.
+   */
   | { status: "blocked"; reason?: string };
 
 export type AssetResolver = (request: {

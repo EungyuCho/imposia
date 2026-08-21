@@ -47,12 +47,15 @@ renamed to `0.6.0.md` when this release ships.
   the reported `mimeType` carry `font/woff`, never the legacy string.
   Container magic bytes and `FontFace.load()` still gate acceptance. (ASA-457)
 - `RESOURCE_BLOCKED` is reported once per blocked resource — up to 20 per
-  generation — with the URL in `value`, the resource kind in `property`, and
-  the refusal reason in `recovery`, including the case where the resolver
-  reported success and Core overruled it on validation. Documents that
-  previously produced one aggregate warning can now produce several; the
-  aggregate form remains only when nothing was recorded individually.
-  (ASA-458)
+  generation — with the resource kind in `property`, a Core-authored refusal
+  reason in `recovery`, and the resource named by its `sourceIdentity`
+  marker, including the case where the resolver reported success and Core
+  overruled it on validation. Warnings stay safe to publish: they never
+  carry the authored URL, and a resolver's own `reason` text never reaches
+  them — a resolver block always reads "the resolver refused this
+  resource". Documents that previously produced one aggregate warning can
+  now produce several; the aggregate form remains only when nothing was
+  recorded individually. (ASA-458, ASA-465)
 - A `@font-face` `src` list that contains a plain `format(woff2)` candidate
   collapses to that single candidate, halving font resolver calls for the
   common `woff2, woff` pairing; `AssetResolver` implementations see fewer

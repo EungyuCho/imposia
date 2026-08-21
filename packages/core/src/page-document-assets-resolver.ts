@@ -1,5 +1,12 @@
 import postcss, { type Root } from "postcss";
 import { ImposiaError } from "./errors.js";
+import {
+  BLOCKED_REASON,
+  type BlockedReason,
+  containerMismatchReason,
+  undecodableReason,
+  unsupportedMimeReason,
+} from "./page-document-blocked-reasons.js";
 import { abortError } from "./page-document-frame.js";
 import type { AssetResolution, AssetResolver } from "./page-document-types.js";
 
@@ -9,8 +16,11 @@ export type AssetOutcome =
    * act on. It matters most when the resolver said `resolved` and Core overruled it: without
    * a reason the caller sees a successful resolution and a document that quietly composed
    * with a substitute, and has nothing to trace back from.
+   *
+   * The `BlockedReason` brand keeps every reason Core-authored: a resolver's own `reason`
+   * text cannot become one, so it can never reach `document.warnings`.
    */
-  | { readonly status: "blocked"; readonly reason?: string }
+  | { readonly status: "blocked"; readonly reason?: BlockedReason }
   | {
       readonly status: "asset";
       readonly blobUrl: string;
@@ -215,9 +225,9 @@ async function resolveOneWork(
   scope: BlobScope,
   consumeBytes?: (bytes: number) => void,
 ): Promise<AssetOutcome> {
-  if (signal.aborted) return { status: "blocked", reason: "generation was superseded" };
+  if (signal.aborted) return { status: "blocked", reason: BLOCKED_REASON.superseded };
   if (unsafeAuthoredUrl(request.url)) {
-    return { status: "blocked", reason: "URL uses a scheme that can execute script" };
+    return { status: "blocked", reason: BLOCKED_REASON.unsafeScheme };
   }
   let resolution: AssetResolution;
   try {
@@ -237,13 +247,9 @@ async function resolveOneWork(
   if (signal.aborted) throw abortError();
   if (resolution === null || typeof resolution !== "object") throw resolutionFailure();
   if (resolution.status === "blocked") {
-    return {
-      status: "blocked",
-      reason:
-        typeof resolution.reason === "string" && resolution.reason !== ""
-          ? resolution.reason
-          : "the resolver refused this resource",
-    };
+    // `resolution.reason` is deliberately not read: it is the resolver's private text and
+    // must never surface in diagnostics (docs/architecture/0005-core-extension-contract.md).
+    return { status: "blocked", reason: BLOCKED_REASON.resolverRefused };
   }
   if (resolution.status !== "resolved") throw resolutionFailure();
   if (!(resolution.bytes instanceof Uint8Array) || typeof resolution.mimeType !== "string") {
@@ -257,7 +263,7 @@ async function resolveOneWork(
   if (!supportedMime(request.kind, resolution.mimeType)) {
     return {
       status: "blocked",
-      reason: `declared type ${mimeType(resolution.mimeType) || "(empty)"} is not a supported ${request.kind} type`,
+      reason: unsupportedMimeReason(mimeType(resolution.mimeType), request.kind),
     };
   }
   // Everything downstream -- the object URL's Blob type, the decode probe, and the type
@@ -265,10 +271,7 @@ async function resolveOneWork(
   // indistinguishable from one whose server already sent `font/woff`.
   const canonicalMime = canonicalMimeType(resolution.mimeType);
   if (!hasContainerSignature(request.kind, copied)) {
-    return {
-      status: "blocked",
-      reason: `bytes are not a ${canonicalMime} container -- the declared type does not match the data`,
-    };
+    return { status: "blocked", reason: containerMismatchReason(canonicalMime) };
   }
   if (request.kind === "stylesheet") {
     try {
@@ -283,7 +286,7 @@ async function resolveOneWork(
           : {}),
       };
     } catch (_error: unknown) {
-      return { status: "blocked", reason: "stylesheet could not be parsed as CSS" };
+      return { status: "blocked", reason: BLOCKED_REASON.unparsableStylesheet };
     }
   }
   let blobUrl: string | undefined;
@@ -297,10 +300,7 @@ async function resolveOneWork(
   }
   if (!ready) {
     if (blobUrl !== undefined) revokeBlob(scope, blobUrl);
-    return {
-      status: "blocked",
-      reason: `bytes decoded as ${canonicalMime} could not be loaded by the browser`,
-    };
+    return { status: "blocked", reason: undecodableReason(canonicalMime) };
   }
   blobUrl ??= createBlob(scope, copied, canonicalMime);
   if (blobUrl === undefined) throw resolutionFailure();
