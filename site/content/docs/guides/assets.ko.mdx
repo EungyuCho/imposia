@@ -62,7 +62,7 @@ export const assetResolver: AssetResolver = async ({ url, kind, baseUrl, signal 
 | `baseUrl` | source에 지정했을 때 전달되는 문서의 기준 URL입니다. |
 | `signal` | 세대가 대체되거나 실패하거나 제거되면 중단됩니다. |
 
-`url`은 항상 리졸버 안에서 `baseUrl`에 대해 직접 해석하고, `signal`은 항상 `fetch`에 전달하세요. signal을 무시하는 리졸버는 아무도 보지 않을 세대를 위해 계속 일하게 됩니다.
+`url`은 항상 리졸버 안에서 `baseUrl`을 기준으로 직접 해석하고, `signal`은 항상 `fetch`에 전달하세요. signal을 무시하는 리졸버는 아무도 보지 않을 세대를 위해 계속 일하게 됩니다.
 
 ### 응답
 
@@ -70,7 +70,7 @@ export const assetResolver: AssetResolver = async ({ url, kind, baseUrl, signal 
 
 ## 반환한 뒤에도 거부되는 경우
 
-바이트를 승인했다고 끝이 아닙니다. Core가 바이트를 검증하며, 불일치는 거부로 처리됩니다.
+바이트를 승인했다고 끝이 아닙니다. Core가 바이트를 검증하며, 값이 맞지 않으면 거부한 것과 같아집니다.
 
 | 검사 | 규칙 |
 | --- | --- |

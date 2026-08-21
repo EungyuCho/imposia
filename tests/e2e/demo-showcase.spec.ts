@@ -109,6 +109,124 @@ test("React publishing lab paginates direct editor input and reports commit late
   }
 });
 
+test("publishing lab rejects a failing revision whole and keeps the committed generation visible", async ({
+  page,
+  browserName,
+}) => {
+  const { errors, pageErrors } = captureBrowserErrors(page, browserName);
+  await page.goto("/examples/demo/");
+
+  try {
+    const preview = page.getByTestId("demo-preview-surface");
+    await expect(preview.locator("[data-imposia-react-status='ready']")).toBeVisible();
+    await page.locator("[data-demo-case='stress']").click();
+    await expect(preview.locator("[data-imposia-react-status='ready']")).toBeVisible();
+    await expect(page.getByTestId("integrity-status")).toContainText("Exact and ordered");
+    const host = preview.locator("[data-imposia-react-status]");
+    const startGeneration = await host.getAttribute("data-imposia-generation");
+    expect(startGeneration).not.toBeNull();
+    const before = await page.evaluate(() => {
+      const frame = document.querySelector<HTMLIFrameElement>(
+        "[data-testid='demo-preview-surface'] iframe[data-imposia-frame='page-document']",
+      );
+      if (frame?.contentDocument == null) throw new Error("Canonical frame is unavailable.");
+      (globalThis as { __imposiaProbeFrame?: HTMLIFrameElement }).__imposiaProbeFrame = frame;
+      return {
+        pages: frame.contentDocument.querySelectorAll("[data-imposia-page]").length,
+        sample: frame.contentDocument.body.textContent?.slice(0, 128) ?? "",
+      };
+    });
+
+    await page.getByTestId("run-failed-revision").click();
+    await expect(page.getByTestId("commit-probe-outcome")).toContainText("Rejected:");
+    await expect(page.getByTestId("commit-probe-outcome")).toContainText("input limit");
+    await expect(preview.locator("[data-imposia-react-status='error']")).toBeVisible();
+    // The failed revision was rejected whole: same generation, same iframe,
+    // same committed pages.
+    await expect(host).toHaveAttribute("data-imposia-generation", startGeneration ?? "");
+    const during = await page.evaluate(() => {
+      const frame = document.querySelector<HTMLIFrameElement>(
+        "[data-testid='demo-preview-surface'] iframe[data-imposia-frame='page-document']",
+      );
+      const retained = (globalThis as { __imposiaProbeFrame?: HTMLIFrameElement })
+        .__imposiaProbeFrame;
+      if (frame?.contentDocument == null) throw new Error("Canonical frame is unavailable.");
+      return {
+        sameFrame: frame === retained,
+        pages: frame.contentDocument.querySelectorAll("[data-imposia-page]").length,
+        sample: frame.contentDocument.body.textContent?.slice(0, 128) ?? "",
+      };
+    });
+    expect(during).toEqual({ sameFrame: true, pages: before.pages, sample: before.sample });
+    await expect(page.getByTestId("commit-probe-end")).toHaveText(startGeneration ?? "");
+
+    await page.getByTestId("recover-failed-revision").click();
+    await expect(page.getByTestId("commit-probe-outcome")).toContainText("Recovered: generation");
+    await expect(preview.locator("[data-imposia-react-status='ready']")).toBeVisible();
+    await expect(host).toHaveAttribute(
+      "data-imposia-generation",
+      String(Number(startGeneration) + 1),
+    );
+    await expect(page.getByTestId("integrity-status")).toContainText("Exact and ordered");
+    const recovered = await page.evaluate(() => {
+      const frame = document.querySelector<HTMLIFrameElement>(
+        "[data-testid='demo-preview-surface'] iframe[data-imposia-frame='page-document']",
+      );
+      const retained = (globalThis as { __imposiaProbeFrame?: HTMLIFrameElement })
+        .__imposiaProbeFrame;
+      return {
+        sameFrame: frame === retained,
+        canonicalFrames: document.querySelectorAll(
+          "[data-testid='demo-preview-surface'] iframe[data-imposia-frame='page-document']",
+        ).length,
+      };
+    });
+    expect(recovered).toEqual({ sameFrame: true, canonicalFrames: 1 });
+  } finally {
+    expect(errors).toEqual([]);
+    expect(pageErrors).toEqual([]);
+  }
+});
+
+test("publishing lab supersedes the middle revision and commits exactly one winning generation", async ({
+  page,
+  browserName,
+}) => {
+  const { errors, pageErrors } = captureBrowserErrors(page, browserName);
+  await page.goto("/examples/demo/");
+
+  try {
+    const preview = page.getByTestId("demo-preview-surface");
+    await expect(preview.locator("[data-imposia-react-status='ready']")).toBeVisible();
+    await page.locator("[data-demo-case='stress']").click();
+    await expect(preview.locator("[data-imposia-react-status='ready']")).toBeVisible();
+    await expect(page.getByTestId("integrity-status")).toContainText(
+      "Exact and ordered · CSR revision 0",
+    );
+    const host = preview.locator("[data-imposia-react-status]");
+    const startGeneration = Number(await host.getAttribute("data-imposia-generation"));
+    expect(Number.isFinite(startGeneration)).toBe(true);
+
+    await page.getByTestId("run-supersession").click();
+    await expect(page.getByTestId("commit-probe-outcome")).toContainText(
+      "superseded before it could appear",
+    );
+    // Two revisions were issued but exactly one generation committed: the
+    // middle revision never became current.
+    await expect(page.getByTestId("commit-probe-revisions")).toHaveText("2");
+    await expect(page.getByTestId("commit-probe-start")).toHaveText(String(startGeneration));
+    await expect(page.getByTestId("commit-probe-end")).toHaveText(String(startGeneration + 1));
+    await expect(host).toHaveAttribute("data-imposia-generation", String(startGeneration + 1));
+    await expect(page.getByTestId("integrity-status")).toContainText(
+      "Exact and ordered · CSR revision 2",
+    );
+    expect(await preview.locator("iframe[data-imposia-frame='page-document']").count()).toBe(1);
+  } finally {
+    expect(errors).toEqual([]);
+    expect(pageErrors).toEqual([]);
+  }
+});
+
 test("React publishing lab proves page-boundary continuity through rapid CSR updates", async ({
   page,
   browserName,

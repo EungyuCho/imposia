@@ -106,7 +106,7 @@ useImposiaPublication(props: UseImposiaPublicationProps): UseImposiaPublicationR
 
 `useImposiaDocument`는 페이지 컴포넌트의 source, revision, 옵션, 콜백을 받습니다. HTML 원본은 HTML이나 기준 URL이 바뀔 때 갱신되고, light DOM 원본은 노드 정체성이 바뀔 때 갱신됩니다. `sourceRevision`은 갱신을 강제하고, `documentOptionsRevision`은 컨트롤러를 다시 마운트합니다.
 
-`useImposiaPublication`은 Publication 컴포넌트의 snapshot, revision, 옵션, 콜백을 받습니다. 스냅샷 참조나 `snapshotRevision`이 바뀔 때 갱신되고, `publicationOptionsRevision`은 컨트롤러를 다시 마운트합니다. 두 훅 모두 정리 단계에서 컨트롤러를 제거하고 `AbortError`를 수명 주기 취소로 처리합니다.
+`useImposiaPublication`은 Publication 컴포넌트의 snapshot, revision, 옵션, 콜백을 받습니다. 스냅샷 참조나 `snapshotRevision`이 바뀔 때 갱신되고, `publicationOptionsRevision`은 컨트롤러를 다시 마운트합니다. 두 훅 모두 정리 단계에서 컨트롤러를 제거하고 `AbortError`를 수명 주기 취소로 봅니다.
 
 ```tsx title="app/article.tsx"
 function Article({ html }: { html: string }) {

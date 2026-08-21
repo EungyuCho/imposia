@@ -1269,3 +1269,60 @@ button {
     animation-duration: var(--demo-motion-status-reduced);
   }
 }
+
+/* Commit protection probe (ASA-446) */
+.demo-commit-probe-copy {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.65;
+  color: var(--demo-text-secondary, #4b5551);
+}
+
+.demo-commit-probe-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.demo-commit-probe-evidence {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px 12px;
+  margin: 0;
+}
+
+.demo-commit-probe-evidence div {
+  display: grid;
+  gap: 2px;
+}
+
+.demo-commit-probe-evidence dt {
+  font-size: 8px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--demo-text-muted, #5f6864);
+}
+
+.demo-commit-probe-evidence dd {
+  margin: 0;
+  font-family: var(--demo-mono, "SFMono-Regular", Consolas, monospace);
+  font-size: 12px;
+}
+
+.demo-commit-probe-outcome {
+  display: block;
+  font-family: var(--demo-mono, "SFMono-Regular", Consolas, monospace);
+  font-size: 9px;
+  line-height: 1.45;
+  color: var(--demo-text-secondary, #4b5551);
+}
+
+/* Visible only when the untracked generated bundle is missing (ASA-448) */
+.demo-build-notice {
+  margin: 48px auto;
+  max-width: 52ch;
+  font-family: var(--demo-mono, "SFMono-Regular", Consolas, monospace);
+  font-size: 13px;
+  line-height: 1.65;
+}

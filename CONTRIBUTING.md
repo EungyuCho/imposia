@@ -32,8 +32,16 @@ before proposing a release-facing change. The verification map in
 [`docs/verification.md`](./docs/verification.md) identifies the browser suites
 that observe each public behavior.
 
-`pnpm build` regenerates the checked-in browser examples. Include their changes
-when a source or public-example change affects generated output.
+`pnpm build` generates the browser example bundles (`examples/demo/app.js`,
+`examples/react/app.js`, `examples/demo/viewer.css`). They are untracked
+(ASA-448) — do not commit them; run `pnpm build` (or `pnpm build:demo`) to
+produce them locally before serving the examples or running the browser
+suites outside `pnpm check`.
+
+`node --import tsx scripts/proof-lab-packed.ts` rebuilds those example bundles
+from the packed `@imposia/*` tarballs (or, with `--published`, from the npm
+registry) and runs the proof-lab browser specs against them, failing if any
+workspace alias leaks into the bundle (ASA-446).
 
 ## Contribution checklist
 

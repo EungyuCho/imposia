@@ -41,7 +41,7 @@ React 패키지를 사용할 때는 `@imposia/react/styles.css`를 한 번만 �
 | 확정 후 갱신 실패 | Promise는 거부되고, 이전에 확정된 문서가 현재로 남습니다. |
 | 컨트롤러 제거 | 작업이 중단되고 리소스와 iframe이 해제되며 `current`가 비워집니다. |
 
-`ImposiaError`는 `Error`를 확장하며 `readonly code: string`을 가집니다. 취소는 보고해야 할 실패와 구분해 처리하세요.
+`ImposiaError`는 `Error`를 확장하며 `readonly code: string`을 가집니다. 취소는 보고해야 할 실패와 구분해서 다루세요.
 
 ```ts
 try {

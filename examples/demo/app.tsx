@@ -36,6 +36,29 @@ type IntegrityPageRange = Readonly<{
   count: number;
 }>;
 
+type CommitProbePhase = "idle" | "failing" | "failed" | "recovering" | "superseding";
+
+type CommitProbe = Readonly<{
+  phase: CommitProbePhase;
+  startGeneration?: number | undefined;
+  endGeneration?: number | undefined;
+  revisionsIssued: number;
+  outcome?: string | undefined;
+}>;
+
+const IDLE_COMMIT_PROBE: CommitProbe = Object.freeze({ phase: "idle", revisionsIssued: 0 });
+
+let oversizedProbeFiller: string | undefined;
+
+/**
+ * Deterministically fails pagination in every engine: the source exceeds the
+ * documented maxInputBytes limit (5 MiB), which Core rejects before parsing.
+ */
+function probeOversizedHtml(): string {
+  oversizedProbeFiller ??= `<p hidden>${"#".repeat(6 * 1024 * 1024)}</p>`;
+  return oversizedProbeFiller;
+}
+
 type IntegrityReport = Readonly<{
   sourceTokenCount: number;
   committedTokenCount: number;
@@ -537,6 +560,7 @@ function App() {
   const codeHeadingId = useId();
   const exportHeadingId = useId();
   const integrityHeadingId = useId();
+  const commitProbeHeadingId = useId();
   const [demoCase, setDemoCase] = useState<DemoCase>("editor");
   const [sampleId, setSampleId] = useState<SampleId>("editorial");
   const [pagePreset, setPagePreset] = useState<PagePreset>(DEFAULT_PAGE_PRESET);
@@ -554,6 +578,15 @@ function App() {
   const [editorRevision, setEditorRevision] = useState(0);
   const [integrityStatus, setIntegrityStatus] = useState<IntegrityStatus>("idle");
   const [integrityReport, setIntegrityReport] = useState<IntegrityReport>();
+  const [commitProbe, setCommitProbeState] = useState<CommitProbe>(IDLE_COMMIT_PROBE);
+  const [probeFailActive, setProbeFailActive] = useState(false);
+  const [probeFailRevision, setProbeFailRevision] = useState(0);
+  const commitProbeRef = useRef<CommitProbe>(IDLE_COMMIT_PROBE);
+  const supersedeTargetRef = useRef<number | undefined>(undefined);
+  const setCommitProbe = useCallback((next: CommitProbe) => {
+    commitProbeRef.current = next;
+    setCommitProbeState(next);
+  }, []);
   const pendingCsrRevisionRef = useRef<number | undefined>(undefined);
   const csrBurstTimeoutsRef = useRef<number[]>([]);
   const extensionsEnabledRef = useRef(extensionsEnabled);
@@ -635,9 +668,20 @@ function App() {
       sample.id === "integrity"
         ? selectedHtml.replace("{{CSR_REVISION}}", String(csrRevision))
         : selectedHtml;
+    if (probeFailActive && sample.id === "integrity") {
+      return { html: html + probeOversizedHtml() };
+    }
     return { html };
-  }, [csrRevision, demoCase, editorHtml, editorRevision, experimentalPlacementEnabled, sample]);
-  const sourceRevision = `case:${demoCase};${extensionsEnabled ? "extensions:on" : "extensions:off"};${experimentalPlacementEnabled ? "placement:on" : "placement:off"};csr:${csrRevision};editor:${editorRevision}`;
+  }, [
+    csrRevision,
+    demoCase,
+    editorHtml,
+    editorRevision,
+    experimentalPlacementEnabled,
+    probeFailActive,
+    sample,
+  ]);
+  const sourceRevision = `case:${demoCase};${extensionsEnabled ? "extensions:on" : "extensions:off"};${experimentalPlacementEnabled ? "placement:on" : "placement:off"};csr:${csrRevision};editor:${editorRevision};probe:${probeFailActive ? "fail" : "ok"}:${probeFailRevision}`;
   const activeTitle =
     demoCase === "editor" || demoCase === "output" ? "Live editor document" : sample.title;
   const documentOptions = useMemo<PageDocumentOptions>(
@@ -711,9 +755,55 @@ function App() {
     } else if (pendingRevision === undefined) {
       setIntegrityStatus(report.exactSequence ? "verified" : "failed");
     }
+
+    const probe = commitProbeRef.current;
+    if (probe.phase === "superseding") {
+      const target = supersedeTargetRef.current;
+      if (
+        target !== undefined &&
+        Number.isFinite(committedRevision) &&
+        committedRevision >= target
+      ) {
+        supersedeTargetRef.current = undefined;
+        const generations =
+          probe.startGeneration === undefined
+            ? undefined
+            : nextDocument.generation - probe.startGeneration;
+        setCommitProbe({
+          ...probe,
+          phase: "idle",
+          endGeneration: nextDocument.generation,
+          outcome:
+            generations === 1
+              ? `2 revisions, 1 commit: revision ${target - 1} was superseded before it could appear.`
+              : `2 revisions committed across ${generations ?? "?"} generations: no supersession this run.`,
+        });
+      }
+    } else if (probe.phase === "recovering") {
+      setCommitProbe({
+        ...probe,
+        phase: "idle",
+        endGeneration: nextDocument.generation,
+        outcome: `Recovered: generation ${nextDocument.generation} replaced the survivor in one swap.`,
+      });
+    }
   };
 
   const handleError = (nextError: unknown) => {
+    const probe = commitProbeRef.current;
+    if (probe.phase === "failing") {
+      // The failing revision is the observation, not a defect: the committed
+      // generation is untouched, so the integrity verdict must not change.
+      const message = nextError instanceof Error ? nextError.message : String(nextError);
+      setCommitProbe({
+        ...probe,
+        phase: "failed",
+        endGeneration: viewerRef.current?.current?.generation,
+        outcome: `Rejected: ${message} Generation ${probe.startGeneration ?? "?"} stayed visible; nothing partial rendered.`,
+      });
+      setError(message);
+      return;
+    }
     cancelCsrBurst();
     liveRender.cancel();
     setIntegrityReport(undefined);
@@ -732,6 +822,9 @@ function App() {
   const markDocumentLoading = () => {
     cancelCsrBurst();
     liveRender.cancel();
+    setCommitProbe(IDLE_COMMIT_PROBE);
+    setProbeFailActive(false);
+    supersedeTargetRef.current = undefined;
     setIntegrityReport(undefined);
     setIntegrityStatus("idle");
     setState(
@@ -780,6 +873,39 @@ function App() {
       }, delay);
       csrBurstTimeoutsRef.current.push(timeoutId);
     }
+  };
+
+  const runFailedRevision = () => {
+    if (state.status !== "ready" || probeFailActive || integrityStatus === "running") return;
+    liveRender.cancel();
+    cancelCsrBurst();
+    setCommitProbe({
+      phase: "failing",
+      startGeneration: viewerRef.current?.current?.generation,
+      revisionsIssued: 1,
+    });
+    setProbeFailRevision((revision) => revision + 1);
+    setProbeFailActive(true);
+  };
+
+  const recoverFailedRevision = () => {
+    if (!probeFailActive) return;
+    setCommitProbe({ ...commitProbeRef.current, phase: "recovering" });
+    setProbeFailActive(false);
+  };
+
+  const runSupersession = () => {
+    if (state.status !== "ready" || probeFailActive || integrityStatus === "running") return;
+    liveRender.cancel();
+    cancelCsrBurst();
+    supersedeTargetRef.current = csrRevision + 2;
+    setCommitProbe({
+      phase: "superseding",
+      startGeneration: viewerRef.current?.current?.generation,
+      revisionsIssued: 2,
+    });
+    setCsrRevision((revision) => revision + 1);
+    window.setTimeout(() => setCsrRevision((revision) => revision + 1), 0);
   };
 
   const handleOrientationChange = (nextOrientation: PageOrientation) => {
@@ -953,6 +1079,85 @@ function App() {
               onStart={liveRender.start}
               onCancel={liveRender.cancel}
             />
+          </section>
+        ) : null}
+
+        {demoCase === "stress" && sample.id === "integrity" ? (
+          <section
+            className="demo-control-section demo-commit-probe"
+            aria-labelledby={commitProbeHeadingId}
+          >
+            <div className="demo-section-heading">
+              <h2 id={commitProbeHeadingId}>Commit protection</h2>
+              <span>{commitProbe.phase === "idle" ? "deterministic" : commitProbe.phase}</span>
+            </div>
+            <p className="demo-commit-probe-copy">
+              Watch the workspace while each procedure runs: the committed pages and their
+              generation number stay visible until one complete winning generation replaces them. A
+              failed revision is rejected whole, and a superseded revision never appears.
+            </p>
+            <div className="demo-commit-probe-actions">
+              <button
+                type="button"
+                className="demo-output-button"
+                data-testid="run-failed-revision"
+                onClick={runFailedRevision}
+                disabled={
+                  state.status !== "ready" ||
+                  probeFailActive ||
+                  integrityStatus === "running" ||
+                  liveRender.snapshot.status === "running"
+                }
+              >
+                Submit a failing revision
+              </button>
+              <button
+                type="button"
+                className="demo-output-button"
+                data-testid="recover-failed-revision"
+                onClick={recoverFailedRevision}
+                disabled={!probeFailActive}
+              >
+                Recover with a valid revision
+              </button>
+              <button
+                type="button"
+                className="demo-output-button"
+                data-testid="run-supersession"
+                onClick={runSupersession}
+                disabled={
+                  state.status !== "ready" ||
+                  probeFailActive ||
+                  integrityStatus === "running" ||
+                  liveRender.snapshot.status === "running"
+                }
+              >
+                Race two revisions
+              </button>
+            </div>
+            <dl className="demo-commit-probe-evidence">
+              <div>
+                <dt>Start generation</dt>
+                <dd data-testid="commit-probe-start">{commitProbe.startGeneration ?? "—"}</dd>
+              </div>
+              <div>
+                <dt>Committed generation</dt>
+                <dd data-testid="commit-probe-end">{commitProbe.endGeneration ?? "—"}</dd>
+              </div>
+              <div>
+                <dt>Revisions issued</dt>
+                <dd data-testid="commit-probe-revisions">
+                  {commitProbe.revisionsIssued === 0 ? "—" : commitProbe.revisionsIssued}
+                </dd>
+              </div>
+            </dl>
+            <output
+              className="demo-commit-probe-outcome"
+              data-testid="commit-probe-outcome"
+              aria-live="polite"
+            >
+              {commitProbe.outcome ?? "Idle. Run a procedure to record an observation."}
+            </output>
           </section>
         ) : null}
 

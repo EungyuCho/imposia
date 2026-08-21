@@ -17,7 +17,15 @@
     <link rel="stylesheet" href="/examples/demo/styles.css">
   </head>
   <body>
-    <main id="app"></main>
+    <main id="app">
+      <!-- Replaced by the app on boot. Visible only when the generated bundle
+           is missing (it is untracked; see ASA-448). -->
+      <p class="demo-build-notice">
+        This page needs the generated <code>app.js</code> bundle. From the
+        repository root run <code>corepack pnpm install --frozen-lockfile</code>
+        and <code>pnpm build</code>, then reload.
+      </p>
+    </main>
     <script type="module" src="/examples/demo/app.js"></script>
   </body>
 </html>

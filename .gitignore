@@ -21,3 +21,7 @@ site/build/
 *.tsbuildinfo
 .agents/
 .claude/worktrees/
+# Generated demo bundles (ASA-448): pnpm build regenerates them; they are not committed.
+examples/demo/app.js
+examples/react/app.js
+examples/demo/viewer.css

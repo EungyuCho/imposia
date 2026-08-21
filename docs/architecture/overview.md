@@ -636,7 +636,7 @@ tsc -b                   project references: core → viewer → client → reac
 build-core-browser       esbuild core to ONE browser ESM bundle (inlines postcss),
                          then fail if the metafile shows a Node builtin, Playwright, or pdfjs
       ↓
-build-demo               bundle examples/demo + examples/react to committed .js
+build-demo               bundle examples/demo + examples/react to untracked .js
       ↓
 site:build               react-router build → check-site-prerender → copy-site-demo
       ↓

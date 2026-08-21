@@ -31,7 +31,7 @@ const pageDocument = await controller.ready;
 | `css` | `readonly string[]`. 함께 적용할 CSS입니다. |
 | `assetResolver` | 글꼴, 이미지, 미디어, 스타일시트 요청에 응답하는 비동기 리졸버입니다. |
 | `page` | `{ size?, orientation?, margin? }`. size는 `A4`, `Letter` 또는 사용자 정의 너비·높이를 받습니다. |
-| `limits` | 입력, 노드, 에셋, 시간 제한, 페이지, 레이아웃 패스, 생성 출력에 대한 선택적 상한입니다. |
+| `limits` | 입력, 노드, 에셋, 시간 제한, 페이지, 레이아웃 패스, 생성 출력의 선택적 상한입니다. |
 | `headerTemplate`, `footerTemplate` | 머리말·꼬리말 장식 마크업입니다. |
 | `decorateBlankPages` | 빈 페이지에 장식을 적용할지 정합니다. |
 | `experimental` | `{ footnotes?: boolean; pageFloats?: boolean }`. 두 기능 모두 실험 단계이며, 제한을 벗어나면 `FOOTNOTE_DEFERRED` 또는 `PAGE_FLOAT_FALLBACK` 경고와 함께 폴백합니다. |
@@ -69,7 +69,7 @@ const pageDocument = await controller.ready;
 
 ### 확장 기능
 
-`PageExtension`과 `PublicationExtension`은 동기식 `finalizePage(page, context)`도 구현할 수 있습니다. 이 훅은 Core가 장식과 margin box를 처리한 뒤, 확정 전에 승인된 페이지마다 한 번 실행되므로 `page.element`는 크기를 측정할 수 있는 실제 페이지 요소입니다. `page.tableFragments`에는 이어지는 표 조각이 원본 정보, 1부터 시작하는 연속 인덱스와 함께 들어 있습니다. 변경 내용은 확정된 iframe에 유지됩니다. 훅은 `decorateBlankPages` 설정과 관계없이, 의도적으로 삽입한 빈 페이지를 포함한 모든 할당 페이지에서 실행됩니다.
+`PageExtension`과 `PublicationExtension`은 동기식 `finalizePage(page, context)`도 구현할 수 있습니다. 이 훅은 Core가 장식과 margin box를 붙인 뒤, 확정 전에 승인된 페이지마다 한 번 실행되므로 `page.element`는 크기를 측정할 수 있는 실제 페이지 요소입니다. `page.tableFragments`에는 이어지는 표 조각이 원본 정보, 1부터 시작하는 연속 인덱스와 함께 들어 있습니다. 변경 내용은 확정된 iframe에 유지됩니다. 훅은 `decorateBlankPages` 설정과 관계없이, 의도적으로 삽입한 빈 페이지를 포함한 모든 할당 페이지에서 실행됩니다.
 
 <Callout type="warn" title="finalizePage는 undefined를 반환해야 합니다">
 `finalizePage`가 `undefined`가 아닌 값을 반환하면 세대 전체가 거부됩니다. 이 훅은 실제 페이지 요소를 변경하는 방식으로만 동작하며, 대체 값을 반환하는 방식은 없습니다.
@@ -95,7 +95,7 @@ const pageDocument = await controller.ready;
 | `generation`, `pageCount` | `number` | 확정 세대 번호와 페이지 수입니다. |
 | `pages` | `readonly PageMetadata[]` | 페이지 번호, 좌우 면, 이름, 빈 페이지 여부, 기하 정보, 크기, 본문 텍스트입니다. |
 | `warnings` | `readonly PageWarning[]` | 현재 세대의 진단입니다. |
-| `timings` | `{ totalMs; resourceMs; paginationMs }` | 밀리초 단위의 세대 처리 시간입니다. |
+| `timings` | `{ totalMs; resourceMs; paginationMs }` | 세대를 만드는 데 걸린 시간입니다. 단위는 밀리초입니다. |
 | `exportEpub(options)` | `Promise<Blob>` | 진행 중인 최신 작업을 기다린 뒤, 마지막으로 확정된 원본을 리플로우형 EPUB 3.3 `Blob`으로 내보냅니다. |
 
 EPUB 옵션에는 `metadata: { title, language, identifier, modified? }`가 필요하고, `signal`과 `{ maxEntries?, maxBytes? }` 제한을 선택적으로 받습니다. 내보내기는 의미 구조 기준입니다. 페이지 래퍼, margin 장식, 생성된 카운터, 페이지 전용 실험 산출물은 제외됩니다.
