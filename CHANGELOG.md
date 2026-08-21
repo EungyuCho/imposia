@@ -5,6 +5,63 @@ versioning for its published package interfaces. What that means before `1.0`
 — what counts as public, and what a minor release is allowed to break — is in
 [`docs/api-policy.md`](docs/api-policy.md).
 
+## 0.6.0 — Unreleased
+
+Minor release for the asset and print pipeline. Three changes are breaking —
+two print defaults and one status union — and each has an upgrade path in
+[`docs/migrations/unreleased.md`](docs/migrations/unreleased.md), which is
+renamed to `0.6.0.md` when this release ships.
+
+### Breaking
+
+- Printing preserves backgrounds by default: the print shadow root sets
+  `print-color-adjust: exact` (with the WebKit prefix), so the printed sheet
+  matches the composed page instead of depending on the print dialog's
+  "Background graphics" checkbox. Every consumer's printed output changes.
+  The rule carries no `!important`; content that wants ink saving can still
+  set `print-color-adjust: economy`. (ASA-459)
+- Printing renames every hoisted `@font-face` family to
+  `imposia-print-<n>--<family>` and rewrites the shadow's style rules and
+  inline styles to match, so a face the host application declared under the
+  same name can no longer satisfy a weight or range the composed document
+  never loaded. Anything that matched those families by name in the transient
+  print stylesheet sees the new prefix. The rewrite is CSSOM-based and does
+  not reach `font` shorthands, `adoptedStyleSheets`, or `var()`-carried
+  families. (ASA-462)
+- `ImposiaDocumentStatus` and `ImposiaPublicationStatus` gained `"aborted"`.
+  When the live run's generation is aborted — a caller's `options.signal`
+  reaches it through `documentOptions`/`publicationOptions` — both hooks now
+  transition to this terminal state instead of stranding the caller in
+  `loading`, and a previously committed document or publication stays on the
+  state exactly as it does for `loading` and `error`. Exhaustive switches
+  over these unions stop compiling until they handle the new member;
+  `status !== "loading"` checks need no change. (ASA-461)
+
+### Changed
+
+- Fonts declared with pre-RFC 8081 MIME spellings (`application/font-woff`,
+  `application/x-font-woff`, `application/vnd.ms-opentype`, and nine more)
+  are accepted and canonicalised onto the `font/*` tree; previously they were
+  blocked and the document silently composed with a fallback face. The
+  canonical spelling flows downstream, so the object URL's `Blob` type and
+  the reported `mimeType` carry `font/woff`, never the legacy string.
+  Container magic bytes and `FontFace.load()` still gate acceptance. (ASA-457)
+- `RESOURCE_BLOCKED` is reported once per blocked resource — up to 20 per
+  generation — with the URL in `value`, the resource kind in `property`, and
+  the refusal reason in `recovery`, including the case where the resolver
+  reported success and Core overruled it on validation. Documents that
+  previously produced one aggregate warning can now produce several; the
+  aggregate form remains only when nothing was recorded individually.
+  (ASA-458)
+- A `@font-face` `src` list that contains a plain `format(woff2)` candidate
+  collapses to that single candidate, halving font resolver calls for the
+  common `woff2, woff` pairing; `AssetResolver` implementations see fewer
+  requests. Candidates carrying `tech()` are never chosen, and lists without
+  a plain woff2 entry are requested as authored. Trade-off: the engine's
+  load-failure fallback to later candidates disappears for collapsed lists —
+  a woff2 whose bytes fail to load no longer falls back to its woff sibling.
+  (ASA-460)
+
 ## 0.5.0 — 2026-08-20
 
 Minor release for browser-native parsing and a pagination performance batch.
