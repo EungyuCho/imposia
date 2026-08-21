@@ -4,6 +4,7 @@ import {
   resolvePageAssets,
   resourceBlockedWarnings,
 } from "../../packages/core/src/page-document-assets.js";
+import { unsupportedMimeReason } from "../../packages/core/src/page-document-blocked-reasons.js";
 import type { AssetResolution } from "../../packages/core/src/page-document-types.js";
 
 const signal = () => new AbortController().signal;
@@ -31,8 +32,8 @@ describe("individually reported blocked resources", () => {
     expect(result.blockedResources).toHaveLength(1);
     expect(result.blockedResources[0]).toMatchObject({
       kind: "image",
-      url: "https://assets.example/a.png",
       reason: "a page extension refused this resource",
+      sourceIdentity: "resource-0",
     });
     result.revoke();
   });
@@ -80,10 +81,7 @@ describe("individually reported blocked resources", () => {
 
     const warnings = resourceBlockedWarnings(result.blockedResources, result.sourceIdentity, false);
     expect(warnings).toHaveLength(2);
-    expect(warnings.map((warning) => warning.value)).toEqual([
-      "https://assets.example/a.png",
-      "https://assets.example/b.png",
-    ]);
+    expect(warnings.map((warning) => warning.sourceIdentity)).toEqual(["resource-0", "resource-1"]);
     for (const warning of warnings) {
       expect(warning.code).toBe("RESOURCE_BLOCKED");
       expect(warning.property).toBe("image");
@@ -92,9 +90,51 @@ describe("individually reported blocked resources", () => {
     result.revoke();
   });
 
-  it("passes a resolver's own blocked reason through", async () => {
+  // The privacy contract behind ASA-465: a resolver's `reason` is host-private text and
+  // must never reach `document.warnings`. The blocked path carries only Core's fixed
+  // phrase, and the warning names the resource by its sourceIdentity marker -- never by
+  // its authored URL, which is source content.
+  it("never carries the resolver's own blocked reason or the authored URL", async () => {
+    const secret = "RESOLVER_REASON_SECRET https://user:token@private.invalid/asset.png";
     const resolver = (): Promise<AssetResolution> =>
-      Promise.resolve({ status: "blocked", reason: "the corporate proxy refused it" });
+      Promise.resolve({ status: "blocked", reason: secret });
+    const result = await resolvePageAssets(
+      '<img src="https://private.invalid/book/private-asset.png">',
+      undefined,
+      [],
+      resolver,
+      undefined,
+      signal(),
+    );
+
+    expect(result.blockedResources).toHaveLength(1);
+    expect(result.blockedResources[0]?.reason).toBe("the resolver refused this resource");
+
+    const warnings = resourceBlockedWarnings(result.blockedResources, result.sourceIdentity, false);
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toMatchObject({
+      code: "RESOURCE_BLOCKED",
+      message: "Blocked image: the resolver refused this resource.",
+      property: "image",
+      recovery: "the resolver refused this resource",
+      sourceIdentity: "resource-0",
+    });
+    expect(warnings[0]?.value).toBeUndefined();
+    const serialized = JSON.stringify(warnings);
+    expect(serialized).not.toContain("RESOLVER_REASON_SECRET");
+    expect(serialized).not.toContain("private.invalid");
+    result.revoke();
+  });
+
+  // The declared MIME type is also resolver text. It is quoted only when it looks like a
+  // MIME token; anything else is replaced, so it cannot smuggle arbitrary text either.
+  it("does not quote a declared MIME type that is not a MIME token", async () => {
+    const resolver = (): Promise<AssetResolution> =>
+      Promise.resolve({
+        status: "resolved",
+        bytes: new Uint8Array([1, 2, 3]),
+        mimeType: "SECRET TOKEN in a mime field",
+      });
     const result = await resolvePageAssets(
       '<img src="https://assets.example/a.png">',
       undefined,
@@ -105,7 +145,9 @@ describe("individually reported blocked resources", () => {
     );
 
     expect(result.blockedResources).toHaveLength(1);
-    expect(result.blockedResources[0]?.reason).toBe("the corporate proxy refused it");
+    expect(result.blockedResources[0]?.reason).toBe(
+      "declared type (unprintable) is not a supported image type",
+    );
     result.revoke();
   });
 
@@ -133,8 +175,7 @@ describe("individually reported blocked resources", () => {
 describe("resourceBlockedWarnings", () => {
   const blocked = Object.freeze({
     kind: "font" as const,
-    url: "https://assets.example/a.woff2",
-    reason: "declared type text/plain is not a supported font type",
+    reason: unsupportedMimeReason("text/plain", "font"),
     sourceIdentity: "resource-0",
   });
 
@@ -147,10 +188,10 @@ describe("resourceBlockedWarnings", () => {
     expect(warnings).toHaveLength(1);
     expect(warnings[0]).toMatchObject({
       code: "RESOURCE_BLOCKED",
-      value: "https://assets.example/a.woff2",
       property: "font",
       recovery: "declared type text/plain is not a supported font type",
     });
+    expect(warnings[0]?.value).toBeUndefined();
   });
 
   it("keeps the single aggregate warning when nothing was recorded individually", () => {

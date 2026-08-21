@@ -153,13 +153,17 @@ test("blocks resolver results with one deterministic frozen warning", async ({
     expect(observation.first.warnings).toHaveLength(1);
     expect(observation.first.warnings[0]).toMatchObject({
       code: "RESOURCE_BLOCKED",
-      message: "Resource was blocked by the loading policy.",
+      message: "Blocked image: the resolver refused this resource.",
+      property: "image",
+      recovery: "the resolver refused this resource",
     });
     expect(observation.first.warnings[0]?.sourceIdentity).toEqual(expect.stringMatching(/\S/));
     expect(observation.second.warnings).toEqual(observation.first.warnings);
     expect(observation.first.warningsFrozen).toBe(true);
     expect(observation.first.warningFrozen).toBe(true);
     expect(JSON.stringify(observation.first.warnings)).not.toContain(observation.blockedReason);
+    // The authored URL is source content; safe diagnostics never carry it.
+    expect(JSON.stringify(observation.first.warnings)).not.toContain("blocked.png");
     expect(observation.first.frameHtml).not.toMatch(
       new RegExp(`${observation.blockedReason}|blocked\\.png`),
     );

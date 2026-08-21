@@ -98,10 +98,12 @@ requiring a code change (CHANGELOG has the full entries):
   `application/x-font-woff` and eleven other pre-RFC 8081 spellings now load
   instead of being silently blocked. The reported `mimeType` and the blob's
   type carry the canonical `font/*` spelling.
-- **`RESOURCE_BLOCKED` is reported per resource** (ASA-458). Up to 20 warnings
-  per generation, each naming the URL (`value`), kind (`property`), and reason
-  (`recovery`). If you count or deduplicate warnings by code, expect more than
-  one.
+- **`RESOURCE_BLOCKED` is reported per resource** (ASA-458, ASA-465). Up to
+  20 warnings per generation, each naming the kind (`property`), a
+  Core-authored reason (`recovery`), and the resource via `sourceIdentity`.
+  The authored URL and a resolver's own `reason` text never appear in
+  warnings — diagnostics stay safe to publish. If you count or deduplicate
+  warnings by code, expect more than one.
 - **`@font-face` `src` lists collapse to their plain woff2 candidate**
   (ASA-460). `AssetResolver` implementations receive fewer font requests, and
   the engine-level fallback from a failing woff2 to a later candidate no
