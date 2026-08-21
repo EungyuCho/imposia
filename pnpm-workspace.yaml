@@ -24,6 +24,16 @@ minimumReleaseAgeExclude:
   - '@oxc-minify/binding-win32-ia32-msvc@0.146.0'
   - '@oxc-minify/binding-win32-x64-msvc@0.146.0'
   - oxc-minify@0.146.0
+  - fumadocs-core@16.15.0
+  - fumadocs-mdx@15.3.1
+  - fumadocs-ui@16.15.0
+overrides:
+  # Dev-only chain: fumadocs pulls next, which pulls postcss and sharp.
+  # fumadocs 16.15.0 still resolves next 16.2.10, so the advisories below are
+  # only reachable by pinning the patched versions here.
+  next: 16.3.2
+  postcss: 8.5.26
+  sharp: 0.35.3
 publicHoistPattern:
   - "*eslint*"
   - "*prettier*"
