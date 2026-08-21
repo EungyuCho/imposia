@@ -14,11 +14,34 @@ import {
 } from "./page-document-assets-resolver.js";
 import { abortError } from "./page-document-frame.js";
 import type { ResolvedSemanticAsset } from "./page-document-semantic.js";
-import type {
-  AssetResolver,
-  PageExtensionAssetRequest,
-  PageLimits,
+import {
+  type AssetResolver,
+  type CorePageWarning,
+  type PageExtensionAssetRequest,
+  type PageLimits,
+  UNLOCATED_PAGE_WARNING_LOCATION,
 } from "./page-document-types.js";
+
+/**
+ * One resource that did not make it into the document, named individually.
+ *
+ * A single aggregate "something was blocked" flag tells a caller that their document is
+ * wrong but not which resource or why, and the most confusing case -- Core overruling a
+ * resolver that reported success -- is invisible in it.
+ */
+export type BlockedResource = {
+  readonly kind: AssetRequest["kind"];
+  readonly url: string;
+  readonly reason: string;
+  readonly sourceIdentity: string;
+};
+
+/**
+ * Ceiling on individually reported resources. A document that blocks thousands of resources
+ * has one systemic cause, and the first few name it; the rest would only bury the warning
+ * list. The aggregate `resourceBlocked` flag stays exact regardless of this cap.
+ */
+const MAX_REPORTED_BLOCKED_RESOURCES = 20;
 
 export type ResolvedPageAssets = {
   readonly html: string;
@@ -26,9 +49,50 @@ export type ResolvedPageAssets = {
   readonly blobUrls: readonly string[];
   readonly resourceBlocked: boolean;
   readonly sourceIdentity: string | undefined;
+  readonly blockedResources: readonly BlockedResource[];
   readonly semanticAssets: readonly ResolvedSemanticAsset[];
   revoke(): void;
 };
+
+/**
+ * The `RESOURCE_BLOCKED` warnings a generation should carry for these assets.
+ *
+ * One warning per blocked resource, naming the URL (`value`), its kind (`property`), and
+ * why it was refused (`recovery`) through the existing optional warning fields, so the
+ * shape stays non-breaking. When nothing was recorded individually -- a block that predates
+ * asset resolution, such as the sanitizer's -- the single aggregate warning is kept, but
+ * only if an equivalent warning is not already present. The aggregate-presence guard must
+ * never suppress the per-resource reports: a `javascript:` href elsewhere in the document
+ * already emits this code, and that is exactly the document that needs the diagnostics.
+ */
+export function resourceBlockedWarnings(
+  blockedResources: readonly BlockedResource[],
+  fallbackSourceIdentity: string | undefined,
+  hasAggregateWarning: boolean,
+): readonly CorePageWarning[] {
+  if (blockedResources.length > 0) {
+    return blockedResources.map((resource) =>
+      Object.freeze({
+        code: "RESOURCE_BLOCKED" as const,
+        message: `Blocked ${resource.kind}: ${resource.reason}.`,
+        sourceIdentity: resource.sourceIdentity,
+        location: UNLOCATED_PAGE_WARNING_LOCATION,
+        property: resource.kind,
+        value: resource.url,
+        recovery: resource.reason,
+      }),
+    );
+  }
+  if (hasAggregateWarning) return [];
+  return [
+    Object.freeze({
+      code: "RESOURCE_BLOCKED" as const,
+      message: "Resource was blocked by the loading policy.",
+      sourceIdentity: fallbackSourceIdentity,
+      location: UNLOCATED_PAGE_WARNING_LOCATION,
+    }),
+  ];
+}
 
 function blockedScheme(value: string): boolean {
   return unsafeAuthoredUrl(value) || value.trim() === "";
@@ -124,11 +188,23 @@ export async function resolvePageAssets(
   let queue = [...discovery.queue];
   const contexts: readonly CssContext[] = discovery.contexts;
   const outputCss = discovery.outputCss;
-  const markBlocked = (request: AssetRequest): AssetOutcome => {
+  const blockedResources: BlockedResource[] = [];
+  const recordBlocked = (request: AssetRequest, reason: string | undefined): void => {
     blocked = true;
     blockedIdentity ??= request.sourceIdentity;
-    return { status: "blocked" };
+    if (blockedResources.length >= MAX_REPORTED_BLOCKED_RESOURCES) return;
+    blockedResources.push(
+      Object.freeze({
+        kind: request.kind,
+        url: request.url,
+        reason: reason ?? "blocked by the loading policy",
+        sourceIdentity: request.sourceIdentity,
+      }),
+    );
   };
+  // Recording happens once, when the outcome loop applies the blocked outcome. A preflight
+  // block must not record here as well, or a vetoed resource would be reported twice.
+  const preflightBlocked = (reason: string): AssetOutcome => ({ status: "blocked", reason });
   const resolutionMemo = new Map<string, MemoizedResolution>();
   const consumeBytes = (bytes: number): void => {
     if (limits?.maxAssetBytes !== undefined && assetBytes + bytes > limits.maxAssetBytes) {
@@ -164,9 +240,17 @@ export async function resolvePageAssets(
                 sourceIdentity: request.sourceIdentity,
               });
               if (allowAsset !== undefined && !allowAsset(extensionRequest)) {
-                return Promise.resolve(markBlocked(request));
+                return Promise.resolve(preflightBlocked("a page extension refused this resource"));
               }
-              if (blockedScheme(request.url)) return Promise.resolve(markBlocked(request));
+              if (blockedScheme(request.url)) {
+                return Promise.resolve(
+                  preflightBlocked(
+                    request.url.trim() === ""
+                      ? "URL is empty"
+                      : "URL uses a scheme that can execute script",
+                  ),
+                );
+              }
               const remapAbort = (error: unknown): never => {
                 if (operation.signal.aborted) throw abortError();
                 throw error;
@@ -207,7 +291,7 @@ export async function resolvePageAssets(
       for (const [index, request] of level.entries()) {
         const outcome = outcomes[index];
         if (outcome === undefined) continue;
-        if (outcome.status === "blocked") markBlocked(request);
+        if (outcome.status === "blocked") recordBlocked(request, outcome.reason);
         else {
           semanticAssets.push(
             Object.freeze({
@@ -232,6 +316,7 @@ export async function resolvePageAssets(
       blobUrls: Object.freeze([...scope.urls]),
       resourceBlocked: blocked,
       sourceIdentity: blockedIdentity,
+      blockedResources: Object.freeze(blockedResources),
       semanticAssets: Object.freeze(semanticAssets),
       revoke: () => scope.revoke(),
     };
