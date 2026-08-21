@@ -38,15 +38,22 @@ ships work out of milestone order, exactly as `0.5.0` just did.
 
 ## Current position
 
-Imposia `0.5.0` is prepared at commit `364e491` (2026-08-20) but is **not yet
-public**: local `main` is 3 commits ahead of `origin/main`, and none of the
-four packages has been published to npm. The release contains a security patch
-(bundled `postcss`/`nanoid`, ASA-423), a breaking replacement of `parse5` with
-the browser-native parser (ASA-404, ADR 0013), four fragmenter optimizations
-(ASA-424, ASA-425, ASA-426, ASA-427), publishing-pass indexing (ASA-406), and
-a rebuilt cross-engine visual gate (ASA-432). Until publication happens, the
-only consumers are on `0.4.1` and are still shipping the dependency versions
-the security patch fixes.
+Imposia `0.5.0` is **public**. All four packages were published to npm on
+2026-08-21 from the `v0.5.0` tag, and `main` matches `origin/main`. The
+release contains a security patch (bundled `postcss`/`nanoid`, ASA-423), a
+breaking replacement of `parse5` with the browser-native parser (ASA-404,
+ADR 0013), four fragmenter optimizations (ASA-424, ASA-425, ASA-426,
+ASA-427), publishing-pass indexing (ASA-406), a rebuilt cross-engine visual
+gate (ASA-432), and the generation-stamp fix for a transient the Viewer had
+been classifying as corruption (ASA-438).
+
+**2026-08-21 is the date every exposure clock starts from.** The escape
+hatches below are removed one release after exposure, not one release after
+commit, so ASA-444 belongs to the first minor that ships after this date.
+Consumers on `0.4.1` now have a delivered upgrade path
+([`migrations/0.5.0.md`](migrations/0.5.0.md)) and a recorded answer on the
+backport question — no `0.4.2` ships, because both advisories were measured
+unreachable in the published `0.4.1` browser artifact.
 
 Three of the optimizations ship both the fast path and the implementation it
 replaced, selectable through `experimental.forceSequentialPlacement`,
@@ -107,7 +114,10 @@ Every milestone must preserve these constraints:
 Publish is first because every later milestone assumes a public package. The
 comparison protocol compares a version people can install; the escape-hatch
 clock starts at exposure, not at commit; and an unpublished security patch
-protects nobody.
+protects nobody. Publication happened on 2026-08-21, so the first of those
+three is satisfied and the second has started counting. The milestone stays
+open until its remaining debts — the hatches, the RTL warning, and the gate's
+darwin coverage — are settled.
 
 ### Outcome
 
@@ -377,19 +387,24 @@ in this list:
 4. reduces maintenance cost without changing the product contract;
 5. adds a new capability with no demonstrated adoption blocker.
 
-Under this rule, ASA-438 (potential stale-generation exposure under load)
-outranks every open feature and evidence task, and the publication work
-(ASA-443) outranks new capability outright: an unpublished security fix and
-an unreachable release fail item 2 for every prospective adopter at once.
+Under this rule, ASA-438 outranked every open feature and evidence task and
+is now closed: the transient was root-caused, shown to predate `0.5.0`, and
+fixed without loosening the invariant. The publication work (ASA-443) that
+outranked new capability outright is likewise done. What the rule now
+promotes is the Publish milestone's remaining debts — ASA-444 and ASA-434
+stage 1 under item 1, ASA-449's gate coverage under item 4 — ahead of any
+Proof-milestone evidence task, and ASA-450 ahead of ASA-444 because the
+rollback contract needs its regression pin before that refactor edits the
+same region.
 
 ## Verification notes
 
-- **Verified from this repository:** the `0.5.0` release commit `364e491`,
-  the commit gap to `origin/main` (re-checked 2026-08-21), the absence of any
-  npm publication
-  attempt for `0.5.0`, the escape-hatch and budget state recorded in
-  [`bundle-size.md`](bundle-size.md), the product contract, the
-  compatibility matrix, and the release-gate structure.
+- **Verified from this repository and from npm (2026-08-21):** the `0.5.0`
+  release commit `364e491`, all four packages resolving to `0.5.0` on the
+  registry, the `v0.5.0` tag, `main` matching `origin/main`, the escape-hatch
+  and budget state recorded in [`bundle-size.md`](bundle-size.md), the
+  product contract, the compatibility matrix, and the release-gate
+  structure.
 - **Roadmap decision:** milestones are named by outcome and decoupled from
   package versions; `1.0` alone keeps its number. Publish precedes Proof
   because exposure, not commit, starts every downstream clock.

@@ -793,7 +793,7 @@ security fixes, repositioning integrity as the primary contract) → `0.2.0`
 table-colgroup preset, isolated top-document print) → `0.4.0` (cooperative
 pagination) → `0.4.1` (multi-page print fix, responsive Viewer panels) →
 `0.5.0` (browser-native parsing, fragmenter performance batch, bundled
-dependency security patch) — prepared but **not yet published**.
+dependency security patch, generation-stamp fix), published 2026-08-21.
 
 Milestones are named by outcome and are **decoupled from package version
 numbers** — a milestone may span several releases, and a release may carry
