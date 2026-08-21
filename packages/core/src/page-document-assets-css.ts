@@ -156,6 +156,60 @@ function importToken(params: string): CssUrlToken | undefined {
   return scanCssUrls(params)[0];
 }
 
+/**
+ * Reduces a `@font-face` `src` list to the single candidate a browser would actually fetch.
+ *
+ * `src` is a preference list, not a manifest: the engine walks it and loads the first entry
+ * whose `format()` it supports. Treating every `url()` in the list as a required asset makes
+ * the common `woff2, woff` pairing cost two resolver calls, two decodes, and two object URLs
+ * per face -- the second of which no engine will ever paint -- and it burns the reference
+ * budget twice as fast.
+ *
+ * Only a `woff2` candidate collapses the list. Every browser Imposia supports reads `woff2`,
+ * so choosing it cannot strand a face, whereas guessing among `ttf`/`otf`/unlabelled entries
+ * could. That argument does not extend to `tech()`: a `format(woff2) tech(...)` candidate is
+ * only loadable where the technology is supported, so candidates carrying `tech()` are never
+ * chosen, and a list whose only `woff2` entries carry `tech()` is left exactly as authored --
+ * as is any list without a `woff2` entry.
+ */
+function preferredFontSource(value: string): string {
+  const candidates = splitTopLevelCommas(value);
+  if (candidates.length < 2) return value;
+
+  const woff2 = candidates.find(
+    (candidate) =>
+      /format\s*\(\s*['"]?woff2['"]?\s*\)/i.test(candidate) && !/\btech\s*\(/i.test(candidate),
+  );
+  return woff2 === undefined ? value : woff2.trim();
+}
+
+/** Splits on commas that sit outside quotes and parentheses, so `format(...)` stays intact. */
+function splitTopLevelCommas(value: string): readonly string[] {
+  const parts: string[] = [];
+  let depth = 0;
+  let quote: string | undefined;
+  let start = 0;
+
+  for (let index = 0; index < value.length; index += 1) {
+    const character = value[index];
+    if (quote !== undefined) {
+      if (character === "\\") index += 1;
+      else if (character === quote) quote = undefined;
+      continue;
+    }
+    if (character === "'" || character === '"') quote = character;
+    else if (character === "(") depth += 1;
+    else if (character === ")") depth = Math.max(0, depth - 1);
+    else if (character === "," && depth === 0) {
+      parts.push(value.slice(start, index));
+      start = index + 1;
+    }
+  }
+  parts.push(value.slice(start));
+
+  return parts.filter((part) => part.trim() !== "");
+}
+
 export function cssReferences(root: Root): readonly CssReference[] {
   const references: CssReference[] = [];
   root.walk((node) => {
@@ -177,6 +231,7 @@ export function cssReferences(root: Root): readonly CssReference[] {
     if (node.type !== "decl") return;
     if (node.prop.trim().toLowerCase() === "src") {
       node.value = node.value.replace(/\blocal\s*\([^)]*\)\s*,?/gi, "");
+      node.value = preferredFontSource(node.value);
     }
     if (hasUnsupportedCssResourceFunction(node.value)) return;
     const kind: CssReferenceKind = node.prop.trim().toLowerCase() === "src" ? "font" : "image";
