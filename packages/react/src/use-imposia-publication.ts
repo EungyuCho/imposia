@@ -7,7 +7,7 @@ import {
 } from "@imposia/client";
 import { type RefObject, useCallback, useEffect, useRef, useState } from "react";
 
-export type ImposiaPublicationStatus = "idle" | "loading" | "ready" | "error";
+export type ImposiaPublicationStatus = "idle" | "loading" | "ready" | "aborted" | "error";
 
 export type ImposiaPublicationState = Readonly<{
   status: ImposiaPublicationStatus;
@@ -47,6 +47,18 @@ function stateForLoading(current: PublicationDocument | undefined): ImposiaPubli
   return current === undefined
     ? { status: "loading" }
     : { status: "loading", publication: current };
+}
+
+/**
+ * A publication run that was abandoned while this hook was still the live owner.
+ *
+ * Mirrors `useImposiaDocument`: without this transition an abort of the live run left the
+ * caller stranded in `loading` with no further state change to wait for.
+ */
+function stateForAborted(current: PublicationDocument | undefined): ImposiaPublicationState {
+  return current === undefined
+    ? { status: "aborted" }
+    : { status: "aborted", publication: current };
 }
 
 function stateForError(
@@ -145,12 +157,18 @@ export function useImposiaPublication({
         onReadyRef.current?.(publication);
       },
       (error: unknown) => {
+        // Superseded or unmounted: another run owns the state now, so say nothing.
         if (
           disposedRef.current ||
           operationRef.current !== operation ||
-          !Object.is(mountedOptionsRevisionRef.current, mountedOptionsRevision) ||
-          isAbortError(error)
+          !Object.is(mountedOptionsRevisionRef.current, mountedOptionsRevision)
         ) {
+          return;
+        }
+        // Aborted while still the live run: transition to a terminal state instead of
+        // stranding the caller in `loading` -- this effect does not re-run on its own.
+        if (isAbortError(error)) {
+          transition(stateForAborted(currentRef.current));
           return;
         }
         reportError(error);
@@ -186,8 +204,11 @@ export function useImposiaPublication({
         onReadyRef.current?.(publication);
       },
       (error: unknown) => {
-        if (disposedRef.current || operationRef.current !== operation || isAbortError(error))
+        if (disposedRef.current || operationRef.current !== operation) return;
+        if (isAbortError(error)) {
+          transition(stateForAborted(currentRef.current));
           return;
+        }
         reportError(error);
       },
     );
