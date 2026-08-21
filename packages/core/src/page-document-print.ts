@@ -3,7 +3,22 @@ export const PRINT_STYLE_ATTRIBUTE = "data-imposia-print-style";
 
 const PRINT_ROOT_RETENTION_MS = 60_000;
 const PRINT_ISOLATION_CSS = `@media print{body>:not([${PRINT_ROOT_ATTRIBUTE}]){display:none!important}[${PRINT_ROOT_ATTRIBUTE}]{display:block!important;position:static!important;inset:auto!important;margin:0!important;padding:0!important;border:0!important;width:auto!important;height:auto!important;min-width:0!important;min-height:0!important;max-width:none!important;max-height:none!important;transform:none!important;filter:none!important;opacity:1!important;visibility:visible!important;overflow:visible!important;contain:none!important;z-index:auto!important}html,body{margin:0!important;padding:0!important;background:#fff!important;width:auto!important;height:auto!important;min-height:0!important;max-height:none!important;overflow:visible!important}}`;
-const PRINT_SHADOW_BASE_CSS = ":host{all:initial;display:block;color-scheme:light}";
+// `print-color-adjust: exact` keeps the printed sheet matching the composed page.
+//
+// Chromium's default is `economy`, which lets the engine drop backgrounds when printing --
+// a shaded table header composes grey on screen and prints white unless the reader happens
+// to tick "Background graphics" in the print dialog. For a library whose contract is that
+// the pages you see are the pages you get, that silent divergence is a defect, not a
+// preference, so fidelity is the default here.
+//
+// The property is inherited, and the `all: initial` above resets it on the host, so the
+// longhand has to follow the shorthand to survive. WebKit still needs the prefix.
+//
+// Deliberately not `!important`: this rule is the first stylesheet in the shadow root and
+// the generation's own styles are appended after it, so a consumer that genuinely wants
+// ink-saving output can still set `print-color-adjust: economy` on their content.
+const PRINT_SHADOW_BASE_CSS =
+  ":host{all:initial;display:block;color-scheme:light;-webkit-print-color-adjust:exact;print-color-adjust:exact}";
 const INHERITED_BODY_PROPERTIES = [
   "color",
   "direction",
@@ -46,6 +61,129 @@ export function collectHoistedPagedMediaRules(rules: CSSRuleList, hoisted: strin
     }
     if (hasNestedRules(rule)) collectHoistedPagedMediaRules(rule.cssRules, hoisted);
   }
+}
+
+/**
+ * Counter behind the per-print family namespace.
+ *
+ * Only ever names a transient stylesheet in the top document, so it cannot reach pages or
+ * warnings and does not weaken the determinism invariant the way a clock or RNG would.
+ */
+let printFamilyNamespace = 0;
+
+function quoteFamily(name: string): string {
+  return `"${name.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+}
+
+/** Splits a `font-family` list into its entries, respecting quotes. */
+function familyEntries(value: string): readonly string[] {
+  const parts: string[] = [];
+  let quote: string | undefined;
+  let start = 0;
+  for (let index = 0; index < value.length; index += 1) {
+    const character = value[index];
+    if (quote !== undefined) {
+      if (character === "\\") index += 1;
+      else if (character === quote) quote = undefined;
+      continue;
+    }
+    if (character === "'" || character === '"') quote = character;
+    else if (character === ",") {
+      parts.push(value.slice(start, index));
+      start = index + 1;
+    }
+  }
+  parts.push(value.slice(start));
+  return parts;
+}
+
+function bareFamily(entry: string): string {
+  const trimmed = entry.trim();
+  const unquoted =
+    (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+    (trimmed.startsWith("'") && trimmed.endsWith("'"))
+      ? trimmed.slice(1, -1)
+      : trimmed;
+  return unquoted.replace(/\\(.)/g, "$1");
+}
+
+// Not `instanceof CSSStyleRule`: the walked rules belong to the top document, and when the
+// host application runs inside a same-origin iframe their constructors come from that
+// realm, so every instanceof check would be false and no rule would be rewritten -- the
+// faces would be renamed while their uses kept the old names, composing the whole shadow
+// in fallback faces. Duck-typing keeps the walk realm-proof, like `hasNestedRules` above.
+function isStyleRule(rule: CSSRule): rule is CSSStyleRule {
+  return "selectorText" in rule;
+}
+
+/**
+ * Renames every hoisted `@font-face` family, and rewrites the cloned content to match.
+ *
+ * `@font-face` is ignored inside a shadow tree, so the composed document's faces have to be
+ * hoisted into the top document to take effect at all. That puts them in the same namespace
+ * as whatever the host application already declared, and font matching does not care which
+ * stylesheet a face came from: a weight or unicode-range the composed document never loaded
+ * can still be satisfied by a host face. The printed sheet then differs from the page that
+ * was composed -- with a real bold where the preview synthesised one, say -- and nothing
+ * says so.
+ *
+ * Namespacing closes that: the host's declarations can no longer match, so the print falls
+ * back exactly where the composed document fell back.
+ *
+ * Families the hoisted faces do not declare are left alone, so generic keywords and system
+ * fonts keep resolving normally.
+ */
+export function isolateHoistedFontFamilies(shadow: ShadowRoot, hoisted: string[]): void {
+  printFamilyNamespace += 1;
+  const prefix = `imposia-print-${printFamilyNamespace}--`;
+  // Keyed on the lowercased family: CSS matches font-family case-insensitively, so a
+  // declaration and a usage that differ only in case must land on the same rename.
+  const renamed = new Map<string, string>();
+
+  for (const [index, cssText] of hoisted.entries()) {
+    const match = /@font-face\s*\{[^}]*?font-family\s*:\s*([^;}]+)/i.exec(cssText);
+    const declared = match?.[1] === undefined ? undefined : bareFamily(match[1]);
+    if (declared === undefined || declared === "") continue;
+
+    const key = declared.toLowerCase();
+    const namespaced = renamed.get(key) ?? `${prefix}${declared}`;
+    renamed.set(key, namespaced);
+    hoisted[index] = cssText.replace(
+      /(@font-face\s*\{[^}]*?font-family\s*:\s*)([^;}]+)/i,
+      (_whole, head: string) => `${head}${quoteFamily(namespaced)}`,
+    );
+  }
+
+  if (renamed.size === 0) return;
+
+  const rewrite = (style: CSSStyleDeclaration): void => {
+    const value = style.getPropertyValue("font-family");
+    if (value === "") return;
+    const mapped = familyEntries(value)
+      .map((entry) => {
+        const replacement = renamed.get(bareFamily(entry).toLowerCase());
+        return replacement === undefined ? entry.trim() : quoteFamily(replacement);
+      })
+      .join(", ");
+    if (mapped !== value)
+      style.setProperty("font-family", mapped, style.getPropertyPriority("font-family"));
+  };
+
+  const walkRules = (rules: CSSRuleList): void => {
+    for (const rule of rules) {
+      if (isStyleRule(rule)) rewrite(rule.style);
+      if (hasNestedRules(rule)) walkRules(rule.cssRules);
+    }
+  };
+
+  for (const sheet of shadow.styleSheets) {
+    try {
+      walkRules(sheet.cssRules);
+    } catch (_error: unknown) {
+      // A sheet Core cannot read is one it did not author; leaving it alone is correct.
+    }
+  }
+  for (const element of shadow.querySelectorAll<HTMLElement>("[style]")) rewrite(element.style);
 }
 
 export function createPagesWrapper(topDocument: Document, sourceDocument: Document): HTMLElement {
@@ -95,6 +233,9 @@ export function commitPrintRoot(
   }
   shadow.append(createPagesWrapper(topDocument, sourceDocument));
   topDocument.body.append(root);
+  // Must run after the pages are in the shadow: the rewrite also covers inline styles on
+  // the cloned content, including the inherited body properties copied above.
+  isolateHoistedFontFamilies(shadow, hoisted);
 
   const isolationStyle = topDocument.createElement("style");
   isolationStyle.setAttribute(PRINT_STYLE_ATTRIBUTE, "");

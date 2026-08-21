@@ -1,7 +1,11 @@
 import { normalizeCss } from "./css-contracts.js";
 import { prepareDecoration, prepareDocument, prepareExtensionInput } from "./document.js";
 import { ImposiaError } from "./errors.js";
-import { type ResolvedPageAssets, resolvePageAssets } from "./page-document-assets.js";
+import {
+  type ResolvedPageAssets,
+  resolvePageAssets,
+  resourceBlockedWarnings,
+} from "./page-document-assets.js";
 import { settlePaginationAssets } from "./page-document-assets-ready.js";
 import {
   allowExtensionAsset,
@@ -3761,14 +3765,13 @@ export async function buildGeneration(
       ...fragmentationWarnings,
     ];
     if (overflowWarning !== undefined) warnings.push(overflowWarning);
-    if (resourceBlocked && !warnings.some((warning) => warning.code === "RESOURCE_BLOCKED")) {
+    if (resourceBlocked) {
       warnings.push(
-        Object.freeze({
-          code: "RESOURCE_BLOCKED",
-          message: "Resource was blocked by the loading policy.",
-          sourceIdentity: assets?.sourceIdentity,
-          location: UNLOCATED_PAGE_WARNING_LOCATION,
-        }),
+        ...resourceBlockedWarnings(
+          assets?.blockedResources ?? [],
+          assets?.sourceIdentity,
+          warnings.some((warning) => warning.code === "RESOURCE_BLOCKED"),
+        ),
       );
     }
     warnings.push(...extensionWarnings.finish());

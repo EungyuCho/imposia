@@ -7,7 +7,7 @@ import {
 } from "@imposia/client";
 import { type RefObject, useCallback, useEffect, useRef, useState } from "react";
 
-export type ImposiaDocumentStatus = "idle" | "loading" | "ready" | "error";
+export type ImposiaDocumentStatus = "idle" | "loading" | "ready" | "aborted" | "error";
 
 export type ImposiaDocumentState = Readonly<{
   status: ImposiaDocumentStatus;
@@ -55,6 +55,17 @@ function isAbortError(error: unknown): boolean {
 
 function stateForLoading(current: PageDocument | undefined): ImposiaDocumentState {
   return current === undefined ? { status: "loading" } : { status: "loading", document: current };
+}
+
+/**
+ * A generation that was abandoned while this hook was still the live owner.
+ *
+ * Distinct from `idle`, which means no generation was ever started, and from `error`,
+ * which means one failed. Nothing is in flight and nothing new was committed, so a caller
+ * that gates a loading overlay on `status` must treat this as a terminal state.
+ */
+function stateForAborted(current: PageDocument | undefined): ImposiaDocumentState {
+  return current === undefined ? { status: "aborted" } : { status: "aborted", document: current };
 }
 
 function stateForError(current: PageDocument | undefined, error: unknown): ImposiaDocumentState {
@@ -150,13 +161,20 @@ export function useImposiaDocument({
         onReadyRef.current?.(pageDocument);
       },
       (error: unknown) => {
+        // Superseded or unmounted: another run owns the state now, so say nothing.
         if (
           disposedRef.current ||
           operationRef.current !== operation ||
-          !Object.is(mountedDocumentOptionsRevisionRef.current, mountedOptionsRevision) ||
-          isAbortError(error)
+          !Object.is(mountedDocumentOptionsRevisionRef.current, mountedOptionsRevision)
         )
           return;
+        // Aborted while still the live run. Nothing failed, so `error` would misreport it,
+        // but returning without a transition strands the caller in `loading` with no
+        // further state change to wait for -- this effect does not re-run on its own.
+        if (isAbortError(error)) {
+          transition(stateForAborted(currentRef.current));
+          return;
+        }
         reportError(error);
       },
     );
@@ -192,8 +210,11 @@ export function useImposiaDocument({
         onReadyRef.current?.(pageDocument);
       },
       (error: unknown) => {
-        if (disposedRef.current || operationRef.current !== operation || isAbortError(error))
+        if (disposedRef.current || operationRef.current !== operation) return;
+        if (isAbortError(error)) {
+          transition(stateForAborted(currentRef.current));
           return;
+        }
         reportError(error);
       },
     );

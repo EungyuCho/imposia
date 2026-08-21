@@ -4,7 +4,13 @@ import { abortError } from "./page-document-frame.js";
 import type { AssetResolution, AssetResolver } from "./page-document-types.js";
 
 export type AssetOutcome =
-  | { readonly status: "blocked" }
+  /**
+   * `reason` names why the bytes did not become an asset, in words a resolver author can
+   * act on. It matters most when the resolver said `resolved` and Core overruled it: without
+   * a reason the caller sees a successful resolution and a document that quietly composed
+   * with a substitute, and has nothing to trace back from.
+   */
+  | { readonly status: "blocked"; readonly reason?: string }
   | {
       readonly status: "asset";
       readonly blobUrl: string;
@@ -54,8 +60,44 @@ const MEDIA_MIME_TYPES = new Set([
   "video/webm",
 ]);
 
+// Font MIME types that predate the `font/*` tree (RFC 8081). Servers still send them --
+// a `.woff` served as `application/x-font-woff` is common enough that rejecting it strands
+// otherwise valid fonts, and the failure is invisible: the face lands with an empty `src`
+// and the document silently composes with a fallback face, shifting every line box.
+//
+// Canonicalising is not a weaker check. The container is verified from its magic bytes by
+// `hasContainerSignature`, and the decoded font still has to load through `FontFace`.
+// The declared type only decides which allowlist entry it matches and what `Blob` type the
+// generated object URL carries, so mapping an alias onto its modern spelling keeps both
+// correct rather than trusting the caller's label.
+const MIME_ALIASES = new Map<string, string>([
+  ["application/font-woff", "font/woff"],
+  ["application/x-font-woff", "font/woff"],
+  ["application/font-woff2", "font/woff2"],
+  ["application/x-font-woff2", "font/woff2"],
+  ["application/font-sfnt", "font/ttf"],
+  ["application/x-font-ttf", "font/ttf"],
+  ["application/x-font-truetype", "font/ttf"],
+  ["application/x-truetype-font", "font/ttf"],
+  ["application/font-otf", "font/otf"],
+  ["application/x-font-otf", "font/otf"],
+  ["application/x-font-opentype", "font/otf"],
+  ["application/vnd.ms-opentype", "font/otf"],
+]);
+
 export function mimeType(value: string): string {
   return value.split(";", 1)[0]?.trim().toLowerCase() ?? "";
+}
+
+/**
+ * The declared type reduced to its modern spelling.
+ *
+ * Every alias above names a font container, so this cannot pull a non-font type into the
+ * font allowlist. Values with no alias are returned unchanged.
+ */
+export function canonicalMimeType(value: string): string {
+  const mime = mimeType(value);
+  return MIME_ALIASES.get(mime) ?? mime;
 }
 
 export function unsafeAuthoredUrl(value: string): boolean {
@@ -63,7 +105,7 @@ export function unsafeAuthoredUrl(value: string): boolean {
 }
 
 function supportedMime(kind: AssetRequest["kind"], value: string): boolean {
-  const mime = mimeType(value);
+  const mime = canonicalMimeType(value);
   if (kind === "stylesheet") return mime === "text/css";
   if (kind === "image") return IMAGE_MIME_TYPES.has(mime);
   if (kind === "font") return FONT_MIME_TYPES.has(mime);
@@ -173,7 +215,10 @@ async function resolveOneWork(
   scope: BlobScope,
   consumeBytes?: (bytes: number) => void,
 ): Promise<AssetOutcome> {
-  if (signal.aborted || unsafeAuthoredUrl(request.url)) return { status: "blocked" };
+  if (signal.aborted) return { status: "blocked", reason: "generation was superseded" };
+  if (unsafeAuthoredUrl(request.url)) {
+    return { status: "blocked", reason: "URL uses a scheme that can execute script" };
+  }
   let resolution: AssetResolution;
   try {
     resolution = await abortable(
@@ -191,7 +236,15 @@ async function resolveOneWork(
   }
   if (signal.aborted) throw abortError();
   if (resolution === null || typeof resolution !== "object") throw resolutionFailure();
-  if (resolution.status === "blocked") return { status: "blocked" };
+  if (resolution.status === "blocked") {
+    return {
+      status: "blocked",
+      reason:
+        typeof resolution.reason === "string" && resolution.reason !== ""
+          ? resolution.reason
+          : "the resolver refused this resource",
+    };
+  }
   if (resolution.status !== "resolved") throw resolutionFailure();
   if (!(resolution.bytes instanceof Uint8Array) || typeof resolution.mimeType !== "string") {
     throw resolutionFailure();
@@ -202,9 +255,21 @@ async function resolveOneWork(
   const copied = new Uint8Array(resolution.bytes);
   consumeBytes?.(copied.byteLength);
   if (!supportedMime(request.kind, resolution.mimeType)) {
-    return { status: "blocked" };
+    return {
+      status: "blocked",
+      reason: `declared type ${mimeType(resolution.mimeType) || "(empty)"} is not a supported ${request.kind} type`,
+    };
   }
-  if (!hasContainerSignature(request.kind, copied)) return { status: "blocked" };
+  // Everything downstream -- the object URL's Blob type, the decode probe, and the type
+  // reported back to the caller -- uses the canonical spelling, so an aliased font is
+  // indistinguishable from one whose server already sent `font/woff`.
+  const canonicalMime = canonicalMimeType(resolution.mimeType);
+  if (!hasContainerSignature(request.kind, copied)) {
+    return {
+      status: "blocked",
+      reason: `bytes are not a ${canonicalMime} container -- the declared type does not match the data`,
+    };
+  }
   if (request.kind === "stylesheet") {
     try {
       const root = postcss.parse(new TextDecoder("utf-8", { fatal: true }).decode(copied));
@@ -212,29 +277,32 @@ async function resolveOneWork(
         status: "stylesheet",
         root,
         bytes: copied,
-        mimeType: mimeType(resolution.mimeType),
+        mimeType: canonicalMime,
         ...(typeof resolution.resolvedUrl === "string"
           ? { resolvedUrl: resolution.resolvedUrl }
           : {}),
       };
     } catch (_error: unknown) {
-      return { status: "blocked" };
+      return { status: "blocked", reason: "stylesheet could not be parsed as CSS" };
     }
   }
   let blobUrl: string | undefined;
   let ready: boolean;
   if (request.kind === "image") {
-    ready = await decodeImage(copied, resolution.mimeType);
+    ready = await decodeImage(copied, canonicalMime);
   } else {
-    blobUrl = createBlob(scope, copied, resolution.mimeType);
+    blobUrl = createBlob(scope, copied, canonicalMime);
     ready =
       request.kind === "font" ? await loadFont(blobUrl) : await loadMedia(blobUrl, request.kind);
   }
   if (!ready) {
     if (blobUrl !== undefined) revokeBlob(scope, blobUrl);
-    return { status: "blocked" };
+    return {
+      status: "blocked",
+      reason: `bytes decoded as ${canonicalMime} could not be loaded by the browser`,
+    };
   }
-  blobUrl ??= createBlob(scope, copied, resolution.mimeType);
+  blobUrl ??= createBlob(scope, copied, canonicalMime);
   if (blobUrl === undefined) throw resolutionFailure();
   if (signal.aborted) {
     if (scope.urls.delete(blobUrl)) URL.revokeObjectURL(blobUrl);
@@ -244,7 +312,7 @@ async function resolveOneWork(
     status: "asset",
     blobUrl,
     bytes: copied,
-    mimeType: mimeType(resolution.mimeType),
+    mimeType: canonicalMime,
     ...(typeof resolution.resolvedUrl === "string" ? { resolvedUrl: resolution.resolvedUrl } : {}),
   };
 }
