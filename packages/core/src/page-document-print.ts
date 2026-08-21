@@ -3,7 +3,22 @@ export const PRINT_STYLE_ATTRIBUTE = "data-imposia-print-style";
 
 const PRINT_ROOT_RETENTION_MS = 60_000;
 const PRINT_ISOLATION_CSS = `@media print{body>:not([${PRINT_ROOT_ATTRIBUTE}]){display:none!important}[${PRINT_ROOT_ATTRIBUTE}]{display:block!important;position:static!important;inset:auto!important;margin:0!important;padding:0!important;border:0!important;width:auto!important;height:auto!important;min-width:0!important;min-height:0!important;max-width:none!important;max-height:none!important;transform:none!important;filter:none!important;opacity:1!important;visibility:visible!important;overflow:visible!important;contain:none!important;z-index:auto!important}html,body{margin:0!important;padding:0!important;background:#fff!important;width:auto!important;height:auto!important;min-height:0!important;max-height:none!important;overflow:visible!important}}`;
-const PRINT_SHADOW_BASE_CSS = ":host{all:initial;display:block;color-scheme:light}";
+// `print-color-adjust: exact` keeps the printed sheet matching the composed page.
+//
+// Chromium's default is `economy`, which lets the engine drop backgrounds when printing --
+// a shaded table header composes grey on screen and prints white unless the reader happens
+// to tick "Background graphics" in the print dialog. For a library whose contract is that
+// the pages you see are the pages you get, that silent divergence is a defect, not a
+// preference, so fidelity is the default here.
+//
+// The property is inherited, and the `all: initial` above resets it on the host, so the
+// longhand has to follow the shorthand to survive. WebKit still needs the prefix.
+//
+// Deliberately not `!important`: this rule is the first stylesheet in the shadow root and
+// the generation's own styles are appended after it, so a consumer that genuinely wants
+// ink-saving output can still set `print-color-adjust: economy` on their content.
+const PRINT_SHADOW_BASE_CSS =
+  ":host{all:initial;display:block;color-scheme:light;-webkit-print-color-adjust:exact;print-color-adjust:exact}";
 const INHERITED_BODY_PROPERTIES = [
   "color",
   "direction",
