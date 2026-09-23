@@ -1,5 +1,5 @@
 import { sameDocumentFragment, srcsetCandidates } from "./page-document-assets-html.js";
-import { hasCssResource, sanitizeCss } from "./page-document-sanitize-css.js";
+import { hasCssResource, hasCssUrlResource, sanitizeCss } from "./page-document-sanitize-css.js";
 import { safeSemanticHyperlink } from "./page-document-sanitize-resolver-input.js";
 
 export { sanitizeCss } from "./page-document-sanitize-css.js";
@@ -19,6 +19,7 @@ export interface PreparedFragment {
 
 export { prepareDocument } from "./document.js";
 
+const HTML_NAMESPACE = "http://www.w3.org/1999/xhtml";
 const RESOURCE_ATTRIBUTES = new Set([
   "href",
   "src",
@@ -173,7 +174,14 @@ export function sanitizeFrameContent(
       const resolved =
         preserveResolvedResources &&
         resolvedAttribute(element, name, attribute.value, resolvedUrls);
-      if (hasCssResource(attribute.value, preserveResolvedResources, resolvedUrls)) {
+      // Only `style` and non-HTML (SVG, MathML) presentation attributes go through a CSS
+      // parser. Other HTML attributes such as `alt` or `title` are prose, so words like
+      // `image (left)` there must not count as CSS functions.
+      const cssResource =
+        name === "style" || element.namespaceURI !== HTML_NAMESPACE
+          ? hasCssResource(attribute.value, preserveResolvedResources, resolvedUrls)
+          : hasCssUrlResource(attribute.value, preserveResolvedResources, resolvedUrls);
+      if (cssResource) {
         resourceBlocked = true;
         element.removeAttribute(attribute.name);
         continue;
@@ -192,7 +200,7 @@ export function sanitizeFrameContent(
     if (localName === "style") {
       const sanitized = sanitizeCss(
         element.textContent ?? "",
-        preserveResolvedResources && element.namespaceURI === "http://www.w3.org/1999/xhtml",
+        preserveResolvedResources && element.namespaceURI === HTML_NAMESPACE,
         resolvedUrls,
       );
       resourceBlocked ||= sanitized.resourceBlocked;

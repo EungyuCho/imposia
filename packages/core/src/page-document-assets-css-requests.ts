@@ -1,5 +1,10 @@
 import postcss, { type Root } from "postcss";
-import { type CssReference, cssReferences, replaceCssRange } from "./page-document-assets-css.js";
+import {
+  type CssReference,
+  cssReferences,
+  functionQualifier,
+  replaceCssRange,
+} from "./page-document-assets-css.js";
 import type { AssetOutcome, AssetRequest } from "./page-document-assets-resolver.js";
 
 function cssCurrentText(reference: CssReference): string {
@@ -54,33 +59,6 @@ function importConditions(reference: CssReference): string | undefined {
   return tail.trim();
 }
 
-function functionQualifier(
-  source: string,
-  name: string,
-): { readonly value: string; readonly rest: string } | undefined {
-  if (!source.toLowerCase().startsWith(`${name}(`)) return undefined;
-  let depth = 1;
-  let quote: string | undefined;
-  for (let index = name.length + 1; index < source.length; index += 1) {
-    const character = source[index];
-    if (quote !== undefined) {
-      if (character === "\\") index += 1;
-      else if (character === quote) quote = undefined;
-    } else if (character === "'" || character === '"') quote = character;
-    else if (character === "(") depth += 1;
-    else if (character === ")") {
-      depth -= 1;
-      if (depth === 0) {
-        return {
-          value: source.slice(name.length + 1, index).trim(),
-          rest: source.slice(index + 1).trimStart(),
-        };
-      }
-    }
-  }
-  return undefined;
-}
-
 function conditionedImport(
   reference: CssReference,
   importedNodes: Root["nodes"],
@@ -100,7 +78,8 @@ function conditionedImport(
       conditions = conditions.slice("layer".length).trimStart();
     }
   }
-  if (/^supports\b/i.test(conditions)) {
+  // `supports(` is one function token. `supports (…)` is a media query, as in browsers.
+  if (/^supports\(/i.test(conditions)) {
     const qualifier = functionQualifier(conditions, "supports");
     if (qualifier === undefined) return undefined;
     supports = qualifier.value;
