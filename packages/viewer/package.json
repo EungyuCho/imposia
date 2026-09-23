@@ -1,7 +1,7 @@
 {
   "name": "@imposia/viewer",
   "version": "0.5.0",
-  "description": "Browser-native viewer for canonical Imposia page documents and PDF.js documents.",
+  "description": "Browser-native viewer for canonical Imposia page documents.",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/EungyuCho/imposia.git",
@@ -13,11 +13,9 @@
   },
   "keywords": [
     "viewer",
-    "pdf",
     "pagination",
     "paged-media",
-    "browser",
-    "pdfjs"
+    "browser"
   ],
   "type": "module",
   "license": "Apache-2.0",
@@ -42,8 +40,7 @@
     "THIRD_PARTY_NOTICES.md"
   ],
   "dependencies": {
-    "@imposia/core": "workspace:^",
-    "pdfjs-dist": "5.4.530"
+    "@imposia/core": "workspace:^"
   },
   "publishConfig": {
     "access": "public"

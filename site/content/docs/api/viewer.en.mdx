@@ -1,9 +1,9 @@
 ---
 title: Viewer API
-description: Page presentation, Reader, Inspector, and PDF viewing controllers from @imposia/viewer.
+description: Page presentation, Reader, and Inspector controllers from @imposia/viewer.
 ---
 
-`@imposia/viewer` presents documents. `mountPageViewer` presents the canonical iframe of a committed Core page document; `mountViewer` is a separate PDF.js viewer for existing PDF files. Neither runs pagination.
+`@imposia/viewer` presents documents. `mountPageViewer` presents the canonical iframe of a committed Core page document. It does not run pagination.
 
 ## `mountPageViewer`
 
@@ -81,20 +81,3 @@ Serialization produces a versioned value from the destination ID. The standalone
 | `state` | `{ open, warnings, selected }`. |
 
 The Inspector panel shares the auxiliary-panel slot with Contents, Search, and Thumbnails: opening any one closes the others. It is hidden for print and absent from EPUB export.
-
-## `mountViewer` for PDF
-
-```ts
-mountViewer(container: HTMLElement, source: ViewerSource, options?: ViewerOptions): ViewerController;
-type ViewerSource = Uint8Array | ArrayBuffer | string | { pdf: Uint8Array };
-```
-
-This separate Viewer loads/rasterizes PDF pages with PDF.js. It presents PDF files your application already has; it is not an export path for Core page documents, which have no PDF-byte API. Options are `mode?: "continuous" | "single"`, `zoom?`, `workerSrc?`, and `theme?`. It returns immediately in `loading`; failures set `state.status` to `error` and populate `state.error`.
-
-| `ViewerController` member | Returns / effect |
-| --- | --- |
-| `goToPage(page)`, `nextPage()`, `previousPage()` | Navigate only while ready. |
-| `setZoom(zoom)`, `setMode(mode)` | Update rendering only while ready. |
-| `setTheme(theme?)` | Replace/clear Viewer variables; ignored after destruction. |
-| `destroy()` | Cancels work, destroys PDF.js resources, and empties the container. |
-| `state` | Page, count, zoom, mode, loading/ready/error status, and optional error text. |

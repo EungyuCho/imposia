@@ -1,4 +1,5 @@
-import postcss, { type Declaration, type Rule } from "postcss";
+import type { Declaration, Rule } from "postcss";
+import { parseCss } from "./css-parse.js";
 import { ImposiaError } from "./errors.js";
 import type {
   EffectivePageLimits,
@@ -534,7 +535,7 @@ export function extractPublishingCss(
   startOrder: number,
   warnings: WarningCollector,
 ): ExtractedPublishingCss {
-  const root = postcss.parse(css);
+  const root = parseCss(css);
   const rules: PublishingCssRule[] = [];
   let nextOrder = startOrder;
   root.walkRules((rule) => {
@@ -718,7 +719,7 @@ function inlineDeclarations(element: Element): readonly Declaration[] {
   const style = element.getAttribute("style");
   if (style === null) return Object.freeze([]);
   try {
-    const root = postcss.parse(`x{${style}}`);
+    const root = parseCss(`x{${style}}`);
     const rule = root.first;
     return Object.freeze(
       rule?.type === "rule"

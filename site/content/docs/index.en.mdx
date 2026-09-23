@@ -40,6 +40,19 @@ If pagination fails or a newer update arrives first, readers keep seeing the las
 | Print or PDF | `print()` | The browser's native print dialog, where the reader picks a printer or **Save as PDF** |
 | EPUB | `exportEpub()` | Optional. A reflowable EPUB 3.3 `Blob` built from the committed semantic source |
 
+## Size and speed
+
+| Measure | Result |
+| --- | ---: |
+| Core pagination (`mountPageDocument`), minified and gzipped | 56.7 KiB |
+| React page viewer with Core (`ImposiaPageViewer`), minified and gzipped | 67.2 KiB |
+| Paginate a 99-page article | 125 ms |
+| Change one word in that article and recommit | 121 ms |
+| First rendered frame after a commit | 1.9 ms |
+| Paginate a 100-entry Publication where every entry has its own `<style>` | 94 ms |
+
+Measured on September 23, 2026 with Chromium 149 on an Apple M4. Times are medians of seven runs, and the sizes exclude React and React DOM. To measure on your own machine, run `pnpm build` and then `pnpm benchmark` in the repository.
+
 ## Know the boundary
 
 <Callout type="warn" title="Imposia does not produce PDF bytes">

@@ -1,31 +1,13 @@
 # @imposia/viewer
 
-`@imposia/viewer` is a browser ESM viewer for PDF documents and for Core's
-canonical page document. It presents an existing document; it is not a renderer
-or a PDF-byte exporter.
+`@imposia/viewer` is a browser ESM viewer for Core's canonical page document. It
+presents an existing document; it is not a renderer or a PDF-byte exporter.
 
 ## Install
 
 ```bash
 pnpm add @imposia/viewer
 ```
-
-## View a PDF
-
-```ts
-import { mountViewer } from "@imposia/viewer";
-import "@imposia/viewer/styles.css";
-
-const viewer = mountViewer(document.querySelector<HTMLElement>("#viewer")!, "/book.pdf", {
-  workerSrc: "/pdf.worker.min.mjs",
-});
-
-viewer.setZoom(1.2);
-viewer.setMode("single");
-```
-
-`mountViewer()` uses PDF.js and supports continuous and single-page modes in
-Chromium, Firefox, and WebKit.
 
 ## Theme modules
 

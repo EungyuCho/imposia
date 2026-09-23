@@ -38,7 +38,6 @@ async function mountSpreadFixture(page: import("@playwright/test").Page, width: 
       importMap.textContent = JSON.stringify({
         imports: {
           "@imposia/core": "/packages/core/dist/index.js",
-          "pdfjs-dist": "/node_modules/pdfjs-dist/build/pdf.mjs",
         },
       });
       document.head.append(importMap);

@@ -1,4 +1,5 @@
-import postcss, { type AtRule, type Declaration, type Root } from "postcss";
+import type { AtRule, Declaration, Root } from "postcss";
+import { parseCss } from "./css-parse.js";
 import { ImposiaError } from "./errors.js";
 import type {
   PageContext,
@@ -492,7 +493,7 @@ function appendPageNameProjection(root: Root): void {
 }
 
 export function extractPageMediaCss(css: string, startOrder = 0): ExtractedPageMediaCss {
-  const root = postcss.parse(css);
+  const root = parseCss(css);
   const rules: AuthoredPageRule[] = [];
   let nextOrder = startOrder;
   root.walkAtRules("page", (rule) => {

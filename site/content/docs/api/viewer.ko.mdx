@@ -1,9 +1,9 @@
 ---
 title: Viewer API
-description: "@imposia/viewer가 제공하는 페이지 표시, Reader, Inspector, PDF 뷰어 컨트롤러입니다."
+description: "@imposia/viewer가 제공하는 페이지 표시, Reader, Inspector 컨트롤러입니다."
 ---
 
-`@imposia/viewer`는 문서를 표시합니다. `mountPageViewer`는 확정된 Core 페이지 문서의 canonical iframe을 표시하고, `mountViewer`는 기존 PDF 파일을 위한 별도의 PDF.js 뷰어입니다. 둘 다 페이지네이션을 실행하지 않습니다.
+`@imposia/viewer`는 문서를 표시합니다. `mountPageViewer`는 확정된 Core 페이지 문서의 canonical iframe을 표시합니다. 페이지네이션은 실행하지 않습니다.
 
 ## `mountPageViewer`
 
@@ -81,20 +81,3 @@ restorePublicationDeepLink(value: string, controller: PublicationController): Pu
 | `state` | `{ open, warnings, selected }`입니다. |
 
 Inspector 패널은 목차·검색·썸네일과 보조 패널 자리를 공유합니다. 어느 하나를 열면 나머지가 닫힙니다. 인쇄에서는 숨겨지고 EPUB 내보내기에는 포함되지 않습니다.
-
-## PDF를 위한 `mountViewer`
-
-```ts
-mountViewer(container: HTMLElement, source: ViewerSource, options?: ViewerOptions): ViewerController;
-type ViewerSource = Uint8Array | ArrayBuffer | string | { pdf: Uint8Array };
-```
-
-이 별도의 Viewer는 PDF.js로 PDF 페이지를 로드하고 래스터화합니다. 앱이 이미 가진 PDF 파일을 표시하는 도구이며, Core 페이지 문서의 내보내기 경로가 아닙니다. Core 페이지 문서에는 PDF 바이트 API가 없습니다. 옵션은 `mode?: "continuous" | "single"`, `zoom?`, `workerSrc?`, `theme?`입니다. `loading` 상태로 즉시 반환하며, 실패하면 `state.status`가 `error`가 되고 `state.error`가 채워집니다.
-
-| `ViewerController` 멤버 | 반환값과 동작 |
-| --- | --- |
-| `goToPage(page)`, `nextPage()`, `previousPage()` | 준비된 동안에만 이동합니다. |
-| `setZoom(zoom)`, `setMode(mode)` | 준비된 동안에만 렌더링을 갱신합니다. |
-| `setTheme(theme?)` | Viewer 변수를 교체하거나 제거합니다. 제거 후에는 무시됩니다. |
-| `destroy()` | 작업을 취소하고 PDF.js 리소스를 정리하며 컨테이너를 비웁니다. |
-| `state` | 페이지, 페이지 수, 배율, 모드, loading/ready/error 상태, 선택적 오류 텍스트입니다. |

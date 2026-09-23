@@ -11,7 +11,7 @@ description: 按需选择 React、Core 或 Viewer 契约，并了解共用的包
 | --- | --- | --- |
 | `@imposia/react` | React 集成 | `ImposiaPageViewer`、`ImposiaDocument`、`ImposiaPublicationViewer` 与两个生命周期 Hook |
 | `@imposia/core` | 框架无关的分页与出版 | `mountPageDocument`、`mountPublication`、`prepareDocument` |
-| `@imposia/viewer` | 展示已提交的页面，或加载 PDF | `mountPageViewer`、`mountViewer`、深链接辅助函数 |
+| `@imposia/viewer` | 展示已提交的页面 | `mountPageViewer`、深链接辅助函数 |
 | `@imposia/client` | 组合的框架无关入口 | 重新导出 Core 与 Viewer 的主要集成 API |
 
 使用 React 包时，导入一次 `@imposia/react/styles.css`。
@@ -26,7 +26,7 @@ description: 按需选择 React、Core 或 Viewer 契约，并了解共用的包
     框架无关的页面文档与 Publication 控制器。
   </Card>
   <Card title="Viewer API" href="/zh-CN/docs/api/viewer">
-    页面展示、Reader、Inspector 与独立 PDF Viewer。
+    页面展示、Reader 与 Inspector。
   </Card>
 </Cards>
 

@@ -1,4 +1,5 @@
-import postcss, { type AtRule, type Declaration, type Root } from "postcss";
+import type { AtRule, Declaration, Root } from "postcss";
+import { parseCss as parseStylesheet } from "./css-parse.js";
 
 export type CssReferenceKind = "font" | "image" | "stylesheet";
 
@@ -322,7 +323,7 @@ export function cssReferences(root: Root): readonly CssReference[] {
 }
 
 export function parseCss(css: string, inline: boolean): Root {
-  return postcss.parse(inline ? `x{${css}}` : css);
+  return parseStylesheet(inline ? `x{${css}}` : css);
 }
 
 export function inlineCss(root: Root): string {

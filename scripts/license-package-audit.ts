@@ -168,9 +168,7 @@ const upstreamNotices: Record<string, readonly [string, string][]> = {
   "@imposia/core": [],
   "@imposia/client": [],
   "@imposia/react": [],
-  "@imposia/viewer": [
-    ["pdfjs-dist", "node_modules/.pnpm/pdfjs-dist@5.4.530/node_modules/pdfjs-dist/LICENSE"],
-  ],
+  "@imposia/viewer": [],
 };
 
 export async function auditPackageArtifact(

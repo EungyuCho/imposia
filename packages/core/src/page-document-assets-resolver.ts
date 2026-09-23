@@ -1,4 +1,5 @@
-import postcss, { type Root } from "postcss";
+import type { Root } from "postcss";
+import { parseCss } from "./css-parse.js";
 import { ImposiaError } from "./errors.js";
 import {
   BLOCKED_REASON,
@@ -275,7 +276,7 @@ async function resolveOneWork(
   }
   if (request.kind === "stylesheet") {
     try {
-      const root = postcss.parse(new TextDecoder("utf-8", { fatal: true }).decode(copied));
+      const root = parseCss(new TextDecoder("utf-8", { fatal: true }).decode(copied));
       return {
         status: "stylesheet",
         root,

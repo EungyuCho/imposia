@@ -7,8 +7,9 @@ versioning for its published package interfaces. What that means before `1.0`
 
 ## 0.6.0 — Unreleased
 
-Minor release for the asset and print pipeline. Three changes are breaking —
-two print defaults and one status union — and each has an upgrade path in
+Minor release for the asset and print pipeline. Four changes are breaking —
+two print defaults, one status union, and the removed PDF viewer — and each
+has an upgrade path in
 [`docs/migrations/unreleased.md`](docs/migrations/unreleased.md), which is
 renamed to `0.6.0.md` when this release ships.
 
@@ -36,6 +37,12 @@ renamed to `0.6.0.md` when this release ships.
   state exactly as it does for `loading` and `error`. Exhaustive switches
   over these unions stop compiling until they handle the new member;
   `status !== "loading"` checks need no change. (ASA-461)
+- Removed the independent PDF.js viewer: `mountViewer`, its `ViewerController`,
+  `ViewerMode`, `ViewerOptions`, `ViewerSource`, and `ViewerState` types, and
+  the stylesheet rules only it used. `@imposia/viewer`, `@imposia/client`, and
+  `@imposia/react` no longer depend on `pdfjs-dist`. Imposia does not produce
+  PDF bytes, so the viewer had no input from the rest of the toolkit.
+  `mountPageViewer` is unchanged.
 
 ### Changed
 
@@ -64,6 +71,46 @@ renamed to `0.6.0.md` when this release ships.
   load-failure fallback to later candidates disappears for collapsed lists —
   a woff2 whose bytes fail to load no longer falls back to its woff sibling.
   (ASA-460)
+- Core imports only the postcss parser and `AtRule` instead of the postcss
+  package entry. Core · PageDocument drops from 62.0 KiB to 56.7 KiB gzip and
+  the page Viewer route from 28.9 KiB to 11.6 KiB; bundle budgets were
+  lowered to match.
+- Committed pages use `content-visibility: auto` on screen, so the browser
+  skips rendering off-screen pages. The first frame after a commit dropped
+  from 39 ms to 4 ms on a 156-page document; scroll geometry and print are
+  unchanged. Code that reads layout inside an off-screen page still gets
+  correct values, at the cost of a forced layout for that page.
+- Publication commits compute every entry's page range in one pass over the
+  committed pages, and build the search index on first use instead of on
+  every commit. On a 595-page, 100-entry Publication a commit dropped from
+  2760 ms to 2567 ms; the first search, destination lookup, or navigation
+  after a commit now pays the index build (about 64 ms at that size).
+
+### Fixed
+
+- A paragraph or table taller than a page no longer overflows the current
+  page when no line or row of it fits in the remaining space. Plain-text
+  paragraphs, `<br>`-separated line blocks, and tables now break before the
+  block and fragment it from a fresh page; `PAGE_OVERFLOW` is reported only
+  when nothing fits on a fresh page. Previously Core kept the block on the
+  current page and reported overflow, and every following page-tall block
+  then piled up on that same overflowing page — in a 120-paragraph document,
+  112 paragraphs landed on the last page. Text was never lost or duplicated;
+  page assignment was wrong. Paragraphs with inline elements and grids were
+  not affected.
+- A `<style>` element in the middle of a document no longer makes earlier
+  pages overflow without a warning. Core placed each style into the page
+  being filled, after the styles still waiting in the source, which reversed
+  their cascade order until those were placed too; earlier pages were
+  measured under one winning rule and committed under another. Core now
+  moves every body and Publication entry `<style>` to the start of the flow
+  before pagination, keeping their order, so the cascade is the same while
+  measuring and after commit. Styles using `@scope` without a selector stay
+  in place. Documents whose later styles override earlier ones can paginate
+  differently (a 300-section fixture went from 70 pages, 30 of them
+  overflowing, to 75 pages with none). Publication entry styles also stop
+  forcing a style recalculation per entry: 200 styled entries paginate in
+  203 ms instead of 362 ms, with identical page text.
 
 ## 0.5.0 — 2026-08-20
 

@@ -5,8 +5,7 @@ consumer entry paths. It measures the current source on Node.js 22.12 or newer
 with the repository-pinned `esbuild` version for bundling and the
 repository-pinned `oxc-minify` version for the minification post-pass — the
 same two-stage pipeline that produces the published Core browser artifact. It
-does not measure runtime performance, CSS, source maps, the PDF.js worker, or
-React itself.
+does not measure runtime performance, CSS, source maps, or React itself.
 
 ## Run the report
 
@@ -16,7 +15,7 @@ From the repository root, install the lockfile dependencies and run:
 pnpm bundle:size
 ```
 
-The command builds six minified browser ESM scenarios in memory, compresses each
+The command builds five minified browser ESM scenarios in memory, compresses each
 output with gzip level 9, prints the budget report, and exits nonzero when a
 route exceeds its gzip budget. It then prints a reproducible EPUB diagnostic
 that compares a complete Core export against the same export with the EPUB
@@ -29,9 +28,44 @@ All 6 consumer routes are within their gzip budgets.
 
 ## Current baseline
 
-Recorded on 2026-08-20 at the 0.5.0 release commit, after the browser-native
-parsing change (ADR 0013, `d8e2638`), the oxc-minify post-pass (`5d73b43`), and
-the pagination performance batch (ASA-424, ASA-425, ASA-426):
+Recorded on 2026-09-23 on the 0.6.0 development line (Apple M1 Max, Node.js 22),
+after the PDF.js viewer removal and the postcss parser-subpath import:
+
+| Consumer route | Minified | Gzip | Gzip budget | Headroom |
+| --- | ---: | ---: | ---: | ---: |
+| Core · PageDocument | 188.0 KiB | 56.7 KiB | 60.0 KiB | 3.3 KiB |
+| Core · Publication | 203.3 KiB | 60.9 KiB | 64.0 KiB | 3.1 KiB |
+| Viewer · PageDocument | 39.0 KiB | 11.6 KiB | 13.0 KiB | 1.4 KiB |
+| Client · PageDocument | 220.0 KiB | 65.3 KiB | 69.0 KiB | 3.7 KiB |
+| React · PageViewer | 226.7 KiB | 67.2 KiB | 71.0 KiB | 3.8 KiB |
+
+Two changes produced this baseline:
+
+- **postcss parser subpaths.** Core called only `postcss.parse` and
+  `postcss.atRule` but imported the package entry, which carries the
+  processor, LazyResult, and source map generator. Importing
+  `postcss/lib/parse` and `postcss/lib/at-rule` took Core · PageDocument from
+  62.0 KiB to 56.5 KiB gzip. Viewer · PageDocument fell from 28.9 KiB to
+  11.6 KiB, because the Core helpers it imports had been pulling in the whole
+  package entry. The budgets were lowered to restore roughly 5% headroom.
+- **PDF.js viewer removal.** Removing `mountViewer` deleted the `Viewer · PDF`
+  route (433.8 KiB minified, 120.1 KiB gzip, dominated by PDF.js). The other
+  routes measured the same bytes before and after, because tree shaking
+  already kept PDF.js out of them. Outside these routes, a Viewer, Client, or
+  React install no longer adds `pdfjs-dist` (37 MB unpacked) or its optional
+  native `@napi-rs/canvas` binary (25 MB on darwin-arm64), and
+  `@imposia/viewer/styles.css`, which this report does not measure, dropped
+  from 3.9 KiB to 3.0 KiB gzip.
+
+The ASA-424/425/426 escape hatches share their code with runtime fallbacks, so
+removing them reclaims almost nothing; the 0.5.0 expectation below that their
+removal would tighten the budgets does not hold.
+
+### 0.5.0 baseline (2026-08-20)
+
+Recorded at the 0.5.0 release commit, after the browser-native parsing change
+(ADR 0013, `d8e2638`), the oxc-minify post-pass (`5d73b43`), and the pagination
+performance batch (ASA-424, ASA-425, ASA-426):
 
 | Consumer route | Minified | Gzip | Gzip budget | Headroom |
 | --- | ---: | ---: | ---: | ---: |
@@ -45,9 +79,6 @@ the pagination performance batch (ASA-424, ASA-425, ASA-426):
 Compared with the 2026-07-23 baseline, the Core · PageDocument route dropped
 from 103.6 KiB to 56.8 KiB gzip: removing parse5 and its `entities` dependency
 accounts for roughly 47 KiB, and the oxc-minify post-pass for the remainder.
-`Viewer · PDF` is the one route the new minifier pipeline measures larger
-(117.3 → 120.1 KiB gzip); it is dominated by PDF.js, so its budget stays at
-125 KiB rather than tightening.
 
 The performance batch then moved Core · PageDocument back up from 56.8 KiB to
 60.0 KiB, and the four Core-bearing budgets were raised to restore roughly 5%
@@ -68,7 +99,6 @@ These are source-level consumer scenarios rather than package tarball sizes:
 - `Core · PageDocument` exports `mountPageDocument`.
 - `Core · Publication` exports `mountPublication`.
 - `Viewer · PageDocument` exports `mountPageViewer` without Core pagination.
-- `Viewer · PDF` exports `mountViewer` and includes the PDF.js browser module.
 - `Client · PageDocument` exports Core pagination and the page Viewer together.
 - `React · PageViewer` exports `ImposiaPageViewer`; React and React DOM remain
   external peer dependencies.
@@ -86,9 +116,8 @@ state the user-visible benefit, and record why code splitting, tree shaking, or
 a smaller dependency cannot preserve the previous limit.
 
 Decrease a budget when a durable reduction leaves enough headroom for toolchain
-variation. Keep React peers external, keep PDF.js included only in the PDF
-scenario, and do not remove a real dependency from a scenario to make its number
-smaller.
+variation. Keep React peers external, and do not remove a real dependency from a
+scenario to make its number smaller.
 
 ## EPUB decision
 
@@ -125,4 +154,4 @@ second exporter needs the trusted semantic projection interface.
   interface complexity because the required semantic snapshot and retained
   assets are currently private Core state.
 - **Not measured:** network transfer with HTTP content encoding, application
-  code splitting, browser parse time, CSS, and the PDF.js worker.
+  code splitting, browser parse time, and CSS.

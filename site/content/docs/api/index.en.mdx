@@ -11,7 +11,7 @@ Use this reference after you have rendered a first document. Choose a package pa
 | --- | --- | --- |
 | `@imposia/react` | React integration | `ImposiaPageViewer`, `ImposiaDocument`, `ImposiaPublicationViewer`, both lifecycle hooks |
 | `@imposia/core` | Framework-neutral pagination and publications | `mountPageDocument`, `mountPublication`, `prepareDocument` |
-| `@imposia/viewer` | Present committed pages or load a PDF | `mountPageViewer`, `mountViewer`, deep-link helpers |
+| `@imposia/viewer` | Present committed pages | `mountPageViewer`, deep-link helpers |
 | `@imposia/client` | Combined framework-neutral entry point | Re-exports the primary Core and Viewer integration APIs |
 
 Import `@imposia/react/styles.css` once when you use the React package.
@@ -26,7 +26,7 @@ Import `@imposia/react/styles.css` once when you use the React package.
     Framework-neutral page document and Publication controllers.
   </Card>
   <Card title="Viewer API" href="/en/docs/api/viewer">
-    Page presentation, Reader, Inspector, and the independent PDF viewer.
+    Page presentation, Reader, and Inspector.
   </Card>
 </Cards>
 

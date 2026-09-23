@@ -182,7 +182,6 @@ test("Client re-exports the Core Publication controller without another runtime 
         imports: {
           "@imposia/core": "/packages/core/dist/index.js",
           "@imposia/viewer": "/packages/viewer/dist/index.js",
-          "pdfjs-dist": "/node_modules/pdfjs-dist/build/pdf.mjs",
         },
       });
       document.head.append(importMap);

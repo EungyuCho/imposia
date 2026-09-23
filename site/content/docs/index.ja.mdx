@@ -40,6 +40,19 @@ Imposia はこの問いをなくします。手元の HTML と CSS をブラウ�
 | 印刷または PDF | `print()` | ブラウザー標準の印刷ダイアログ。読者はここでプリンターまたは**PDF に保存**を選びます |
 | EPUB | `exportEpub()` | 任意の機能。ページと同時に確定した意味構造を保つソースから作るリフロー型 EPUB 3.3 `Blob` |
 
+## サイズと速度
+
+| 項目 | 結果 |
+| --- | ---: |
+| Core のページ分割（`mountPageDocument`）、minify と gzip 後 | 56.7 KiB |
+| Core を含む React ページビューア（`ImposiaPageViewer`）、minify と gzip 後 | 67.2 KiB |
+| 99 ページの記事をページ分割 | 125 ms |
+| その記事の単語を 1 つ変えて再確定 | 121 ms |
+| 確定直後の最初の描画フレーム | 1.9 ms |
+| すべてのエントリーに `<style>` がある 100 エントリーの Publication をページ分割 | 94 ms |
+
+2026 年 9 月 23 日に Apple M4 上の Chromium 149 で計測しました。時間は 7 回の計測の中央値で、サイズには React と React DOM を含みません。手元で計測するには、リポジトリで `pnpm build` を実行してから `pnpm benchmark` を実行してください。
+
 ## 境界を確認する
 
 <Callout type="warn" title="Imposia は PDF バイトを返しません">

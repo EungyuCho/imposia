@@ -71,11 +71,10 @@ The entrypoint also re-exports `PageComposeOptions` and
 budget; progress is pass-local staging information and does not replace the
 atomic committed-document contract.
 
-`PageViewerMode` adds `spread` to the page-document Viewer's existing
-`continuous` and `single` choices without changing the PDF Viewer's
-`ViewerMode`. A cover spread keeps page 1 alone, and narrow containers
-temporarily expose `state.effectiveMode === "single"` while preserving the
-requested mode and current global page.
+`PageViewerMode` is `continuous`, `single`, or `spread`. A cover spread keeps
+page 1 alone, and narrow containers temporarily expose
+`state.effectiveMode === "single"` while preserving the requested mode and
+current global page.
 
 Set `controls: false` to retain navigation, mode, zoom, responsive spread, and
 print behavior without the built-in rail. Compose host controls with

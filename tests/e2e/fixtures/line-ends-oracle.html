@@ -6,7 +6,8 @@
     <script type="importmap">
       {
         "imports": {
-          "postcss": "data:text/javascript,const stub = { parse() { throw new Error('postcss stub'); } }; export default stub;"
+          "postcss/lib/parse": "data:text/javascript,export default function parse() { throw new Error('postcss stub'); }",
+          "postcss/lib/at-rule": "data:text/javascript,export default class AtRule { constructor() { throw new Error('postcss stub'); } }"
         }
       }
     </script>

@@ -66,7 +66,7 @@ Apache-2.0.
                     │                                    │
         ┌───────────▼───────────┐                        │
         │  @imposia/viewer      │  presentation shell     │
-        │  + pdfjs-dist         │  decorates the iframe   │
+        │                       │  decorates the iframe   │
         └───────────┬───────────┘                        │
                     │                                    │
                     └─────────────────┬──────────────────┘
@@ -85,14 +85,14 @@ Apache-2.0.
 | Package | Size | Role |
 |---|---:|---|
 | `@imposia/core` | ~11.5k LOC | Sanitization, asset resolution, fragmentation, commit, print, EPUB, Publication |
-| `@imposia/viewer` | ~2.5k LOC | Viewer chrome, reader panels, PDF.js viewer, theme tokens |
+| `@imposia/viewer` | ~2.5k LOC | Viewer chrome, reader panels, theme tokens |
 | `@imposia/react` | ~1.2k LOC | Components, hooks, imperative handles |
 | `@imposia/client` | ~90 LOC | Pure re-export union of core + viewer |
 
 The dependency direction is strictly one-way with no cycles. `@imposia/client`
 exists so that the pagination API and the presentation API can be imported
 together **without** core ever depending on viewer — core must stay free of
-`pdfjs-dist` and of every Node builtin, and that is mechanically enforced
+every Node builtin, and that is mechanically enforced
 (§7).
 
 `@imposia/react` re-exports the entire client surface (`export * from
@@ -390,17 +390,10 @@ contract at the React layer.
 
 ### 6.4 Viewer
 
-Two disjoint mount APIs rather than runtime polymorphism:
-
-- `mountViewer(container, source, options)` — the PDF.js viewer. Creates its own
-  DOM, rasterizes pages to canvas with windowed rendering and render-task
-  cancellation.
-- `mountPageViewer(container, pageDocument, options)` — the Imposia viewer.
-  Adopts Core's iframe as described above.
-
-They share only the chrome factory (rail, toolbar, indicators), the theme
-binding, and the stylesheet. `PageViewerMode` extends `ViewerMode` with
-`"spread"` on the page side only, leaving the PDF contract untouched.
+`mountPageViewer(container, pageDocument, options)` is the only mount API. It
+adopts Core's iframe as described above; `PageViewerMode` is `"continuous"`,
+`"single"`, or `"spread"`. The PDF.js viewer (`mountViewer`) was removed in the
+0.6 line, so the Viewer package has no PDF rendering dependency.
 
 Reader features are projections, never independent sources of truth: the TOC is
 a projection of `PublicationDocument.outline`; search is a UI shell over
@@ -617,10 +610,14 @@ Recorded release matrix (`docs/verification.md`): **354 browser scenarios
 passed, 120 intentional skips, 0 failures, 474 total**, plus 8 site scenarios
 and 23 Vitest scenarios.
 
-A performance baseline is recorded in `benchmarks/baseline.json` (M1 Max,
-schemaVersion 2): warm medians of **105 ms / 10 pages, 146 ms / 50 pages,
-332 ms / 200 pages**, broken down into resource wait, print preparation, and PDF
-generation phases.
+A performance baseline is recorded in `benchmarks/baseline.json` by
+`pnpm benchmark` (schemaVersion 3, Chromium 149 on an Apple M4, 2026-09-23):
+medians of **125 ms** to paginate a 99-page article, **121 ms** to recommit it
+after a one-word change, **1.9 ms** for the first frame after a commit, and
+**94 ms** for a 100-entry Publication with a `<style>` per entry.
+`pnpm benchmark --compare <core bundle>` measures another revision's built
+bundle in the same browser, alternating runs. The previous schemaVersion 2
+baseline measured the removed Node PDF renderer.
 
 ---
 
@@ -652,7 +649,7 @@ its `.d.ts` files survive from `tsc -b`.
 |---|---|
 | `check-core-package-boundary` / `core-package-boundary` | Published core is browser-only and clean-room-safe: no Node builtins, no Playwright, no pdfjs — plus a **legacy renderer blocklist** so remnants of the pre-clean-room Node renderer can never resurface — and the package entry (`dist/index.js` / `dist/index.d.ts`) never exports an `internal*TestApi` test seam (§13.5) |
 | `check-site-prerender` | All 40 routes (4 locales × 10 paths) truly prerendered — Fumadocs shell present, `<html lang>` matches the path locale, no `hydrate-fallback` — and `_redirects` matches exactly |
-| `bundle-size` / `bundle-size-report` | Six consumer routes stay under gzip budgets; overage is a hard failure naming the route and the excess |
+| `bundle-size` / `bundle-size-report` | Five consumer routes stay under gzip budgets; overage is a hard failure naming the route and the excess |
 | `preflight` | Node ≥22, lockfile, full Apache-2.0 text, third-party notices, all three Playwright browsers installed — fails fast before expensive steps |
 | `licenses` + `license-policy` + `license-package-audit` + `core-bundle-license-audit` | SPDX allowlist with version-pinned reviewed exceptions; every packed tarball carries LICENSE/README/notices; **every package bundled into core's source map must appear in both notice files with full upstream text** |
 | `copy-site-demo` | The deployed demo is byte-identical to `examples/demo/` |
@@ -664,14 +661,13 @@ regression fails in seconds rather than at publish time.
 
 ### 13.3 Budgets
 
-| Route | Gzip budget | Recorded (2026-08-20) |
+| Route | Gzip budget | Recorded (2026-09-23) |
 |---|---:|---:|
-| Core · PageDocument | 60 KiB | 56.8 |
-| Core · Publication | 64 KiB | 60.8 |
-| Viewer · PageDocument | 30 KiB | 28.2 |
-| Viewer · PDF (incl. PDF.js) | 125 KiB | 120.1 |
+| Core · PageDocument | 60 KiB | 56.7 |
+| Core · Publication | 64 KiB | 60.9 |
+| Viewer · PageDocument | 13 KiB | 11.6 |
 | Client · PageDocument | 69 KiB | 65.3 |
-| React · PageViewer | 71 KiB | 67.0 |
+| React · PageViewer | 71 KiB | 67.2 |
 
 Budgets are constants in the script, so raising one is an explicit reviewed
 diff.
@@ -759,7 +755,7 @@ ADRs, contracts, and the CHANGELOG are intentionally English-only.
 ## 15. Governance
 
 - **License** — Apache-2.0 throughout. Core bundles PostCSS, nanoid, and
-  picocolors; `pdfjs-dist` stays an external Viewer dependency. Every
+  picocolors; the Viewer has no third-party runtime dependency. Every
   tarball carries its own LICENSE and notices.
 - **Clean-room** — Independently authored from repository requirements and
   cited public specifications only (W3C CSS break/page/content/GCPM/page-floats/

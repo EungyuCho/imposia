@@ -1,4 +1,5 @@
-import postcss, { type Declaration, type Rule } from "postcss";
+import type { Declaration, Rule } from "postcss";
+import { parseCss } from "./css-parse.js";
 import { normalizePageMediaCss, normalizePageNameDeclaration } from "./page-media.js";
 import type { WarningCollector } from "./warnings.js";
 
@@ -82,7 +83,7 @@ function normalizeRule(
 }
 
 export function normalizeCss(css: string, warnings: WarningCollector, baseOrder = 0): string {
-  const root = postcss.parse(css);
+  const root = parseCss(css);
   normalizePageMediaCss(root, warnings, baseOrder);
   const declarationIndexes = new Map<Declaration, number>();
   let declarationIndex = 0;
@@ -99,7 +100,7 @@ export function normalizeInlineCss(
   warnings: WarningCollector,
   baseOrder: number,
 ): string {
-  const root = postcss.parse(`x{${css}}`);
+  const root = parseCss(`x{${css}}`);
   root.walkRules((rule) => normalizeRule(rule, new Map(), baseOrder, warnings));
   const rule = root.first;
   return rule?.type === "rule" ? rule.nodes.map((node) => node.toString()).join(";") : css;

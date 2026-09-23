@@ -43,24 +43,43 @@ function containsEntryContent(element: Element): boolean {
   );
 }
 
-function entryPageRange(pageDocument: PageDocument, entryIndex: number): PublicationPageRange {
+function entryPageRanges(
+  pageDocument: PageDocument,
+  entryCount: number,
+): (entry: number) => PublicationPageRange {
+  const fallback = Object.freeze({ start: 1, end: pageDocument.pageCount });
   const frameDocument = pageDocument.iframe.contentDocument;
-  const fallback = () => Object.freeze({ start: 1, end: pageDocument.pageCount });
-  if (frameDocument === null) return fallback();
-  const selector = `[${PUBLICATION_ENTRY_MARKER}="${entryIndex}"]`;
-  const contentPages: number[] = [];
-  const fallbackPages: number[] = [];
+  if (frameDocument === null) return () => fallback;
+  // One pass over the committed pages. Pages are visited in ascending order,
+  // so the first and last page recorded for an entry are its range bounds.
+  const contentPages = new Map<number, { start: number; end: number }>();
+  const markerPages = new Map<number, { start: number; end: number }>();
+  const record = (ranges: typeof contentPages, entry: number, page: number) => {
+    const range = ranges.get(entry);
+    if (range === undefined) ranges.set(entry, { start: page, end: page });
+    else range.end = page;
+  };
   for (const page of frameDocument.querySelectorAll<HTMLElement>("[data-imposia-page]")) {
     const number = Number(page.getAttribute("data-imposia-page-number"));
-    const markers = [...page.querySelectorAll(selector)];
-    if (markers.length > 0) fallbackPages.push(number);
-    if (markers.some(containsEntryContent)) contentPages.push(number);
+    const seenMarker = new Set<number>();
+    const seenContent = new Set<number>();
+    for (const marker of page.querySelectorAll(`[${PUBLICATION_ENTRY_MARKER}]`)) {
+      const entry = Number(marker.getAttribute(PUBLICATION_ENTRY_MARKER));
+      if (!Number.isInteger(entry) || entry < 0 || entry >= entryCount) continue;
+      if (!seenMarker.has(entry)) {
+        seenMarker.add(entry);
+        record(markerPages, entry, number);
+      }
+      if (!seenContent.has(entry) && containsEntryContent(marker)) {
+        seenContent.add(entry);
+        record(contentPages, entry, number);
+      }
+    }
   }
-  const occupied = contentPages.length > 0 ? contentPages : fallbackPages;
-  const start = occupied[0];
-  const end = occupied.at(-1);
-  if (start === undefined || end === undefined) return fallback();
-  return Object.freeze({ start, end });
+  return (entry) => {
+    const range = contentPages.get(entry) ?? markerPages.get(entry);
+    return range === undefined ? fallback : Object.freeze({ ...range });
+  };
 }
 
 function publicationWarning(
@@ -84,9 +103,10 @@ function publicationDocument(
   pageDocument: PageDocument,
   snapshot: PreparedPublicationSnapshot,
 ): PublicationDocument {
+  const pageRange = entryPageRanges(pageDocument, snapshot.entries.length);
   const entries: readonly CommittedPublicationEntry[] = Object.freeze(
     snapshot.entries.map((entry, index) =>
-      Object.freeze({ ...entry, pageRange: entryPageRange(pageDocument, index) }),
+      Object.freeze({ ...entry, pageRange: pageRange(index) }),
     ),
   );
   const warnings = Object.freeze(
@@ -127,7 +147,10 @@ export function mountPublication(
   const searchScope = nextPublicationSearchScope();
   const snapshots = new WeakMap<PageSource, PreparedPublicationSnapshot>();
   const publications = new WeakMap<PageDocument, PublicationDocument>();
-  const searchIndexes = new WeakMap<PageDocument, PublicationSearchIndex>();
+  // Search indexes are built on first use: reading every committed page's text
+  // and computed styles costs tens of milliseconds on large Publications, and
+  // most commits are never searched.
+  const searchIndexes = new WeakMap<PageDocument, () => PublicationSearchIndex>();
   snapshots.set(prepared.source, prepared);
   const pageController = mountPageDocumentWithFinalizer(
     container,
@@ -143,10 +166,15 @@ export function mountPublication(
       }
       const publication = publicationDocument(pageDocument, nextSnapshot);
       publications.set(pageDocument, publication);
-      searchIndexes.set(
-        pageDocument,
-        createPublicationSearchIndex(pageDocument, publication.entries, searchScope),
-      );
+      let searchIndex: PublicationSearchIndex | undefined;
+      searchIndexes.set(pageDocument, () => {
+        searchIndex ??= createPublicationSearchIndex(
+          pageDocument,
+          publication.entries,
+          searchScope,
+        );
+        return searchIndex;
+      });
       return (committed, exportOptions) =>
         exportPublicationEpub(committed, publication.entries, publication.outline, exportOptions);
     },
@@ -173,7 +201,7 @@ export function mountPublication(
       : (resolvePublicationDestination(publication.outline, id) ??
           (pageController.current === undefined
             ? undefined
-            : searchIndexes.get(pageController.current)?.resolveDestination(id)));
+            : searchIndexes.get(pageController.current)?.().resolveDestination(id)));
   };
   return {
     ready,
@@ -185,7 +213,7 @@ export function mountPublication(
       const pageDocument = pageController.current;
       return pageDocument === undefined
         ? Object.freeze([])
-        : (searchIndexes.get(pageDocument)?.search(query) ?? Object.freeze([]));
+        : (searchIndexes.get(pageDocument)?.().search(query) ?? Object.freeze([]));
     },
     navigate(destination) {
       const resolved = currentDestination(destination.id);
@@ -203,7 +231,7 @@ export function mountPublication(
       }
       if (
         !moveToPublicationDestination(pageController.current, resolved) &&
-        !searchIndexes.get(pageController.current)?.navigate(resolved)
+        !searchIndexes.get(pageController.current)?.().navigate(resolved)
       ) {
         throw new ImposiaError(
           "PUBLICATION_DESTINATION_NOT_FOUND",

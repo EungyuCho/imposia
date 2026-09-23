@@ -28,51 +28,37 @@ const SCENARIOS = Object.freeze([
   Object.freeze({
     name: "Core · PageDocument",
     source: 'export { mountPageDocument } from "@imposia/core";',
-    // 60.0 KiB measured 2026-08-20 after the pagination performance batch
-    // (ASA-424/425/426). Each of those tickets ships its fast path alongside
-    // the previous implementation behind an experimental escape hatch, so the
-    // route currently carries both; the hatches are scheduled for removal one
-    // release after they land, which reclaims the difference. Splitting the
-    // paths out is not available: they are selected per element mid-pagination
-    // inside one hot loop, so a dynamic import boundary would have to be
-    // crossed per node. Still 43.6 KiB below the 103.6 KiB pre-ASA-404 route.
-    gzipBudgetBytes: 63 * KIBIBYTE,
+    // 56.7 KiB measured 2026-09-23, after Core switched to the postcss parser
+    // subpaths (62.0 KiB before). The ASA-424/425/426 escape hatches share
+    // their code with the runtime fallbacks, so removing them reclaims almost
+    // nothing; do not count on it to tighten this budget.
+    gzipBudgetBytes: 60 * KIBIBYTE,
   }),
   Object.freeze({
     name: "Core · Publication",
     source: 'export { mountPublication } from "@imposia/core";',
-    // 64.1 KiB measured 2026-08-20; publication adds outline/search over
-    // PageDocument and inherits the same dual-path pagination cost.
-    gzipBudgetBytes: 67 * KIBIBYTE,
+    // 60.9 KiB measured 2026-09-23; publication adds outline/search over
+    // PageDocument.
+    gzipBudgetBytes: 64 * KIBIBYTE,
   }),
   Object.freeze({
     name: "Viewer · PageDocument",
     source: 'export { mountPageViewer } from "@imposia/viewer";',
-    // 28.2 KiB measured 2026-08-20; the route never included parse5, so only the
-    // minifier pipeline moved it.
-    gzipBudgetBytes: 30 * KIBIBYTE,
-  }),
-  Object.freeze({
-    name: "Viewer · PDF",
-    source: 'export { mountViewer } from "@imposia/viewer";',
-    // 120.1 KiB measured 2026-08-20. Dominated by PDF.js; the oxc pipeline
-    // measures this route 2.8 KiB gzip larger than esbuild did, so the budget
-    // stays at its previous value (4.1% headroom).
-    gzipBudgetBytes: 125 * KIBIBYTE,
+    // 11.6 KiB measured 2026-09-23. Core helpers the viewer imports used to
+    // pull in the whole postcss package entry (28.9 KiB before).
+    gzipBudgetBytes: 13 * KIBIBYTE,
   }),
   Object.freeze({
     name: "Client · PageDocument",
     source: 'export { mountPageDocument, mountPageViewer } from "@imposia/client";',
-    // 68.5 KiB measured 2026-08-20 (Core pagination + page viewer); tracks the
-    // Core · PageDocument dual-path increase.
-    gzipBudgetBytes: 72 * KIBIBYTE,
+    // 65.3 KiB measured 2026-09-23 (Core pagination + page viewer).
+    gzipBudgetBytes: 69 * KIBIBYTE,
   }),
   Object.freeze({
     name: "React · PageViewer",
     source: 'export { ImposiaPageViewer } from "@imposia/react";',
-    // 70.3 KiB measured 2026-08-20; React/React DOM stay external. Tracks the
-    // Core · PageDocument dual-path increase.
-    gzipBudgetBytes: 74 * KIBIBYTE,
+    // 67.2 KiB measured 2026-09-23; React/React DOM stay external.
+    gzipBudgetBytes: 71 * KIBIBYTE,
   }),
 ]) satisfies readonly BundleScenario[];
 

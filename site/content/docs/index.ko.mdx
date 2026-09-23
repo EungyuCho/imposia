@@ -40,6 +40,19 @@ Imposia는 이 질문 자체를 없앱니다. 이미 사용하던 HTML과 CSS를
 | 인쇄 또는 PDF | `print()` | 브라우저의 기본 인쇄 창입니다. 여기서 사용자가 프린터나 **PDF로 저장**을 선택합니다. |
 | EPUB | `exportEpub()` | 선택 사항입니다. 확정된 원본의 의미 구조로 만든 리플로우형 EPUB 3.3 `Blob`입니다. |
 
+## 크기와 속도
+
+| 항목 | 결과 |
+| --- | ---: |
+| Core 페이지네이션(`mountPageDocument`), 압축(minify·gzip) 후 | 56.7 KiB |
+| Core를 포함한 React 페이지 뷰어(`ImposiaPageViewer`), 압축(minify·gzip) 후 | 67.2 KiB |
+| 99페이지 문서 페이지네이션 | 125 ms |
+| 그 문서에서 단어 하나를 바꾸고 다시 확정 | 121 ms |
+| 확정 직후 첫 화면 렌더링 | 1.9 ms |
+| 항목마다 `<style>`이 있는 100개 항목 Publication 페이지네이션 | 94 ms |
+
+2026년 9월 23일 Apple M4의 Chromium 149에서 측정했습니다. 시간은 7회 측정의 중앙값이고, 크기에는 React와 React DOM이 포함되지 않습니다. 직접 측정하려면 저장소에서 `pnpm build`를 실행한 뒤 `pnpm benchmark`를 실행하세요.
+
 ## 경계를 확인하세요
 
 <Callout type="warn" title="Imposia는 PDF 바이트를 만들지 않습니다">

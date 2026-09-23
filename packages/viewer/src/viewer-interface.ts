@@ -3,7 +3,7 @@ import { IMPOSIA_BRAND_MARK } from "./brand-mark.js";
 interface ViewerInterfaceOptions {
   readonly root: HTMLElement;
   readonly label: string;
-  readonly status: "loading" | "ready";
+  readonly status: "ready";
   readonly toolbarRole: "group" | "toolbar";
   readonly initialPageLabel: string;
   readonly initialZoomLabel: string;
@@ -23,12 +23,6 @@ interface ViewerInterfaceElements {
   readonly single: HTMLButtonElement;
 }
 
-export interface ViewerElements extends ViewerInterfaceElements {
-  readonly stage: HTMLElement;
-  readonly pages: HTMLElement;
-  readonly stateLabel: HTMLElement;
-}
-
 export interface PageViewerElements extends ViewerInterfaceElements {
   readonly stage: HTMLElement;
   readonly iframe: HTMLIFrameElement;
@@ -36,7 +30,7 @@ export interface PageViewerElements extends ViewerInterfaceElements {
   readonly spread: HTMLButtonElement;
 }
 
-export function element<K extends keyof HTMLElementTagNameMap>(
+function element<K extends keyof HTMLElementTagNameMap>(
   tagName: K,
   className: string,
   text?: string,
@@ -104,33 +98,6 @@ function createViewerInterface(options: ViewerInterfaceOptions): ViewerInterface
     zoomIn,
     continuous,
     single,
-  };
-}
-
-export function createPdfViewerInterface(container: HTMLElement): ViewerElements {
-  const root = element("section", "imposia-viewer");
-  const shared = createViewerInterface({
-    root,
-    label: "Imposia PDF viewer",
-    status: "loading",
-    toolbarRole: "toolbar",
-    initialPageLabel: "1 / 0",
-    initialZoomLabel: "100%",
-  });
-  const stage = element("div", "imposia-stage");
-  const stateLabel = element("div", "imposia-state");
-  stateLabel.setAttribute("role", "status");
-  stateLabel.innerHTML =
-    '<span class="imposia-spinner" aria-hidden="true"></span><span>Preparing document</span>';
-  const pages = element("div", "imposia-pages");
-  stage.append(stateLabel, pages);
-  root.append(shared.rail, stage);
-  container.replaceChildren(root);
-  return {
-    ...shared,
-    stage,
-    pages,
-    stateLabel,
   };
 }
 

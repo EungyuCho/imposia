@@ -512,6 +512,27 @@ function isNonFlowNode(node: Node): boolean {
   );
 }
 
+/**
+ * Moves every HTML `<style>` in the flow to its start, keeping their order, so
+ * the fragmenter places them all on the first page before measuring anything.
+ *
+ * Pages are appended to the probe after the source flow. Moving one style
+ * into a page mid-pass put it after the styles still waiting in the source,
+ * reversing their cascade order until those were placed too: earlier pages
+ * were measured under one winner and committed under another, and could
+ * overflow silently. Each move also forced a style recalculation over every
+ * page placed so far. `@scope` without a selector binds to the style's
+ * parent, so those styles stay where they are.
+ */
+function hoistFlowStyles(flow: HTMLElement): void {
+  const styles = [...flow.querySelectorAll<HTMLStyleElement>("style")].filter(
+    (style) =>
+      style.namespaceURI === "http://www.w3.org/1999/xhtml" &&
+      !/@scope\b/iu.test(style.textContent ?? ""),
+  );
+  if (styles.length > 0) flow.prepend(...styles);
+}
+
 function flowHasContent(flow: HTMLElement): boolean {
   return [...flow.childNodes].some((node) => !isNonFlowNode(node));
 }
@@ -2388,6 +2409,21 @@ class RecursiveFragmenter {
     return false;
   }
 
+  /**
+   * Moves a block whose first fragment holds nothing yet onto a fresh page,
+   * breaking before it. Returns the parent cursor on the fresh page.
+   */
+  #relocateToFreshPage(
+    element: Element,
+    parent: FragmentCursor,
+    continueParent: ContinueFragment,
+  ): FragmentCursor {
+    element.remove();
+    const fresh = continueParent(parent.page.name);
+    fresh.container.append(element);
+    return fresh;
+  }
+
   #shellCursor(
     parent: FragmentCursor,
     shell: Element,
@@ -3027,6 +3063,7 @@ class RecursiveFragmenter {
     };
 
     let lineIndex = 0;
+    let relocated = false;
     while (lineIndex < lines.length) {
       const scheduled = this.#checkpoint();
       if (scheduled !== undefined) await scheduled;
@@ -3049,6 +3086,19 @@ class RecursiveFragmenter {
       if (lineIndex + fittingLines === lines.length) {
         this.#markPageContent(shellCursor.page, Math.max(1, fittingLines));
         break;
+      }
+      if (
+        fittingLines === 0 &&
+        !relocated &&
+        shell === element &&
+        this.#hasPageContent(shellCursor.page)
+      ) {
+        // No line fits after earlier content: break before the block and
+        // fragment it from a fresh page. Only a fresh page is a real overflow.
+        relocated = true;
+        parentAtFragment = this.#relocateToFreshPage(element, parentAtFragment, continueParent);
+        shellCursor = this.#shellCursor(parentAtFragment, shell, constraint);
+        continue;
       }
       if (fittingLines === 0) {
         const line = lines[lineIndex];
@@ -3104,6 +3154,7 @@ class RecursiveFragmenter {
     };
 
     let currentText = text;
+    let relocated = false;
     while (this.#cursorOverflows(shellCursor)) {
       const scheduled = this.#checkpoint();
       if (scheduled !== undefined) await scheduled;
@@ -3118,6 +3169,14 @@ class RecursiveFragmenter {
       );
       if (fittingRemainder === undefined) {
         currentText.data = value;
+        if (!relocated && shell === element && this.#hasPageContent(shellCursor.page)) {
+          // No prefix fits after earlier content: break before the block and
+          // fragment it from a fresh page. Only a fresh page is a real overflow.
+          relocated = true;
+          parentAtFragment = this.#relocateToFreshPage(element, parentAtFragment, continueParent);
+          shellCursor = this.#shellCursor(parentAtFragment, shell, constraint);
+          continue;
+        }
         this.#reportOverflow();
         this.#markPageContent(shellCursor.page);
         return parentAtFragment;
@@ -3195,6 +3254,7 @@ class RecursiveFragmenter {
         : { overflowRoot: parentAtFragment.overflowRoot }),
     };
     let rowsOnFragment = 0;
+    let tableRelocated = false;
     let groupShell: Element | undefined;
 
     const appendGroup = (table: Element, group: Element): void => {
@@ -3286,6 +3346,24 @@ class RecursiveFragmenter {
         let overflowed = false;
         if (this.#cursorOverflows(tableCursor)) {
           for (const row of cluster) row.remove();
+          const relocateTable =
+            !tableRelocated &&
+            tableShell === element &&
+            rowsOnFragment === 0 &&
+            this.#hasPageContent(tableCursor.page);
+          if (relocateTable) {
+            // No row fits after earlier content: break before the table and
+            // fragment it from a fresh page. Only a fresh page is a real overflow.
+            tableRelocated = true;
+            parentAtFragment = this.#relocateToFreshPage(element, parentAtFragment, continueParent);
+            tableCursor = {
+              page: parentAtFragment.page,
+              container: tableCursor.container,
+              ...(parentAtFragment.overflowRoot === undefined
+                ? {}
+                : { overflowRoot: parentAtFragment.overflowRoot }),
+            };
+          }
           let furnitureOverflowed = reportFurnitureOverflow(tableCursor);
           if (furnitureOverflowed) {
             this.#markPageContent(tableCursor.page);
@@ -3293,7 +3371,7 @@ class RecursiveFragmenter {
           const captionOnFragment = [...tableShell.children].some(
             (child) => child.localName === "caption",
           );
-          if (rowsOnFragment > 0 || captionOnFragment) {
+          if (!relocateTable && (rowsOnFragment > 0 || captionOnFragment)) {
             tableCursor = continueTable(parentAtFragment.page.name, template);
             furnitureOverflowed = reportFurnitureOverflow(tableCursor);
           }
@@ -3542,6 +3620,7 @@ export async function buildGeneration(
           settings.experimental,
           settings.limits,
         );
+        hoistFlowStyles(passSource);
         probe.append(passSource);
         await settlePaginationAssets(
           frameDocument,
