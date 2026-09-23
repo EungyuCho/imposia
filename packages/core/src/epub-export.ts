@@ -1,4 +1,5 @@
-import postcss, { type AtRule, type Declaration, type Root } from "postcss";
+import type { AtRule, Declaration, Root } from "postcss";
+import { parseCss } from "./css-parse.js";
 import { createStoredZip, type StoredZipEntry } from "./epub-zip.js";
 import { ImposiaError } from "./errors.js";
 import { hasUnsupportedCssResourceFunction, scanCssUrls } from "./page-document-assets-css.js";
@@ -462,7 +463,7 @@ function cleanCssRoot(root: Root, blobHrefs: ReadonlyMap<string, string>): void 
 
 function rewriteStylesheet(css: string, blobHrefs: ReadonlyMap<string, string>): string {
   try {
-    const root = postcss.parse(css);
+    const root = parseCss(css);
     cleanCssRoot(root, blobHrefs);
     return root.toString();
   } catch {
@@ -472,7 +473,7 @@ function rewriteStylesheet(css: string, blobHrefs: ReadonlyMap<string, string>):
 
 function rewriteInlineStyle(css: string, blobHrefs: ReadonlyMap<string, string>): string {
   try {
-    const root = postcss.parse(`x{${css}}`);
+    const root = parseCss(`x{${css}}`);
     cleanCssRoot(root, blobHrefs);
     const rule = root.first;
     return rule?.type === "rule" ? rule.nodes.map((node) => node.toString()).join(";") : "";

@@ -1,4 +1,5 @@
-import postcss, { type Root } from "postcss";
+import type { Root } from "postcss";
+import AtRule from "postcss/lib/at-rule";
 import {
   type CssReference,
   cssReferences,
@@ -87,7 +88,7 @@ function conditionedImport(
   }
   let nodes = importedNodes;
   if (conditions !== "") {
-    const media = postcss.atRule({ name: "media", params: conditions });
+    const media = new AtRule({ name: "media", params: conditions });
     media.append(...nodes);
     nodes = [media];
   }
@@ -95,12 +96,12 @@ function conditionedImport(
     const params = /^(?:\(|selector\s*\(|font-tech\s*\(|font-format\s*\()/i.test(supports)
       ? supports
       : `(${supports})`;
-    const rule = postcss.atRule({ name: "supports", params });
+    const rule = new AtRule({ name: "supports", params });
     rule.append(...nodes);
     nodes = [rule];
   }
   if (layer !== undefined) {
-    const rule = postcss.atRule({ name: "layer", params: layer });
+    const rule = new AtRule({ name: "layer", params: layer });
     rule.append(...nodes);
     nodes = [rule];
   }

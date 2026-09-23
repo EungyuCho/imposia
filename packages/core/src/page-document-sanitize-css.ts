@@ -1,4 +1,5 @@
-import postcss, { type AtRule } from "postcss";
+import type { AtRule, Root } from "postcss";
+import { parseCss } from "./css-parse.js";
 import { hasUnsupportedCssResourceFunction, scanCssUrls } from "./page-document-assets-css.js";
 import { sameDocumentFragment } from "./page-document-assets-html.js";
 
@@ -74,9 +75,9 @@ export function sanitizeCss(
   preserveResolvedResources = false,
   resolvedUrls?: ReadonlySet<string>,
 ): SanitizedCss {
-  let root: ReturnType<typeof postcss.parse>;
+  let root: Root;
   try {
-    root = postcss.parse(css);
+    root = parseCss(css);
   } catch {
     return { css: "", resourceBlocked: true };
   }
