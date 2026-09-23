@@ -71,6 +71,20 @@ renamed to `0.6.0.md` when this release ships.
   load-failure fallback to later candidates disappears for collapsed lists —
   a woff2 whose bytes fail to load no longer falls back to its woff sibling.
   (ASA-460)
+- Core imports only the postcss parser and `AtRule` instead of the postcss
+  package entry. Core · PageDocument drops from 62.0 KiB to 56.7 KiB gzip and
+  the page Viewer route from 28.9 KiB to 11.6 KiB; bundle budgets were
+  lowered to match.
+- Committed pages use `content-visibility: auto` on screen, so the browser
+  skips rendering off-screen pages. The first frame after a commit dropped
+  from 39 ms to 4 ms on a 156-page document; scroll geometry and print are
+  unchanged. Code that reads layout inside an off-screen page still gets
+  correct values, at the cost of a forced layout for that page.
+- Publication commits compute every entry's page range in one pass over the
+  committed pages, and build the search index on first use instead of on
+  every commit. On a 595-page, 100-entry Publication a commit dropped from
+  2760 ms to 2567 ms; the first search, destination lookup, or navigation
+  after a commit now pays the index build (about 64 ms at that size).
 
 ### Fixed
 

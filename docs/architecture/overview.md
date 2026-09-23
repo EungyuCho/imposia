@@ -659,11 +659,11 @@ regression fails in seconds rather than at publish time.
 
 | Route | Gzip budget | Recorded (2026-09-23) |
 |---|---:|---:|
-| Core · PageDocument | 63 KiB | 62.0 |
-| Core · Publication | 67 KiB | 66.1 |
-| Viewer · PageDocument | 30 KiB | 28.9 |
-| Client · PageDocument | 72 KiB | 70.6 |
-| React · PageViewer | 74 KiB | 72.5 |
+| Core · PageDocument | 60 KiB | 56.7 |
+| Core · Publication | 64 KiB | 60.9 |
+| Viewer · PageDocument | 13 KiB | 11.6 |
+| Client · PageDocument | 69 KiB | 65.3 |
+| React · PageViewer | 71 KiB | 67.2 |
 
 Budgets are constants in the script, so raising one is an explicit reviewed
 diff.
