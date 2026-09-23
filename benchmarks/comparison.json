@@ -1,0 +1,142 @@
+{
+  "schemaVersion": 1,
+  "capturedAt": "2026-09-23T15:28:32.264Z",
+  "runs": {
+    "warmup": 1,
+    "measured": 7,
+    "timeoutSeconds": 120
+  },
+  "environment": {
+    "platform": "darwin",
+    "release": "25.5.0",
+    "architecture": "arm64",
+    "cpuModel": "Apple M4",
+    "logicalCpuCount": 10,
+    "totalMemoryBytes": 25769803776,
+    "nodeVersion": "v24.19.0",
+    "chromiumVersion": "149.0.7827.55",
+    "viewport": "1200x800"
+  },
+  "input": {
+    "css": "@page { size: A4; margin: 18mm; }\nbody { margin: 0; font-family: serif; font-size: 16px; line-height: 1.5; }",
+    "generator": "scripts/benchmark-compare.ts article(): per section an <h2>, a paragraph, a two-item list, and a paragraph"
+  },
+  "libraries": [
+    {
+      "id": "imposia",
+      "name": "Imposia",
+      "version": "0.5.0",
+      "commit": "44594de",
+      "sources": [
+        {
+          "url": "packages/core/dist/index.js (built from this checkout)",
+          "sha256": "047bfe83f7422780ec2a77fbcad0adc2a17c34d64a39ada795cc371dba2192a7",
+          "gzipKiB": 61.8
+        }
+      ],
+      "api": "mountPageDocument(host, { html }) then controller.ready; controller.update({ html })"
+    },
+    {
+      "id": "pagedjs",
+      "name": "Paged.js",
+      "version": "0.4.3",
+      "sources": [
+        {
+          "url": "https://cdn.jsdelivr.net/npm/pagedjs@0.4.3/dist/paged.min.js",
+          "sha256": "c4af9ac4a80f15e4abf53e11fdf34659dc4913f61b541652811cfa570f397211",
+          "gzipKiB": 94.2
+        }
+      ],
+      "api": "new PagedModule.Previewer().preview(content, [stylesheetUrl], renderTo) resolving to a flow with total"
+    },
+    {
+      "id": "vivliostyle",
+      "name": "Vivliostyle (@vivliostyle/core)",
+      "version": "2.45.2",
+      "sources": [
+        {
+          "url": "https://cdn.jsdelivr.net/npm/@vivliostyle/core@2.45.2/+esm",
+          "sha256": "16725bd088a0147605e11888e36e490435f7a33a2a8d004c014741d87270b7aa",
+          "gzipKiB": 215.2
+        }
+      ],
+      "api": "new CoreViewer({ viewportElement }).loadDocument({ url }, {}, { renderAllPages: true }) until readystatechange reports ReadyState.COMPLETE"
+    }
+  ],
+  "scenarios": [
+    {
+      "id": "paginate-200",
+      "description": "Paginate a 600-section article (headings, paragraphs, lists) at A4 with 18mm margins",
+      "unit": "ms",
+      "results": {
+        "imposia": {
+          "median": 249,
+          "samples": [248.7, 262.4, 249, 245.7, 249, 242.6, 256.3],
+          "pageCount": 200
+        },
+        "pagedjs": {
+          "median": 850.7,
+          "samples": [850.7, 850.8, 849.3, 850, 857.4, 849.4, 851.3],
+          "pageCount": 200
+        },
+        "vivliostyle": {
+          "median": 2554.1,
+          "samples": [2542.9, 2514.3, 2539, 2554.1, 2583.3, 2581.6, 2655],
+          "pageCount": 200
+        }
+      }
+    },
+    {
+      "id": "edit-50",
+      "description": "Change one word in a 149-section report and show the updated pages (re-render only)",
+      "unit": "ms",
+      "results": {
+        "imposia": {
+          "median": 45.9,
+          "samples": [46.3, 46.2, 46.6, 45.8, 45.6, 45.7, 45.9],
+          "pageCount": 50
+        },
+        "pagedjs": {
+          "median": 216.7,
+          "samples": [215.8, 216.7, 215.7, 215.8, 216.7, 216.7, 216.7],
+          "pageCount": 50
+        },
+        "vivliostyle": {
+          "median": 253.7,
+          "samples": [251.1, 255.5, 255.3, 252, 253.7, 255.9, 250.2],
+          "pageCount": 50
+        }
+      }
+    },
+    {
+      "id": "bundle",
+      "description": "Gzip (level 9) size of the browser JavaScript each library needs",
+      "unit": "KiB",
+      "results": {
+        "imposia": {
+          "median": 56.8,
+          "samples": [56.8],
+          "file": "`Core · PageDocument` route of `pnpm bundle:size` (minified ESM exporting mountPageDocument)"
+        },
+        "pagedjs": {
+          "median": 94.2,
+          "samples": [94.2],
+          "file": "https://cdn.jsdelivr.net/npm/pagedjs@0.4.3/dist/paged.min.js"
+        },
+        "vivliostyle": {
+          "median": 215.2,
+          "samples": [215.2],
+          "file": "https://cdn.jsdelivr.net/npm/@vivliostyle/core@2.45.2/+esm"
+        }
+      }
+    }
+  ],
+  "notes": [
+    "Observed results on one machine, not product contracts. Paged.js and Vivliostyle were treated as black boxes: only documented entry points were called and only public outcomes (promise resolution, events, page elements, time) were observed.",
+    "Every sample runs in a new browser context. Library code is loaded before the timer starts; CDN bytes are served from memory, so network time is excluded.",
+    "Imposia receives the CSS as a <style> element in its html source and paginates inside its own iframe. Paged.js receives the same CSS as a stylesheet URL and renders into a <div> in the host document. Vivliostyle loads a same-origin HTML document (the same body with the same CSS in a <style>) into a viewport <div> in the host document; its time includes fetching that document from the local server.",
+    "Page counts: Imposia from PageDocument.pageCount, Paged.js from the resolved flow.total, Vivliostyle from the number of [data-vivliostyle-page-container] elements after ReadyState.COMPLETE. In this capture all three produced the same page count in each scenario. A library whose count is more than 2x off Imposia's is recorded as a failure.",
+    "edit-50: Imposia uses its incremental controller.update(). Paged.js and Vivliostyle document no incremental update API, so the documented way to show changed content is to render again from scratch (a new Previewer.preview() into the cleared container; a second loadDocument() on the same CoreViewer). Only the re-render is timed.",
+    "bundle: Imposia is the tree-shaken Core · PageDocument route from pnpm bundle:size (the full packages/core/dist/index.js loaded by this benchmark is listed under libraries). Paged.js is jsDelivr's minified copy of the published dist/paged.js browser build. Vivliostyle is jsDelivr's ES module wrapper of the published, already minified lib/vivliostyle.js. Each file is compressed alone with gzip level 9."
+  ]
+}

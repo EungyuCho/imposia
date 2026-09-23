@@ -17,9 +17,10 @@ import {
   Printer,
   ShieldCheck,
 } from "lucide-react";
-import { type ReactNode, useState } from "react";
+import { type ComponentType, type ReactNode, useEffect, useState } from "react";
 import { Link } from "react-router";
 import baseline from "../../../benchmarks/baseline.json";
+import comparison from "../../../benchmarks/comparison.json";
 import { LOCALE_NAMES, LOCALES, type Locale } from "../../lib/i18n";
 import { LANDING_COPY } from "./copy";
 
@@ -66,6 +67,95 @@ function benchmarkValue(id: string): string {
 
 function chromiumMajor(): string {
   return baseline.environment.chromiumVersion.split(".", 1)[0] ?? "";
+}
+
+type LibraryId = "imposia" | "pagedjs" | "vivliostyle";
+
+const LIBRARY_ORDER: readonly LibraryId[] = ["imposia", "pagedjs", "vivliostyle"];
+const LIBRARY_NAMES: Record<LibraryId, string> = {
+  imposia: "Imposia",
+  pagedjs: "Paged.js",
+  vivliostyle: "Vivliostyle",
+};
+
+interface ComparisonResult {
+  readonly median?: number;
+  readonly error?: string;
+}
+
+function formatMeasure(value: number, unit: string): string {
+  if (unit === "KiB") return value.toFixed(1);
+  return value < 10 && !Number.isInteger(value) ? value.toFixed(1) : String(Math.round(value));
+}
+
+/** Median for one library in benchmarks/comparison.json, or undefined when it failed. */
+function comparisonMedian(scenarioId: string, library: LibraryId): number | undefined {
+  const scenario = comparison.scenarios.find((item) => item.id === scenarioId);
+  if (scenario === undefined) {
+    throw new Error(`benchmarks/comparison.json has no "${scenarioId}" scenario.`);
+  }
+  const result = (scenario.results as Record<string, ComparisonResult>)[library];
+  return result?.median;
+}
+
+/** Full browser bundle, gzip, for every library, so the three bars compare like with like. */
+function fullBundleKiB(library: LibraryId): number | undefined {
+  return comparison.libraries.find((item) => item.id === library)?.sources[0]?.gzipKiB;
+}
+
+function libraryVersion(library: LibraryId): string {
+  const entry: { version?: string; commit?: string } | undefined = comparison.libraries.find(
+    (item) => item.id === library,
+  );
+  // Imposia is measured from an unreleased checkout, so name the commit.
+  return entry?.commit === undefined ? (entry?.version ?? "") : `main@${entry.commit}`;
+}
+
+interface ChartSpec {
+  readonly title: string;
+  readonly subtitle: string;
+  readonly unit: string;
+  readonly values: Record<LibraryId, number | undefined>;
+}
+
+function CompareChart({ chart, failedLabel }: { chart: ChartSpec; failedLabel: string }) {
+  const measured = LIBRARY_ORDER.map((library) => chart.values[library]).filter(
+    (value): value is number => value !== undefined,
+  );
+  const max = Math.max(...measured, 1);
+  return (
+    <figure className="lp-card lp-chart">
+      <figcaption>
+        <span className="lp-chart-title">{chart.title}</span>
+        <span className="lp-chart-sub">{chart.subtitle}</span>
+      </figcaption>
+      <ul className="lp-bars">
+        {LIBRARY_ORDER.map((library) => {
+          const value = chart.values[library];
+          return (
+            <li className={library === "imposia" ? "lp-bar is-imposia" : "lp-bar"} key={library}>
+              <span className="lp-bar-labels">
+                <span>{LIBRARY_NAMES[library]}</span>
+                <span className="lp-bar-value">
+                  {value === undefined
+                    ? failedLabel
+                    : `${formatMeasure(value, chart.unit)} ${chart.unit}`}
+                </span>
+              </span>
+              <span aria-hidden="true" className="lp-bar-track">
+                <span
+                  className="lp-bar-fill"
+                  style={{
+                    width: `${value === undefined ? 0 : Math.max(2, (value / max) * 100)}%`,
+                  }}
+                />
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+    </figure>
+  );
 }
 
 // A deliberately small highlighter for the two fixed snippets below.
@@ -317,6 +407,24 @@ function ViewerMock({ label }: { label: string }) {
   );
 }
 
+/**
+ * Shows the static illustration until the live viewer module loads in the
+ * browser, then swaps in a real, paginated Imposia document of the same size.
+ */
+function HeroViewer({ label, liveLabel }: { label: string; liveLabel: string }) {
+  const [Live, setLive] = useState<ComponentType<{ label: string }> | undefined>(undefined);
+  useEffect(() => {
+    let active = true;
+    void import("./live-viewer").then((module) => {
+      if (active) setLive(() => module.default);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+  return Live === undefined ? <ViewerMock label={label} /> : <Live label={liveLabel} />;
+}
+
 function LanguageMenu({ lang, label }: { lang: Locale; label: string }) {
   return (
     <details className="lp-lang">
@@ -345,10 +453,50 @@ export function Landing({ lang }: { lang: Locale }) {
   const copy = LANDING_COPY[lang];
   const docs = `/${lang}/docs`;
   const stats = [
-    { ...copy.bench.stats.edit, value: benchmarkValue("report-update"), unit: "ms" },
-    { ...copy.bench.stats.large, value: benchmarkValue("large-mount"), unit: "ms" },
+    {
+      ...copy.bench.stats.edit,
+      value: formatMeasure(comparisonMedian("edit-50", "imposia") ?? Number.NaN, "ms"),
+      unit: "ms",
+    },
+    {
+      ...copy.bench.stats.large,
+      value: formatMeasure(comparisonMedian("paginate-200", "imposia") ?? Number.NaN, "ms"),
+      unit: "ms",
+    },
     { ...copy.bench.stats.print, value: benchmarkValue("print-call"), unit: "ms" },
     { ...copy.bench.stats.partial, value: benchmarkValue("partial-frames") },
+  ];
+  const charts: readonly ChartSpec[] = [
+    {
+      title: copy.bench.charts.edit,
+      subtitle: copy.bench.charts.lowerIsBetter,
+      unit: "ms",
+      values: {
+        imposia: comparisonMedian("edit-50", "imposia"),
+        pagedjs: comparisonMedian("edit-50", "pagedjs"),
+        vivliostyle: comparisonMedian("edit-50", "vivliostyle"),
+      },
+    },
+    {
+      title: copy.bench.charts.paginate,
+      subtitle: copy.bench.charts.lowerIsBetter,
+      unit: "ms",
+      values: {
+        imposia: comparisonMedian("paginate-200", "imposia"),
+        pagedjs: comparisonMedian("paginate-200", "pagedjs"),
+        vivliostyle: comparisonMedian("paginate-200", "vivliostyle"),
+      },
+    },
+    {
+      title: copy.bench.charts.bundle,
+      subtitle: copy.bench.charts.bundleSubtitle,
+      unit: "KiB",
+      values: {
+        imposia: fullBundleKiB("imposia"),
+        pagedjs: fullBundleKiB("pagedjs"),
+        vivliostyle: fullBundleKiB("vivliostyle"),
+      },
+    },
   ];
   const packages = [
     { name: "@imposia/react", icon: Atom, description: copy.packages.descriptions.react },
@@ -432,7 +580,7 @@ export function Landing({ lang }: { lang: Locale }) {
               </a>
             </div>
           </div>
-          <ViewerMock label={copy.hero.viewerLabel} />
+          <HeroViewer label={copy.hero.viewerLabel} liveLabel={copy.hero.liveViewerLabel} />
         </section>
 
         <section aria-labelledby="lp-features-title" className="lp-section lp-features">
@@ -511,9 +659,22 @@ export function Landing({ lang }: { lang: Locale }) {
               </div>
             ))}
           </dl>
+          <div className="lp-charts">
+            {charts.map((chart) => (
+              <CompareChart
+                chart={chart}
+                failedLabel={copy.bench.charts.failed}
+                key={chart.title}
+              />
+            ))}
+          </div>
           <p className="lp-footnote">
             <Info aria-hidden="true" size={14} />
-            {`Imposia 0.6.0 (unreleased) · ${copy.bench.footnote}`}
+            <span>
+              {`Imposia ${libraryVersion("imposia")} · Paged.js ${libraryVersion("pagedjs")} · Vivliostyle ${libraryVersion("vivliostyle")} · ${copy.bench.footnote}`}
+              <br />
+              {copy.bench.charts.caveat}
+            </span>
           </p>
         </section>
 

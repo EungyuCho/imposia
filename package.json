@@ -26,6 +26,7 @@
     "test:parity": "playwright test tests/e2e/browser-core-fragmentation.spec.ts tests/e2e/browser-core-breaks.spec.ts",
     "bundle:size": "node --import tsx scripts/bundle-size.ts",
     "benchmark": "node --import tsx scripts/benchmark.ts",
+    "benchmark:compare": "node --import tsx scripts/benchmark-compare.ts",
     "audit:prod": "pnpm audit --prod --audit-level moderate",
     "licenses": "node --import tsx scripts/licenses.ts",
     "verify": "node --import tsx scripts/capture-check.ts",

@@ -168,15 +168,17 @@
 .lp-hero {
   display: flex;
   align-items: center;
-  gap: 72px;
-  padding: 104px var(--lp-gutter) 112px;
+  /* Narrower than the design's 72px gap and 80px gutter so the live viewer
+     is at least 720px wide at 1440px, where the Viewer allows spreads. */
+  gap: 48px;
+  padding: 104px min(var(--lp-gutter), 64px) 112px;
   background:
     radial-gradient(90% 140% at 0% 0%, #e4e2ff 0%, #f1efff 30%, transparent 62%), var(--lp-bg);
 }
 
 .lp-hero-copy {
   display: flex;
-  width: 560px;
+  width: 520px;
   flex: none;
   flex-direction: column;
   gap: 28px;
@@ -371,9 +373,24 @@
   font-weight: 500;
 }
 
-.lp-viewer-modes span {
+.lp-viewer-modes span,
+.lp-viewer-modes button {
   padding: 3px 10px;
+  border: 0;
   border-radius: 5px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+
+.lp-viewer-modes button:not(:disabled),
+.lp-viewer-print:not(:disabled),
+.lp-viewer-step:not(:disabled) {
+  cursor: pointer;
+}
+
+.lp-viewer-modes button:not(.is-active):not(:disabled):hover {
+  color: #e7e7ea;
 }
 
 .lp-viewer-modes .is-active {
@@ -382,6 +399,8 @@
 }
 
 .lp-viewer-print {
+  border: 0;
+  font: inherit;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -392,8 +411,22 @@
   font-weight: 600;
 }
 
-.lp-viewer-stage {
+/* The live viewer's own stylesheet sets `height: 100%`, so the host needs the
+   extra specificity. 510px fits one A4 spread at the desktop hero width;
+   the static illustration uses the same height so the swap does not shift. */
+.lp-viewer .lp-viewer-stage,
+.lp-viewer .lp-viewer-host {
+  height: 510px;
+}
+
+.lp-viewer .lp-viewer-host {
+  background: #141418;
+}
+
+.lp-viewer .lp-viewer-stage {
+  box-sizing: border-box;
   display: flex;
+  align-items: center;
   justify-content: center;
   gap: 4px;
   padding: 36px 32px;
@@ -545,7 +578,30 @@
 }
 
 .lp-viewer-pages {
+  min-width: 7ch;
   color: #e7e7ea;
+  text-align: center;
+}
+
+.lp-viewer-pending {
+  color: #fcd34d;
+}
+
+.lp-viewer-step {
+  display: inline-flex;
+  padding: 2px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #e7e7ea;
+}
+
+.lp-viewer-step:disabled {
+  color: #52525b;
+}
+
+.lp-viewer-step:not(:disabled):hover {
+  background: #26262d;
 }
 
 /* Shared section styles */
@@ -860,12 +916,98 @@
 
 .lp-footnote {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
+  line-height: 1.6;
   gap: 8px;
   margin-top: -32px;
   color: var(--lp-ink-3);
   font-family: var(--lp-mono);
   font-size: 12px;
+}
+
+.lp-charts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 20px;
+  margin-top: -24px;
+}
+
+.lp-chart {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  padding: 28px;
+}
+
+.lp-chart figcaption {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.lp-chart-title {
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.lp-chart-sub {
+  color: var(--lp-ink-3);
+  font-size: 13px;
+}
+
+.lp-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.lp-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.lp-bar-labels {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--lp-ink-2);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.lp-bar-value {
+  color: var(--lp-ink-3);
+  font-family: var(--lp-mono);
+  font-weight: 400;
+}
+
+.lp-bar.is-imposia .lp-bar-labels {
+  color: var(--lp-ink);
+  font-weight: 600;
+}
+
+.lp-bar.is-imposia .lp-bar-value {
+  color: var(--lp-brand);
+}
+
+.lp-bar-track {
+  display: block;
+  height: 10px;
+  overflow: hidden;
+  border-radius: 5px;
+  background: var(--lp-surface-2);
+}
+
+.lp-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: 5px;
+  background: #b4b4bc;
+}
+
+.lp-bar.is-imposia .lp-bar-fill {
+  background: var(--lp-brand);
 }
 
 /* Packages */
@@ -1075,6 +1217,10 @@
 }
 
 @media (max-width: 900px) {
+  .lp-charts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   .lp-feature-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -1132,7 +1278,7 @@
     display: none;
   }
 
-  .lp-viewer-stage {
+  .lp-viewer .lp-viewer-stage {
     padding: 24px 16px;
   }
 

@@ -88,6 +88,11 @@ renamed to `0.6.0.md` when this release ships.
 
 ### Fixed
 
+- `@imposia/react/styles.css` imports `@imposia/client/styles.css` instead of
+  `@imposia/viewer/styles.css`. `@imposia/viewer` is not a direct dependency
+  of `@imposia/react`, so under strict package layouts such as pnpm's the
+  documented `import "@imposia/react/styles.css"` failed to resolve in
+  bundlers. The imported rules are unchanged.
 - A paragraph or table taller than a page no longer overflows the current
   page when no line or row of it fits in the remaining space. Plain-text
   paragraphs, `<br>`-separated line blocks, and tables now break before the
@@ -111,6 +116,20 @@ renamed to `0.6.0.md` when this release ships.
   overflowing, to 75 pages with none). Publication entry styles also stop
   forcing a style recalculation per entry: 200 styled entries paginate in
   203 ms instead of 362 ms, with identical page text.
+- Pages with a running header or footer (`<template data-page-header>`,
+  `<template data-page-footer>`, or the `headerTemplate`/`footerTemplate`
+  options) no longer overflow into the footer without a warning. Core added
+  the decorations only after pagination, so every split path — tables,
+  paragraphs, line blocks, lists, grid and flex — measured the page as if the
+  header and footer rows were empty, and a page filled to its last line lost
+  the decorations' height (about 45px on A4 with both rows) once they were
+  added. Core now renders the header and footer templates into each page as
+  it is allocated, with page tokens resolved provisionally, and fit checks
+  read the content row's height instead of the page geometry's. Documents
+  with decorations can move a line or row to the next page. `decoratePage`
+  extension output is still added after pagination and is not reserved; when
+  it, or a final page token, shrinks a page that fit, Core now reports
+  `PAGE_OVERFLOW`.
 
 ## 0.5.0 — 2026-08-20
 

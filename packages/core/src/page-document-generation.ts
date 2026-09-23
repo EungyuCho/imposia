@@ -432,10 +432,39 @@ function setPageBlank(
   pageMedia: PaginationPageMedia,
 ): void {
   updatePageMedia(page, pageMedia, page.name, blank);
-  if (blank && !decorateBlankPages && page.decorated) {
-    page.page.querySelector("[data-imposia-page-header]")?.replaceChildren();
-    page.page.querySelector("[data-imposia-page-footer]")?.replaceChildren();
-  }
+  if (blank && !decorateBlankPages) clearDecorationRows(page);
+}
+
+function clearDecorationRows(page: PageParts): void {
+  page.page.querySelector("[data-imposia-page-header]")?.replaceChildren();
+  page.page.querySelector("[data-imposia-page-footer]")?.replaceChildren();
+}
+
+/**
+ * Renders the running header and footer templates into a page as soon as it is
+ * allocated, so the page grid's `auto` header and footer rows already have
+ * their height while the fragmenter measures the content row between them.
+ * Without this the rows stayed empty during pagination and the committed
+ * decorations shrank every filled page's content box after the fact.
+ *
+ * The total page count is unknown here, so page tokens resolve provisionally
+ * to the page's own number; `decoratePage` replaces both rows with the final
+ * decoration once pagination accepts the page set.
+ */
+function reserveDecorationRows(
+  frameDocument: Document,
+  page: PageParts,
+  settings: PageGenerationSettings,
+): void {
+  if (settings.headerTemplate === undefined && settings.footerTemplate === undefined) return;
+  const header = page.page.querySelector<HTMLElement>("[data-imposia-page-header]");
+  const footer = page.page.querySelector<HTMLElement>("[data-imposia-page-footer]");
+  if (header === null || footer === null) throw new Error("Page decorations are unavailable.");
+  const pageNumber = Number(page.page.getAttribute("data-imposia-page-number"));
+  appendDecoration(frameDocument, header, settings.headerTemplate);
+  appendDecoration(frameDocument, footer, settings.footerTemplate);
+  resolveDecorationTokens(header, pageNumber, pageNumber);
+  resolveDecorationTokens(footer, pageNumber, pageNumber);
 }
 
 function decoratePage(
@@ -450,7 +479,10 @@ function decoratePage(
 ): boolean {
   if (page.decorated) return false;
   page.decorated = true;
-  if (page.blank && !settings.decorateBlankPages) return false;
+  if (page.blank && !settings.decorateBlankPages) {
+    clearDecorationRows(page);
+    return false;
+  }
   const header = page.page.querySelector<HTMLElement>("[data-imposia-page-header]");
   const footer = page.page.querySelector<HTMLElement>("[data-imposia-page-footer]");
   if (header === null || footer === null) throw new Error("Page decorations are unavailable.");
@@ -1399,13 +1431,20 @@ function pageSide(page: PageParts): "left" | "right" {
   return page.page.getAttribute("data-imposia-page-side") === "left" ? "left" : "right";
 }
 
+/**
+ * The block size of the page's content row: the page content height less the
+ * header and footer rows. Fit checks read this instead of
+ * `geometry.contentHeightCssPx`, which ignores the decoration rows.
+ */
+function usableContentHeight(page: PageParts): number {
+  return Math.max(page.content.clientHeight, page.content.getBoundingClientRect().height);
+}
+
 function pageOverflows(page: PageParts): boolean {
-  const contentBounds = page.content.getBoundingClientRect();
   const flowBounds = page.flow.getBoundingClientRect();
-  const availableHeight = Math.max(page.content.clientHeight, contentBounds.height);
   return (
     Math.max(page.flow.scrollHeight, flowBounds.height) >
-    availableHeight + OVERFLOW_TOLERANCE_CSS_PX
+    usableContentHeight(page) + OVERFLOW_TOLERANCE_CSS_PX
   );
 }
 
@@ -2302,7 +2341,7 @@ class RecursiveFragmenter {
       const inlineExtent = Math.max(element.scrollHeight, bounds.height);
       const blockExtent = Math.max(element.scrollWidth, bounds.width);
       return (
-        inlineExtent > cursor.page.geometry.contentHeightCssPx + OVERFLOW_TOLERANCE_CSS_PX ||
+        inlineExtent > usableContentHeight(cursor.page) + OVERFLOW_TOLERANCE_CSS_PX ||
         blockExtent > cursor.page.geometry.contentWidthCssPx + OVERFLOW_TOLERANCE_CSS_PX
       );
     }
@@ -2318,7 +2357,7 @@ class RecursiveFragmenter {
       const inlineExtent = Math.max(element.scrollHeight, bounds.height);
       const blockExtent = Math.max(element.scrollWidth, bounds.width);
       return (
-        inlineExtent > cursor.page.geometry.contentHeightCssPx + OVERFLOW_TOLERANCE_CSS_PX ||
+        inlineExtent > usableContentHeight(cursor.page) + OVERFLOW_TOLERANCE_CSS_PX ||
         blockExtent > cursor.page.geometry.contentWidthCssPx + OVERFLOW_TOLERANCE_CSS_PX
       );
     }
@@ -2556,8 +2595,7 @@ class RecursiveFragmenter {
    */
   #fittingPrefixHint(run: readonly Node[], cursor: FragmentCursor): number {
     const contentBounds = cursor.page.content.getBoundingClientRect();
-    const availableHeight = Math.max(cursor.page.content.clientHeight, contentBounds.height);
-    const limit = contentBounds.top + availableHeight + OVERFLOW_TOLERANCE_CSS_PX;
+    const limit = contentBounds.top + usableContentHeight(cursor.page) + OVERFLOW_TOLERANCE_CSS_PX;
     let bottom = Number.NEGATIVE_INFINITY;
     let hint = 0;
     for (const [index, node] of run.entries()) {
@@ -2796,7 +2834,7 @@ class RecursiveFragmenter {
     if (overflows && pageHadContent) {
       const fitsOnFreshPage =
         element.getBoundingClientRect().height <=
-        cursor.page.geometry.contentHeightCssPx + OVERFLOW_TOLERANCE_CSS_PX;
+        usableContentHeight(cursor.page) + OVERFLOW_TOLERANCE_CSS_PX;
       const fragmentsInPlace =
         !constraint.atomic &&
         !constraint.insideAvoid &&
@@ -2814,7 +2852,7 @@ class RecursiveFragmenter {
     if (
       constraint.layout === "safe-multicol" &&
       element.getBoundingClientRect().height >
-        cursor.page.geometry.contentHeightCssPx + OVERFLOW_TOLERANCE_CSS_PX
+        usableContentHeight(cursor.page) + OVERFLOW_TOLERANCE_CSS_PX
     ) {
       this.#warnOnce(
         "UNSUPPORTED_LAYOUT",
@@ -3667,6 +3705,7 @@ export async function buildGeneration(
             throw new ImposiaError("PAGE_LIMIT", "Page limit exceeded.");
           }
           const created = createPage(frameDocument, pageMedia, passPages.length + 1, name);
+          reserveDecorationRows(frameDocument, created, pageSettings);
           passPages.push(created);
           probe.append(created.page);
           settings.onProgress?.(
@@ -3781,6 +3820,18 @@ export async function buildGeneration(
       publishingWarnings = accepted.publishing.warnings;
       overflowWarning = accepted.overflowWarning;
       settings.experimental.onDebugCounters?.(accepted.debugCounters);
+      // Pagination reserved the Core header and footer rows, but final page
+      // tokens and extension decorations are only known now. Record which pages
+      // fit before decorating so a page the final decoration shrinks is
+      // reported instead of clipped silently.
+      const decorationMayResize =
+        overflowWarning === undefined &&
+        (pageSettings.headerTemplate !== undefined ||
+          pageSettings.footerTemplate !== undefined ||
+          extensions.some((extension) => extension.decoratePage !== undefined));
+      const fittedBeforeDecoration = decorationMayResize
+        ? pages.map((page) => !pageOverflows(page))
+        : [];
       for (const [index, page] of pages.entries()) {
         resourceBlocked =
           decoratePage(
@@ -3795,6 +3846,17 @@ export async function buildGeneration(
           ) || resourceBlocked;
         resolveDecorationTokens(page.page, index + 1, pages.length);
         resolveMarginBoxes(page, index + 1, pages.length, accepted.publishing.namedStrings[index]);
+      }
+      if (
+        overflowWarning === undefined &&
+        pages.some((page, index) => fittedBeforeDecoration[index] === true && pageOverflows(page))
+      ) {
+        overflowWarning = Object.freeze({
+          code: "PAGE_OVERFLOW",
+          message: "Content exceeds the usable page area.",
+          sourceIdentity: undefined,
+          location: UNLOCATED_PAGE_WARNING_LOCATION,
+        });
       }
       warningSourceLocations = collectWarningSourceLocations(pages);
       cleanPublishingInternals(pages);
