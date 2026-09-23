@@ -226,7 +226,7 @@ Imposia 以一份文档作为统一依据，同时把源内容处理与界面展
 | [`@imposia/react`](https://www.npmjs.com/package/@imposia/react) | 主要 React 适配器 | React 18+ 应用需要组件、Hook 或命令式页面句柄 |
 | [`@imposia/client`](https://www.npmjs.com/package/@imposia/client) | 统一的框架无关入口 | 希望通过一个浏览器依赖同时使用 Core 与 Viewer API |
 | [`@imposia/core`](https://www.npmjs.com/package/@imposia/core) | canonical 页面文档运行时 | 不使用 React，直接控制生命周期、分页、资源解析、扩展、打印与 EPUB |
-| [`@imposia/viewer`](https://www.npmjs.com/package/@imposia/viewer) | 页面与 PDF 展示 | 展示 Core iframe，或挂载独立的 PDF.js Canvas 查看器 |
+| [`@imposia/viewer`](https://www.npmjs.com/package/@imposia/viewer) | 页面展示 | 以翻页、缩放和阅读面板展示 Core iframe |
 
 软件包按集成方式划分，但文档始终由 Core 统一管理。
 
@@ -455,31 +455,6 @@ viewer.setTheme({ "--imposia-viewer-color-accent": "#ef6a3b" });
 
 主题只改变展示，不会新增 React 或 Core 生命周期。完整公开 Token 请参阅
 [`@imposia/viewer` 主题契约](./packages/viewer/README.md#theme-modules)。
-
----
-
-## 独立 PDF Viewer
-
-`@imposia/viewer` 还包含连续页与单页 PDF.js Canvas 查看器。这是独立展示 API，
-不是 Core 的 PDF 导出通道。
-
-```ts
-import { mountViewer } from "@imposia/viewer";
-import "@imposia/viewer/styles.css";
-
-const viewer = mountViewer(
-  document.querySelector<HTMLElement>("#viewer")!,
-  "/book.pdf",
-  { workerSrc: "/pdf.worker.min.mjs" },
-);
-
-viewer.setMode("single");
-viewer.setZoom(1.2);
-viewer.nextPage();
-```
-
-展示 Core 页面文档时请使用 `mountPageViewer()`。它会保留该文档控制器创建的
-原始 iframe。
 
 ---
 

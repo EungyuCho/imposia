@@ -68,7 +68,6 @@ beforeAll(async () => {
   const dependencies = new Map([
     ["parse5", path.join(workspace, "packages", "core", "node_modules", "parse5")],
     ["postcss", path.join(workspace, "packages", "core", "node_modules", "postcss")],
-    ["pdfjs-dist", path.join(workspace, "packages", "viewer", "node_modules", "pdfjs-dist")],
     ["react", path.join(workspace, "packages", "react", "node_modules", "react")],
     ["react-dom", path.join(workspace, "packages", "react", "node_modules", "react-dom")],
   ]);

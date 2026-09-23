@@ -1,18 +1,17 @@
 # Third-party notices
 
-Imposia source distributions and package artifacts depend on the projects below. Their licenses remain controlling for their respective code. The `@imposia/core` browser artifact bundles PostCSS, nanoid, and picocolors runtime code; its package notice carries the complete upstream texts for all three projects. PDF.js remains an external dependency of the Viewer package.
+Imposia source distributions and package artifacts depend on the projects below. Their licenses remain controlling for their respective code. The `@imposia/core` browser artifact bundles PostCSS, nanoid, and picocolors runtime code; its package notice carries the complete upstream texts for all three projects.
 
 | Component | Version | Use | License |
 | --- | --- | --- | --- |
 | PostCSS | 8.5.26 | Bundled CSS declaration parsing in `@imposia/core` | MIT |
 | nanoid | 3.3.18 | Bundled CSS support transitively used by PostCSS in `@imposia/core` | MIT |
 | picocolors | 1.1.1 | Bundled CSS support transitively used by PostCSS in `@imposia/core` | ISC |
-| pdfjs-dist (PDF.js) | 5.4.530 | Browser PDF rendering in `@imposia/viewer` | Apache-2.0 |
 
 Package artifacts carry their own legal files:
 
 - `@imposia/core`: `packages/core/LICENSE` and `packages/core/THIRD_PARTY_NOTICES.md` (complete bundled PostCSS, nanoid, and picocolors license texts).
-- `@imposia/viewer`: `packages/viewer/LICENSE` and `packages/viewer/THIRD_PARTY_NOTICES.md` (PDF.js Apache-2.0 text; dependency remains external).
+- `@imposia/viewer`: `packages/viewer/LICENSE` and `packages/viewer/THIRD_PARTY_NOTICES.md`.
 - `@imposia/client`: `packages/client/LICENSE` and `packages/client/THIRD_PARTY_NOTICES.md`.
 - `@imposia/react`: `packages/react/LICENSE` and `packages/react/THIRD_PARTY_NOTICES.md`.
 

@@ -34,7 +34,6 @@ test("presents the real canonical iframe without taking over its lifecycle", asy
       importMap.textContent = JSON.stringify({
         imports: {
           "@imposia/core": "/packages/core/dist/index.js",
-          "pdfjs-dist": "/node_modules/pdfjs-dist/build/pdf.mjs",
         },
       });
       document.head.append(importMap);
@@ -247,7 +246,6 @@ test("keeps viewer styles scoped and exposes chrome-free presentation controls",
       importMap.textContent = JSON.stringify({
         imports: {
           "@imposia/core": "/packages/core/dist/index.js",
-          "pdfjs-dist": "/node_modules/pdfjs-dist/build/pdf.mjs",
         },
       });
       document.head.append(importMap);
@@ -312,10 +310,10 @@ test("keeps viewer styles scoped and exposes chrome-free presentation controls",
           backgroundColor: bodyStyle.backgroundColor,
         },
         outsideBoxSizing: outsideStyle.boxSizing,
-        rootCanvasToken: getComputedStyle(document.documentElement).getPropertyValue(
-          "--imposia-viewer-color-canvas",
+        rootAccentToken: getComputedStyle(document.documentElement).getPropertyValue(
+          "--imposia-viewer-color-accent",
         ),
-        hostCanvasToken: hostStyle.getPropertyValue("--imposia-viewer-color-canvas").trim(),
+        hostAccentToken: hostStyle.getPropertyValue("--imposia-viewer-color-accent").trim(),
         hostBackgroundImage: hostStyle.backgroundImage,
         hostWatermark: getComputedStyle(host, "::before").content,
         inspectorPanel: {
@@ -340,8 +338,8 @@ test("keeps viewer styles scoped and exposes chrome-free presentation controls",
       backgroundColor: "rgb(18, 52, 86)",
     });
     expect(observation.outsideBoxSizing).toBe("content-box");
-    expect(observation.rootCanvasToken).toBe("");
-    expect(observation.hostCanvasToken).toBe("#d8d5cc");
+    expect(observation.rootAccentToken).toBe("");
+    expect(observation.hostAccentToken).toBe("#ef6a3b");
     expect(observation.hostBackgroundImage).toBe("none");
     expect(observation.hostWatermark).toBe("none");
     expect(observation.inspectorPanel).toEqual({ top: "0px", maxHeight: "100%" });
@@ -389,7 +387,6 @@ test("scopes runtime theme tokens to one page viewer and restores host styles", 
       importMap.textContent = JSON.stringify({
         imports: {
           "@imposia/core": "/packages/core/dist/index.js",
-          "pdfjs-dist": "/node_modules/pdfjs-dist/build/pdf.mjs",
         },
       });
       document.head.append(importMap);
@@ -477,57 +474,7 @@ test("scopes runtime theme tokens to one page viewer and restores host styles", 
   }
 });
 
-test("applies the same runtime theme contract to the independent PDF viewer", async ({
-  page,
-  browserName,
-}) => {
-  const { errors, pageErrors } = captureBrowserErrors(page, browserName);
-  await page.goto("/examples/book.html");
-
-  try {
-    const observation = await page.evaluate(async () => {
-      const importMap = document.createElement("script");
-      importMap.type = "importmap";
-      importMap.textContent = JSON.stringify({
-        imports: {
-          "@imposia/core": "/packages/core/dist/index.js",
-          "pdfjs-dist": "/node_modules/pdfjs-dist/build/pdf.mjs",
-        },
-      });
-      document.head.append(importMap);
-      const viewerModule = (await import("/packages/viewer/dist/index.js")) as {
-        mountViewer(
-          container: HTMLElement,
-          source: Uint8Array,
-          options: { theme?: Theme; workerSrc?: string },
-        ): { setTheme(theme?: Theme): void; destroy(): void };
-      };
-      const host = document.createElement("div");
-      document.body.replaceChildren(host);
-      const viewer = viewerModule.mountViewer(host, new Uint8Array([0]), {
-        workerSrc: "/node_modules/pdfjs-dist/build/pdf.worker.mjs",
-        theme: { "--imposia-viewer-color-accent": "#8b6cff" },
-      });
-      const root = host.querySelector<HTMLElement>(".imposia-viewer");
-      const initial = root?.style.getPropertyValue("--imposia-viewer-color-accent");
-      viewer.setTheme({ "--imposia-viewer-color-accent": "#ef6a3b" });
-      const updated = root?.style.getPropertyValue("--imposia-viewer-color-accent");
-      viewer.destroy();
-      return { initial, updated, emptyAfterDestroy: host.childElementCount === 0 };
-    });
-
-    expect(observation).toEqual({
-      initial: "#8b6cff",
-      updated: "#ef6a3b",
-      emptyAfterDestroy: true,
-    });
-  } finally {
-    expect(errors).toEqual([]);
-    expect(pageErrors).toEqual([]);
-  }
-});
-
-test("rejects invalid initial themes before either viewer mutates its host", async ({
+test("rejects an invalid initial theme before the page viewer mutates its host", async ({
   page,
   browserName,
 }) => {
@@ -551,7 +498,6 @@ test("rejects invalid initial themes before either viewer mutates its host", asy
       importMap.textContent = JSON.stringify({
         imports: {
           "@imposia/core": "/packages/core/dist/index.js",
-          "pdfjs-dist": "/node_modules/pdfjs-dist/build/pdf.mjs",
         },
       });
       document.head.append(importMap);
@@ -568,37 +514,19 @@ test("rejects invalid initial themes before either viewer mutates its host", asy
           pageDocument: PageDocument,
           options: { theme?: Readonly<Record<string, string>> },
         ): unknown;
-        mountViewer(
-          container: HTMLElement,
-          source: Uint8Array,
-          options: { theme?: Readonly<Record<string, string>>; workerSrc?: string },
-        ): unknown;
       };
       const invalidTheme = { color: "red" };
       const pageHost = document.createElement("div");
-      const pdfHost = document.createElement("div");
-      const sentinel = document.createElement("span");
-      sentinel.textContent = "keep me";
-      pdfHost.append(sentinel);
-      document.body.replaceChildren(pageHost, pdfHost);
+      document.body.replaceChildren(pageHost);
       const controller = core.mountPageDocument(pageHost, { html: "<p>Stable</p>" }, {});
       const pageDocument = await controller.ready;
       const frameClass = pageDocument.iframe.getAttribute("class");
       const hostClass = pageHost.getAttribute("class");
       let pageRejected = false;
-      let pdfRejected = false;
       try {
         viewerModule.mountPageViewer(pageHost, pageDocument, { theme: invalidTheme });
       } catch {
         pageRejected = true;
-      }
-      try {
-        viewerModule.mountViewer(pdfHost, new Uint8Array([0]), {
-          workerSrc: "/node_modules/pdfjs-dist/build/pdf.worker.mjs",
-          theme: invalidTheme,
-        });
-      } catch {
-        pdfRejected = true;
       }
       const result = {
         pageRejected,
@@ -606,9 +534,6 @@ test("rejects invalid initial themes before either viewer mutates its host", asy
         pageFrameClassUnchanged: pageDocument.iframe.getAttribute("class") === frameClass,
         pageFrameOnly:
           pageHost.childElementCount === 1 && pageHost.firstElementChild === pageDocument.iframe,
-        pdfRejected,
-        pdfSentinelRetained:
-          pdfHost.childElementCount === 1 && pdfHost.firstElementChild === sentinel,
       };
       await controller.destroy();
       return result;
@@ -619,8 +544,6 @@ test("rejects invalid initial themes before either viewer mutates its host", asy
       pageHostClassUnchanged: true,
       pageFrameClassUnchanged: true,
       pageFrameOnly: true,
-      pdfRejected: true,
-      pdfSentinelRetained: true,
     });
   } finally {
     expect(errors).toEqual([]);

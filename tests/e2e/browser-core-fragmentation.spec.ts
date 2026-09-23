@@ -39,7 +39,6 @@ test("fragments canonical browser flow into real A4 pages without duplicating te
       importMap.textContent = JSON.stringify({
         imports: {
           "@imposia/core": "/packages/core/dist/index.js",
-          "pdfjs-dist": "/node_modules/pdfjs-dist/build/pdf.mjs",
         },
       });
       document.head.append(importMap);

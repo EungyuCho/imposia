@@ -7,8 +7,9 @@ versioning for its published package interfaces. What that means before `1.0`
 
 ## 0.6.0 — Unreleased
 
-Minor release for the asset and print pipeline. Three changes are breaking —
-two print defaults and one status union — and each has an upgrade path in
+Minor release for the asset and print pipeline. Four changes are breaking —
+two print defaults, one status union, and the removed PDF viewer — and each
+has an upgrade path in
 [`docs/migrations/unreleased.md`](docs/migrations/unreleased.md), which is
 renamed to `0.6.0.md` when this release ships.
 
@@ -36,6 +37,12 @@ renamed to `0.6.0.md` when this release ships.
   state exactly as it does for `loading` and `error`. Exhaustive switches
   over these unions stop compiling until they handle the new member;
   `status !== "loading"` checks need no change. (ASA-461)
+- Removed the independent PDF.js viewer: `mountViewer`, its `ViewerController`,
+  `ViewerMode`, `ViewerOptions`, `ViewerSource`, and `ViewerState` types, and
+  the stylesheet rules only it used. `@imposia/viewer`, `@imposia/client`, and
+  `@imposia/react` no longer depend on `pdfjs-dist`. Imposia does not produce
+  PDF bytes, so the viewer had no input from the rest of the toolkit.
+  `mountPageViewer` is unchanged.
 
 ### Changed
 

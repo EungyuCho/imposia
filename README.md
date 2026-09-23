@@ -241,7 +241,7 @@ integration layers:
 | [`@imposia/react`](https://www.npmjs.com/package/@imposia/react) | Primary React adapter | Your application uses React 18+ and needs components, hooks, or an imperative page handle |
 | [`@imposia/client`](https://www.npmjs.com/package/@imposia/client) | Unified framework-neutral entrypoint | You want Core and Viewer APIs from one browser-only dependency |
 | [`@imposia/core`](https://www.npmjs.com/package/@imposia/core) | Canonical page-document runtime | You want direct lifecycle, pagination, resolver, extension, print, and EPUB control without React |
-| [`@imposia/viewer`](https://www.npmjs.com/package/@imposia/viewer) | Page and PDF presentation | You need to present the Core iframe or mount an independent PDF.js canvas viewer |
+| [`@imposia/viewer`](https://www.npmjs.com/package/@imposia/viewer) | Page presentation | You need to present the Core iframe with navigation, zoom, and reader panels |
 
 The package split changes integration ergonomics, not document ownership. Core
 remains the single source of truth.
@@ -480,31 +480,6 @@ viewer.setTheme({ "--imposia-viewer-color-accent": "#ef6a3b" });
 Themes change presentation without adding another React or Core lifecycle. See
 the [`@imposia/viewer` theme contract](./packages/viewer/README.md#theme-modules)
 for the complete public token surface.
-
----
-
-## Independent PDF Viewer
-
-`@imposia/viewer` also includes a continuous and single-page PDF.js canvas
-viewer. This is a separate presentation API, not a PDF export path for Core:
-
-```ts
-import { mountViewer } from "@imposia/viewer";
-import "@imposia/viewer/styles.css";
-
-const viewer = mountViewer(
-  document.querySelector<HTMLElement>("#viewer")!,
-  "/book.pdf",
-  { workerSrc: "/pdf.worker.min.mjs" },
-);
-
-viewer.setMode("single");
-viewer.setZoom(1.2);
-viewer.nextPage();
-```
-
-Use `mountPageViewer()` when presenting a Core page document. It retains the
-exact iframe created by that document's controller.
 
 ---
 

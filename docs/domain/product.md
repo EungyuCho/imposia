@@ -39,9 +39,8 @@ browser surface without moving rendering or export authority to a server or CLI.
   spread controls, `print()`, and `exportEpub()`. `useImposiaDocument()` exposes
   the host ref, lifecycle state, current document, and controller for custom
   React presentation.
-- `@imposia/viewer` presents a canonical Core page document or an independent
-  PDF.js document. The page Viewer retains Core's iframe and never clones pages or
-  reruns layout. Its optional built-in control rail can be omitted for headless
+- `@imposia/viewer` presents a canonical Core page document. The page Viewer
+  retains Core's iframe and never clones pages or reruns layout. Its optional built-in control rail can be omitted for headless
   presentation while the same controller exposes page navigation, continuous,
   single, and spread modes, zoom, immutable state snapshots, and state
   subscriptions. Viewer CSS is scoped to the Viewer root; the host application

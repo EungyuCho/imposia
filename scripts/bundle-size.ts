@@ -53,14 +53,6 @@ const SCENARIOS = Object.freeze([
     gzipBudgetBytes: 30 * KIBIBYTE,
   }),
   Object.freeze({
-    name: "Viewer · PDF",
-    source: 'export { mountViewer } from "@imposia/viewer";',
-    // 120.1 KiB measured 2026-08-20. Dominated by PDF.js; the oxc pipeline
-    // measures this route 2.8 KiB gzip larger than esbuild did, so the budget
-    // stays at its previous value (4.1% headroom).
-    gzipBudgetBytes: 125 * KIBIBYTE,
-  }),
-  Object.freeze({
     name: "Client · PageDocument",
     source: 'export { mountPageDocument, mountPageViewer } from "@imposia/client";',
     // 68.5 KiB measured 2026-08-20 (Core pagination + page viewer); tracks the

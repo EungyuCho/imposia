@@ -232,7 +232,7 @@ Imposia는 하나의 문서를 기준으로 삼되, 원본을 다루는 일과 �
 | [`@imposia/react`](https://www.npmjs.com/package/@imposia/react) | 주 React 어댑터 | React 18+ 앱에서 컴포넌트, 훅, 명령형 페이지 핸들이 필요할 때 |
 | [`@imposia/client`](https://www.npmjs.com/package/@imposia/client) | 통합 프레임워크 중립 진입점 | 브라우저 전용 패키지 하나로 Core와 Viewer API를 함께 사용할 때 |
 | [`@imposia/core`](https://www.npmjs.com/package/@imposia/core) | canonical 페이지 문서 런타임 | React 없이 수명 주기, 페이지네이션, 에셋 해석, 확장 기능, 인쇄, EPUB을 직접 제어할 때 |
-| [`@imposia/viewer`](https://www.npmjs.com/package/@imposia/viewer) | 페이지 및 PDF 표시 | Core iframe을 표시하거나 독립 PDF.js 캔버스 뷰어를 마운트할 때 |
+| [`@imposia/viewer`](https://www.npmjs.com/package/@imposia/viewer) | 페이지 표시 | Core iframe을 페이지 이동, 줌, 리더 패널과 함께 표시할 때 |
 
 패키지는 통합 방식에 따라 나뉘지만 문서의 기준은 언제나 Core가 소유합니다.
 
@@ -473,31 +473,6 @@ viewer.setTheme({ "--imposia-viewer-color-accent": "#ef6a3b" });
 테마는 React나 Core의 수명 주기를 바꾸지 않고 화면 표시만 바꿉니다. 전체 공개
 토큰은 [`@imposia/viewer` 테마 계약](./packages/viewer/README.md#theme-modules)을
 참고하세요.
-
----
-
-## 독립 PDF Viewer
-
-`@imposia/viewer`에는 연속·단일 페이지 PDF.js 캔버스 뷰어도 포함됩니다.
-이는 별도의 표시 API이며 Core의 PDF 내보내기 경로가 아닙니다.
-
-```ts
-import { mountViewer } from "@imposia/viewer";
-import "@imposia/viewer/styles.css";
-
-const viewer = mountViewer(
-  document.querySelector<HTMLElement>("#viewer")!,
-  "/book.pdf",
-  { workerSrc: "/pdf.worker.min.mjs" },
-);
-
-viewer.setMode("single");
-viewer.setZoom(1.2);
-viewer.nextPage();
-```
-
-Core 페이지 문서를 표시할 때는 `mountPageViewer()`를 사용하세요. 문서
-컨트롤러가 만든 iframe을 그대로 유지합니다.
 
 ---
 

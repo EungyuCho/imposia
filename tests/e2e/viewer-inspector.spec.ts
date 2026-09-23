@@ -75,7 +75,6 @@ test("browses only current diagnostics and temporarily highlights through Viewer
       importMap.textContent = JSON.stringify({
         imports: {
           "@imposia/core": "/packages/core/dist/index.js",
-          "pdfjs-dist": "/node_modules/pdfjs-dist/build/pdf.mjs",
         },
       });
       document.head.append(importMap);
@@ -453,7 +452,6 @@ test("exposes global-only diagnostics and focuses the panel when no warning is a
       importMap.textContent = JSON.stringify({
         imports: {
           "@imposia/core": "/packages/core/dist/index.js",
-          "pdfjs-dist": "/node_modules/pdfjs-dist/build/pdf.mjs",
         },
       });
       document.head.append(importMap);
@@ -541,7 +539,6 @@ test("clears a selected diagnostic on the first delivered resize observation", a
       importMap.textContent = JSON.stringify({
         imports: {
           "@imposia/core": "/packages/core/dist/index.js",
-          "pdfjs-dist": "/node_modules/pdfjs-dist/build/pdf.mjs",
         },
       });
       document.head.append(importMap);
@@ -632,7 +629,6 @@ test("adds no Viewer inspector surface unless explicitly enabled", async ({
       importMap.textContent = JSON.stringify({
         imports: {
           "@imposia/core": "/packages/core/dist/index.js",
-          "pdfjs-dist": "/node_modules/pdfjs-dist/build/pdf.mjs",
         },
       });
       document.head.append(importMap);

@@ -1,9 +1,9 @@
 ---
 title: Viewer API
-description: 来自 @imposia/viewer 的页面展示、Reader、Inspector 与 PDF 查看控制器。
+description: 来自 @imposia/viewer 的页面展示、Reader 与 Inspector 控制器。
 ---
 
-`@imposia/viewer` 负责展示文档。`mountPageViewer` 展示已提交 Core 页面文档的 canonical iframe；`mountViewer` 是面向现有 PDF 文件的独立 PDF.js 查看器。两者都不运行分页。
+`@imposia/viewer` 负责展示文档。`mountPageViewer` 展示已提交 Core 页面文档的 canonical iframe，不运行分页。
 
 ## `mountPageViewer`
 
@@ -81,20 +81,3 @@ restorePublicationDeepLink(value: string, controller: PublicationController): Pu
 | `state` | `{ open, warnings, selected }`。 |
 
 Inspector 面板与目录、搜索、缩略图共用辅助面板槽位：打开任意一个会关闭其他。打印时隐藏，EPUB 导出中不存在。
-
-## 面向 PDF 的 `mountViewer`
-
-```ts
-mountViewer(container: HTMLElement, source: ViewerSource, options?: ViewerOptions): ViewerController;
-type ViewerSource = Uint8Array | ArrayBuffer | string | { pdf: Uint8Array };
-```
-
-这个独立 Viewer 用 PDF.js 加载并光栅化 PDF 页面。它展示应用已经拥有的 PDF 文件；它不是 Core 页面文档的导出路径——Core 页面文档没有 PDF 字节 API。选项为 `mode?: "continuous" | "single"`、`zoom?`、`workerSrc?` 和 `theme?`。函数以 `loading` 状态立即返回；失败会把 `state.status` 置为 `error` 并填充 `state.error`。
-
-| `ViewerController` 成员 | 返回值 / 效果 |
-| --- | --- |
-| `goToPage(page)`、`nextPage()`、`previousPage()` | 仅在就绪时导航。 |
-| `setZoom(zoom)`、`setMode(mode)` | 仅在就绪时更新渲染。 |
-| `setTheme(theme?)` | 替换或清除 Viewer 变量；销毁后忽略。 |
-| `destroy()` | 取消工作，销毁 PDF.js 资源，并清空容器。 |
-| `state` | 页码、页数、缩放、模式、loading/ready/error 状态和可选的错误文本。 |

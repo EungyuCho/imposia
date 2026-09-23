@@ -11,7 +11,7 @@ description: React、Core、Viewer から必要な契約を選び、共通のパ
 | --- | --- | --- |
 | `@imposia/react` | React 統合 | `ImposiaPageViewer`、`ImposiaDocument`、`ImposiaPublicationViewer`、2 つのライフサイクル Hook |
 | `@imposia/core` | フレームワーク非依存のページ分割と Publication | `mountPageDocument`、`mountPublication`、`prepareDocument` |
-| `@imposia/viewer` | 確定済みページの表示、または PDF の読み込み | `mountPageViewer`、`mountViewer`、ディープリンクヘルパー |
+| `@imposia/viewer` | 確定済みページの表示 | `mountPageViewer`、ディープリンクヘルパー |
 | `@imposia/client` | フレームワーク非依存の統合エントリーポイント | Core と Viewer の主要統合 API を再エクスポート |
 
 React パッケージを使う場合は、`@imposia/react/styles.css` を一度だけ読み込んでください。
@@ -26,7 +26,7 @@ React パッケージを使う場合は、`@imposia/react/styles.css` を一度�
     フレームワーク非依存のページ文書と Publication のコントローラー。
   </Card>
   <Card title="Viewer API" href="/ja/docs/api/viewer">
-    ページ表示、Reader、Inspector、独立した PDF ビューアー。
+    ページ表示、Reader、Inspector。
   </Card>
 </Cards>
 

@@ -1,9 +1,10 @@
 # Migrating from 0.5.0 to 0.6.0 (unreleased)
 
-`0.6.0` is a minor release with three breaking changes, all in the asset and
-print pipeline: printing preserves backgrounds by default (ASA-459), hoisted
-print `@font-face` families are namespaced away from the host document
-(ASA-462), and the React hooks gained an `aborted` document status (ASA-461).
+`0.6.0` is a minor release with four breaking changes: printing preserves
+backgrounds by default (ASA-459), hoisted print `@font-face` families are
+namespaced away from the host document (ASA-462), the React hooks gained an
+`aborted` document status (ASA-461), and the PDF.js viewer `mountViewer` was
+removed from `@imposia/viewer`.
 Most applications upgrade without a code change. This note exists so the
 exceptions are findable without reading commit history.
 
@@ -89,6 +90,26 @@ its own.
 - A superseded or unmounted run still says nothing — the transition happens
   only when the aborted run is the live owner of the state.
 
+### 4. `mountViewer` and the PDF.js dependency were removed
+
+`@imposia/viewer` no longer ships the independent PDF viewer or depends on
+`pdfjs-dist`. Imposia does not produce PDF bytes, so this viewer had no input
+from the rest of the toolkit. Removed from `@imposia/viewer`,
+`@imposia/client`, and `@imposia/react`:
+
+- `mountViewer` and its `workerSrc` option.
+- The types `ViewerController`, `ViewerMode`, `ViewerOptions`,
+  `ViewerSource`, and `ViewerState`. `PageViewerMode` is now declared
+  directly as `"continuous" | "single" | "spread"`.
+- The stylesheet rules that only the PDF viewer used: `.imposia-stage`,
+  `.imposia-pages`, `.imposia-page`, `.imposia-canvas`, `.imposia-page-tag`,
+  `.imposia-state`, `.imposia-spinner`, and `.imposia-error`.
+
+If you displayed PDF files with `mountViewer`, use
+[PDF.js](https://mozilla.github.io/pdf.js/) directly, or the browser's
+built-in viewer through `<iframe src="file.pdf">`. `mountPageViewer` and every
+page-document Viewer contract are unchanged.
+
 ## Behavioral changes that are not breaking
 
 These ship in the same release and can change what you observe without
@@ -118,5 +139,6 @@ requiring a code change (CHANGELOG has the full entries):
   allowlist.
 - Determinism. The print family counter names only the transient stylesheet
   in the top document; it never reaches pages or warnings.
-- Every committed-document, Viewer, and EPUB contract. The changes above are
-  confined to asset resolution, print output, and the React status unions.
+- Every committed-document, page Viewer, and EPUB contract. The changes above
+  are confined to asset resolution, print output, the React status unions, and
+  the removed PDF viewer.

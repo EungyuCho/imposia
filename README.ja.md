@@ -233,7 +233,7 @@ Imposia は 1 つの文書を基準にしながら、ソース処理と画面表
 | [`@imposia/react`](https://www.npmjs.com/package/@imposia/react) | 主要 React アダプター | React 18+ アプリでコンポーネント、フック、命令型ページハンドルが必要な場合 |
 | [`@imposia/client`](https://www.npmjs.com/package/@imposia/client) | 統合されたフレームワーク非依存エントリーポイント | 1 つのブラウザー専用パッケージから Core と Viewer API を使う場合 |
 | [`@imposia/core`](https://www.npmjs.com/package/@imposia/core) | canonical ページ文書ランタイム | React なしでライフサイクル、ページ分割、アセット解決、拡張機能、印刷、EPUB を直接制御する場合 |
-| [`@imposia/viewer`](https://www.npmjs.com/package/@imposia/viewer) | ページと PDF の表示 | Core iframe を表示するか、独立した PDF.js キャンバスビューアをマウントする場合 |
+| [`@imposia/viewer`](https://www.npmjs.com/package/@imposia/viewer) | ページの表示 | Core iframe をページ移動、ズーム、リーダーパネルとともに表示する場合 |
 
 パッケージは統合方法によって分かれていますが、文書の基準は常に Core が
 管理します。
@@ -472,31 +472,6 @@ viewer.setTheme({ "--imposia-viewer-color-accent": "#ef6a3b" });
 テーマは React や Core のライフサイクルを追加せず、表示だけを変更します。
 公開トークンの全体は [`@imposia/viewer` のテーマ契約](./packages/viewer/README.md#theme-modules)
 を参照してください。
-
----
-
-## 独立 PDF Viewer
-
-`@imposia/viewer` には連続表示と単一ページ表示に対応した PDF.js キャンバスビューアも
-含まれます。これは独立した表示 API であり、Core の PDF 書き出し経路ではありません。
-
-```ts
-import { mountViewer } from "@imposia/viewer";
-import "@imposia/viewer/styles.css";
-
-const viewer = mountViewer(
-  document.querySelector<HTMLElement>("#viewer")!,
-  "/book.pdf",
-  { workerSrc: "/pdf.worker.min.mjs" },
-);
-
-viewer.setMode("single");
-viewer.setZoom(1.2);
-viewer.nextPage();
-```
-
-Core のページ文書を表示する場合は `mountPageViewer()` を使います。その文書の
-コントローラーが作成した正確な iframe を保持します。
 
 ---
 

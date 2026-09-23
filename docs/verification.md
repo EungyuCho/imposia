@@ -74,7 +74,7 @@ The package READMEs and root README contain compile-shaped examples for:
 - React's `ImposiaPageViewer` and `ImposiaPublicationViewer` imperative handles,
   revision lifecycles, and document/Publication hooks;
 - Viewer spread/cover presentation, current-generation diagnostics, Reader panel
-  lifecycle, and independent PDF.js presentation.
+  lifecycle.
 
 These examples intentionally avoid claiming complete CSS parity, fixed-layout
 EPUB, or PDF-byte export. The [compatibility matrix](compatibility.md) is the

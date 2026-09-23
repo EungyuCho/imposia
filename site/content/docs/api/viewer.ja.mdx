@@ -1,9 +1,9 @@
 ---
 title: Viewer API
-description: "@imposia/viewer が提供するページ表示、Reader、Inspector、PDF 表示のコントローラーです。"
+description: "@imposia/viewer が提供するページ表示、Reader、Inspector のコントローラーです。"
 ---
 
-`@imposia/viewer` は文書を表示します。`mountPageViewer` は確定済みの Core ページ文書の canonical iframe を表示し、`mountViewer` は既存の PDF ファイルのための独立した PDF.js ビューアーです。どちらもページ分割は実行しません。
+`@imposia/viewer` は文書を表示します。`mountPageViewer` は確定済みの Core ページ文書の canonical iframe を表示します。ページ分割は実行しません。
 
 ## `mountPageViewer`
 
@@ -81,20 +81,3 @@ restorePublicationDeepLink(value: string, controller: PublicationController): Pu
 | `state` | `{ open, warnings, selected }` です。 |
 
 Inspector パネルは、目次、検索、サムネイルと補助パネルの枠を共有します。どれか 1 つを開くと他は閉じます。印刷時には表示されず、EPUB 書き出しにも含まれません。
-
-## PDF 用の `mountViewer`
-
-```ts
-mountViewer(container: HTMLElement, source: ViewerSource, options?: ViewerOptions): ViewerController;
-type ViewerSource = Uint8Array | ArrayBuffer | string | { pdf: Uint8Array };
-```
-
-これは、PDF.js で PDF ページを読み込みラスタライズする、独立した Viewer です。アプリケーションがすでに持っている PDF ファイルを表示するためのもので、Core のページ文書の書き出し経路ではありません。ページ文書に PDF バイトの API はありません。オプションは `mode?: "continuous" | "single"`、`zoom?`、`workerSrc?`、`theme?` です。呼び出しは `loading` 状態で即座に返り、失敗すると `state.status` が `error` になり、`state.error` が設定されます。
-
-| `ViewerController` のメンバー | 戻り値・効果 |
-| --- | --- |
-| `goToPage(page)`、`nextPage()`、`previousPage()` | ready の間だけ移動します。 |
-| `setZoom(zoom)`、`setMode(mode)` | ready の間だけ表示を更新します。 |
-| `setTheme(theme?)` | Viewer 変数を差し替え、またはクリアします。破棄後は何もしません。 |
-| `destroy()` | 処理を中止し、PDF.js のリソースを破棄し、コンテナーを空にします。 |
-| `state` | ページ、ページ数、ズーム、モード、loading・ready・error の状態、任意のエラーテキストです。 |
