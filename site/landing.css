@@ -411,12 +411,22 @@
   font-weight: 600;
 }
 
-/* The live viewer's own stylesheet sets `height: 100%`, so the host needs the
-   extra specificity. 510px fits one A4 spread at the desktop hero width;
-   the static illustration uses the same height so the swap does not shift. */
-.lp-viewer .lp-viewer-stage,
-.lp-viewer .lp-viewer-host {
+/* 510px fits one A4 spread at the desktop hero width; the static illustration
+   keeps it so the prerendered hero does not jump. */
+.lp-viewer .lp-viewer-stage {
   height: 510px;
+}
+
+/* The live viewer shows exactly the current page or spread and moves with the
+   window's own buttons. Its pages are scaled with a transform, and a transformed
+   box still counts toward its scroll container's scrollable area, so a
+   scrolling host would expose the whole unscaled document height as empty
+   space. Size the host to the visible page instead and clip the rest. The
+   viewer's own stylesheet sets `height: 100%` and `overflow: auto`, hence the
+   extra specificity. */
+.lp-viewer .lp-viewer-host {
+  height: auto;
+  overflow: hidden;
 }
 
 .lp-viewer .lp-viewer-host {
