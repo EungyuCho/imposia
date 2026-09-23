@@ -12,6 +12,16 @@ export interface PageViewerBinding {
   getViewer(): ReturnType<typeof mountPageViewer> | undefined;
 }
 
+type ViewerLayoutOptions = {
+  readonly cover: boolean | undefined;
+  readonly mode: PageViewerOptions["mode"];
+  readonly zoom: number | undefined;
+};
+
+function viewerLayoutOptions(options: PageViewerOptions | undefined): ViewerLayoutOptions {
+  return { cover: options?.spread?.cover, mode: options?.mode, zoom: options?.zoom };
+}
+
 function sameReaderOptions(
   left: PageViewerOptions["reader"] | undefined,
   right: PageViewerOptions["reader"] | undefined,
@@ -37,6 +47,7 @@ export function usePageViewerBinding(
   const viewerReaderRef = useRef<PageViewerOptions["reader"] | undefined>(undefined);
   const viewerInspectorRef = useRef(false);
   const viewerControlsRef = useRef(true);
+  const viewerLayoutRef = useRef<ViewerLayoutOptions>(viewerLayoutOptions(undefined));
   const unsubscribeRef = useRef<(() => void) | undefined>(undefined);
   const onErrorRef = useRef(onError);
   const onStateChangeRef = useRef(onStateChange);
@@ -86,6 +97,7 @@ export function usePageViewerBinding(
         viewerReaderRef.current = viewerOptions?.reader;
         viewerInspectorRef.current = viewerOptions?.inspector ?? false;
         viewerControlsRef.current = viewerOptions?.controls ?? true;
+        viewerLayoutRef.current = viewerLayoutOptions(viewerOptions);
         if (preservedPage !== undefined) viewer.goToPage(preservedPage);
         unsubscribeRef.current = viewer.subscribe((state) => onStateChangeRef.current?.(state));
       }
@@ -95,10 +107,15 @@ export function usePageViewerBinding(
         activeViewer.refresh(pageDocument);
       }
       activeViewer.setTheme(viewerOptions?.theme);
-      if (viewerOptions?.spread?.cover !== undefined)
-        activeViewer.setSpreadCover(viewerOptions.spread.cover);
-      if (viewerOptions?.mode !== undefined) activeViewer.setMode(viewerOptions.mode);
-      if (viewerOptions?.zoom !== undefined) activeViewer.setZoom(viewerOptions.zoom);
+      // Reapply a layout option only when the caller changes it, so a rerender with an
+      // equal inline options object keeps what the reader chose with the viewer controls,
+      // and dropping an option returns the viewer to its default.
+      const layout = viewerLayoutOptions(viewerOptions);
+      const appliedLayout = viewerLayoutRef.current;
+      if (layout.cover !== appliedLayout.cover) activeViewer.setSpreadCover(layout.cover ?? false);
+      if (layout.mode !== appliedLayout.mode) activeViewer.setMode(layout.mode ?? "continuous");
+      if (layout.zoom !== appliedLayout.zoom) activeViewer.setZoom(layout.zoom ?? 1);
+      viewerLayoutRef.current = layout;
       setViewerError(undefined);
     } catch (error: unknown) {
       const nextError = error instanceof Error ? error : new Error(String(error));

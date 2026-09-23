@@ -195,6 +195,69 @@ test("preserves print-only CSS conditions and stylesheet-relative asset bases", 
   }
 });
 
+test("applies only the style sheets a browser enables by default", async ({
+  page,
+  browserName,
+}) => {
+  const { errors, pageErrors, authoredHostRequests } = await openAssetPage(page, browserName);
+  try {
+    const observation = await page.evaluate(async () => {
+      const requested: string[] = [];
+      const resolver: AssetResolver = async ({ url }) => {
+        requested.push(url);
+        const name = url.replace(/^.*\//, "").replace(/\.css$/, "");
+        return {
+          status: "resolved",
+          bytes: new TextEncoder().encode(`.${name}{display:none}`),
+          mimeType: "text/css",
+        };
+      };
+      const host = document.body.appendChild(document.createElement("div"));
+      let controller: Controller | undefined;
+      try {
+        const core = (await import("/packages/core/dist/index.js")) as CoreModule;
+        controller = core.mountPageDocument(
+          host,
+          {
+            html:
+              '<link rel="stylesheet" title="Main" href="styles/main.css">' +
+              '<link rel="stylesheet" title="Other" href="styles/other.css">' +
+              '<link rel="alternate stylesheet" title="Alt" href="styles/alt.css">' +
+              '<link rel="stylesheet" disabled href="styles/off.css">' +
+              '<p class="main">main</p><p class="other">other</p><p class="alt">alt</p><p class="off">off</p>',
+            baseUrl: "https://assets.example.test/book/",
+          },
+          { assetResolver: resolver },
+        );
+        const ready = await controller.ready;
+        const frame = ready.iframe.contentDocument;
+        if (frame === null) throw new Error("Missing canonical frame document.");
+        const display = (selector: string) =>
+          frame.defaultView?.getComputedStyle(frame.querySelector(selector) as Element).display;
+        return {
+          requested,
+          main: display(".main"),
+          other: display(".other"),
+          alt: display(".alt"),
+          off: display(".off"),
+        };
+      } finally {
+        await controller?.destroy();
+        host.remove();
+      }
+    });
+
+    expect(observation.requested.sort()).toEqual(["styles/main.css", "styles/other.css"]);
+    expect(observation.main).toBe("none");
+    expect(observation.other).not.toBe("none");
+    expect(observation.alt).not.toBe("none");
+    expect(observation.off).not.toBe("none");
+    expect(authoredHostRequests).toEqual([]);
+  } finally {
+    assertNoBrowserErrors(errors, pageErrors);
+  }
+});
+
 test("blocks resolver results with one deterministic frozen warning", async ({
   page,
   browserName,

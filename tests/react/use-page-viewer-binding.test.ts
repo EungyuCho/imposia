@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import type { PageDocument, PageViewerState } from "@imposia/client";
+import type { PageDocument, PageViewerOptions, PageViewerState } from "@imposia/client";
 import { act, createElement, useRef, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -100,4 +100,35 @@ it("preserves user zoom, mode, and spread cover after a callback rerender with i
 
   expect(mocked.viewers).toHaveLength(1);
   expect(viewer?.state).toMatchObject({ zoom: 1.1, mode: "spread", spreadCover: true });
+});
+
+function OptionsHarness(props: { readonly options: PageViewerOptions }) {
+  const hostRef = useRef<HTMLDivElement>(null);
+  usePageViewerBinding(hostRef, pageDocument, props.options, undefined);
+  return createElement("div", { ref: hostRef });
+}
+
+it("applies changed layout options and restores defaults when an option is dropped", async () => {
+  await act(async () =>
+    root.render(
+      createElement(OptionsHarness, {
+        options: { zoom: 2, mode: "spread", spread: { cover: true } },
+      }),
+    ),
+  );
+  const viewer = mocked.viewers[0];
+  await act(async () => {
+    viewer?.setZoom(2);
+    viewer?.setMode("spread");
+    viewer?.setSpreadCover(true);
+  });
+
+  await act(async () =>
+    root.render(createElement(OptionsHarness, { options: { zoom: 1.5, mode: "spread" } })),
+  );
+  expect(viewer?.state).toMatchObject({ zoom: 1.5, mode: "spread", spreadCover: false });
+
+  await act(async () => root.render(createElement(OptionsHarness, { options: {} })));
+  expect(mocked.viewers).toHaveLength(1);
+  expect(viewer?.state).toMatchObject({ zoom: 1, mode: "continuous", spreadCover: false });
 });

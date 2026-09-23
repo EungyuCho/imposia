@@ -23,7 +23,11 @@ function escapedCharacter(
   if (next === undefined) return { value: "", end: index + 1 };
   const hex = text.slice(index + 1).match(/^[0-9a-f]{1,6}/i)?.[0];
   if (hex !== undefined) {
-    const end = index + 1 + hex.length;
+    let end = index + 1 + hex.length;
+    // A hex escape absorbs one following whitespace (CRLF counts as one), so `\75 rl(`
+    // spells `url(` exactly as a browser reads it.
+    if (text.startsWith("\r\n", end)) end += 2;
+    else if (/[\t\n\r\f ]/.test(text[end] ?? "")) end += 1;
     const codePoint = Number.parseInt(hex, 16);
     return { value: String.fromCodePoint(codePoint <= 0x10ffff ? codePoint : 0xfffd), end };
   }
@@ -113,10 +117,28 @@ export function scanCssUrls(text: string): readonly CssUrlToken[] {
   return tokens;
 }
 
+function unquotedUrlEnd(text: string, start: number): number {
+  let index = start;
+  while (index < text.length) {
+    if (text[index] === "\\") {
+      index += 2;
+      continue;
+    }
+    if (text[index] === ")") return index;
+    index += 1;
+  }
+  return -1;
+}
+
 export function hasUnsupportedCssResourceFunction(text: string): boolean {
   let index = 0;
   while (index < text.length) {
     const character = text[index];
+    if (character === "/" && text[index + 1] === "*") {
+      const end = text.indexOf("*/", index + 2);
+      index = end < 0 ? text.length : end + 2;
+      continue;
+    }
     if (character === "'" || character === '"') {
       const end = quotedEnd(text, index + 1, character);
       index = end < 0 ? text.length : end + 1;
@@ -130,6 +152,16 @@ export function hasUnsupportedCssResourceFunction(text: string): boolean {
     let open = identifier.end;
     while (/\s/.test(text[open] ?? "")) open += 1;
     const functionName = identifier.value.toLowerCase();
+    if (functionName === "url" && text[identifier.end] === "(") {
+      // An unquoted url() body is opaque: `/*` inside it does not open a comment.
+      let content = identifier.end + 1;
+      while (/\s/.test(text[content] ?? "")) content += 1;
+      if (text[content] !== "'" && text[content] !== '"') {
+        const end = unquotedUrlEnd(text, content);
+        index = end < 0 ? text.length : end + 1;
+        continue;
+      }
+    }
     if (
       (functionName === "image" ||
         functionName === "src" ||
@@ -184,6 +216,22 @@ function preferredFontSource(value: string): string {
   return woff2 === undefined ? value : woff2.trim();
 }
 
+/**
+ * Drops `local()` candidates from a `@font-face` `src` list. Splitting on top-level commas
+ * keeps a quoted name such as `local("Foo (Bold)")` whole, where a regex would stop at its
+ * first `)`.
+ */
+function withoutLocalFontSources(value: string): string {
+  const candidates = splitTopLevelCommas(value).map((candidate) => candidate.trim());
+  const remote = candidates.filter((candidate) => {
+    const identifier = identifierAt(candidate, 0);
+    let open = identifier.end;
+    while (/\s/.test(candidate[open] ?? "")) open += 1;
+    return !(identifier.value.toLowerCase() === "local" && candidate[open] === "(");
+  });
+  return remote.length === candidates.length ? value : remote.join(", ");
+}
+
 /** Splits on commas that sit outside quotes and parentheses, so `format(...)` stays intact. */
 function splitTopLevelCommas(value: string): readonly string[] {
   const parts: string[] = [];
@@ -211,6 +259,37 @@ function splitTopLevelCommas(value: string): readonly string[] {
   return parts.filter((part) => part.trim() !== "");
 }
 
+/**
+ * Reads a leading `name(...)` function from `source`, honouring nested parentheses and
+ * quoted strings. Returns its trimmed argument text and the text after it, or undefined when
+ * `source` does not start with the function or the function never closes.
+ */
+export function functionQualifier(
+  source: string,
+  name: string,
+): { readonly value: string; readonly rest: string } | undefined {
+  if (!source.toLowerCase().startsWith(`${name}(`)) return undefined;
+  let depth = 1;
+  for (let index = name.length + 1; index < source.length; index += 1) {
+    const character = source[index];
+    if (character === "'" || character === '"') {
+      const end = quotedEnd(source, index + 1, character);
+      if (end < 0) return undefined;
+      index = end;
+    } else if (character === "(") depth += 1;
+    else if (character === ")") {
+      depth -= 1;
+      if (depth === 0) {
+        return {
+          value: source.slice(name.length + 1, index).trim(),
+          rest: source.slice(index + 1).trimStart(),
+        };
+      }
+    }
+  }
+  return undefined;
+}
+
 export function cssReferences(root: Root): readonly CssReference[] {
   const references: CssReference[] = [];
   root.walk((node) => {
@@ -231,8 +310,7 @@ export function cssReferences(root: Root): readonly CssReference[] {
     }
     if (node.type !== "decl") return;
     if (node.prop.trim().toLowerCase() === "src") {
-      node.value = node.value.replace(/\blocal\s*\([^)]*\)\s*,?/gi, "");
-      node.value = preferredFontSource(node.value);
+      node.value = preferredFontSource(withoutLocalFontSources(node.value));
     }
     if (hasUnsupportedCssResourceFunction(node.value)) return;
     const kind: CssReferenceKind = node.prop.trim().toLowerCase() === "src" ? "font" : "image";

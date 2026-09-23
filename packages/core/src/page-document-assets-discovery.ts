@@ -158,9 +158,14 @@ export function discoverPageAssets(
       addAttribute(element, "poster", "image");
     }
     if (name === "track") addAttribute(element, "src", "media");
-    if (name === "link" && /(?:^|\s)stylesheet(?:\s|$)/i.test(element.getAttribute("rel") ?? "")) {
+    const rel = name === "link" ? (element.getAttribute("rel") ?? "") : "";
+    if (/(?:^|\s)stylesheet(?:\s|$)/i.test(rel)) {
       const authored = element.getAttribute("href");
-      if (authored !== null) {
+      // Browsers do not apply an alternate or disabled style sheet until script switches to
+      // it, and print has no such switch. Leaving the link unrequested lets the sanitizer
+      // drop it like any other <link>.
+      const enabled = !/(?:^|\s)alternate(?:\s|$)/i.test(rel) && !element.hasAttribute("disabled");
+      if (authored !== null && enabled) {
         queue = [
           ...queue,
           makeRequest("stylesheet", authored, sourceBaseUrl, 0, (outcome) => {
@@ -169,8 +174,12 @@ export function discoverPageAssets(
               return [];
             }
             const style = parsed.createElement("style");
-            const media = element.getAttribute("media");
-            if (media !== null) style.setAttribute("media", media);
+            // `title` keeps the sheet in its style sheet set, so of two differently titled
+            // persistent sheets only the first applies, as it would from the <link>.
+            for (const attribute of ["media", "title"]) {
+              const value = element.getAttribute(attribute);
+              if (value !== null) style.setAttribute(attribute, value);
+            }
             element.replaceWith(style);
             return contextRequests({
               root: outcome.root,

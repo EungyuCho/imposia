@@ -66,4 +66,15 @@ describe("external CSS requests", () => {
     requests[0]?.apply(stylesheet(".theme{color:red}"));
     expect(root.toString()).toContain("@layer theme{@supports (display: grid){@media print{");
   });
+
+  it("reads `supports (…)` with a space as a media query, as browsers do", () => {
+    const root = parseCss('@import "styles/theme.css" supports (display: grid);', false);
+    const requests = cssRequests(
+      { root, owner: { index: 0, inline: false }, baseUrl: "https://example.test/book/", depth: 0 },
+      cssReferences(root),
+      makeRequest,
+    );
+    requests[0]?.apply(stylesheet(".theme{color:red}"));
+    expect(root.toString()).toBe("@media supports (display: grid){.theme{color:red}}");
+  });
 });

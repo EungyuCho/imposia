@@ -50,6 +50,17 @@ describe("@font-face src negotiation", () => {
     expect(urls).toEqual(["/a.woff2"]);
   });
 
+  it("drops a local() name that contains parentheses as one candidate", () => {
+    const root = parseCss(
+      '@font-face{src:local("Foo (Bold)"), url("/a.woff") format("woff")}',
+      false,
+    );
+    const urls = cssReferences(root).map((reference) => reference.token.url);
+
+    expect(urls).toEqual(["/a.woff"]);
+    expect(root.toString()).toBe('@font-face{src:url("/a.woff") format("woff")}');
+  });
+
   // A comma inside format() must not split the list, or the chosen candidate would be a
   // fragment and its url() would resolve against nothing.
   it("does not split on commas nested inside functions or quotes", () => {
