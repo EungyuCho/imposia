@@ -88,6 +88,11 @@ renamed to `0.6.0.md` when this release ships.
 
 ### Fixed
 
+- `@imposia/react/styles.css` imports `@imposia/client/styles.css` instead of
+  `@imposia/viewer/styles.css`. `@imposia/viewer` is not a direct dependency
+  of `@imposia/react`, so under strict package layouts such as pnpm's the
+  documented `import "@imposia/react/styles.css"` failed to resolve in
+  bundlers. The imported rules are unchanged.
 - A paragraph or table taller than a page no longer overflows the current
   page when no line or row of it fits in the remaining space. Plain-text
   paragraphs, `<br>`-separated line blocks, and tables now break before the
