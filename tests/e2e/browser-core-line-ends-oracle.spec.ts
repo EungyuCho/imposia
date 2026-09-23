@@ -3,10 +3,11 @@ import { captureBrowserErrors } from "./browser-core-support.js";
 
 // Function-level oracle for the ASA-425 rendered-line-ends fast path and the
 // grapheme-segmentation cache. The spec imports the compiled pagination module
-// directly (via the fixture page's import map, which stubs postcss) and proves
-// that renderedLineEndsFast returns offset arrays identical to the sequential
-// per-grapheme implementation across scripts, and that seedGraphemeSuffix
-// seeds segmentations byte-identical to re-segmenting the suffix from scratch.
+// directly (via the fixture page's import map, which stubs the postcss parser
+// subpaths) and proves that renderedLineEndsFast returns offset arrays identical
+// to the sequential per-grapheme implementation across scripts, and that
+// seedGraphemeSuffix seeds segmentations byte-identical to re-segmenting the
+// suffix from scratch.
 
 type LineEndsObservation = Readonly<{
   id: string;
