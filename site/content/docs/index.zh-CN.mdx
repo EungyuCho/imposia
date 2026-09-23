@@ -46,12 +46,12 @@ Imposia 消除的正是这个问题。它把你现有的 HTML 和 CSS 在浏览�
 | --- | ---: |
 | Core 分页（`mountPageDocument`），minify 并 gzip 后 | 56.7 KiB |
 | 包含 Core 的 React 页面查看器（`ImposiaPageViewer`），minify 并 gzip 后 | 67.2 KiB |
-| 为 99 页的文章分页 | 125 ms |
-| 修改该文章中的一个词并重新提交 | 121 ms |
-| 提交后的第一帧渲染 | 1.9 ms |
-| 为每个条目都有自己 `<style>` 的 100 条目 Publication 分页 | 94 ms |
+| 为 99 页的文章分页 | 127 ms |
+| 修改该文章中的一个词并重新提交 | 127 ms |
+| 提交后的第一帧渲染 | 2.0 ms |
+| 为每个条目都有自己 `<style>` 的 100 条目 Publication 分页 | 97 ms |
 
-2026 年 9 月 23 日在 Apple M4 上的 Chromium 149 中测得。时间为 7 次运行的中位数，体积不含 React 和 React DOM。如需在自己的机器上测量，请在仓库中先运行 `pnpm build`，再运行 `pnpm benchmark`。
+2026 年 9 月 24 日在 Apple M4 上的 Chromium 149 中测得。时间为 7 次运行的中位数，体积不含 React 和 React DOM。如需在自己的机器上测量，请在仓库中先运行 `pnpm build`，再运行 `pnpm benchmark`。
 
 ## 认清边界
 

@@ -1,21 +1,33 @@
-import { redirect } from "react-router";
+import type { LinksFunction, MetaFunction } from "react-router";
+import { Navigate, useParams } from "react-router";
+import landingHref from "../../landing.css?url";
 import { isSupportedLocale } from "../../lib/i18n";
-import type { Route } from "./+types/home";
+import { LANDING_COPY } from "../landing/copy";
+import { Landing } from "../landing/landing";
 
 /**
- * `/:lang` is documentation, not a marketing page. The route stays so the
- * locale prefix works on its own and forwards to that locale's docs root;
- * the standalone demo remains reachable from the navigation.
- *
- * The redirect belongs in a loader rather than a rendered `<Navigate>`:
- * during prerendering the router is static, where `<Navigate>` is a no-op and
- * warns. Production serves these hops from `_redirects` at the edge.
+ * `/:lang` is the product landing page (design/landing.pen). It is prerendered
+ * per locale; documentation lives under `/:lang/docs`.
  */
-export function clientLoader({ params }: Route.ClientLoaderArgs) {
-  const lang = params.lang;
-  return redirect(lang && isSupportedLocale(lang) ? `/${lang}/docs` : "/en/docs");
-}
+export const links: LinksFunction = () => [
+  { href: landingHref, rel: "stylesheet" },
+  { href: "https://fonts.googleapis.com", rel: "preconnect" },
+  { crossOrigin: "anonymous", href: "https://fonts.gstatic.com", rel: "preconnect" },
+  {
+    href: "https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;600&family=Newsreader:opsz,wght@6..72,500&display=swap",
+    rel: "stylesheet",
+  },
+];
 
-export default function LocaleIndexRoute() {
-  return null;
+export const meta: MetaFunction = ({ params }) => {
+  const lang = params.lang;
+  if (!lang || !isSupportedLocale(lang)) return [];
+  const copy = LANDING_COPY[lang];
+  return [{ title: copy.metaTitle }, { content: copy.metaDescription, name: "description" }];
+};
+
+export default function LandingRoute() {
+  const lang = useParams<"lang">().lang;
+  if (!lang || !isSupportedLocale(lang)) return <Navigate replace to="/en" />;
+  return <Landing lang={lang} />;
 }

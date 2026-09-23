@@ -611,10 +611,13 @@ passed, 120 intentional skips, 0 failures, 474 total**, plus 8 site scenarios
 and 23 Vitest scenarios.
 
 A performance baseline is recorded in `benchmarks/baseline.json` by
-`pnpm benchmark` (schemaVersion 3, Chromium 149 on an Apple M4, 2026-09-23):
-medians of **125 ms** to paginate a 99-page article, **121 ms** to recommit it
-after a one-word change, **1.9 ms** for the first frame after a commit, and
-**94 ms** for a 100-entry Publication with a `<style>` per entry.
+`pnpm benchmark` (schemaVersion 4, Chromium 149 on an Apple M4, 2026-09-24):
+medians of **127 ms** to paginate a 99-page article, **127 ms** to recommit it
+after a one-word change, **2.0 ms** for the first frame after a commit,
+**97 ms** for a 100-entry Publication with a `<style>` per entry, **57 ms**
+to recommit a 50-page report, **308 ms** for a 200-page document, **1.1 ms**
+from `print()` to the print-dialog request, and **0** partial frames across
+20 rapid updates. The landing page reads these figures at build time.
 `pnpm benchmark --compare <core bundle>` measures another revision's built
 bundle in the same browser, alternating runs. The previous schemaVersion 2
 baseline measured the removed Node PDF renderer.

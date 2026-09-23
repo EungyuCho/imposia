@@ -1,6 +1,6 @@
 {
-  "schemaVersion": 3,
-  "capturedAt": "2026-09-23T14:47:37.544Z",
+  "schemaVersion": 4,
+  "capturedAt": "2026-09-23T15:10:21.385Z",
   "runs": {
     "warmup": 2,
     "measured": 7
@@ -19,30 +19,66 @@
     {
       "id": "document-mount",
       "description": "Mount a 99-page article (headings, paragraphs, lists)",
+      "unit": "ms",
       "pageCount": 99,
-      "medianMs": 125,
-      "samplesMs": [125, 117.7, 131.3, 116.9, 128.1, 117.4, 126.7]
+      "median": 127,
+      "samples": [128.9, 123.4, 137.1, 121.1, 127, 127, 125]
     },
     {
       "id": "document-update",
       "description": "Update one word in that article and recommit",
+      "unit": "ms",
       "pageCount": 99,
-      "medianMs": 120.8,
-      "samplesMs": [119.9, 115.8, 122.4, 120.8, 121.9, 120.8, 120.6]
+      "median": 126.7,
+      "samples": [134.2, 126.9, 119.5, 126.4, 126.9, 126.7, 125.1]
     },
     {
       "id": "first-frame",
       "description": "First rendered frame after the article commits",
+      "unit": "ms",
       "pageCount": 99,
-      "medianMs": 1.9,
-      "samplesMs": [1.9, 1.9, 1.9, 1.9, 1.8, 2.1, 1.9]
+      "median": 2,
+      "samples": [2, 1.9, 1.9, 2, 1.8, 2.1, 2.3]
     },
     {
       "id": "publication-mount",
       "description": "Mount a Publication of 100 entries, each with a <style>",
+      "unit": "ms",
       "pageCount": 100,
-      "medianMs": 93.8,
-      "samplesMs": [93.8, 92.7, 94.5, 100.7, 92.2, 93.2, 101.1]
+      "median": 96.8,
+      "samples": [96.8, 96, 102.7, 102.1, 96.1, 96.1, 100.5]
+    },
+    {
+      "id": "report-update",
+      "description": "Update one word in a 50-page report and recommit",
+      "unit": "ms",
+      "pageCount": 50,
+      "median": 56.7,
+      "samples": [56, 56.4, 57, 59.8, 56.7, 60, 54.9]
+    },
+    {
+      "id": "large-mount",
+      "description": "Mount a 200-page document",
+      "unit": "ms",
+      "pageCount": 200,
+      "median": 307.8,
+      "samples": [311.3, 301.6, 307.8, 314.9, 291.6, 308.5, 292.6]
+    },
+    {
+      "id": "print-call",
+      "description": "print() on the 50-page report until the browser print dialog is requested",
+      "unit": "ms",
+      "pageCount": 50,
+      "median": 1.1,
+      "samples": [1.1, 1.1, 1, 1.3, 1, 1.3, 1.4]
+    },
+    {
+      "id": "partial-frames",
+      "description": "Frames showing an incomplete page set during 20 rapid report updates",
+      "unit": "frames",
+      "pageCount": 50,
+      "median": 0,
+      "samples": [0, 0, 0, 0, 0, 0, 0]
     }
   ]
 }
