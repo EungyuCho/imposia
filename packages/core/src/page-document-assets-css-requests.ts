@@ -1,4 +1,4 @@
-import type { Root } from "postcss";
+import postcss, { type Root } from "postcss";
 import { type CssReference, cssReferences, replaceCssRange } from "./page-document-assets-css.js";
 import type { AssetOutcome, AssetRequest } from "./page-document-assets-resolver.js";
 
@@ -30,6 +30,102 @@ function replaceCssUrl(reference: CssReference, value: string): void {
 
 function removeCssReference(reference: CssReference): void {
   reference.node.remove();
+}
+
+export function stylesheetBaseUrl(url: string, baseUrl: string | undefined): string | undefined {
+  try {
+    return new URL(url, baseUrl).href;
+  } catch {
+    return baseUrl;
+  }
+}
+
+function importConditions(reference: CssReference): string | undefined {
+  if (reference.node.type !== "atrule") return undefined;
+  const params = reference.node.params;
+  let tail = params.slice(reference.token.end).trimStart();
+  const quote = params[reference.token.start - 1];
+  if ((quote === "'" || quote === '"') && tail.startsWith(quote)) {
+    tail = tail.slice(1).trimStart();
+  }
+  if (/\burl\s*\(/i.test(params.slice(0, reference.token.start)) && tail.startsWith(")")) {
+    tail = tail.slice(1).trimStart();
+  }
+  return tail.trim();
+}
+
+function functionQualifier(
+  source: string,
+  name: string,
+): { readonly value: string; readonly rest: string } | undefined {
+  if (!source.toLowerCase().startsWith(`${name}(`)) return undefined;
+  let depth = 1;
+  let quote: string | undefined;
+  for (let index = name.length + 1; index < source.length; index += 1) {
+    const character = source[index];
+    if (quote !== undefined) {
+      if (character === "\\") index += 1;
+      else if (character === quote) quote = undefined;
+    } else if (character === "'" || character === '"') quote = character;
+    else if (character === "(") depth += 1;
+    else if (character === ")") {
+      depth -= 1;
+      if (depth === 0) {
+        return {
+          value: source.slice(name.length + 1, index).trim(),
+          rest: source.slice(index + 1).trimStart(),
+        };
+      }
+    }
+  }
+  return undefined;
+}
+
+function conditionedImport(
+  reference: CssReference,
+  importedNodes: Root["nodes"],
+): Root["nodes"] | undefined {
+  let conditions = importConditions(reference);
+  if (conditions === undefined) return undefined;
+  let layer: string | undefined;
+  let supports: string | undefined;
+  if (/^layer(?=\s|\(|$)/i.test(conditions)) {
+    if (/^layer\(/i.test(conditions)) {
+      const qualifier = functionQualifier(conditions, "layer");
+      if (qualifier === undefined) return undefined;
+      layer = qualifier.value;
+      conditions = qualifier.rest;
+    } else {
+      layer = "";
+      conditions = conditions.slice("layer".length).trimStart();
+    }
+  }
+  if (/^supports\b/i.test(conditions)) {
+    const qualifier = functionQualifier(conditions, "supports");
+    if (qualifier === undefined) return undefined;
+    supports = qualifier.value;
+    conditions = qualifier.rest;
+  }
+  let nodes = importedNodes;
+  if (conditions !== "") {
+    const media = postcss.atRule({ name: "media", params: conditions });
+    media.append(...nodes);
+    nodes = [media];
+  }
+  if (supports !== undefined) {
+    const params = /^(?:\(|selector\s*\(|font-tech\s*\(|font-format\s*\()/i.test(supports)
+      ? supports
+      : `(${supports})`;
+    const rule = postcss.atRule({ name: "supports", params });
+    rule.append(...nodes);
+    nodes = [rule];
+  }
+  if (layer !== undefined) {
+    const rule = postcss.atRule({ name: "layer", params: layer });
+    rule.append(...nodes);
+    nodes = [rule];
+  }
+  return nodes;
 }
 
 export function cssRequests(
@@ -68,12 +164,18 @@ export function cssRequests(
           }
           const importedReferences = cssReferences(outcome.root);
           const importedNodes = [...outcome.root.nodes];
-          reference.node.replaceWith(...importedNodes);
+          const conditionedNodes = conditionedImport(reference, importedNodes);
+          if (conditionedNodes === undefined) {
+            removeCssReference(reference);
+            return [];
+          }
+          reference.node.replaceWith(...conditionedNodes);
           return cssRequests(
             {
               root: context.root,
               owner: context.owner,
-              baseUrl: outcome.resolvedUrl ?? context.baseUrl,
+              baseUrl:
+                outcome.resolvedUrl ?? stylesheetBaseUrl(reference.token.url, context.baseUrl),
               depth: context.depth + 2,
             },
             importedReferences,

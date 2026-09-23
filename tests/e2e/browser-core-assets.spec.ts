@@ -100,6 +100,101 @@ test("resolves HTML and CSS assets only through the resolver", async ({ page, br
   }
 });
 
+test("preserves print-only CSS conditions and stylesheet-relative asset bases", async ({
+  page,
+  browserName,
+}) => {
+  const { errors, pageErrors, authoredHostRequests } = await openAssetPage(page, browserName);
+  try {
+    const observation = await page.evaluate(async () => {
+      const png = Uint8Array.from(
+        atob(
+          "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
+        ),
+        (character) => character.charCodeAt(0),
+      );
+      const requests: RequestRecord[] = [];
+      const resolver: AssetResolver = async ({ url, kind, baseUrl, signal }) => {
+        requests.push({ url, kind, baseUrl, hasSignal: signal instanceof AbortSignal });
+        if (kind === "stylesheet") {
+          return {
+            status: "resolved",
+            bytes: new TextEncoder().encode(
+              `.from-${url.includes("link") ? "link" : "import"}{display:none;background-image:url("paper.png")}`,
+            ),
+            mimeType: "text/css",
+          };
+        }
+        return { status: "resolved", bytes: png, mimeType: "image/png" };
+      };
+      const host = document.body.appendChild(document.createElement("div"));
+      let controller: Controller | undefined;
+      try {
+        const core = (await import("/packages/core/dist/index.js")) as CoreModule;
+        controller = core.mountPageDocument(
+          host,
+          {
+            html: '<link rel="stylesheet" media="print" href="styles/link.css"><style>@import "other/import.css" print;</style><p class="from-link">Link print only</p><p class="from-import">Import print only</p>',
+            baseUrl: "https://assets.example.test/book/",
+          },
+          { assetResolver: resolver },
+        );
+        const ready = await controller.ready;
+        const frame = ready.iframe.contentDocument;
+        if (frame === null) throw new Error("Missing canonical frame document.");
+        return {
+          requests,
+          linkDisplay: frame.defaultView?.getComputedStyle(
+            frame.querySelector(".from-link") as Element,
+          ).display,
+          importDisplay: frame.defaultView?.getComputedStyle(
+            frame.querySelector(".from-import") as Element,
+          ).display,
+          styles: [...frame.querySelectorAll("style")].map((style) => ({
+            media: style.getAttribute("media"),
+            css: style.textContent ?? "",
+          })),
+        };
+      } finally {
+        await controller?.destroy();
+        host.remove();
+      }
+    });
+
+    expect(observation.linkDisplay).not.toBe("none");
+    expect(observation.importDisplay).not.toBe("none");
+    expect(
+      observation.styles.some(
+        (style) => style.media === "print" && style.css.includes(".from-link"),
+      ),
+    ).toBe(true);
+    expect(
+      observation.styles.some(
+        (style) => style.css.includes("@media print") && style.css.includes(".from-import"),
+      ),
+    ).toBe(true);
+    expect(observation.requests).toEqual(
+      expect.arrayContaining([
+        {
+          url: "paper.png",
+          kind: "image",
+          baseUrl: "https://assets.example.test/book/styles/link.css",
+          hasSignal: true,
+        },
+        {
+          url: "paper.png",
+          kind: "image",
+          baseUrl: "https://assets.example.test/book/other/import.css",
+          hasSignal: true,
+        },
+      ]),
+    );
+    expect(authoredHostRequests).toEqual([]);
+  } finally {
+    assertNoBrowserErrors(errors, pageErrors);
+  }
+});
+
 test("blocks resolver results with one deterministic frozen warning", async ({
   page,
   browserName,

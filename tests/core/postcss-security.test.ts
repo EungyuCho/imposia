@@ -20,4 +20,17 @@ describe("PostCSS serialization security", () => {
       resourceBlocked: false,
     });
   });
+
+  it("blocks string URLs in image-set and other unsupported resource functions", () => {
+    for (const value of [
+      'image-set("https://assets.example.test/print.png" 1x)',
+      '-webkit-image-set("https://assets.example.test/print.png" 1x)',
+      'cross-fade("https://assets.example.test/print.png", white 50%)',
+      'local("Untrusted font")',
+    ]) {
+      const result = sanitizeCss(`.print{background-image:${value}}`, true, new Set());
+      expect(result.resourceBlocked).toBe(true);
+      expect(result.css).not.toContain("background-image");
+    }
+  });
 });

@@ -35,6 +35,58 @@ async function closeZeroNetworkPage(
 const requestSignature = ({ url, kind, baseUrl, hasSignal }: RequestRecord): string =>
   `${kind}:${url}:${baseUrl ?? ""}:${hasSignal}`;
 
+test("does not carry string image-set URLs into the print copy", async ({ page, browserName }) => {
+  const opened = await openZeroNetworkPage(page, browserName);
+  try {
+    const observation = await page.evaluate(async () => {
+      type PrintableController = Controller & { print(): Promise<void> };
+      const core = (await import("/packages/core/dist/index.js")) as CoreModule;
+      const host = document.body.appendChild(document.createElement("div"));
+      const originalPrint = window.print;
+      const requested: string[] = [];
+      let printCopy = "";
+      let controller: PrintableController | undefined;
+      try {
+        controller = core.mountPageDocument(
+          host,
+          {
+            html: '<style>.probe{background-image:image-set("https://blocked.invalid/print.png" 1x)}</style><p class="probe">Print asset boundary</p>',
+          },
+          {
+            assetResolver: async ({ url }) => {
+              requested.push(url);
+              return { status: "blocked" };
+            },
+          },
+        ) as PrintableController;
+        const ready = await controller.ready;
+        Object.defineProperty(window, "print", {
+          configurable: true,
+          value: () => {
+            printCopy =
+              document.querySelector<HTMLElement>("[data-imposia-print-root]")?.shadowRoot
+                ?.innerHTML ?? "";
+            window.dispatchEvent(new Event("afterprint"));
+          },
+        });
+        await controller.print();
+        return { requested, printCopy, warnings: ready.warnings.map((item) => item.code) };
+      } finally {
+        Object.defineProperty(window, "print", { configurable: true, value: originalPrint });
+        await controller?.destroy();
+        host.remove();
+      }
+    });
+    expect(observation.requested).toEqual([]);
+    expect(observation.printCopy).toContain("Print asset boundary");
+    expect(observation.printCopy).not.toContain("blocked.invalid");
+    expect(observation.warnings).toContain("RESOURCE_BLOCKED");
+    expect(opened.networkRequests).toEqual([]);
+  } finally {
+    await closeZeroNetworkPage(page, opened);
+  }
+});
+
 test("sanitizes unsupported contexts before resolver discovery and keeps blob CSP", async ({
   page,
   browserName,

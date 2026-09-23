@@ -1,6 +1,6 @@
 import type { Root } from "postcss";
 import { cssReferences, inlineCss, parseCss } from "./page-document-assets-css.js";
-import { cssRequests } from "./page-document-assets-css-requests.js";
+import { cssRequests, stylesheetBaseUrl } from "./page-document-assets-css-requests.js";
 import {
   rewriteSrcset,
   sameDocumentFragment,
@@ -169,11 +169,13 @@ export function discoverPageAssets(
               return [];
             }
             const style = parsed.createElement("style");
+            const media = element.getAttribute("media");
+            if (media !== null) style.setAttribute("media", media);
             element.replaceWith(style);
             return contextRequests({
               root: outcome.root,
               owner: { element: style, inline: false },
-              baseUrl: outcome.resolvedUrl ?? sourceBaseUrl,
+              baseUrl: outcome.resolvedUrl ?? stylesheetBaseUrl(authored, sourceBaseUrl),
               depth: 0,
             });
           }),

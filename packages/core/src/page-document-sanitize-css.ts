@@ -1,5 +1,5 @@
 import postcss from "postcss";
-import { scanCssUrls } from "./page-document-assets-css.js";
+import { hasUnsupportedCssResourceFunction, scanCssUrls } from "./page-document-assets-css.js";
 import { sameDocumentFragment } from "./page-document-assets-html.js";
 
 export interface SanitizedCss {
@@ -22,7 +22,10 @@ export function hasCssResource(
   resolvedUrls?: ReadonlySet<string>,
 ): boolean {
   const decoded = decodeCssEscapes(value);
-  if (!/\b(?:url|image-set|cross-fade|local)\s*\(/i.test(decoded)) return false;
+  // image-set() and cross-fade() can contain bare string URLs. The URL scanner
+  // only handles url(), so none of their arguments can be trusted as resolved.
+  if (hasUnsupportedCssResourceFunction(decoded)) return true;
+  if (!/\burl\s*\(/i.test(decoded)) return false;
   const tokens = scanCssUrls(decoded).filter((token) => !sameDocumentFragment(token.url));
   if (tokens.length === 0) return false;
   if (!preserveResolvedResources || resolvedUrls === undefined) return true;

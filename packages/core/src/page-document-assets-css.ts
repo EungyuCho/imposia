@@ -133,6 +133,7 @@ export function hasUnsupportedCssResourceFunction(text: string): boolean {
     if (
       (functionName === "image" ||
         functionName === "src" ||
+        functionName === "local" ||
         functionName.endsWith("image-set") ||
         functionName.endsWith("cross-fade")) &&
       text[open] === "("

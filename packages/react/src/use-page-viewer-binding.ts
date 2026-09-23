@@ -95,9 +95,10 @@ export function usePageViewerBinding(
         activeViewer.refresh(pageDocument);
       }
       activeViewer.setTheme(viewerOptions?.theme);
-      activeViewer.setSpreadCover(viewerOptions?.spread?.cover ?? false);
-      activeViewer.setMode(viewerOptions?.mode ?? "continuous");
-      activeViewer.setZoom(viewerOptions?.zoom ?? 1);
+      if (viewerOptions?.spread?.cover !== undefined)
+        activeViewer.setSpreadCover(viewerOptions.spread.cover);
+      if (viewerOptions?.mode !== undefined) activeViewer.setMode(viewerOptions.mode);
+      if (viewerOptions?.zoom !== undefined) activeViewer.setZoom(viewerOptions.zoom);
       setViewerError(undefined);
     } catch (error: unknown) {
       const nextError = error instanceof Error ? error : new Error(String(error));

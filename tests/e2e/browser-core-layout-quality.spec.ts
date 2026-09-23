@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, type Page, test } from "@playwright/test";
 import { captureBrowserErrors } from "./browser-core-support.js";
 
 type PageObservation = {
@@ -34,9 +34,76 @@ const markerOccurrences = (text: string, markers: readonly string[]): readonly n
 const orderedMarkerIndexes = (text: string, markers: readonly string[]): readonly number[] =>
   markers.map((marker) => text.indexOf(marker));
 
+async function observeTwoTallTableRows(page: Page, avoidSecond: boolean) {
+  return page.evaluate(async (avoid) => {
+    const core = (await import("/packages/core/dist/index.js")) as CoreModule;
+    const host = document.body.appendChild(document.createElement("div"));
+    const controller = core.mountPageDocument(host, {
+      html: `<style>table{border-collapse:collapse;width:100%}td{padding:0;border:0;height:600px}tr.avoid{break-inside:avoid}</style>
+        <table><tbody><tr data-row="first"><td>FIRST-ROW</td></tr>
+        <tr class="${avoid ? "avoid" : ""}" data-row="second"><td>SECOND-ROW</td></tr></tbody></table>`,
+    });
+    try {
+      const ready = await controller.ready;
+      const frame = ready.iframe.contentDocument;
+      if (frame === null) throw new Error("Missing canonical frame document.");
+      const pages = [...frame.querySelectorAll<HTMLElement>("[data-imposia-page]")].map(
+        (pageElement) => {
+          const content = pageElement.querySelector<HTMLElement>("[data-imposia-page-content]");
+          const flow = pageElement.querySelector<HTMLElement>("[data-imposia-page-flow]");
+          if (content === null || flow === null) throw new Error("Missing page flow.");
+          return {
+            rows: [...pageElement.querySelectorAll<HTMLTableRowElement>("tr[data-row]")].map(
+              (row) => ({ id: row.dataset.row, text: row.textContent?.trim() }),
+            ),
+            overflow: flow.scrollHeight - content.clientHeight,
+          };
+        },
+      );
+      return { pages, warningCodes: ready.warnings.map((warning) => warning.code) };
+    } finally {
+      await controller.destroy();
+      host.remove();
+    }
+  }, avoidSecond);
+}
+
 test.describe("Chromium Core fragmentation and layout quality", () => {
   test.beforeEach(({ browserName }) => {
     test.skip(browserName !== "chromium", "Layout-quality pagination is Chromium-reference only.");
+  });
+
+  test("moves a second 600px row without leaving an empty row or silent overflow", async ({
+    page,
+  }) => {
+    await page.goto("/examples/book.html");
+    const observation = await observeTwoTallTableRows(page, false);
+    expect(observation.pages.flatMap((item) => item.rows)).toEqual([
+      { id: "first", text: "FIRST-ROW" },
+      { id: "second", text: "SECOND-ROW" },
+    ]);
+    expect(
+      observation.pages.findIndex((item) => item.rows.some((row) => row.id === "first")),
+    ).toBeLessThan(
+      observation.pages.findIndex((item) => item.rows.some((row) => row.id === "second")),
+    );
+    expect(observation.pages.every((item) => item.overflow <= 1)).toBe(true);
+    expect(observation.warningCodes).not.toContain("PAGE_OVERFLOW");
+  });
+
+  test("keeps a fresh-page fitting row with break-inside avoid intact", async ({ page }) => {
+    await page.goto("/examples/book.html");
+    const observation = await observeTwoTallTableRows(page, true);
+    expect(observation.pages.flatMap((item) => item.rows)).toEqual([
+      { id: "first", text: "FIRST-ROW" },
+      { id: "second", text: "SECOND-ROW" },
+    ]);
+    expect(
+      observation.pages.findIndex((item) => item.rows.some((row) => row.id === "first")),
+    ).toBeLessThan(
+      observation.pages.findIndex((item) => item.rows.some((row) => row.id === "second")),
+    );
+    expect(observation.warningCodes).not.toContain("AVOID_RELAXED");
   });
 
   test("honors break-before and break-after at nested block boundaries", async ({
