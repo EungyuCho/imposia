@@ -29,6 +29,11 @@ test("root redirects to the English landing page", async ({ page, browserName })
     await expect(page).toHaveURL(/\/en\/?$/, { timeout: 15_000 });
     await expect(page.locator("html")).toHaveAttribute("lang", "en");
     await expect(page.getByRole("heading", { level: 1, name: "Imposia" })).toBeVisible();
+    // The hero viewer is a real Imposia document paginated in the browser.
+    await expect(page.locator(".lp-viewer-live .lp-viewer-ok")).toBeVisible({ timeout: 20_000 });
+    await expect(
+      page.locator(".lp-viewer-live iframe[data-imposia-frame='page-document']"),
+    ).toHaveCount(1);
   } finally {
     assertNoBrowserErrors(captured);
   }

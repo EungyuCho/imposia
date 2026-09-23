@@ -11,6 +11,7 @@ export interface LandingCopy {
     getStarted: string;
     demo: string;
     viewerLabel: string;
+    liveViewerLabel: string;
   };
   readonly features: {
     eyebrow: string;
@@ -37,6 +38,15 @@ export interface LandingCopy {
     };
     medianOf: string;
     footnote: string;
+    charts: {
+      edit: string;
+      paginate: string;
+      bundle: string;
+      lowerIsBetter: string;
+      bundleSubtitle: string;
+      failed: string;
+      caveat: string;
+    };
   };
   readonly packages: {
     eyebrow: string;
@@ -63,6 +73,7 @@ export const LANDING_COPY: Record<Locale, LandingCopy> = {
       getStarted: "Get Started",
       demo: "Live demo",
       viewerLabel: "Illustration of the Imposia page viewer showing a two-page spread",
+      liveViewerLabel: "Live Imposia page viewer: a sample document paginated in your browser",
     },
     features: {
       eyebrow: "WHY IMPOSIA",
@@ -148,7 +159,18 @@ export const LANDING_COPY: Record<Locale, LandingCopy> = {
         },
       },
       medianOf: "median of",
-      footnote: "fixtures and harness in scripts/benchmark.ts · pnpm build && pnpm benchmark",
+      footnote:
+        "harness in scripts/benchmark-compare.ts and scripts/benchmark.ts · pnpm benchmark:compare",
+      charts: {
+        edit: "Live edit latency · 50 pages",
+        paginate: "Pagination · 200 pages",
+        bundle: "Bundle size",
+        lowerIsBetter: "lower is better",
+        bundleSubtitle: "full browser bundle, gzip, lower is better",
+        failed: "failed",
+        caveat:
+          "Paged.js and Vivliostyle have no incremental update, so an edit renders them again from scratch. All three produced the same page counts.",
+      },
     },
     packages: {
       eyebrow: "PACKAGES",
@@ -184,6 +206,7 @@ export const LANDING_COPY: Record<Locale, LandingCopy> = {
       getStarted: "시작하기",
       demo: "라이브 데모",
       viewerLabel: "두 페이지를 펼쳐 보여 주는 Imposia 페이지 뷰어 예시 그림",
+      liveViewerLabel: "실시간 Imposia 페이지 뷰어: 브라우저에서 페이지로 나눈 예제 문서",
     },
     features: {
       eyebrow: "WHY IMPOSIA",
@@ -270,7 +293,18 @@ export const LANDING_COPY: Record<Locale, LandingCopy> = {
         },
       },
       medianOf: "중앙값, 측정 횟수",
-      footnote: "픽스처와 측정 코드: scripts/benchmark.ts · pnpm build && pnpm benchmark",
+      footnote:
+        "측정 코드: scripts/benchmark-compare.ts, scripts/benchmark.ts · pnpm benchmark:compare",
+      charts: {
+        edit: "실시간 수정 지연 · 50페이지",
+        paginate: "페이지 분할 · 200페이지",
+        bundle: "번들 크기",
+        lowerIsBetter: "낮을수록 좋음",
+        bundleSubtitle: "전체 브라우저 번들, gzip, 낮을수록 좋음",
+        failed: "실패",
+        caveat:
+          "Paged.js와 Vivliostyle은 증분 업데이트가 없어 수정할 때 처음부터 다시 렌더링합니다. 세 라이브러리 모두 같은 페이지 수를 냈습니다.",
+      },
     },
     packages: {
       eyebrow: "PACKAGES",
@@ -306,6 +340,7 @@ export const LANDING_COPY: Record<Locale, LandingCopy> = {
       getStarted: "はじめる",
       demo: "ライブデモ",
       viewerLabel: "見開き 2 ページを表示する Imposia ページビューアーのイメージ",
+      liveViewerLabel: "動作中の Imposia ページビューアー: ブラウザーでページ分割したサンプル文書",
     },
     features: {
       eyebrow: "WHY IMPOSIA",
@@ -391,7 +426,18 @@ export const LANDING_COPY: Record<Locale, LandingCopy> = {
         },
       },
       medianOf: "中央値・計測回数",
-      footnote: "フィクスチャーと計測コード: scripts/benchmark.ts · pnpm build && pnpm benchmark",
+      footnote:
+        "計測コード: scripts/benchmark-compare.ts, scripts/benchmark.ts · pnpm benchmark:compare",
+      charts: {
+        edit: "ライブ編集の遅延 · 50 ページ",
+        paginate: "ページ分割 · 200 ページ",
+        bundle: "バンドルサイズ",
+        lowerIsBetter: "低いほど良い",
+        bundleSubtitle: "ブラウザー用バンドル全体、gzip、低いほど良い",
+        failed: "失敗",
+        caveat:
+          "Paged.js と Vivliostyle には差分更新がないため、編集のたびに最初から描画し直します。3 つとも同じページ数になりました。",
+      },
     },
     packages: {
       eyebrow: "PACKAGES",
@@ -427,6 +473,7 @@ export const LANDING_COPY: Record<Locale, LandingCopy> = {
       getStarted: "开始使用",
       demo: "在线演示",
       viewerLabel: "Imposia 页面查看器展示双页跨页的示意图",
+      liveViewerLabel: "实时运行的 Imposia 页面查看器：在你的浏览器中分页的示例文档",
     },
     features: {
       eyebrow: "WHY IMPOSIA",
@@ -504,7 +551,17 @@ export const LANDING_COPY: Record<Locale, LandingCopy> = {
         },
       },
       medianOf: "中位数，运行次数",
-      footnote: "测试样例与测量代码：scripts/benchmark.ts · pnpm build && pnpm benchmark",
+      footnote:
+        "测量代码：scripts/benchmark-compare.ts、scripts/benchmark.ts · pnpm benchmark:compare",
+      charts: {
+        edit: "实时编辑延迟 · 50 页",
+        paginate: "分页 · 200 页",
+        bundle: "包体积",
+        lowerIsBetter: "越低越好",
+        bundleSubtitle: "完整浏览器包，gzip，越低越好",
+        failed: "失败",
+        caveat: "Paged.js 和 Vivliostyle 没有增量更新，编辑时会从头重新渲染。三者得到的页数相同。",
+      },
     },
     packages: {
       eyebrow: "PACKAGES",
