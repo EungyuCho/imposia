@@ -512,6 +512,27 @@ function isNonFlowNode(node: Node): boolean {
   );
 }
 
+/**
+ * Moves every HTML `<style>` in the flow to its start, keeping their order, so
+ * the fragmenter places them all on the first page before measuring anything.
+ *
+ * Pages are appended to the probe after the source flow. Moving one style
+ * into a page mid-pass put it after the styles still waiting in the source,
+ * reversing their cascade order until those were placed too: earlier pages
+ * were measured under one winner and committed under another, and could
+ * overflow silently. Each move also forced a style recalculation over every
+ * page placed so far. `@scope` without a selector binds to the style's
+ * parent, so those styles stay where they are.
+ */
+function hoistFlowStyles(flow: HTMLElement): void {
+  const styles = [...flow.querySelectorAll<HTMLStyleElement>("style")].filter(
+    (style) =>
+      style.namespaceURI === "http://www.w3.org/1999/xhtml" &&
+      !/@scope\b/iu.test(style.textContent ?? ""),
+  );
+  if (styles.length > 0) flow.prepend(...styles);
+}
+
 function flowHasContent(flow: HTMLElement): boolean {
   return [...flow.childNodes].some((node) => !isNonFlowNode(node));
 }
@@ -3599,6 +3620,7 @@ export async function buildGeneration(
           settings.experimental,
           settings.limits,
         );
+        hoistFlowStyles(passSource);
         probe.append(passSource);
         await settlePaginationAssets(
           frameDocument,

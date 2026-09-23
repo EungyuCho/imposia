@@ -98,6 +98,19 @@ renamed to `0.6.0.md` when this release ships.
   112 paragraphs landed on the last page. Text was never lost or duplicated;
   page assignment was wrong. Paragraphs with inline elements and grids were
   not affected.
+- A `<style>` element in the middle of a document no longer makes earlier
+  pages overflow without a warning. Core placed each style into the page
+  being filled, after the styles still waiting in the source, which reversed
+  their cascade order until those were placed too; earlier pages were
+  measured under one winning rule and committed under another. Core now
+  moves every body and Publication entry `<style>` to the start of the flow
+  before pagination, keeping their order, so the cascade is the same while
+  measuring and after commit. Styles using `@scope` without a selector stay
+  in place. Documents whose later styles override earlier ones can paginate
+  differently (a 300-section fixture went from 70 pages, 30 of them
+  overflowing, to 75 pages with none). Publication entry styles also stop
+  forcing a style recalculation per entry: 200 styled entries paginate in
+  203 ms instead of 362 ms, with identical page text.
 
 ## 0.5.0 — 2026-08-20
 
