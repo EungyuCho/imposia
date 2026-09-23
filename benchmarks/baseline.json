@@ -1,56 +1,48 @@
 {
-  "schemaVersion": 2,
-  "coldRuns": 3,
-  "warmRuns": 7,
-  "workload": "representative-local-v1",
-  "environment": {
-    "capturedAt": "2026-07-17T06:26:35.987Z",
-    "platform": "darwin",
-    "release": "25.2.0",
-    "architecture": "arm64",
-    "cpuModel": "Apple M1 Max",
-    "logicalCpuCount": 10,
-    "totalMemoryBytes": 34359738368,
-    "nodeVersion": "v22.23.1",
-    "playwrightVersion": "1.57.0",
-    "chromiumVersion": "143.0.7499.4"
+  "schemaVersion": 3,
+  "capturedAt": "2026-09-23T14:47:37.544Z",
+  "runs": {
+    "warmup": 2,
+    "measured": 7
   },
-  "cases": {
-    "10": {
-      "pageCount": 10,
-      "coldSamplesMs": [953.77, 254.9, 270.52],
-      "warmSamplesMs": [113.62, 103.1, 105.5, 145.92, 107.02, 104.74, 103.47],
-      "coldMedianMs": 270.52,
-      "warmMedianMs": 105.5,
-      "phases": {
-        "resourceWaitMs": 22.76,
-        "printPreparationMs": 3.75,
-        "pdfGenerationMs": 15.2
-      }
+  "environment": {
+    "platform": "darwin",
+    "release": "25.5.0",
+    "architecture": "arm64",
+    "cpuModel": "Apple M4",
+    "logicalCpuCount": 10,
+    "totalMemoryBytes": 25769803776,
+    "nodeVersion": "v24.19.0",
+    "chromiumVersion": "149.0.7827.55"
+  },
+  "scenarios": [
+    {
+      "id": "document-mount",
+      "description": "Mount a 99-page article (headings, paragraphs, lists)",
+      "pageCount": 99,
+      "medianMs": 125,
+      "samplesMs": [125, 117.7, 131.3, 116.9, 128.1, 117.4, 126.7]
     },
-    "50": {
-      "pageCount": 50,
-      "coldSamplesMs": [331.56, 316.54, 334.45],
-      "warmSamplesMs": [151.85, 148.88, 145.64, 139.55, 147.6, 144.8, 145.88],
-      "coldMedianMs": 331.56,
-      "warmMedianMs": 145.88,
-      "phases": {
-        "resourceWaitMs": 30.49,
-        "printPreparationMs": 5.94,
-        "pdfGenerationMs": 43.34
-      }
+    {
+      "id": "document-update",
+      "description": "Update one word in that article and recommit",
+      "pageCount": 99,
+      "medianMs": 120.8,
+      "samplesMs": [119.9, 115.8, 122.4, 120.8, 121.9, 120.8, 120.6]
     },
-    "200": {
-      "pageCount": 200,
-      "coldSamplesMs": [472.09, 504.46, 467.02],
-      "warmSamplesMs": [321.2, 322.88, 319.24, 334.3, 373.33, 331.77, 334.31],
-      "coldMedianMs": 472.09,
-      "warmMedianMs": 331.77,
-      "phases": {
-        "resourceWaitMs": 62.16,
-        "printPreparationMs": 14.8,
-        "pdfGenerationMs": 159.21
-      }
+    {
+      "id": "first-frame",
+      "description": "First rendered frame after the article commits",
+      "pageCount": 99,
+      "medianMs": 1.9,
+      "samplesMs": [1.9, 1.9, 1.9, 1.9, 1.8, 2.1, 1.9]
+    },
+    {
+      "id": "publication-mount",
+      "description": "Mount a Publication of 100 entries, each with a <style>",
+      "pageCount": 100,
+      "medianMs": 93.8,
+      "samplesMs": [93.8, 92.7, 94.5, 100.7, 92.2, 93.2, 101.1]
     }
-  }
+  ]
 }

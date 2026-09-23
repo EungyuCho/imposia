@@ -610,10 +610,14 @@ Recorded release matrix (`docs/verification.md`): **354 browser scenarios
 passed, 120 intentional skips, 0 failures, 474 total**, plus 8 site scenarios
 and 23 Vitest scenarios.
 
-A performance baseline is recorded in `benchmarks/baseline.json` (M1 Max,
-schemaVersion 2): warm medians of **105 ms / 10 pages, 146 ms / 50 pages,
-332 ms / 200 pages**, broken down into resource wait, print preparation, and PDF
-generation phases.
+A performance baseline is recorded in `benchmarks/baseline.json` by
+`pnpm benchmark` (schemaVersion 3, Chromium 149 on an Apple M4, 2026-09-23):
+medians of **125 ms** to paginate a 99-page article, **121 ms** to recommit it
+after a one-word change, **1.9 ms** for the first frame after a commit, and
+**94 ms** for a 100-entry Publication with a `<style>` per entry.
+`pnpm benchmark --compare <core bundle>` measures another revision's built
+bundle in the same browser, alternating runs. The previous schemaVersion 2
+baseline measured the removed Node PDF renderer.
 
 ---
 
