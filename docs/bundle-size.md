@@ -28,23 +28,51 @@ All 6 consumer routes are within their gzip budgets.
 
 ## Current baseline
 
-Recorded on 2026-08-20 at the 0.5.0 release commit, after the browser-native
-parsing change (ADR 0013, `d8e2638`), the oxc-minify post-pass (`5d73b43`), and
-the pagination performance batch (ASA-424, ASA-425, ASA-426):
+Recorded on 2026-09-23 on the 0.6.0 development line (Apple M1 Max, Node.js 22),
+after the PDF.js viewer removal:
+
+| Consumer route | Minified | Gzip | Gzip budget | Headroom |
+| --- | ---: | ---: | ---: | ---: |
+| Core · PageDocument | 207.2 KiB | 62.0 KiB | 63.0 KiB | 1.0 KiB |
+| Core · Publication | 222.3 KiB | 66.1 KiB | 67.0 KiB | 0.9 KiB |
+| Viewer · PageDocument | 97.0 KiB | 28.9 KiB | 30.0 KiB | 1.1 KiB |
+| Client · PageDocument | 239.2 KiB | 70.6 KiB | 72.0 KiB | 1.4 KiB |
+| React · PageViewer | 245.9 KiB | 72.5 KiB | 74.0 KiB | 1.5 KiB |
+
+Removing `mountViewer` deleted the `Viewer · PDF` route (433.8 KiB minified,
+120.1 KiB gzip, dominated by PDF.js). The five remaining routes measure the
+same bytes before and after the removal, because tree shaking already kept
+PDF.js out of them. The removal changes two things outside these routes:
+
+- **Install size.** `@imposia/viewer` no longer depends on `pdfjs-dist`, so a
+  Viewer, Client, or React install no longer adds `pdfjs-dist` (37 MB
+  unpacked) or its optional native `@napi-rs/canvas` binary (25 MB on
+  darwin-arm64).
+- **Viewer stylesheet.** `@imposia/viewer/styles.css`, which this report does
+  not measure, dropped from 24.0 KiB to 17.6 KiB raw and from 3.9 KiB to
+  3.0 KiB gzip.
+
+Since the 0.5.0 baseline (2026-08-20), the Core routes grew about 2 KiB gzip
+across the unreleased 0.6.0 changes; Core-bearing headroom is now 0.9–1.5 KiB.
+
+### 0.5.0 baseline (2026-08-20)
+
+Recorded at the 0.5.0 release commit, after the browser-native parsing change
+(ADR 0013, `d8e2638`), the oxc-minify post-pass (`5d73b43`), and the pagination
+performance batch (ASA-424, ASA-425, ASA-426):
 
 | Consumer route | Minified | Gzip | Gzip budget | Headroom |
 | --- | ---: | ---: | ---: | ---: |
 | Core · PageDocument | 201.0 KiB | 60.0 KiB | 63.0 KiB | 3.0 KiB |
 | Core · Publication | 216.1 KiB | 64.1 KiB | 67.0 KiB | 2.9 KiB |
 | Viewer · PageDocument | 95.3 KiB | 28.3 KiB | 30.0 KiB | 1.7 KiB |
+| Viewer · PDF | 433.8 KiB | 120.1 KiB | 125.0 KiB | 4.9 KiB |
 | Client · PageDocument | 232.6 KiB | 68.5 KiB | 72.0 KiB | 3.5 KiB |
 | React · PageViewer | 239.0 KiB | 70.3 KiB | 74.0 KiB | 3.7 KiB |
 
 Compared with the 2026-07-23 baseline, the Core · PageDocument route dropped
 from 103.6 KiB to 56.8 KiB gzip: removing parse5 and its `entities` dependency
 accounts for roughly 47 KiB, and the oxc-minify post-pass for the remainder.
-The `Viewer · PDF` route (120.1 KiB gzip, dominated by PDF.js) was removed with
-`mountViewer`; `@imposia/viewer` no longer depends on PDF.js.
 
 The performance batch then moved Core · PageDocument back up from 56.8 KiB to
 60.0 KiB, and the four Core-bearing budgets were raised to restore roughly 5%
