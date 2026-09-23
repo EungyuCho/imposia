@@ -18,6 +18,8 @@
 </p>
 
 <p align="center">
+  <a href="https://www.npmjs.com/package/@imposia/react"><img src="https://img.shields.io/npm/v/@imposia/react?color=4f46e5&label=npm" alt="npm version"></a>
+  <a href="https://github.com/EungyuCho/imposia/actions/workflows/verify.yml"><img src="https://github.com/EungyuCho/imposia/actions/workflows/verify.yml/badge.svg" alt="Verify workflow status"></a>
   <img src="https://img.shields.io/badge/runtime-browser%20ESM-4338ca" alt="Browser ESM">
   <img src="https://img.shields.io/badge/React-%3E%3D18-149eca?logo=react&logoColor=white" alt="React 18 or newer">
   <img src="https://img.shields.io/badge/TypeScript-6.0-3178c6?logo=typescript&logoColor=white" alt="TypeScript 6.0">
@@ -25,7 +27,9 @@
 </p>
 
 <p align="center">
-  <a href="https://imposia.pages.dev">Documentation</a> ·
+  <a href="https://imposia.pages.dev/en">Website</a> ·
+  <a href="https://imposia.pages.dev/en/docs">Documentation</a> ·
+  <a href="https://imposia.pages.dev/examples/demo/index.html">Live demo</a> ·
   <a href="https://www.npmjs.com/org/imposia">npm packages</a> ·
   <a href="https://github.com/EungyuCho/imposia">GitHub</a>
 </p>
@@ -33,6 +37,7 @@
 <p align="center">
   <a href="#quick-start">Quick Start</a> ·
   <a href="#why-imposia">Why</a> ·
+  <a href="#benchmarks">Benchmarks</a> ·
   <a href="#how-it-works">How It Works</a> ·
   <a href="#packages">Packages</a> ·
   <a href="#publishing-contract">Compatibility</a> ·
@@ -57,8 +62,23 @@ server export, fixed-layout EPUB, PDF-byte API, or promise of complete CSS
 fragmentation parity.
 
 <p align="center">
-  <img src="./docs/images/imposia-readme-hero.png" width="100%" alt="A browser document passing through Imposia and becoming paginated pages and an open book">
+  <a href="https://imposia.pages.dev/en"><img src="./docs/images/imposia-landing-hero.png" width="100%" alt="The Imposia landing page: a live ImposiaPageViewer paginating a sample document into an A4 spread"></a>
+  <br/>
+  <sub>The hero on <a href="https://imposia.pages.dev/en">imposia.pages.dev</a> is not a picture: it paginates a real document in your browser.</sub>
 </p>
+
+<table>
+  <tr>
+    <td width="33%" valign="top"><strong>Real pages from HTML</strong><br/><sub>Existing markup becomes sized pages with margins, running heads, and page numbers.</sub></td>
+    <td width="33%" valign="top"><strong>Native print and PDF</strong><br/><sub><code>print()</code> opens the browser's print dialog; readers print or choose Save as PDF.</sub></td>
+    <td width="33%" valign="top"><strong>No half-built frames</strong><br/><sub>The next page set is finished off-screen and swapped in only when it is complete.</sub></td>
+  </tr>
+  <tr>
+    <td width="33%" valign="top"><strong>One document everywhere</strong><br/><sub>Preview and print read the same committed pages, so page counts never drift.</sub></td>
+    <td width="33%" valign="top"><strong>React-first, framework-free</strong><br/><sub>Drop in <code>&lt;ImposiaPageViewer /&gt;</code>, or drive <code>@imposia/core</code> from any framework.</sub></td>
+    <td width="33%" valign="top"><strong>Controlled asset loading</strong><br/><sub>Images, fonts, and stylesheets pass through your <code>assetResolver</code>; nothing fetches on its own.</sub></td>
+  </tr>
+</table>
 
 ---
 
@@ -81,6 +101,28 @@ Imposia keeps one page document at the center of the workflow:
 | Unsupported layout looks "close enough" | Silent approximation hides broken output | Constrained and unsupported cases remain atomic or emit typed warnings |
 | React owns a second renderer | Component and framework-neutral behavior drift | React retains the same Core controller and iframe |
 | Export needs a server pipeline | Browser-only apps hand content to another runtime | The current semantic source exports a bounded reflowable EPUB `Blob` |
+
+---
+
+## Benchmarks
+
+Same input, same browser, pinned versions, median of 7 runs (Apple M4, Chromium 149). Lower is better.
+
+| Measurement | Imposia | Paged.js 0.4.3 | Vivliostyle 2.45.2 |
+| :--- | ---: | ---: | ---: |
+| Re-render after a one-word edit (50 pages) | **46 ms** | 217 ms | 254 ms |
+| Paginate 200 pages | **249 ms** | 851 ms | 2,554 ms |
+| Full browser bundle, gzip | **61.8 KiB** | 94.2 KiB | 215.2 KiB |
+
+- All three produced the same page counts. Paged.js and Vivliostyle have no incremental update, so an edit renders them again from scratch; Imposia recommits through `controller.update()`.
+- Paged.js and Vivliostyle were called only through their documented entry points and loaded from jsDelivr, not added as dependencies. Method, versions, hashes, and caveats: [`docs/benchmarks.md`](./docs/benchmarks.md).
+
+Reproduce on your machine:
+
+```bash
+pnpm build
+pnpm benchmark:compare
+```
 
 ---
 
@@ -187,6 +229,10 @@ console.log({
 ---
 
 ## How It Works
+
+<p align="center">
+  <img src="./docs/images/imposia-readme-hero.png" width="100%" alt="A browser document passing through Imposia and becoming paginated pages and an open book">
+</p>
 
 Imposia separates source processing from presentation while keeping one document
 as the source of truth.
@@ -484,6 +530,8 @@ for the complete public token surface.
 ---
 
 ## Interactive Demo
+
+Try it without installing anything: the [landing page](https://imposia.pages.dev/en) runs a live viewer, and the full publishing lab is hosted at [imposia.pages.dev/examples/demo](https://imposia.pages.dev/examples/demo/index.html).
 
 The React publishing lab under [`examples/demo`](./examples/demo) demonstrates
 live source revisions, normalized page media, margin boxes, ordered extensions,

@@ -18,6 +18,8 @@
 </p>
 
 <p align="center">
+  <a href="https://www.npmjs.com/package/@imposia/react"><img src="https://img.shields.io/npm/v/@imposia/react?color=4f46e5&label=npm" alt="npm version"></a>
+  <a href="https://github.com/EungyuCho/imposia/actions/workflows/verify.yml"><img src="https://github.com/EungyuCho/imposia/actions/workflows/verify.yml/badge.svg" alt="Verify workflow status"></a>
   <img src="https://img.shields.io/badge/runtime-browser%20ESM-4338ca" alt="Browser ESM">
   <img src="https://img.shields.io/badge/React-%3E%3D18-149eca?logo=react&logoColor=white" alt="React 18 以上">
   <img src="https://img.shields.io/badge/TypeScript-6.0-3178c6?logo=typescript&logoColor=white" alt="TypeScript 6.0">
@@ -25,7 +27,9 @@
 </p>
 
 <p align="center">
-  <a href="https://imposia.pages.dev">ドキュメント</a> ·
+  <a href="https://imposia.pages.dev/ja">ウェブサイト</a> ·
+  <a href="https://imposia.pages.dev/ja/docs">ドキュメント</a> ·
+  <a href="https://imposia.pages.dev/examples/demo/index.html">ライブデモ</a> ·
   <a href="https://www.npmjs.com/org/imposia">npm パッケージ</a> ·
   <a href="https://github.com/EungyuCho/imposia">GitHub</a>
 </p>
@@ -33,6 +37,7 @@
 <p align="center">
   <a href="#クイックスタート">クイックスタート</a> ·
   <a href="#なぜ-imposia-なのか">選ばれる理由</a> ·
+  <a href="#ベンチマーク">ベンチマーク</a> ·
   <a href="#仕組み">仕組み</a> ·
   <a href="#パッケージ">パッケージ</a> ·
   <a href="#パブリッシング契約">互換性</a> ·
@@ -56,8 +61,23 @@ Core は React なしでも利用できます。Node ランタイム、コマン
 CSS フラグメンテーション互換性は提供しません。
 
 <p align="center">
-  <img src="./docs/images/imposia-readme-hero.png" width="100%" alt="ブラウザ文書が Imposia を通り、ページと開いた本へ変換される様子">
+  <a href="https://imposia.pages.dev/ja"><img src="./docs/images/imposia-landing-hero.png" width="100%" alt="Imposia のランディングページ: 動作中の ImposiaPageViewer がサンプル文書を A4 見開きにページ分割している様子"></a>
+  <br/>
+  <sub><a href="https://imposia.pages.dev/ja">imposia.pages.dev</a> のトップにあるビューアーは画像ではありません。ブラウザーで本物の文書をページ分割しています。</sub>
 </p>
+
+<table>
+  <tr>
+    <td width="33%" valign="top"><strong>HTML から本物のページ</strong><br/><sub>既存のマークアップを、余白・柱・ノンブル付きの決まったサイズのページにします。</sub></td>
+    <td width="33%" valign="top"><strong>ブラウザー印刷と PDF</strong><br/><sub><code>print()</code> はブラウザーの印刷ダイアログを開きます。紙に印刷するか PDF として保存できます。</sub></td>
+    <td width="33%" valign="top"><strong>作りかけの画面を見せない</strong><br/><sub>次のページセットは画面外で完成させてから切り替えます。</sub></td>
+  </tr>
+  <tr>
+    <td width="33%" valign="top"><strong>どこでも同じドキュメント</strong><br/><sub>プレビューと印刷が同じ確定ページを読むので、ページ数がずれません。</sub></td>
+    <td width="33%" valign="top"><strong>React ファースト、フレームワーク非依存</strong><br/><sub><code>&lt;ImposiaPageViewer /&gt;</code> を置くか、どのフレームワークからでも <code>@imposia/core</code> を使えます。</sub></td>
+    <td width="33%" valign="top"><strong>制御されたリソース読み込み</strong><br/><sub>画像・フォント・スタイルシートはすべて <code>assetResolver</code> を通ります。勝手に通信しません。</sub></td>
+  </tr>
+</table>
 
 ---
 
@@ -80,6 +100,28 @@ Imposia はワークフローの中心に 1 つのページ文書を置きます
 | 未対応レイアウトがそれらしく見える | 近似した誤った出力が問題なく見えてしまう | 制約付き・未対応のケースは一まとまりのまま保つか、コード付きの警告を返す |
 | React が第 2 のレンダラーを所有する | コンポーネントとフレームワーク非依存の動作がずれる | React が同じ Core コントローラーと iframe を保持する |
 | 書き出しにサーバーパイプラインが必要 | ブラウザーアプリが別のランタイムへコンテンツを渡す | 現在のソースの意味構造から、定められた上限内でリフロー型 EPUB `Blob` を書き出す |
+
+---
+
+## ベンチマーク
+
+同じ入力、同じブラウザー、固定バージョンで 7 回計測した中央値です（Apple M4, Chromium 149）。低いほど良い結果です。
+
+| 計測項目 | Imposia | Paged.js 0.4.3 | Vivliostyle 2.45.2 |
+| :--- | ---: | ---: | ---: |
+| 単語 1 つの編集後の再描画（50 ページ） | **46 ms** | 217 ms | 254 ms |
+| 200 ページのページ分割 | **249 ms** | 851 ms | 2,554 ms |
+| ブラウザー用バンドル全体、gzip | **61.8 KiB** | 94.2 KiB | 215.2 KiB |
+
+- 3 つとも同じページ数になりました。Paged.js と Vivliostyle には差分更新がないため編集のたびに最初から描画し直し、Imposia は `controller.update()` で再確定します。
+- Paged.js と Vivliostyle は文書化された入口だけを呼び出し、依存関係に追加せず jsDelivr から読み込みました。方法・バージョン・ハッシュ・注意点: [`docs/benchmarks.md`](./docs/benchmarks.md)
+
+手元で再計測するには:
+
+```bash
+pnpm build
+pnpm benchmark:compare
+```
 
 ---
 
@@ -184,6 +226,10 @@ console.log({
 ---
 
 ## 仕組み
+
+<p align="center">
+  <img src="./docs/images/imposia-readme-hero.png" width="100%" alt="ブラウザ文書が Imposia を通り、ページと開いた本へ変換される様子">
+</p>
 
 Imposia は 1 つの文書を基準にしながら、ソース処理と画面表示を分離します。
 
@@ -476,6 +522,8 @@ viewer.setTheme({ "--imposia-viewer-color-accent": "#ef6a3b" });
 ---
 
 ## インタラクティブデモ
+
+インストールなしで試せます。[ランディングページ](https://imposia.pages.dev/ja)で本物のビューアーが動き、パブリッシングラボ全体は [imposia.pages.dev/examples/demo](https://imposia.pages.dev/examples/demo/index.html) にあります。
 
 [`examples/demo`](./examples/demo) の React パブリッシングラボでは、ライブ
 ソース更新、正規化されたページメディア、マージンボックス、順序付きの拡張機能、

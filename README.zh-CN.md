@@ -18,6 +18,8 @@
 </p>
 
 <p align="center">
+  <a href="https://www.npmjs.com/package/@imposia/react"><img src="https://img.shields.io/npm/v/@imposia/react?color=4f46e5&label=npm" alt="npm version"></a>
+  <a href="https://github.com/EungyuCho/imposia/actions/workflows/verify.yml"><img src="https://github.com/EungyuCho/imposia/actions/workflows/verify.yml/badge.svg" alt="Verify workflow status"></a>
   <img src="https://img.shields.io/badge/runtime-browser%20ESM-4338ca" alt="Browser ESM">
   <img src="https://img.shields.io/badge/React-%3E%3D18-149eca?logo=react&logoColor=white" alt="React 18 或更高版本">
   <img src="https://img.shields.io/badge/TypeScript-6.0-3178c6?logo=typescript&logoColor=white" alt="TypeScript 6.0">
@@ -25,7 +27,9 @@
 </p>
 
 <p align="center">
-  <a href="https://imposia.pages.dev">文档</a> ·
+  <a href="https://imposia.pages.dev/zh-CN">网站</a> ·
+  <a href="https://imposia.pages.dev/zh-CN/docs">文档</a> ·
+  <a href="https://imposia.pages.dev/examples/demo/index.html">在线演示</a> ·
   <a href="https://www.npmjs.com/org/imposia">npm 软件包</a> ·
   <a href="https://github.com/EungyuCho/imposia">GitHub</a>
 </p>
@@ -33,6 +37,7 @@
 <p align="center">
   <a href="#快速开始">快速开始</a> ·
   <a href="#为什么选择-imposia">为什么选择 Imposia</a> ·
+  <a href="#基准测试">基准测试</a> ·
   <a href="#工作原理">工作原理</a> ·
   <a href="#软件包">软件包</a> ·
   <a href="#发布契约">兼容性</a> ·
@@ -53,8 +58,23 @@ Core 无需 React 即可使用。Imposia 不提供 Node 运行时、命令行渲
 导出、固定版式 EPUB、PDF 字节 API，也不承诺完整的 CSS 分片兼容性。
 
 <p align="center">
-  <img src="./docs/images/imposia-readme-hero.png" width="100%" alt="浏览器文档经过 Imposia 后转换为分页页面和展开书籍">
+  <a href="https://imposia.pages.dev/zh-CN"><img src="./docs/images/imposia-landing-hero.png" width="100%" alt="Imposia 落地页：实时运行的 ImposiaPageViewer 将示例文档分页为 A4 跨页"></a>
+  <br/>
+  <sub><a href="https://imposia.pages.dev/zh-CN">imposia.pages.dev</a> 首屏的查看器不是图片：它在你的浏览器中为真实文档分页。</sub>
 </p>
+
+<table>
+  <tr>
+    <td width="33%" valign="top"><strong>由 HTML 生成真实页面</strong><br/><sub>把现有标记变成带页边距、页眉和页码的固定尺寸页面。</sub></td>
+    <td width="33%" valign="top"><strong>原生打印与 PDF</strong><br/><sub><code>print()</code> 打开浏览器的打印对话框，读者可以打印或另存为 PDF。</sub></td>
+    <td width="33%" valign="top"><strong>不显示半成品画面</strong><br/><sub>下一组页面在屏幕外完成后才会替换。</sub></td>
+  </tr>
+  <tr>
+    <td width="33%" valign="top"><strong>处处同一份文档</strong><br/><sub>预览和打印读取同一组已提交页面，页数不会出现偏差。</sub></td>
+    <td width="33%" valign="top"><strong>React 优先，不绑定框架</strong><br/><sub>放入 <code>&lt;ImposiaPageViewer /&gt;</code>，或在任意框架中使用 <code>@imposia/core</code>。</sub></td>
+    <td width="33%" valign="top"><strong>受控的资源加载</strong><br/><sub>图片、字体和样式表都经过你的 <code>assetResolver</code>，不会自行发起网络请求。</sub></td>
+  </tr>
+</table>
 
 ---
 
@@ -76,6 +96,28 @@ Imposia 将一份页面文档放在整个工作流的中心。
 | 不支持的布局看起来“差不多” | 静默近似掩盖错误输出 | 受限或不支持的情况会保持为一个整体，或返回带有代码的警告 |
 | React 维护第二套渲染器 | 组件行为与框架无关行为产生偏差 | React 保留同一个 Core 控制器与 iframe |
 | 导出依赖服务端管线 | 仅浏览器应用必须把内容交给另一套运行时 | 当前源内容可在规定上限内直接导出保留语义结构的可重排 EPUB `Blob` |
+
+---
+
+## 基准测试
+
+相同输入、相同浏览器、固定版本，7 次运行的中位数（Apple M4, Chromium 149）。越低越好。
+
+| 测量项目 | Imposia | Paged.js 0.4.3 | Vivliostyle 2.45.2 |
+| :--- | ---: | ---: | ---: |
+| 修改一个词后重新渲染（50 页） | **46 ms** | 217 ms | 254 ms |
+| 为 200 页分页 | **249 ms** | 851 ms | 2,554 ms |
+| 完整浏览器包，gzip | **61.8 KiB** | 94.2 KiB | 215.2 KiB |
+
+- 三者得到的页数相同。Paged.js 和 Vivliostyle 没有增量更新，编辑时会从头重新渲染；Imposia 通过 `controller.update()` 重新提交。
+- Paged.js 和 Vivliostyle 只通过其文档化的入口调用，从 jsDelivr 加载而未作为依赖加入。方法、版本、哈希与注意事项：[`docs/benchmarks.md`](./docs/benchmarks.md)
+
+在本机复现：
+
+```bash
+pnpm build
+pnpm benchmark:compare
+```
 
 ---
 
@@ -179,6 +221,10 @@ console.log({
 ---
 
 ## 工作原理
+
+<p align="center">
+  <img src="./docs/images/imposia-readme-hero.png" width="100%" alt="浏览器文档经过 Imposia 后转换为分页页面和展开书籍">
+</p>
 
 Imposia 以一份文档作为统一依据，同时把源内容处理与界面展示分开。
 
@@ -459,6 +505,8 @@ viewer.setTheme({ "--imposia-viewer-color-accent": "#ef6a3b" });
 ---
 
 ## 交互式演示
+
+无需安装即可试用：[落地页](https://imposia.pages.dev/zh-CN)运行着实时查看器，完整的发布实验室位于 [imposia.pages.dev/examples/demo](https://imposia.pages.dev/examples/demo/index.html)。
 
 [`examples/demo`](./examples/demo) 中的 React 出版实验室展示实时源更新、
 标准化页面媒体、页边距框、按顺序运行的扩展、受限出版案例、Viewer 控件、原生
