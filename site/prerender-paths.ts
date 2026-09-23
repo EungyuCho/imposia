@@ -14,7 +14,7 @@ export const SITE_DOC_PATHS = [
   "docs/changelog",
 ] as const;
 
-/** `/:lang` forwards to that locale's documentation; it renders no content of its own. */
+/** `/:lang` renders that locale's landing page. */
 export const SITE_LOCALE_ROOT_ROUTES = LOCALES.map((locale) => `/${locale}`);
 
 export const SITE_DOC_ROUTES = LOCALES.flatMap((locale) =>

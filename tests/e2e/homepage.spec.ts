@@ -20,30 +20,34 @@ function visibleInPage(page: Page, text: string) {
     .first();
 }
 
-test("root redirects to the default English documentation", async ({ page, browserName }) => {
+test("root redirects to the English landing page", async ({ page, browserName }) => {
   const captured = captureBrowserErrors(page, browserName);
 
   await page.goto("/");
 
   try {
-    await expect(page).toHaveURL(/\/en\/docs\/?$/, { timeout: 15_000 });
+    await expect(page).toHaveURL(/\/en\/?$/, { timeout: 15_000 });
     await expect(page.locator("html")).toHaveAttribute("lang", "en");
-    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Imposia" })).toBeVisible();
   } finally {
     assertNoBrowserErrors(captured);
   }
 });
 
-test("each locale root forwards to that locale's documentation", async ({ page, browserName }) => {
+test("each locale root renders that locale's landing page", async ({ page, browserName }) => {
   test.skip(browserName !== "chromium", "Locale routing is Chromium-reference only.");
   const captured = captureBrowserErrors(page, browserName);
 
   try {
     for (const locale of LOCALES) {
       await page.goto(`/${locale}`);
-      await expect(page).toHaveURL(new RegExp(`/${locale}/docs/?$`), { timeout: 15_000 });
+      await expect(page).toHaveURL(new RegExp(`/${locale}/?$`), { timeout: 15_000 });
       await expect(page.locator("html")).toHaveAttribute("lang", locale);
-      await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+      await expect(page.locator("#imposia-landing")).toBeVisible();
+      await expect(
+        page.locator(`#imposia-landing a[href="/${locale}/docs/getting-started"]`),
+      ).toBeVisible();
+      await expect(page.locator(".lp-stat-value").first()).not.toHaveText(/—/);
     }
   } finally {
     assertNoBrowserErrors(captured);

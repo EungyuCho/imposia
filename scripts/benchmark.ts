@@ -13,20 +13,46 @@ import { chromium, type Page } from "@playwright/test";
 interface Scenario {
   readonly id: string;
   readonly description: string;
+  readonly unit: "ms" | "frames";
 }
 
 interface Sample {
-  readonly ms: number;
+  readonly value: number;
   readonly pageCount: number;
 }
 
 const SCENARIOS: readonly Scenario[] = Object.freeze([
-  { id: "document-mount", description: "Mount a 99-page article (headings, paragraphs, lists)" },
-  { id: "document-update", description: "Update one word in that article and recommit" },
-  { id: "first-frame", description: "First rendered frame after the article commits" },
+  {
+    id: "document-mount",
+    description: "Mount a 99-page article (headings, paragraphs, lists)",
+    unit: "ms",
+  },
+  {
+    id: "document-update",
+    description: "Update one word in that article and recommit",
+    unit: "ms",
+  },
+  { id: "first-frame", description: "First rendered frame after the article commits", unit: "ms" },
   {
     id: "publication-mount",
     description: "Mount a Publication of 100 entries, each with a <style>",
+    unit: "ms",
+  },
+  {
+    id: "report-update",
+    description: "Update one word in a 50-page report and recommit",
+    unit: "ms",
+  },
+  { id: "large-mount", description: "Mount a 200-page document", unit: "ms" },
+  {
+    id: "print-call",
+    description: "print() on the 50-page report until the browser print dialog is requested",
+    unit: "ms",
+  },
+  {
+    id: "partial-frames",
+    description: "Frames showing an incomplete page set during 20 rapid report updates",
+    unit: "frames",
   },
 ]);
 
@@ -67,13 +93,15 @@ async function startServer(): Promise<ChildProcess> {
 function runScenario(page: Page, id: string, coreUrl: string): Promise<Sample> {
   return page.evaluate(
     async ({ id, coreUrl }) => {
-      type Document = { iframe: HTMLIFrameElement; pageCount: number };
+      type Document = { iframe: HTMLIFrameElement; generation: number; pageCount: number };
       type Controller = {
         ready: Promise<Document>;
         update(source: { html: string }): Promise<Document>;
+        print(): Promise<void>;
         destroy(): Promise<void>;
       };
       const core = (await import(coreUrl)) as {
+        committedFrameGeneration(frameDocument: globalThis.Document): number | undefined;
         mountPageDocument(host: HTMLElement, source: { html: string }): Controller;
         mountPublication(
           host: HTMLElement,
@@ -84,9 +112,10 @@ function runScenario(page: Page, id: string, coreUrl: string): Promise<Sample> {
         ): Controller;
       };
       const sentence = "The quick brown fox jumps over the lazy dog near the riverbank. ";
-      const article = (word: string) =>
+      // 360 sections make 99 pages, 182 make 50, and 731 make 200.
+      const article = (word: string, sections = 360) =>
         Array.from(
-          { length: 360 },
+          { length: sections },
           (_value, index) =>
             `<h2>Section ${index + 1}</h2><p>${word} ${sentence.repeat(5)}</p>` +
             `<ul><li>${sentence}</li><li>${sentence.repeat(2)}</li></ul><p>${sentence.repeat(3)}</p>`,
@@ -100,7 +129,7 @@ function runScenario(page: Page, id: string, coreUrl: string): Promise<Sample> {
       document.body.replaceChildren(host);
 
       let controller: Controller;
-      let ms: number;
+      let value: number;
       let pageCount: number;
       if (id === "publication-mount") {
         const entries = Array.from({ length: 100 }, (_value, index) => ({
@@ -121,26 +150,78 @@ function runScenario(page: Page, id: string, coreUrl: string): Promise<Sample> {
           entries,
         });
         pageCount = (await controller.ready).pageCount;
-        ms = performance.now() - startedAt;
+        value = performance.now() - startedAt;
       } else {
+        const sections =
+          id === "large-mount"
+            ? 731
+            : id === "document-mount" || id === "document-update" || id === "first-frame"
+              ? 360
+              : 182;
         const startedAt = performance.now();
-        controller = core.mountPageDocument(host, { html: article("alpha") });
+        controller = core.mountPageDocument(host, { html: article("alpha", sections) });
         const ready = await controller.ready;
-        ms = performance.now() - startedAt;
+        value = performance.now() - startedAt;
         pageCount = ready.pageCount;
         if (id === "first-frame") {
           const frameStartedAt = performance.now();
           await nextFrame();
-          ms = performance.now() - frameStartedAt;
-        } else if (id === "document-update") {
+          value = performance.now() - frameStartedAt;
+        } else if (id === "document-update" || id === "report-update") {
           await nextFrame();
           const updateStartedAt = performance.now();
-          pageCount = (await controller.update({ html: article("beta") })).pageCount;
-          ms = performance.now() - updateStartedAt;
+          pageCount = (await controller.update({ html: article("beta", sections) })).pageCount;
+          value = performance.now() - updateStartedAt;
+        } else if (id === "print-call") {
+          await nextFrame();
+          const nativePrint = window.print;
+          let requestedAt = Number.NaN;
+          window.print = () => {
+            requestedAt = performance.now();
+          };
+          try {
+            const printStartedAt = performance.now();
+            await controller.print();
+            value = requestedAt - printStartedAt;
+          } finally {
+            window.print = nativePrint;
+          }
+        } else if (id === "partial-frames") {
+          // Sample every rendered frame while updates are queued back to back.
+          // A frame is partial when the canonical frame does not hold exactly
+          // the pages of a generation Core committed.
+          const committed = new Map<number, number>([[ready.generation, ready.pageCount]]);
+          const observed: { generation: number | undefined; pages: number }[] = [];
+          let sampling = true;
+          const sample = () => {
+            const frameDocument = ready.iframe.contentDocument;
+            if (frameDocument !== null) {
+              observed.push({
+                generation: core.committedFrameGeneration(frameDocument),
+                pages: frameDocument.querySelectorAll("[data-imposia-page]").length,
+              });
+            }
+            if (sampling) requestAnimationFrame(sample);
+          };
+          requestAnimationFrame(sample);
+          const updates = Array.from({ length: 20 }, (_value, index) =>
+            controller.update({ html: article(`edit-${index}`, sections) }).then(
+              (document) => committed.set(document.generation, document.pageCount),
+              () => undefined,
+            ),
+          );
+          await Promise.all(updates);
+          await nextFrame();
+          sampling = false;
+          value = observed.filter(
+            (frame) =>
+              frame.generation === undefined || committed.get(frame.generation) !== frame.pages,
+          ).length;
+          if (observed.length === 0) throw new Error("No frames were sampled.");
         }
       }
       await controller.destroy();
-      return { ms, pageCount };
+      return { value, pageCount };
     },
     { id, coreUrl },
   );
@@ -184,8 +265,8 @@ async function main(): Promise<void> {
         const values = samples.get(label) ?? [];
         return {
           pageCount: values[0]?.pageCount ?? 0,
-          medianMs: median(values.map((sample) => sample.ms)),
-          samplesMs: values.map((sample) => Math.round(sample.ms * 10) / 10),
+          median: median(values.map((sample) => sample.value)),
+          samples: values.map((sample) => Math.round(sample.value * 10) / 10),
         };
       };
       results.push({
@@ -196,7 +277,7 @@ async function main(): Promise<void> {
     }
     const cpu = cpus()[0];
     const report = {
-      schemaVersion: 3,
+      schemaVersion: 4,
       capturedAt: new Date().toISOString(),
       runs: { warmup: WARMUP_RUNS, measured: MEASURED_RUNS },
       environment: {
@@ -220,8 +301,8 @@ async function main(): Promise<void> {
       COMPARE_PATH === undefined ? "| --- | ---: | ---: |" : "| --- | ---: | ---: | ---: |",
       ...results.map((result) =>
         result.compare === undefined
-          ? `| ${result.description} | ${result.pageCount} | ${result.medianMs} ms |`
-          : `| ${result.description} | ${result.pageCount} | ${result.compare.medianMs} ms | ${result.medianMs} ms |`,
+          ? `| ${result.description} | ${result.pageCount} | ${result.median} ${result.unit} |`
+          : `| ${result.description} | ${result.pageCount} | ${result.compare.median} ${result.unit} | ${result.median} ${result.unit} |`,
       ),
       "",
     ].join("\n");

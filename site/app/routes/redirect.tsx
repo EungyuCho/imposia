@@ -1,7 +1,7 @@
 import { redirect } from "react-router";
 
 export function clientLoader() {
-  return redirect("/en/docs");
+  return redirect("/en");
 }
 
 export default function RootRedirect() {
