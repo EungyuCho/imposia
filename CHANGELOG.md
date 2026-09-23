@@ -72,6 +72,19 @@ renamed to `0.6.0.md` when this release ships.
   a woff2 whose bytes fail to load no longer falls back to its woff sibling.
   (ASA-460)
 
+### Fixed
+
+- A paragraph or table taller than a page no longer overflows the current
+  page when no line or row of it fits in the remaining space. Plain-text
+  paragraphs, `<br>`-separated line blocks, and tables now break before the
+  block and fragment it from a fresh page; `PAGE_OVERFLOW` is reported only
+  when nothing fits on a fresh page. Previously Core kept the block on the
+  current page and reported overflow, and every following page-tall block
+  then piled up on that same overflowing page — in a 120-paragraph document,
+  112 paragraphs landed on the last page. Text was never lost or duplicated;
+  page assignment was wrong. Paragraphs with inline elements and grids were
+  not affected.
+
 ## 0.5.0 — 2026-08-20
 
 Minor release for browser-native parsing and a pagination performance batch.
