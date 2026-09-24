@@ -120,6 +120,10 @@ test("splits a row whose notes cell runs over several pages", async ({ page, bro
       .filter((index) => index >= 0);
     expect(notePages.length).toBeGreaterThan(1);
     expect(observation.pages[notePages[0] ?? -1]?.cells.date).toEqual(["DATE-1"]);
+    // The row is taller than a whole page, so it starts right under the row
+    // before it instead of leaving the rest of that page empty.
+    const beforePage = observation.pages.findIndex((item) => (item.cells.before ?? []).length > 0);
+    expect(notePages[0]).toBe(beforePage);
     for (const index of notePages.slice(1)) {
       expect(observation.pages[index]?.cells.date ?? []).toEqual([]);
       expect(observation.headerRowsPerPage[index]).toBe(1);

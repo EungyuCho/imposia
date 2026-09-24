@@ -28,6 +28,13 @@ Core splits a table row across pages when, and only when, the row cannot fit
 on a fresh table fragment. A row that fits on a fresh fragment keeps today's
 behavior: it moves to the next fragment whole.
 
+Where the split starts depends on how tall the row is. A row taller than the
+whole usable page cannot fit on any fragment, so moving it first would only
+leave the rest of the current page empty: it is split on the current
+fragment, directly under the rows before it. A row that fits a page but not a
+fresh table fragment (the repeated header takes the difference) moves to a
+fresh fragment first and is split there.
+
 ### Scope
 
 A row is splittable when all of the following hold:

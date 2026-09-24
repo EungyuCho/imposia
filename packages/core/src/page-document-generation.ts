@@ -3699,7 +3699,17 @@ class RecursiveFragmenter {
 
         tableCursor.container.append(...cluster);
         let overflowed = false;
-        if (this.#cursorOverflows(tableCursor)) {
+        const pageTallRow = cluster.length === 1 ? cluster[0] : undefined;
+        if (
+          this.#cursorOverflows(tableCursor) &&
+          pageTallRow !== undefined &&
+          pageTallRow.getBoundingClientRect().height >
+            usableContentHeight(tableCursor.page) + OVERFLOW_TOLERANCE_CSS_PX &&
+          (await splitTallRow(pageTallRow, template))
+        ) {
+          // Taller than a whole page, so no fresh fragment could hold it:
+          // split it here instead of leaving the rest of this page empty.
+        } else if (this.#cursorOverflows(tableCursor)) {
           for (const row of cluster) row.remove();
           const relocateTable =
             !tableRelocated &&
