@@ -8,12 +8,13 @@ import { chromium, type Page } from "@playwright/test";
 // Run `pnpm build` first. Writes benchmarks/latest.{json,md}; pass --baseline
 // to also replace benchmarks/baseline.json. `--compare <core bundle>` measures
 // another revision's built bundle in the same browser, alternating the two
-// runs so that machine drift affects both equally.
+// runs so that machine drift affects both equally. `--only <id,id>` runs a
+// subset of the scenarios.
 
 interface Scenario {
   readonly id: string;
   readonly description: string;
-  readonly unit: "ms" | "frames";
+  readonly unit: "ms" | "frames" | "MB";
 }
 
 interface Sample {
@@ -54,6 +55,25 @@ const SCENARIOS: readonly Scenario[] = Object.freeze([
     description: "Frames showing an incomplete page set during 20 rapid report updates",
     unit: "frames",
   },
+  { id: "mount-1000", description: "Mount a 1,000-page document", unit: "ms" },
+  {
+    id: "mount-1000-blocking",
+    description: "Longest main-thread block while mounting the 1,000-page document",
+    unit: "ms",
+  },
+  {
+    id: "mount-1000-heap",
+    description: "JS heap retained by the mounted 1,000-page document, after GC",
+    unit: "MB",
+  },
+  // 1,800 pages is near the ceiling: this article is about 2.8 KB of HTML
+  // per page, so the 5 MiB input limit is reached at about 1,850 pages.
+  { id: "mount-1800", description: "Mount a 1,800-page document", unit: "ms" },
+  {
+    id: "statement-table",
+    description: "Mount a statement whose table has 5,000 rows and a repeated header",
+    unit: "ms",
+  },
 ]);
 
 const WARMUP_RUNS = 2;
@@ -64,6 +84,8 @@ const CORE_PATH = resolve(ROOT, "packages/core/dist/index.js");
 const compareIndex = process.argv.indexOf("--compare");
 const COMPARE_PATH =
   compareIndex === -1 ? undefined : resolve(ROOT, process.argv[compareIndex + 1] ?? "");
+const onlyIndex = process.argv.indexOf("--only");
+const ONLY = onlyIndex === -1 ? undefined : new Set((process.argv[onlyIndex + 1] ?? "").split(","));
 const coreUrl = (label: string) => `http://127.0.0.1:${PORT}/__bench-${label}.js`;
 
 function median(values: readonly number[]): number {
@@ -112,7 +134,8 @@ function runScenario(page: Page, id: string, coreUrl: string): Promise<Sample> {
         ): Controller;
       };
       const sentence = "The quick brown fox jumps over the lazy dog near the riverbank. ";
-      // 360 sections make 99 pages, 182 make 50, and 731 make 200.
+      // 360 sections make 99 pages, 182 make 50, and 731 make 200; the
+      // 1,000- and 1,800-page scenarios scale that ratio.
       const article = (word: string, sections = 360) =>
         Array.from(
           { length: sections },
@@ -151,19 +174,67 @@ function runScenario(page: Page, id: string, coreUrl: string): Promise<Sample> {
         });
         pageCount = (await controller.ready).pageCount;
         value = performance.now() - startedAt;
+      } else if (id === "statement-table") {
+        const rows = Array.from(
+          { length: 5000 },
+          (_value, index) =>
+            `<tr><td>2026-${String((index % 12) + 1).padStart(2, "0")}-${String((index % 28) + 1).padStart(2, "0")}</td>` +
+            `<td>Transaction ${index + 1} ${sentence.slice(0, 20 + (index % 30))}</td>` +
+            `<td>${(index * 37) % 10000}.00</td><td>${(index * 91) % 100000}.00</td></tr>`,
+        ).join("");
+        const startedAt = performance.now();
+        controller = core.mountPageDocument(host, {
+          html:
+            "<style>table{width:100%;border-collapse:collapse}td,th{border:1px solid #999;padding:2px 4px}</style>" +
+            "<h1>Account statement</h1><table><thead><tr><th>Date</th><th>Description</th>" +
+            `<th>Amount</th><th>Balance</th></tr></thead><tbody>${rows}</tbody></table>`,
+        });
+        pageCount = (await controller.ready).pageCount;
+        value = performance.now() - startedAt;
       } else {
         const sections =
-          id === "large-mount"
-            ? 731
-            : id === "document-mount" || id === "document-update" || id === "first-frame"
-              ? 360
-              : 182;
+          id === "mount-1800"
+            ? 6579
+            : id.startsWith("mount-1000")
+              ? 3655
+              : id === "large-mount"
+                ? 731
+                : id === "document-mount" || id === "document-update" || id === "first-frame"
+                  ? 360
+                  : 182;
+        const html = article("alpha", sections);
+        const gc = (globalThis as { gc?: () => void }).gc;
+        gc?.();
+        const heapBefore =
+          (performance as { memory?: { usedJSHeapSize: number } }).memory?.usedJSHeapSize ?? 0;
+        // A MessageChannel ping loop observes how long the main thread stays
+        // blocked: the gap between two pings is at least the longest task.
+        let blocking = 0;
+        let probing = id === "mount-1000-blocking";
+        const channel = new MessageChannel();
+        let lastPing = performance.now();
+        channel.port1.onmessage = () => {
+          const now = performance.now();
+          blocking = Math.max(blocking, now - lastPing);
+          lastPing = now;
+          if (probing) channel.port2.postMessage(undefined);
+        };
+        if (probing) channel.port2.postMessage(undefined);
         const startedAt = performance.now();
-        controller = core.mountPageDocument(host, { html: article("alpha", sections) });
+        controller = core.mountPageDocument(host, { html });
         const ready = await controller.ready;
         value = performance.now() - startedAt;
+        probing = false;
+        channel.port1.close();
         pageCount = ready.pageCount;
-        if (id === "first-frame") {
+        if (id === "mount-1000-blocking") {
+          value = blocking;
+        } else if (id === "mount-1000-heap") {
+          gc?.();
+          const heapAfter =
+            (performance as { memory?: { usedJSHeapSize: number } }).memory?.usedJSHeapSize ?? 0;
+          value = (heapAfter - heapBefore) / (1024 * 1024);
+        } else if (id === "first-frame") {
           const frameStartedAt = performance.now();
           await nextFrame();
           value = performance.now() - frameStartedAt;
@@ -233,7 +304,10 @@ async function main(): Promise<void> {
     throw new Error("--baseline records the current bundle alone; drop --compare.");
   }
   const server = await startServer();
-  const browser = await chromium.launch();
+  // Precise, collectable heap readings for the mount-1000-heap scenario.
+  const browser = await chromium.launch({
+    args: ["--enable-precise-memory-info", "--js-flags=--expose-gc"],
+  });
   try {
     const page = await browser.newPage({ viewport: { width: 1200, height: 800 } });
     const cores = [
@@ -250,7 +324,7 @@ async function main(): Promise<void> {
     await page.addInitScript("globalThis.__name = (fn) => fn;");
     await page.goto(`http://127.0.0.1:${PORT}/examples/book.html`);
     const results = [];
-    for (const scenario of SCENARIOS) {
+    for (const scenario of SCENARIOS.filter((item) => ONLY === undefined || ONLY.has(item.id))) {
       const samples = new Map<string, Sample[]>(cores.map((core) => [core.label, []]));
       for (let run = 0; run < WARMUP_RUNS; run += 1) {
         for (const core of cores) await runScenario(page, scenario.id, coreUrl(core.label));

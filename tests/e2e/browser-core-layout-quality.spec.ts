@@ -754,3 +754,55 @@ test.describe("Chromium Core fragmentation and layout quality", () => {
     }
   });
 });
+
+test("keeps a transformed block atomic and moves it whole to the next page", async ({
+  page,
+  browserName,
+}) => {
+  const { errors, pageErrors } = captureBrowserErrors(page, browserName);
+  await page.goto("/examples/book.html");
+  try {
+    const observation = await page.evaluate(async () => {
+      const core = (await import("/packages/core/dist/index.js")) as CoreModule;
+      const host = document.body.appendChild(document.createElement("div"));
+      const lines = (prefix: string, count: number) =>
+        Array.from({ length: count }, (_value, index) => `<p>${prefix} ${index + 1}</p>`).join("");
+      const controller = core.mountPageDocument(host, {
+        html: `
+          <style>
+            @page { size: 148mm 210mm; margin: 12mm; }
+            p { margin: 0; font: 16px/24px serif; }
+          </style>
+          ${lines("Lead", 20)}
+          <div id="turned" style="transform: translateX(1px)">${lines("Turned", 12)}</div>
+        `,
+      });
+      try {
+        const ready = await controller.ready;
+        const frame = ready.iframe.contentDocument;
+        if (frame === null) throw new Error("Missing canonical frame.");
+        return {
+          pageCount: ready.pageCount,
+          turnedPages: [...frame.querySelectorAll("[data-imposia-page]")]
+            .filter((item) => (item.textContent ?? "").includes("Turned"))
+            .map((item) => item.getAttribute("data-imposia-page-number")),
+          turnedParagraphs: frame.querySelectorAll("#turned p").length,
+          turnedFragments: [...frame.querySelectorAll("div")].filter((item) =>
+            (item.getAttribute("style") ?? "").includes("translateX"),
+          ).length,
+        };
+      } finally {
+        await controller.destroy();
+        host.remove();
+      }
+    });
+
+    expect(observation.pageCount).toBe(2);
+    expect(observation.turnedPages).toEqual(["2"]);
+    expect(observation.turnedParagraphs).toBe(12);
+    expect(observation.turnedFragments).toBe(1);
+  } finally {
+    expect(errors).toEqual([]);
+    expect(pageErrors).toEqual([]);
+  }
+});

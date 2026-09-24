@@ -798,7 +798,34 @@ interface ResolvedGridTracks {
   readonly rows: readonly string[];
 }
 
+const UNPLACED_SOURCE_ATTRIBUTE = "data-imposia-unplaced-source";
+
+/**
+ * Runs `read` with the unplaced source laid out. Firefox resolves
+ * layout-dependent computed values, such as grid track sizes, only for
+ * rendered elements, so a grid still in the skipped source must be rendered
+ * while its tracks are read. Chromium forces that layout on its own.
+ */
+function withSourceLayout<T>(element: Element, read: () => T): T {
+  const source = element.closest<HTMLElement>(`[${UNPLACED_SOURCE_ATTRIBUTE}]`);
+  if (source === null) return read();
+  source.style.removeProperty("content-visibility");
+  try {
+    return read();
+  } finally {
+    source.style.setProperty("content-visibility", "hidden");
+  }
+}
+
 function safeGridTracks(
+  element: Element,
+  style: CSSStyleDeclaration,
+  view: Window,
+): ResolvedGridTracks | undefined {
+  return withSourceLayout(element, () => resolvedGridTracks(element, style, view));
+}
+
+function resolvedGridTracks(
   element: Element,
   style: CSSStyleDeclaration,
   view: Window,
@@ -1115,7 +1142,7 @@ function safeMulticol(element: Element, style: CSSStyleDeclaration, view: Window
   if (
     style.position !== "static" ||
     style.cssFloat !== "none" ||
-    style.transform !== "none" ||
+    hasTransform(element, style) ||
     style.writingMode !== "horizontal-tb" ||
     style.direction !== "ltr" ||
     isInlineDisplay(style.display) ||
@@ -1160,7 +1187,7 @@ function safeMulticol(element: Element, style: CSSStyleDeclaration, view: Window
       descendantStyle.display.includes("grid") ||
       descendantStyle.display.includes("table") ||
       descendantStyle.display === "list-item" ||
-      descendantStyle.transform !== "none" ||
+      hasTransform(descendant, descendantStyle) ||
       descendantStyle.breakBefore.trim().toLowerCase() !== "auto" ||
       descendantStyle.breakAfter.trim().toLowerCase() !== "auto" ||
       (breakInside !== "auto" && breakInside !== "avoid") ||
@@ -1204,6 +1231,18 @@ function fragmentationLayout(
   return "normal";
 }
 
+/**
+ * Whether an element is transformed. The resolved `transform` of
+ * `getComputedStyle` is layout-dependent, so Chromium lays out the element to
+ * answer it, and for an element still in the skipped source that lays out the
+ * whole remaining source. The Typed OM computed value needs style only.
+ */
+function hasTransform(element: Element, style: CSSStyleDeclaration): boolean {
+  const map = (element as { computedStyleMap?: () => StylePropertyMapReadOnly }).computedStyleMap;
+  if (map === undefined) return style.transform !== "none";
+  return String(map.call(element).get("transform") ?? "none") !== "none";
+}
+
 function atomicElement(
   element: Element,
   style: CSSStyleDeclaration,
@@ -1213,7 +1252,7 @@ function atomicElement(
   if (layout !== "normal") return false;
   return (
     isReplacedElement(element) ||
-    style.transform !== "none" ||
+    hasTransform(element, style) ||
     style.position === "absolute" ||
     style.position === "fixed" ||
     style.position === "sticky"
@@ -3784,6 +3823,15 @@ export async function buildGeneration(
           settings.limits,
         );
         hoistFlowStyles(passSource);
+        // The unplaced source is never measured in place, but while it was
+        // laid out every placement relaid out all of it: a 1,000-page mount
+        // spent three quarters of its time there, and time per page grew with
+        // document length. Skipping its rendering keeps each forced layout
+        // local to the page being filled. Its style containment also keeps
+        // unplaced elements out of the counters of the pages placed after it,
+        // matching the committed document, which no longer holds them.
+        passSource.setAttribute(UNPLACED_SOURCE_ATTRIBUTE, "");
+        passSource.style.setProperty("content-visibility", "hidden");
         probe.append(passSource);
         await settlePaginationAssets(
           frameDocument,
