@@ -532,11 +532,12 @@ for the complete public token surface.
 
 ## Interactive Demo
 
-Try it without installing anything: the [landing page](https://imposia.pages.dev/en) runs a live viewer, and the full publishing lab is hosted at [imposia.pages.dev/examples/demo](https://imposia.pages.dev/examples/demo/index.html).
+Try it without installing anything: the [landing page](https://imposia.pages.dev/en) runs a live viewer, and the Playground is hosted at [imposia.pages.dev/examples/demo](https://imposia.pages.dev/examples/demo/index.html).
 
-The React publishing lab under [`examples/demo`](./examples/demo) demonstrates
-live source revisions, normalized page media, margin boxes, ordered extensions,
-constrained publishing cases, Viewer controls, native print, and EPUB export.
+The Playground under [`examples/demo`](./examples/demo) paginates five business
+documents live: an invoice, an account statement, a quarterly report, a service
+agreement, and a batch of invoices numbered separately. Change the data or the
+paper, print or save as PDF, and try to break it with rapid or invalid updates.
 
 ```bash
 corepack pnpm install --frozen-lockfile

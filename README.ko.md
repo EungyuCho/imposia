@@ -526,11 +526,12 @@ viewer.setTheme({ "--imposia-viewer-color-accent": "#ef6a3b" });
 
 ## 인터랙티브 데모
 
-설치 없이 바로 써 보세요. [랜딩 페이지](https://imposia.pages.dev/ko)에서 실제 뷰어가 동작하고, 전체 퍼블리싱 랩은 [imposia.pages.dev/examples/demo](https://imposia.pages.dev/examples/demo/index.html)에 있습니다.
+설치 없이 바로 써 보세요. [랜딩 페이지](https://imposia.pages.dev/ko)에서 실제 뷰어가 동작하고, Playground는 [imposia.pages.dev/examples/demo](https://imposia.pages.dev/examples/demo/index.html)에 있습니다.
 
-[`examples/demo`](./examples/demo)의 React 퍼블리싱 실험실에서는 실시간 소스
-변경, 정규화된 페이지 미디어, margin box, 순서가 있는 확장 기능, 제한된
-퍼블리싱 사례, Viewer 조작, 네이티브 인쇄, EPUB 내보내기를 확인할 수 있습니다.
+[`examples/demo`](./examples/demo)의 Playground는 업무 문서 다섯 가지를 실시간으로
+페이지로 나눕니다. 청구서, 거래 명세서, 분기 보고서, 서비스 계약서, 문서마다
+번호를 따로 매기는 청구서 묶음입니다. 데이터나 용지를 바꾸고, 인쇄하거나 PDF로
+저장하고, 연속 수정이나 잘못된 업데이트로 깨뜨려 볼 수 있습니다.
 
 ```bash
 corepack pnpm install --frozen-lockfile

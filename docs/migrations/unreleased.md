@@ -162,6 +162,13 @@ requiring a code change (CHANGELOG has the full entries):
   equivalence oracles showed produces the same output. As announced in
   [`api-policy.md`](../api-policy.md), this is the scheduled removal, not a
   breaking change.
+- **Fewer `UNSUPPORTED_LAYOUT` warnings.** An unsupported layout (row Flex,
+  unsupported Grid placement, an unsafe table or multicol) that fits the page
+  no longer warns; it warns when it overflows the page, spills out of its own
+  box, or ignores a forced break inside it. If you surfaced every
+  `UNSUPPORTED_LAYOUT` to authors, most of those warnings disappear, and the
+  ones left point at content that is actually clipped or a break that did not
+  happen.
 - **New opt-ins.** `PublicationOptions.pageNumbering: "entry"` numbers each
   entry on its own; `@page :nth(An+B)`, all sixteen margin boxes, and the
   `A3`, `A5`, `B4`, `B5`, `Legal`, and `Ledger` page sizes are accepted.

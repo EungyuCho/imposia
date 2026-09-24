@@ -507,11 +507,11 @@ viewer.setTheme({ "--imposia-viewer-color-accent": "#ef6a3b" });
 
 ## 交互式演示
 
-无需安装即可试用：[落地页](https://imposia.pages.dev/zh-CN)运行着实时查看器，完整的发布实验室位于 [imposia.pages.dev/examples/demo](https://imposia.pages.dev/examples/demo/index.html)。
+无需安装即可试用：[落地页](https://imposia.pages.dev/zh-CN)运行着实时查看器，Playground 位于 [imposia.pages.dev/examples/demo](https://imposia.pages.dev/examples/demo/index.html)。
 
-[`examples/demo`](./examples/demo) 中的 React 出版实验室展示实时源更新、
-标准化页面媒体、页边距框、按顺序运行的扩展、受限出版案例、Viewer 控件、原生
-打印与 EPUB 导出。
+[`examples/demo`](./examples/demo) 中的 Playground 实时分页五种业务文档：发票、
+账户对账单、季度报告、服务协议，以及每张分别编号的批量发票。可以修改数据或纸张，
+打印或另存为 PDF，并用快速连续更新或无效更新试着让它出错。
 
 ```bash
 corepack pnpm install --frozen-lockfile

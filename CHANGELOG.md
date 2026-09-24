@@ -47,7 +47,8 @@ renamed to `0.6.0.md` when this release ships.
 ### Added
 
 - A table row taller than a page is split across pages cell by cell instead
-  of staying atomic and being clipped. Each cell's content continues in the
+  of staying atomic and being clipped. A row taller than the whole page starts
+  directly under the rows before it instead of leaving that page empty. Each cell's content continues in the
   same column on the next page under the repeated header, cells with nothing
   left stay as empty shells, and the columns keep the widths the unsplit row
   has. Rows that fit on a fresh page still move whole, so existing tables
@@ -92,6 +93,21 @@ renamed to `0.6.0.md` when this release ships.
 
 ### Changed
 
+- `UNSUPPORTED_LAYOUT` is reported only when keeping an unsupported layout
+  whole costs something: it overflows the page, spills sideways out of its own
+  box (the extra columns of a fixed-height multicol), or holds a forced break
+  that is not honored. A row of cards in `display: flex`, or any other
+  unsupported box that fits or moves whole to the next page, loses nothing and
+  no longer warns; before, nearly every document with a flex header carried
+  the warning. Layout is unchanged. Code that counted these warnings sees
+  fewer, and the spill case is new.
+- The hosted demo at `/examples/demo/` is now the Imposia Playground: five
+  business documents (invoice, account statement, quarterly report, service
+  agreement, and an invoice batch numbered per invoice) with live data, page
+  setup, Print / Save as PDF, and "try to break it" controls that count
+  half-built frames and show a rejected update leaving the pages on screen.
+  It replaces the publishing lab's stress, compatibility, and EPUB cases and
+  follows the landing page's design (`design/demo.pen`).
 - Removed the `0.5.0` escape hatches `experimental.forceSequentialPlacement`,
   `experimental.forceLegacyLineEnds`, and
   `experimental.forceFullConstraintCapture` on the announced one-release

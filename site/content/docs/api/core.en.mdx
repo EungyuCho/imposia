@@ -112,7 +112,7 @@ Every committed `PageWarning` carries a `code`, a `message`, and a frozen `locat
 | --- | --- |
 | `PAGE_OVERFLOW` | Content exceeds the usable page and cannot fragment further. |
 | `RESOURCE_BLOCKED` | The resolver refused a resource or its bytes failed validation. |
-| `UNSUPPORTED_LAYOUT` | A layout outside a Constrained subset remained atomic instead of fragmenting. |
+| `UNSUPPORTED_LAYOUT` | A layout outside a Constrained subset was kept whole, and that cost something: it overflows the page, spills out of its box, or ignores a forced break inside it. A whole box that fits is not reported. |
 | `UNSUPPORTED_DECORATION_TOKEN` | A decoration template used a token Core does not support. |
 | `PAGE_RULE_UNSUPPORTED` | An authored `@page` declaration is outside the supported set. |
 | `BREAK_CONSTRAINT_RELAXED` | A break constraint could not be honored and was deterministically relaxed. |

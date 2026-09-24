@@ -614,7 +614,7 @@ test.describe("Chromium Core fragmentation and layout quality", () => {
     }
   });
 
-  test("keeps row flex and spanning grid atomic with UNSUPPORTED_LAYOUT", async ({
+  test("keeps a fitting row flex and row-spanning grid whole without warnings", async ({
     page,
     browserName,
   }) => {
@@ -687,7 +687,63 @@ test.describe("Chromium Core fragmentation and layout quality", () => {
       );
       expect(rowPages).toHaveLength(1);
       expect(gridPages).toHaveLength(1);
-      expect(observation.warningCodes).toContain("UNSUPPORTED_LAYOUT");
+      // Both fit on a page, so staying whole loses nothing: no warning.
+      expect(observation.warningCodes).not.toContain("UNSUPPORTED_LAYOUT");
+    } finally {
+      expect(errors).toEqual([]);
+      expect(pageErrors).toEqual([]);
+    }
+  });
+
+  test("warns about an unsupported layout only when keeping it whole costs content", async ({
+    page,
+    browserName,
+  }) => {
+    const { errors, pageErrors } = captureBrowserErrors(page, browserName);
+    await page.goto("/examples/book.html");
+
+    try {
+      const observation = await page.evaluate(async () => {
+        const core = (await import("/packages/core/dist/index.js")) as CoreModule;
+        const host = document.createElement("div");
+        document.body.replaceChildren(host);
+        const codes = async (html: string) => {
+          const controller = core.mountPageDocument(host, {
+            html: `<style>p { margin: 0; font: 16px/24px Arial, sans-serif; } .row { display: flex; flex-direction: row; gap: 12px; }</style>${html}`,
+          });
+          try {
+            return (await controller.ready).warnings.map((warning) => warning.code);
+          } finally {
+            await controller.destroy();
+          }
+        };
+        const result = {
+          // An ordinary row of cards: fits, stays whole, says nothing.
+          fitting: await codes(
+            '<div class="row"><p>Card A</p><p>Card B</p><p>Card C</p></div><p>After the row.</p>',
+          ),
+          // Moved whole to the next page, like an image: still nothing lost.
+          moved: await codes(
+            '<div style="height: 900px"></div><div class="row" style="height: 400px"><p>Moved A</p><p>Moved B</p></div>',
+          ),
+          // Taller than any page: kept whole, it is clipped.
+          overflowing: await codes(
+            '<div class="row" style="height: 1400px"><p>Tall A</p><p>Tall B</p></div>',
+          ),
+          // A forced break inside is not honored while the row stays whole.
+          forcedBreak: await codes(
+            '<div class="row"><p>Before</p><p style="break-before: page">After</p></div>',
+          ),
+        };
+        host.remove();
+        return result;
+      });
+
+      expect(observation.fitting).toEqual([]);
+      expect(observation.moved).toEqual([]);
+      expect(observation.overflowing).toContain("UNSUPPORTED_LAYOUT");
+      expect(observation.overflowing).toContain("PAGE_OVERFLOW");
+      expect(observation.forcedBreak).toEqual(["UNSUPPORTED_LAYOUT"]);
     } finally {
       expect(errors).toEqual([]);
       expect(pageErrors).toEqual([]);
@@ -706,7 +762,9 @@ test.describe("Chromium Core fragmentation and layout quality", () => {
         const core = (await import("/packages/core/dist/index.js")) as CoreModule;
         const host = document.createElement("div");
         document.body.replaceChildren(host);
-        const tokens = Array.from({ length: 90 }, (_value, index) => `MULTICOL-${index + 1}`);
+        // Far more text than two 900px columns hold, so the multicol spills
+        // extra columns sideways out of its box.
+        const tokens = Array.from({ length: 400 }, (_value, index) => `MULTICOL-${index + 1}`);
         const controller = core.mountPageDocument(host, {
           html: `
             <style>

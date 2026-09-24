@@ -3040,17 +3040,6 @@ class RecursiveFragmenter {
       this.#markPageContent(initialCursor.page);
       return initialCursor;
     }
-    if (constraint.layout.startsWith("unsupported-")) {
-      this.#warnOnce(
-        "UNSUPPORTED_LAYOUT",
-        constraint,
-        "The authored layout is outside the supported fragmentation subset and was kept atomic.",
-        "display",
-        constraint.layout.replace("unsupported-", ""),
-        "Kept the source layout atomic.",
-      );
-    }
-
     let cursor = initialCursor;
     const pageHadContent = this.#hasPageContent(cursor.page);
     cursor.container.append(element);
@@ -3111,6 +3100,28 @@ class RecursiveFragmenter {
     }
 
     const html = htmlElement(element);
+    // An unsupported layout that fits loses nothing by staying whole, the same
+    // as an image: a row of cards in display: flex is ordinary input. Warn only
+    // when keeping it whole costs something: it overflows the page, it spills
+    // sideways out of its own box (the extra columns of a fixed-height
+    // multicol), or a forced break inside it is not honored.
+    if (constraint.layout.startsWith("unsupported-")) {
+      const spills =
+        html !== undefined && html.scrollWidth > html.clientWidth + OVERFLOW_TOLERANCE_CSS_PX;
+      if (overflows || spills || constraint.hasForcedDescendant) {
+        this.#warnOnce(
+          "UNSUPPORTED_LAYOUT",
+          constraint,
+          overflows || spills
+            ? "The authored layout is outside the supported fragmentation subset, was kept atomic, and does not fit the page."
+            : "The authored layout is outside the supported fragmentation subset, so a forced break inside it was not honored.",
+          "display",
+          constraint.layout.replace("unsupported-", ""),
+          "Kept the source layout atomic.",
+        );
+      }
+    }
+
     const mustInspectInlineOverflow =
       constraint.hasUnbreakableDescendant &&
       html !== undefined &&
@@ -3699,7 +3710,17 @@ class RecursiveFragmenter {
 
         tableCursor.container.append(...cluster);
         let overflowed = false;
-        if (this.#cursorOverflows(tableCursor)) {
+        const pageTallRow = cluster.length === 1 ? cluster[0] : undefined;
+        if (
+          this.#cursorOverflows(tableCursor) &&
+          pageTallRow !== undefined &&
+          pageTallRow.getBoundingClientRect().height >
+            usableContentHeight(tableCursor.page) + OVERFLOW_TOLERANCE_CSS_PX &&
+          (await splitTallRow(pageTallRow, template))
+        ) {
+          // Taller than a whole page, so no fresh fragment could hold it:
+          // split it here instead of leaving the rest of this page empty.
+        } else if (this.#cursorOverflows(tableCursor)) {
           for (const row of cluster) row.remove();
           const relocateTable =
             !tableRelocated &&

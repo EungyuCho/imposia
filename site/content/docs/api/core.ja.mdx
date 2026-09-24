@@ -112,7 +112,7 @@ EPUB のオプションは `metadata: { title, language, identifier, modified? }
 | --- | --- |
 | `PAGE_OVERFLOW` | 内容が利用可能なページ領域を超え、それ以上分割できない。 |
 | `RESOURCE_BLOCKED` | リゾルバーがリソースを拒否したか、バイトが検証に落ちた。 |
-| `UNSUPPORTED_LAYOUT` | 制約付きサブセットの外のレイアウトが、分割されずにそのまま残った。 |
+| `UNSUPPORTED_LAYOUT` | 制約付きサブセットの外のレイアウトをそのまま残し、その結果として損失が出た。ページからあふれた、ボックスの横にはみ出した、内部の強制改ページが無視された、のいずれか。ページに収まる場合は報告しない。 |
 | `UNSUPPORTED_DECORATION_TOKEN` | 装飾テンプレートが、Core の対応していないトークンを使った。 |
 | `PAGE_RULE_UNSUPPORTED` | ソースの `@page` 宣言が対応範囲の外にある。 |
 | `BREAK_CONSTRAINT_RELAXED` | 改ページ制約を守れず、決定的に緩和した。 |

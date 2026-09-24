@@ -409,7 +409,7 @@ test("attributes oversized caption, header, and footer overflow to table furnitu
   }
 });
 
-test("keeps unsupported table structures atomic with deterministic located warnings", async ({
+test("keeps unsupported table structures atomic and warns, located, when they overflow", async ({
   page,
   browserName,
 }) => {
@@ -432,6 +432,7 @@ test("keeps unsupported table structures atomic with deterministic located warni
               .prelude { box-sizing: border-box; height: 820px; margin: 0; }
               table { width: 100%; border-collapse: collapse; }
               tr { height: 120px; }
+              .unsafe-table { height: 1400px; }
               ${scenario.css}
             </style>
             <p class="prelude">${markers[0]}</p>

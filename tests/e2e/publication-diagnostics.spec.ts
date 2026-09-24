@@ -82,7 +82,7 @@ test("locates safe Publication diagnostics in the current committed generation",
             html: `
               <main data-private="RAW_DOM_SECRET">
                 <section data-warning-target style="display: flex; flex-direction: row; break-before: page">
-                  <span>ROW-A</span><span>ROW-B</span>
+                  <span>ROW-A</span><span style="break-before: page">ROW-B</span>
                 </section>
                 <p data-fallback-target lang="" style="hyphens: auto">
                   characteristically internationalization representation
@@ -148,7 +148,7 @@ test("locates safe Publication diagnostics in the current committed generation",
               title: "Replacement",
               html: `
                 <section data-current-warning style="display: flex; flex-direction: row; break-before: page">
-                  <span>CURRENT-A</span><span>CURRENT-B</span>
+                  <span>CURRENT-A</span><span style="break-before: page">CURRENT-B</span>
                 </section>
               `,
             },
@@ -253,10 +253,13 @@ test("attributes generated warning locations to trusted authored content", async
             title: "Generated",
             html: `
               <style>
+                /* Taller than a page, so keeping the generated row whole
+                   clips it and the warning is a real one. */
                 #generated-host::before {
                   content: target-counter(attr(href), page);
                   display: flex;
                   flex-direction: row;
+                  height: 1400px;
                 }
               </style>
               <div id="generated-host" href="#target">

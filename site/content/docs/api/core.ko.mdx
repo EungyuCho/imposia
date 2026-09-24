@@ -112,7 +112,7 @@ EPUB 옵션에는 `metadata: { title, language, identifier, modified? }`가 필�
 | --- | --- |
 | `PAGE_OVERFLOW` | 내용이 사용 가능한 페이지 영역을 넘었고 더는 분할할 수 없습니다. |
 | `RESOURCE_BLOCKED` | 리졸버가 리소스를 거부했거나 바이트가 검증에 실패했습니다. |
-| `UNSUPPORTED_LAYOUT` | 제한(Constrained) 부분 집합 밖의 레이아웃이 분할되지 않고 통째로 유지됐습니다. |
+| `UNSUPPORTED_LAYOUT` | 제한(Constrained) 부분 집합 밖의 레이아웃을 통째로 유지했는데, 그 때문에 손해가 생겼습니다. 페이지를 넘치거나, 상자 옆으로 삐져나오거나, 안쪽의 강제 나눔이 무시된 경우입니다. 페이지 안에 들어가는 경우는 보고하지 않습니다. |
 | `UNSUPPORTED_DECORATION_TOKEN` | 장식 템플릿이 Core가 지원하지 않는 토큰을 사용했습니다. |
 | `PAGE_RULE_UNSUPPORTED` | 작성된 `@page` 선언이 지원 범위 밖입니다. |
 | `BREAK_CONSTRAINT_RELAXED` | break 제약을 지킬 수 없어 결정적으로 완화했습니다. |

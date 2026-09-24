@@ -525,12 +525,12 @@ viewer.setTheme({ "--imposia-viewer-color-accent": "#ef6a3b" });
 
 ## インタラクティブデモ
 
-インストールなしで試せます。[ランディングページ](https://imposia.pages.dev/ja)で本物のビューアーが動き、パブリッシングラボ全体は [imposia.pages.dev/examples/demo](https://imposia.pages.dev/examples/demo/index.html) にあります。
+インストールなしで試せます。[ランディングページ](https://imposia.pages.dev/ja)で本物のビューアーが動き、Playground は [imposia.pages.dev/examples/demo](https://imposia.pages.dev/examples/demo/index.html) にあります。
 
-[`examples/demo`](./examples/demo) の React パブリッシングラボでは、ライブ
-ソース更新、正規化されたページメディア、マージンボックス、順序付きの拡張機能、
-制約付きパブリッシングケース、Viewer コントロール、ネイティブ印刷、EPUB
-書き出しを確認できます。
+[`examples/demo`](./examples/demo) の Playground は、5 種類のビジネス文書を
+その場でページに分けます。請求書、取引明細書、四半期レポート、サービス契約書、
+文書ごとにページ番号を振る請求書の一括出力です。データや用紙を変え、印刷または
+PDF 保存し、連続した更新や不正な更新で壊そうとしてみてください。
 
 ```bash
 corepack pnpm install --frozen-lockfile

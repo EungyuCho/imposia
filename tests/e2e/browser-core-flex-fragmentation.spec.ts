@@ -309,7 +309,7 @@ test("relaxes an impossible Flex card avoid once without losing or duplicating c
   }
 });
 
-test("keeps unsupported Flex patterns atomic with deterministic located warnings", async ({
+test("keeps unsupported Flex patterns atomic and warns, located, when they overflow the page", async ({
   page,
   browserName,
 }) => {
@@ -328,7 +328,7 @@ test("keeps unsupported Flex patterns atomic with deterministic located warnings
             html: `
               <style>
                 .fallback-prelude { box-sizing: border-box; height: 820px; margin: 0; }
-                .unsupported-flex { display: flex; flex-direction: column; flex-wrap: nowrap; box-sizing: border-box; height: 280px; margin: 0; }
+                .unsupported-flex { display: flex; flex-direction: column; flex-wrap: nowrap; box-sizing: border-box; height: 1400px; margin: 0; }
                 .unsupported-flex > p { box-sizing: border-box; height: 120px; margin: 0; }
                 ${scenario.css}
               </style>

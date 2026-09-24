@@ -71,10 +71,10 @@ test("the GNB demo link loads the standalone demo document", async ({ page, brow
     await demoLink.click();
 
     await expect(page).toHaveURL(/\/examples\/demo\/index\.html$/);
-    await expect(page).toHaveTitle("Imposia Publishing Lab");
-    await expect(
-      page.getByRole("heading", { name: "Edit HTML. Keep complete pages.", exact: true }),
-    ).toBeVisible({ timeout: 15_000 });
+    await expect(page).toHaveTitle("Imposia Playground");
+    await expect(page.getByRole("button", { name: /Account statement/ })).toBeVisible({
+      timeout: 15_000,
+    });
   } finally {
     assertNoBrowserErrors(captured);
   }

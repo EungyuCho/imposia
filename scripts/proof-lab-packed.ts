@@ -209,7 +209,7 @@ async function main(): Promise<void> {
           "exec",
           "playwright",
           "test",
-          "tests/e2e/demo-showcase.spec.ts",
+          "tests/e2e/demo-playground.spec.ts",
           "tests/e2e/react-adapter.spec.ts",
           "tests/e2e/react-adapter-generation-race.spec.ts",
         ],

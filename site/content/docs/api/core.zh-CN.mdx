@@ -112,7 +112,7 @@ EPUB 选项要求 `metadata: { title, language, identifier, modified? }`，并�
 | --- | --- |
 | `PAGE_OVERFLOW` | 内容超出可用页面且无法继续分片。 |
 | `RESOURCE_BLOCKED` | 解析器拒绝了资源，或其字节未通过校验。 |
-| `UNSUPPORTED_LAYOUT` | 受限子集之外的布局保持原子，未被分片。 |
+| `UNSUPPORTED_LAYOUT` | 受限子集之外的布局保持原子，并因此造成损失：超出页面、从自身盒子侧向溢出，或内部的强制分页被忽略。能完整放进页面时不报告。 |
 | `UNSUPPORTED_DECORATION_TOKEN` | 装饰模板使用了 Core 不支持的令牌。 |
 | `PAGE_RULE_UNSUPPORTED` | 作者的 `@page` 声明在受支持集合之外。 |
 | `BREAK_CONSTRAINT_RELAXED` | 无法满足的分页约束被确定性放宽。 |

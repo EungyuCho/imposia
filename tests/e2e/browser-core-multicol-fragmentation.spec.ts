@@ -147,6 +147,9 @@ const UNSUPPORTED_SCENARIOS = [
     content:
       '<h2 class="tall-spanner" data-unsafe-marker="A">A</h2><p data-unsafe-marker="B">B</p><p data-unsafe-marker="C">C</p>',
     expectedOverflow: false,
+    // The spanner is taller than the container, so B and C spill into extra
+    // columns beside the box, where the page clips them.
+    expectedSpill: true,
   },
 ] as const;
 
@@ -310,7 +313,7 @@ test("fragments bounded multicol flow around direct spanners in deterministic re
   }
 });
 
-test("keeps nested and unsupported multicol layouts atomic with deterministic warnings", async ({
+test("keeps nested and unsupported multicol layouts atomic and warns only when one overflows", async ({
   page,
   browserName,
 }) => {
@@ -403,16 +406,23 @@ test("keeps nested and unsupported multicol layouts atomic with deterministic wa
       expect(Object.values(result.first.markerCounts).every((count) => count === 1)).toBe(true);
       expect(result.first.pageFor.every((pageIndex) => pageIndex >= 0)).toBe(true);
       expect(new Set(result.first.pageFor).size).toBe(1);
-      expect(result.first.warnings, result.id).toHaveLength(1);
-      expect(result.first.warnings).toEqual(result.second.warnings);
-      expect(result.first.warnings[0]).toMatchObject({
-        code: "UNSUPPORTED_LAYOUT",
-        property: "display",
-        value: "multicol",
-        recovery: "Kept the source layout atomic.",
-      });
-      expect(result.first.warnings[0]?.sourceIdentity).toMatch(/^source-\d+:section$/u);
       const scenario = UNSUPPORTED_SCENARIOS.find((candidate) => candidate.id === result.id);
+      // Kept whole, a multicol that fits loses nothing and stays silent; one
+      // that overflows the page or spills out of its box warns at its element.
+      const loses =
+        scenario !== undefined &&
+        (scenario.expectedOverflow || ("expectedSpill" in scenario && scenario.expectedSpill));
+      expect(result.first.warnings, result.id).toHaveLength(loses ? 1 : 0);
+      expect(result.first.warnings).toEqual(result.second.warnings);
+      if (loses) {
+        expect(result.first.warnings[0]).toMatchObject({
+          code: "UNSUPPORTED_LAYOUT",
+          property: "display",
+          value: "multicol",
+          recovery: "Kept the source layout atomic.",
+        });
+        expect(result.first.warnings[0]?.sourceIdentity).toMatch(/^source-\d+:section$/u);
+      }
       expect(result.first.overflowCount).toBe(scenario?.expectedOverflow ? 1 : 0);
       expect(result.second).toEqual(result.first);
     }

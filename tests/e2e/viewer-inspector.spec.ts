@@ -107,7 +107,7 @@ test("browses only current diagnostics and temporarily highlights through Viewer
             html: `
               <h1 style="break-before: page">Second entry</h1>
               <section data-warning-target style="display: flex; flex-direction: row">
-                <span>Unsupported row A</span><span>Unsupported row B</span>
+                <span>Unsupported row A</span><span style="break-before: page">Unsupported row B</span>
               </section>
             `,
           },
@@ -553,7 +553,7 @@ test("clears a selected diagnostic on the first delivered resize observation", a
         html: `
           <h1>Resize diagnostic</h1>
           <section style="display: flex; flex-direction: row">
-            <span>Unsupported A</span><span>Unsupported B</span>
+            <span>Unsupported A</span><span style="break-before: page">Unsupported B</span>
           </section>
         `,
       });
