@@ -32,8 +32,12 @@ overrides:
   # fumadocs 16.15.0 still resolves next 16.2.10, so the advisories below are
   # only reachable by pinning the patched versions here.
   next: 16.3.2
-  postcss: 8.5.26
+  postcss: 8.5.28
   sharp: 0.35.3
+  # Dev-only chain: @react-router/dev pulls @babel/core, which pulls
+  # browserslist <= 4.28.6 (high) and baseline-browser-mapping < 2.11.0.
+  browserslist: 4.29.0
+  baseline-browser-mapping: 2.11.25
 publicHoistPattern:
   - "*eslint*"
   - "*prettier*"

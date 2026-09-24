@@ -34,7 +34,7 @@ jobs:
         id: playwright
         run: echo "version=$(pnpm exec playwright --version | sed 's/^Version //')" >> "$GITHUB_OUTPUT"
       - name: Restore Playwright browsers
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: ~/.cache/ms-playwright
           key: ${{ runner.os }}-${{ runner.arch }}-playwright-${{ steps.playwright.outputs.version }}
@@ -76,7 +76,7 @@ jobs:
         id: playwright
         run: echo "version=$(pnpm exec playwright --version | sed 's/^Version //')" >> "$GITHUB_OUTPUT"
       - name: Restore Playwright browsers
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           # Playwright's browser cache lives under ~/Library/Caches on macOS
           # (~/.cache/ms-playwright is linux-only); the os/arch cache key from

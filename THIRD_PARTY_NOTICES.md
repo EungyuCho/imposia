@@ -4,7 +4,7 @@ Imposia source distributions and package artifacts depend on the projects below.
 
 | Component | Version | Use | License |
 | --- | --- | --- | --- |
-| PostCSS | 8.5.26 | Bundled CSS declaration parsing in `@imposia/core` | MIT |
+| PostCSS | 8.5.28 | Bundled CSS declaration parsing in `@imposia/core` | MIT |
 | nanoid | 3.3.18 | Bundled CSS support transitively used by PostCSS in `@imposia/core` | MIT |
 | picocolors | 1.1.1 | Bundled CSS support transitively used by PostCSS in `@imposia/core` | ISC |
 
