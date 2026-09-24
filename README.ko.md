@@ -108,9 +108,9 @@ Imposia는 작업 흐름의 중심에 하나의 페이지 문서를 둡니다.
 
 | 측정 항목 | Imposia | Paged.js 0.4.3 | Vivliostyle 2.45.2 |
 | :--- | ---: | ---: | ---: |
-| 단어 하나 수정 후 다시 렌더링 (50페이지) | **46 ms** | 217 ms | 254 ms |
-| 200페이지 페이지 분할 | **249 ms** | 851 ms | 2,554 ms |
-| 전체 브라우저 번들, gzip | **61.8 KiB** | 94.2 KiB | 215.2 KiB |
+| 단어 하나 수정 후 다시 렌더링 (50페이지) | **30 ms** | 217 ms | 216 ms |
+| 200페이지 페이지 분할 | **131 ms** | 846 ms | 2,140 ms |
+| 전체 브라우저 번들, gzip | **58.5 KiB** | 94.2 KiB | 215.2 KiB |
 
 - 세 라이브러리 모두 같은 페이지 수를 냈습니다. Paged.js와 Vivliostyle은 증분 업데이트가 없어 수정할 때 처음부터 다시 렌더링하고, Imposia는 `controller.update()`로 다시 확정합니다.
 - Paged.js와 Vivliostyle은 문서화된 진입점으로만 호출했고, 의존성으로 추가하지 않고 jsDelivr에서 불러왔습니다. 측정 방법, 버전, 해시, 주의 사항: [`docs/benchmarks.md`](./docs/benchmarks.md)

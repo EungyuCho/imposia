@@ -74,6 +74,11 @@ renamed to `0.6.0.md` when this release ships.
 
 ### Changed
 
+- Pagination no longer slows down as documents grow. Every placement used to
+  relay out all of the source still waiting to be placed, so time per page
+  rose with document length. A 1,800-page mount drops from 14.0 s to 2.0 s,
+  a 1,000-page mount from 3.8 s to 0.94 s, and a 200-page mount from 290 ms
+  to 166 ms (Chromium, Apple M4). Page structure is unchanged.
 - A page carries a `[data-imposia-margin-box]` element only for boxes whose
   resolved content is not empty; previously all six boxes were always
   present, empty or not. This is private page DOM, but `finalizePage`

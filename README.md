@@ -110,9 +110,9 @@ Same input, same browser, pinned versions, median of 7 runs (Apple M4, Chromium 
 
 | Measurement | Imposia | Paged.js 0.4.3 | Vivliostyle 2.45.2 |
 | :--- | ---: | ---: | ---: |
-| Re-render after a one-word edit (50 pages) | **46 ms** | 217 ms | 254 ms |
-| Paginate 200 pages | **249 ms** | 851 ms | 2,554 ms |
-| Full browser bundle, gzip | **61.8 KiB** | 94.2 KiB | 215.2 KiB |
+| Re-render after a one-word edit (50 pages) | **30 ms** | 217 ms | 216 ms |
+| Paginate 200 pages | **131 ms** | 846 ms | 2,140 ms |
+| Full browser bundle, gzip | **58.5 KiB** | 94.2 KiB | 215.2 KiB |
 
 - All three produced the same page counts. Paged.js and Vivliostyle have no incremental update, so an edit renders them again from scratch; Imposia recommits through `controller.update()`.
 - Paged.js and Vivliostyle were called only through their documented entry points and loaded from jsDelivr, not added as dependencies. Method, versions, hashes, and caveats: [`docs/benchmarks.md`](./docs/benchmarks.md).
