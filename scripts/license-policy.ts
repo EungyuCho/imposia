@@ -14,7 +14,7 @@ export interface MissingPackageLicensePolicyItem {
 const reviewedPackageLicenses = [
   {
     names: ["caniuse-lite"],
-    version: "1.0.30001806",
+    version: "1.0.30001810",
     license: "CC-BY-4.0",
     repositoryUrl: "browserslist/caniuse-lite",
   },

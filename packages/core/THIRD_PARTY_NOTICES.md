@@ -3,7 +3,7 @@
 The browser bundle in this package contains code from the following projects. The license texts below are copied verbatim from the installed upstream distributions.
 
 
-## PostCSS 8.5.26 — MIT (bundled)
+## PostCSS 8.5.28 — MIT (bundled)
 
 The MIT License (MIT)
 
