@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "capturedAt": "2026-09-23T15:28:32.264Z",
+  "capturedAt": "2026-09-24T02:39:08.669Z",
   "runs": {
     "warmup": 1,
     "measured": 7,
@@ -26,12 +26,12 @@
       "id": "imposia",
       "name": "Imposia",
       "version": "0.5.0",
-      "commit": "44594de",
+      "commit": "4177daa",
       "sources": [
         {
           "url": "packages/core/dist/index.js (built from this checkout)",
-          "sha256": "047bfe83f7422780ec2a77fbcad0adc2a17c34d64a39ada795cc371dba2192a7",
-          "gzipKiB": 61.8
+          "sha256": "c0c0f9d72271bf66439d714fbea1abae7757406f213cbe554cf45f31e72f932e",
+          "gzipKiB": 64.6
         }
       ],
       "api": "mountPageDocument(host, { html }) then controller.ready; controller.update({ html })"
@@ -70,18 +70,18 @@
       "unit": "ms",
       "results": {
         "imposia": {
-          "median": 249,
-          "samples": [248.7, 262.4, 249, 245.7, 249, 242.6, 256.3],
+          "median": 131.1,
+          "samples": [133.5, 128.8, 131.4, 131.1, 128, 127.1, 131.9],
           "pageCount": 200
         },
         "pagedjs": {
-          "median": 850.7,
-          "samples": [850.7, 850.8, 849.3, 850, 857.4, 849.4, 851.3],
+          "median": 848.5,
+          "samples": [848.3, 846.7, 848.5, 848.6, 848.6, 847.1, 849.4],
           "pageCount": 200
         },
         "vivliostyle": {
-          "median": 2554.1,
-          "samples": [2542.9, 2514.3, 2539, 2554.1, 2583.3, 2581.6, 2655],
+          "median": 2153.7,
+          "samples": [2153.7, 2163.1, 2172.4, 2152.7, 2150.9, 2143.2, 2153.7],
           "pageCount": 200
         }
       }
@@ -92,18 +92,18 @@
       "unit": "ms",
       "results": {
         "imposia": {
-          "median": 45.9,
-          "samples": [46.3, 46.2, 46.6, 45.8, 45.6, 45.7, 45.9],
+          "median": 30.3,
+          "samples": [30.2, 30.2, 31.2, 30.3, 29.9, 30.8, 30.3],
           "pageCount": 50
         },
         "pagedjs": {
           "median": 216.7,
-          "samples": [215.8, 216.7, 215.7, 215.8, 216.7, 216.7, 216.7],
+          "samples": [216.6, 216.8, 216.8, 216.6, 216.7, 216.7, 216.8],
           "pageCount": 50
         },
         "vivliostyle": {
-          "median": 253.7,
-          "samples": [251.1, 255.5, 255.3, 252, 253.7, 255.9, 250.2],
+          "median": 211.9,
+          "samples": [209.9, 212.5, 211.9, 208.8, 209.7, 212.1, 212.5],
           "pageCount": 50
         }
       }
@@ -114,8 +114,8 @@
       "unit": "KiB",
       "results": {
         "imposia": {
-          "median": 56.8,
-          "samples": [56.8],
+          "median": 59.4,
+          "samples": [59.4],
           "file": "`Core · PageDocument` route of `pnpm bundle:size` (minified ESM exporting mountPageDocument)"
         },
         "pagedjs": {

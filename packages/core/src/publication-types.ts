@@ -64,6 +64,15 @@ export interface PublicationDocument extends PageDocument {
 
 export type PublicationOptions = Omit<PageDocumentOptions, "extensions"> & {
   readonly extensions?: readonly PublicationExtension[];
+  /**
+   * How page numbers count. `"publication"` (the default) numbers pages
+   * across the whole Publication. `"entry"` starts every entry on a new page
+   * and restarts numbering there: `counter(page)`, `counter(pages)`, and the
+   * `pageNumber`/`totalPages` template tokens count within the entry, so a
+   * batch of invoices prints "Page 1 of 2" on each invoice. Page metadata,
+   * Viewer navigation, search, and entry page ranges stay global.
+   */
+  readonly pageNumbering?: "publication" | "entry";
 };
 
 export interface PublicationController {

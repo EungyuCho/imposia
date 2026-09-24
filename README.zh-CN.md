@@ -105,9 +105,9 @@ Imposia 将一份页面文档放在整个工作流的中心。
 
 | 测量项目 | Imposia | Paged.js 0.4.3 | Vivliostyle 2.45.2 |
 | :--- | ---: | ---: | ---: |
-| 修改一个词后重新渲染（50 页） | **46 ms** | 217 ms | 254 ms |
-| 为 200 页分页 | **249 ms** | 851 ms | 2,554 ms |
-| 完整浏览器包，gzip | **61.8 KiB** | 94.2 KiB | 215.2 KiB |
+| 修改一个词后重新渲染（50 页） | **30 ms** | 217 ms | 212 ms |
+| 为 200 页分页 | **131 ms** | 849 ms | 2,154 ms |
+| 完整浏览器包，gzip | **59.4 KiB** | 94.2 KiB | 215.2 KiB |
 
 - 三者得到的页数相同。Paged.js 和 Vivliostyle 没有增量更新，编辑时会从头重新渲染；Imposia 通过 `controller.update()` 重新提交。
 - Paged.js 和 Vivliostyle 只通过其文档化的入口调用，从 jsDelivr 加载而未作为依赖加入。方法、版本、哈希与注意事项：[`docs/benchmarks.md`](./docs/benchmarks.md)
@@ -336,8 +336,9 @@ Contents、Search 与 Page thumbnails 位于 canonical iframe 之外，互斥显
 
 ### 页面媒体与出版 CSS
 
-稳定支持范围包括 A4、Letter、自定义绝对尺寸、纵向与横向、宿主边距、支持的
-`@page` 选择器以及六个页边距框：
+稳定支持范围包括 CSS 纸张尺寸关键字（A3–A5、B4、B5、Letter、
+Legal、Ledger）、自定义绝对尺寸、纵向与横向、宿主边距、包含 `:nth()` 的
+`@page` 选择器，以及全部十六个页边距框。页边距框支持字体、颜色、对齐样式：
 
 ```css
 @page {

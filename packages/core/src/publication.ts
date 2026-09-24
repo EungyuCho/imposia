@@ -6,6 +6,7 @@ import {
   warningPublicationEntryIndex,
 } from "./page-document.js";
 import { snapshotExtensions, validateExtensions } from "./page-document-extensions.js";
+import { ENTRY_PAGE_NUMBERING } from "./page-document-generation.js";
 import type { PageDocument, PageSource, PageWarning } from "./page-document-types.js";
 import {
   committedPublicationOutline,
@@ -143,7 +144,15 @@ export function mountPublication(
       "Publication extensions must use transformEntry instead of transform.",
     );
   }
-  const prepared = preparePublicationSnapshot(snapshot);
+  const numbering = options.pageNumbering ?? "publication";
+  if (numbering !== "publication" && numbering !== "entry") {
+    throw new ImposiaError(
+      "INVALID_PUBLICATION",
+      'Publication pageNumbering must be "publication" or "entry".',
+    );
+  }
+  const entryPages = numbering === "entry";
+  const prepared = preparePublicationSnapshot(snapshot, entryPages);
   const searchScope = nextPublicationSearchScope();
   const snapshots = new WeakMap<PageSource, PreparedPublicationSnapshot>();
   const publications = new WeakMap<PageDocument, PublicationDocument>();
@@ -155,7 +164,7 @@ export function mountPublication(
   const pageController = mountPageDocumentWithFinalizer(
     container,
     prepared.source,
-    options,
+    entryPages ? ({ ...options, [ENTRY_PAGE_NUMBERING]: true } as PublicationOptions) : options,
     (pageDocument, source) => {
       const nextSnapshot = snapshots.get(source);
       if (nextSnapshot === undefined) {
@@ -242,7 +251,7 @@ export function mountPublication(
     update(nextSnapshot, updateOptions = {}) {
       let nextPrepared: PreparedPublicationSnapshot;
       try {
-        nextPrepared = preparePublicationSnapshot(nextSnapshot);
+        nextPrepared = preparePublicationSnapshot(nextSnapshot, entryPages);
       } catch (error: unknown) {
         return Promise.reject(error);
       }

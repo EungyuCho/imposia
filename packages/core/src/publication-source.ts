@@ -185,11 +185,13 @@ function prepareEntryMarkup(
   source: PageSource,
   index: number,
   entryId: string,
+  startsPage: boolean,
   extensionCss: readonly string[] = [],
 ): HTMLElement {
   const parsed = new DOMParser().parseFromString(sourceHtml(source), "text/html");
   const wrapper = frameDocument.createElement("section");
   wrapper.setAttribute(PUBLICATION_ENTRY_MARKER, String(index));
+  if (startsPage) wrapper.setAttribute("style", "break-before: page");
   for (const node of [
     ...parsed.head.querySelectorAll('style,link[rel~="stylesheet" i]'),
     ...parsed.body.childNodes,
@@ -229,6 +231,7 @@ function prepareEntryMarkup(
 export function composePublicationExtensionSource(
   extensionSource: PublicationExtensionSource,
   transformed: readonly Readonly<{ html: string; css: readonly string[] }>[],
+  entryPages = false,
 ): PageSource {
   const composed = document.implementation.createHTMLDocument(extensionSource.publication.title);
   const fragment = composed.createDocumentFragment();
@@ -245,6 +248,7 @@ export function composePublicationExtensionSource(
         },
         index,
         entry.metadata.id,
+        entryPages && index > 0,
         output.css,
       ),
     );
@@ -253,8 +257,14 @@ export function composePublicationExtensionSource(
   return Object.freeze({ html: composed.documentElement.outerHTML });
 }
 
+/**
+ * Composes the Publication source. With `entryPages`, every entry after the
+ * first starts on a new page so each entry owns whole pages and can number
+ * them on its own.
+ */
 export function preparePublicationSnapshot(
   snapshot: PublicationSnapshot,
+  entryPages = false,
 ): PreparedPublicationSnapshot {
   const input = record(snapshot);
   if (input === undefined) throw invalidPublication("Publication snapshot must be an object.");
@@ -284,7 +294,7 @@ export function preparePublicationSnapshot(
   for (const [index, source] of sources.entries()) {
     const entry = entries[index];
     if (entry === undefined) throw invalidPublication(`Publication entry ${index + 1} is missing.`);
-    fragment.append(prepareEntryMarkup(composed, source, index, entry.id));
+    fragment.append(prepareEntryMarkup(composed, source, index, entry.id, entryPages && index > 0));
   }
   composed.body.replaceChildren(fragment);
   const source = Object.freeze({ html: composed.documentElement.outerHTML });

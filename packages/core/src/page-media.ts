@@ -1,6 +1,7 @@
 import type { AtRule, Declaration, Root } from "postcss";
 import { parseCss } from "./css-parse.js";
 import { ImposiaError } from "./errors.js";
+import { hasCssResource } from "./page-document-sanitize-css.js";
 import type {
   PageContext,
   PageGeometry,
@@ -9,24 +10,75 @@ import type {
   PageOptions,
   PageOrientation,
 } from "./page-document-types.js";
+import {
+  A4_HEIGHT_CSS_PX,
+  A4_WIDTH_CSS_PX,
+  DEFAULT_PAGE_MARGIN_CSS_PX,
+  LETTER_HEIGHT_CSS_PX,
+  LETTER_WIDTH_CSS_PX,
+} from "./page-units.js";
 import type { WarningCollector } from "./warnings.js";
 
-export const A4_WIDTH_CSS_PX = (210 * 96) / 25.4;
-export const A4_HEIGHT_CSS_PX = (297 * 96) / 25.4;
-export const LETTER_WIDTH_CSS_PX = 8.5 * 96;
-export const LETTER_HEIGHT_CSS_PX = 11 * 96;
-export const DEFAULT_PAGE_MARGIN_CSS_PX = (20 * 96) / 25.4;
+export {
+  A4_HEIGHT_CSS_PX,
+  A4_WIDTH_CSS_PX,
+  cssPx,
+  DEFAULT_PAGE_MARGIN_CSS_PX,
+  LETTER_HEIGHT_CSS_PX,
+  LETTER_WIDTH_CSS_PX,
+} from "./page-units.js";
+
+const MM = 96 / 25.4;
+
+/**
+ * The CSS Paged Media `<page-size>` keywords, portrait, in CSS pixels. Host
+ * options spell them with the capitalization of {@link PageSizeKeyword};
+ * authored `size` values match them case-insensitively.
+ */
+const PAGE_SIZE_KEYWORDS: ReadonlyMap<
+  string,
+  Readonly<{ widthCssPx: number; heightCssPx: number }>
+> = new Map(
+  (
+    [
+      ["A5", 148 * MM, 210 * MM],
+      ["A4", A4_WIDTH_CSS_PX, A4_HEIGHT_CSS_PX],
+      ["A3", 297 * MM, 420 * MM],
+      ["B5", 176 * MM, 250 * MM],
+      ["B4", 250 * MM, 353 * MM],
+      ["Letter", LETTER_WIDTH_CSS_PX, LETTER_HEIGHT_CSS_PX],
+      ["Legal", 8.5 * 96, 14 * 96],
+      ["Ledger", 11 * 96, 17 * 96],
+    ] as const
+  ).map(([name, widthCssPx, heightCssPx]) => [name, Object.freeze({ widthCssPx, heightCssPx })]),
+);
+
+const AUTHORED_PAGE_SIZE_KEYWORDS = new Map(
+  [...PAGE_SIZE_KEYWORDS].map(([name, size]) => [name.toLowerCase(), size]),
+);
 
 export const PAGE_MARGIN_BOX_NAMES = Object.freeze([
+  "top-left-corner",
   "top-left",
   "top-center",
   "top-right",
-  "bottom-left",
-  "bottom-center",
+  "top-right-corner",
+  "right-top",
+  "right-middle",
+  "right-bottom",
+  "bottom-right-corner",
   "bottom-right",
+  "bottom-center",
+  "bottom-left",
+  "bottom-left-corner",
+  "left-bottom",
+  "left-middle",
+  "left-top",
 ] as const);
 
 export type PageMarginBoxName = (typeof PAGE_MARGIN_BOX_NAMES)[number];
+
+export type NamedStringPosition = "first" | "start" | "last";
 
 export type PageMarginContentPart =
   | Readonly<{ type: "text"; value: string }>
@@ -34,13 +86,30 @@ export type PageMarginContentPart =
   | Readonly<{
       type: "string";
       name: string;
-      position: "first" | "start" | "last";
+      position: NamedStringPosition;
     }>;
+
+/**
+ * One margin box after the page cascade: its parsed `content` and the
+ * allowlisted presentation declarations, in cascade order.
+ */
+export type ResolvedMarginBox = Readonly<{
+  content: readonly PageMarginContentPart[];
+  style: readonly (readonly [property: string, value: string])[];
+}>;
+
+type PagePseudo = "first" | "left" | "right" | "blank";
 
 type PageSelector = Readonly<{
   name: string | undefined;
-  pseudos: readonly ("first" | "left" | "right" | "blank")[];
+  pseudos: readonly PagePseudo[];
+  nth: readonly (readonly [step: number, offset: number])[];
   specificity: readonly [number, number, number];
+}>;
+
+type AuthoredMarginBox = Readonly<{
+  content: readonly PageMarginContentPart[] | undefined;
+  style: readonly (readonly [property: string, value: string])[];
 }>;
 
 type PageGeometryDeclaration =
@@ -78,7 +147,7 @@ type PageGeometryDeclaration =
 export type AuthoredPageRule = Readonly<{
   selector: PageSelector;
   declarations: readonly PageGeometryDeclaration[];
-  marginBoxes: ReadonlyMap<PageMarginBoxName, readonly PageMarginContentPart[]>;
+  marginBoxes: ReadonlyMap<PageMarginBoxName, AuthoredMarginBox>;
   order: number;
 }>;
 
@@ -96,11 +165,19 @@ export interface ExtractedPageMediaCss {
 
 export interface ResolvedPageMedia {
   readonly geometry: PageGeometry;
-  readonly marginBoxes: ReadonlyMap<PageMarginBoxName, readonly PageMarginContentPart[]>;
+  readonly marginBoxes: ReadonlyMap<PageMarginBoxName, ResolvedMarginBox>;
 }
 
 const PAGE_PSEUDOS = new Set(["first", "left", "right", "blank"]);
 const PAGE_MARGIN_BOX_SET = new Set<string>(PAGE_MARGIN_BOX_NAMES);
+
+/**
+ * Presentation properties a margin box may declare besides `content`. None of
+ * them can carry an image or another fetchable resource, and none can move
+ * the box out of its slot: geometry stays owned by the page margins.
+ */
+const MARGIN_BOX_STYLE_PROPERTY =
+  /^(?:(?:background-)?color|font(?:-[a-z-]+)?|line-height|(?:letter|word)-spacing|white-space|vertical-align|text-(?:align|transform|overflow|decoration(?:-[a-z]+)?)|border(?:-(?:top|right|bottom|left))?(?:-(?:color|style|width))?|padding(?:-(?:top|right|bottom|left))?)$/;
 const PAGE_DESCRIPTOR_PROPERTIES = new Set([
   "size",
   "orientation",
@@ -172,26 +249,45 @@ function orientSize(
   return { widthCssPx, heightCssPx };
 }
 
-function parsedPageSize(
-  value: string,
-): Readonly<{ widthCssPx: number; heightCssPx: number }> | undefined {
-  const tokens = value.trim().split(/\s+/);
+type ParsedPageSize = Readonly<{
+  size: Readonly<{ widthCssPx: number; heightCssPx: number }> | undefined;
+  orientation: PageOrientation | undefined;
+}>;
+
+function pageOrientationKeyword(value: string | undefined): PageOrientation | undefined {
+  return value === "portrait" || value === "landscape" ? value : undefined;
+}
+
+/**
+ * Parses a `size` descriptor: one or two absolute lengths, a `<page-size>`
+ * keyword, an orientation, or a keyword and an orientation in either order.
+ * An orientation alone rotates whatever size the cascade has chosen.
+ */
+function parsedPageSize(value: string): ParsedPageSize | undefined {
+  const tokens = value.trim().toLowerCase().split(/\s+/);
   if (tokens.length === 0 || tokens.length > 2) return undefined;
-  const first = tokens[0]?.toLowerCase();
-  const second = tokens[1]?.toLowerCase();
-  if (first === "a4" || first === "letter") {
-    if (second !== undefined && second !== "portrait" && second !== "landscape") return undefined;
-    const size =
-      first === "a4"
-        ? { widthCssPx: A4_WIDTH_CSS_PX, heightCssPx: A4_HEIGHT_CSS_PX }
-        : { widthCssPx: LETTER_WIDTH_CSS_PX, heightCssPx: LETTER_HEIGHT_CSS_PX };
-    return second === undefined ? size : orientSize(size.widthCssPx, size.heightCssPx, second);
+  const first = tokens[0] ?? "";
+  const second = tokens[1];
+  const firstLength = absoluteLengthCssPx(first);
+  if (firstLength !== undefined) {
+    const secondLength = second === undefined ? firstLength : absoluteLengthCssPx(second);
+    if (secondLength === undefined) return undefined;
+    return { size: { widthCssPx: firstLength, heightCssPx: secondLength }, orientation: undefined };
   }
-  if (tokens.length !== 2) return undefined;
-  const widthCssPx = absoluteLengthCssPx(tokens[0] ?? "");
-  const heightCssPx = absoluteLengthCssPx(tokens[1] ?? "");
-  if (widthCssPx === undefined || heightCssPx === undefined) return undefined;
-  return { widthCssPx, heightCssPx };
+  const firstOrientation = pageOrientationKeyword(first);
+  const keyword = firstOrientation === undefined ? first : second;
+  const orientation = firstOrientation ?? pageOrientationKeyword(second);
+  if (second !== undefined && orientation === undefined) return undefined;
+  if (keyword === undefined) return { size: undefined, orientation };
+  const size = AUTHORED_PAGE_SIZE_KEYWORDS.get(keyword);
+  if (size === undefined || (firstOrientation !== undefined && second === undefined)) {
+    return undefined;
+  }
+  return {
+    size:
+      orientation === undefined ? size : orientSize(size.widthCssPx, size.heightCssPx, orientation),
+    orientation: undefined,
+  };
 }
 
 function parsedMargins(value: string): PageMargins | undefined {
@@ -212,35 +308,73 @@ function parsedMargins(value: string): PageMargins | undefined {
   });
 }
 
+/** Parses the `An+B` argument of `:nth()`; `of <name>` page groups are not supported. */
+function parseNth(argument: string): readonly [number, number] | undefined {
+  const value = argument.replace(/\s+/g, "").toLowerCase();
+  if (value === "odd") return [2, 1];
+  if (value === "even") return [2, 0];
+  if (/^[+-]?\d+$/.test(value)) return [0, Number.parseInt(value, 10)];
+  const match = /^([+-]?\d*)n([+-]\d+)?$/.exec(value);
+  if (match === null) return undefined;
+  const coefficient = match[1] ?? "";
+  const step =
+    coefficient === "" || coefficient === "+"
+      ? 1
+      : coefficient === "-"
+        ? -1
+        : Number.parseInt(coefficient, 10);
+  return [step, match[2] === undefined ? 0 : Number.parseInt(match[2], 10)];
+}
+
+function nthMatches([step, offset]: readonly [number, number], pageNumber: number): boolean {
+  if (step === 0) return pageNumber === offset;
+  const n = (pageNumber - offset) / step;
+  return Number.isInteger(n) && n >= 0;
+}
+
 function parsePageSelector(value: string): PageSelector | undefined {
   const selector = value.trim();
   if (selector === "") {
     return Object.freeze({
       name: undefined,
       pseudos: Object.freeze([]),
+      nth: Object.freeze([]),
       specificity: Object.freeze([0, 0, 0] as const),
     });
   }
-  if (selector.includes(",") || /\s/.test(selector)) return undefined;
-  const components = selector.split(":");
+  if (selector.includes(",")) return undefined;
+  const nth: (readonly [number, number])[] = [];
+  const withoutNth = selector.replace(/:nth\(([^()]*)\)/gi, (_match, argument: string) => {
+    const parsed = parseNth(argument);
+    if (parsed === undefined) return ":\u0000";
+    nth.push(Object.freeze(parsed));
+    return ":\u0001";
+  });
+  if (/\s/.test(withoutNth) || withoutNth.includes("\u0000")) return undefined;
+  const components = withoutNth.split(":").filter((component) => component !== "\u0001");
   const possibleName = components.shift() ?? "";
   const name = possibleName === "" ? undefined : possibleName;
   if (name !== undefined && (!CSS_IDENTIFIER.test(name) || name.toLowerCase() === "auto")) {
     return undefined;
   }
-  if (components.length === 0 && name === undefined) return undefined;
-  const pseudos: ("first" | "left" | "right" | "blank")[] = [];
+  if (components.length === 0 && name === undefined && nth.length === 0) return undefined;
+  const pseudos: PagePseudo[] = [];
   for (const component of components) {
     const normalized = component.toLowerCase();
     if (!PAGE_PSEUDOS.has(normalized)) return undefined;
-    pseudos.push(normalized as "first" | "left" | "right" | "blank");
+    pseudos.push(normalized as PagePseudo);
   }
   const firstOrBlank = pseudos.filter((item) => item === "first" || item === "blank").length;
   const side = pseudos.filter((item) => item === "left" || item === "right").length;
   return Object.freeze({
     name,
     pseudos: Object.freeze(pseudos),
-    specificity: Object.freeze([name === undefined ? 0 : 1, firstOrBlank, side] as const),
+    nth: Object.freeze(nth),
+    specificity: Object.freeze([
+      name === undefined ? 0 : 1,
+      firstOrBlank + nth.length,
+      side,
+    ] as const),
   });
 }
 
@@ -310,19 +444,13 @@ export function parseMarginBoxContent(value: string): readonly PageMarginContent
       index += counter[0].length;
       continue;
     }
-    const namedString = /^string\(\s*([^\s,)]+)\s*,\s*(first|start|last)\s*\)/i.exec(
+    const namedString = /^string\(\s*([^\s,)]+)\s*(?:,\s*(first|start|last)\s*)?\)/i.exec(
       value.slice(index),
     );
     if (namedString !== null) {
       const name = namedString[1];
-      const position = namedString[2]?.toLowerCase();
-      if (
-        name === undefined ||
-        !CSS_IDENTIFIER.test(name) ||
-        (position !== "first" && position !== "start" && position !== "last")
-      ) {
-        return undefined;
-      }
+      const position = (namedString[2]?.toLowerCase() ?? "first") as NamedStringPosition;
+      if (name === undefined || !CSS_IDENTIFIER.test(name)) return undefined;
       parts.push(Object.freeze({ type: "string", name, position }));
       index += namedString[0].length;
       continue;
@@ -347,6 +475,15 @@ function validPageDescriptor(declaration: Declaration): boolean {
   if (property === "margin") return parsedMargins(value) !== undefined;
   if (property.startsWith("margin-")) return absoluteLengthCssPx(value) !== undefined;
   return false;
+}
+
+function validMarginBoxStyle(property: string, value: string): boolean {
+  return (
+    MARGIN_BOX_STYLE_PROPERTY.test(property) &&
+    value !== "" &&
+    !/[;{}<]/.test(value) &&
+    !hasCssResource(value)
+  );
 }
 
 function normalizeMarginAtRule(rule: AtRule, warnings: WarningCollector, baseOrder: number): void {
@@ -379,10 +516,9 @@ function normalizeMarginAtRule(rule: AtRule, warnings: WarningCollector, baseOrd
     const declaration = node;
     const declarationValue = declaration.value.trim();
     const declarationPosition = declarationOrder(declaration, baseOrder, order);
-    if (
-      declaration.prop.toLowerCase() !== "content" ||
-      parseMarginBoxContent(declarationValue) === undefined
-    ) {
+    const property = declaration.prop.toLowerCase();
+    if (property !== "content" && validMarginBoxStyle(property, declarationValue)) continue;
+    if (property !== "content" || parseMarginBoxContent(declarationValue) === undefined) {
       pageRuleWarning(
         warnings,
         declaration.prop.toLowerCase(),
@@ -460,9 +596,14 @@ function geometryDeclaration(declaration: Declaration, order: number): PageGeome
   const property = declaration.prop.toLowerCase();
   const value = declaration.value.trim();
   if (property === "size") {
-    const size = parsedPageSize(value);
-    if (size === undefined) throw new Error("Normalized page size became invalid.");
-    return Object.freeze({ kind: "size", ...size, property, value, order });
+    const parsed = parsedPageSize(value);
+    if (parsed === undefined) throw new Error("Normalized page size became invalid.");
+    if (parsed.size === undefined) {
+      const orientation = parsed.orientation;
+      if (orientation === undefined) throw new Error("Normalized page size became invalid.");
+      return Object.freeze({ kind: "orientation", orientation, property, value, order });
+    }
+    return Object.freeze({ kind: "size", ...parsed.size, property, value, order });
   }
   if (property === "orientation") {
     const orientation = value as PageOrientation;
@@ -503,7 +644,7 @@ export function extractPageMediaCss(css: string, startOrder = 0): ExtractedPageM
       return;
     }
     const declarations: PageGeometryDeclaration[] = [];
-    const marginBoxes = new Map<PageMarginBoxName, readonly PageMarginContentPart[]>();
+    const marginBoxes = new Map<PageMarginBoxName, AuthoredMarginBox>();
     for (const node of rule.nodes ?? []) {
       if (node.type === "decl") {
         declarations.push(geometryDeclaration(node, nextOrder));
@@ -511,17 +652,23 @@ export function extractPageMediaCss(css: string, startOrder = 0): ExtractedPageM
         continue;
       }
       if (node.type !== "atrule" || !PAGE_MARGIN_BOX_SET.has(node.name.toLowerCase())) continue;
-      let content: Declaration | undefined;
+      let content: readonly PageMarginContentPart[] | undefined;
+      const style: (readonly [string, string])[] = [];
       for (const candidate of node.nodes ?? []) {
-        if (candidate.type === "decl" && candidate.prop.toLowerCase() === "content") {
-          content = candidate;
+        if (candidate.type !== "decl") continue;
+        const property = candidate.prop.toLowerCase();
+        const value = candidate.value.trim();
+        if (property === "content") {
+          content = parseMarginBoxContent(value) ?? content;
+        } else if (validMarginBoxStyle(property, value)) {
+          style.push(Object.freeze([property, value] as const));
         }
       }
-      if (content === undefined) continue;
-      const parsed = parseMarginBoxContent(content.value);
-      if (parsed !== undefined) {
-        marginBoxes.set(node.name.toLowerCase() as PageMarginBoxName, parsed);
-      }
+      if (content === undefined && style.length === 0) continue;
+      marginBoxes.set(
+        node.name.toLowerCase() as PageMarginBoxName,
+        Object.freeze({ content, style: Object.freeze(style) }),
+      );
     }
     rules.push(
       Object.freeze({
@@ -548,18 +695,17 @@ function recordValue(value: unknown): Readonly<Record<string, unknown>> | undefi
 }
 
 function hostSize(value: unknown): Readonly<{ widthCssPx: number; heightCssPx: number }> {
-  if (value === "A4")
-    return Object.freeze({ widthCssPx: A4_WIDTH_CSS_PX, heightCssPx: A4_HEIGHT_CSS_PX });
-  if (value === "Letter") {
-    return Object.freeze({ widthCssPx: LETTER_WIDTH_CSS_PX, heightCssPx: LETTER_HEIGHT_CSS_PX });
-  }
+  const keyword = typeof value === "string" ? PAGE_SIZE_KEYWORDS.get(value) : undefined;
+  if (keyword !== undefined) return keyword;
   const record = recordValue(value);
   const widthCssPx =
     typeof record?.width === "string" ? absoluteLengthCssPx(record.width) : undefined;
   const heightCssPx =
     typeof record?.height === "string" ? absoluteLengthCssPx(record.height) : undefined;
   if (widthCssPx === undefined || heightCssPx === undefined) {
-    throw invalidPageGeometry("Page size must be A4, Letter, or two positive absolute lengths.");
+    throw invalidPageGeometry(
+      `Page size must be ${[...PAGE_SIZE_KEYWORDS.keys()].join(", ")}, or two positive absolute lengths.`,
+    );
   }
   return Object.freeze({ widthCssPx, heightCssPx });
 }
@@ -658,7 +804,7 @@ function selectorMatches(
     if (pseudo === "right" && context.side !== "right") return false;
     if (pseudo === "blank" && !context.blank) return false;
   }
-  return true;
+  return selector.nth.every((nth) => nthMatches(nth, pageNumber));
 }
 
 function comparePageRules(left: AuthoredPageRule, right: AuthoredPageRule): number {
@@ -705,7 +851,8 @@ export function resolvePageMedia(
     margins: defaultMargins(),
   };
   const history: { declaration: PageGeometryDeclaration; before: GeometryState }[] = [];
-  const marginBoxes = new Map<PageMarginBoxName, readonly PageMarginContentPart[]>();
+  const boxContent = new Map<PageMarginBoxName, readonly PageMarginContentPart[]>();
+  const boxStyle = new Map<PageMarginBoxName, Map<string, string>>();
   const matching = rules
     .filter((rule) => selectorMatches(rule.selector, context, pageNumber))
     .sort(comparePageRules);
@@ -733,7 +880,27 @@ export function resolvePageMedia(
       }
       history.push({ declaration, before });
     }
-    for (const [name, content] of rule.marginBoxes) marginBoxes.set(name, content);
+    for (const [name, box] of rule.marginBoxes) {
+      if (box.content !== undefined) boxContent.set(name, box.content);
+      if (box.style.length === 0) continue;
+      const style = boxStyle.get(name) ?? new Map<string, string>();
+      for (const [property, value] of box.style) {
+        style.delete(property);
+        style.set(property, value);
+      }
+      boxStyle.set(name, style);
+    }
+  }
+  const marginBoxes = new Map<PageMarginBoxName, ResolvedMarginBox>();
+  for (const [name, content] of boxContent) {
+    if (content.length === 0) continue;
+    marginBoxes.set(
+      name,
+      Object.freeze({
+        content,
+        style: Object.freeze([...(boxStyle.get(name) ?? [])].map((entry) => Object.freeze(entry))),
+      }),
+    );
   }
 
   const resolvedSize = (candidate: GeometryState) =>
@@ -791,11 +958,49 @@ export function authoredPageName(element: Element): string | undefined {
   return CSS_IDENTIFIER.test(value) ? value : undefined;
 }
 
+/** A box's offset from the start of the content edge and its width, in CSS px. */
+export type MarginBoxSpan = readonly [offset: number, width: number];
+
+/**
+ * Splits one page edge between its start, center, and end margin boxes the
+ * way CSS Paged Media resolves `auto` widths: space follows each box's
+ * max-content width, and a center box stays centered by giving both side
+ * boxes the width of the wider one. `undefined` marks an absent box.
+ */
+export function distributeMarginBoxWidths(
+  available: number,
+  start: number | undefined,
+  center: number | undefined,
+  end: number | undefined,
+): readonly [MarginBoxSpan | undefined, MarginBoxSpan | undefined, MarginBoxSpan | undefined] {
+  if (center !== undefined) {
+    const side = Math.max(start ?? 0, end ?? 0);
+    const total = center + 2 * side;
+    const centerWidth = total > 0 ? (available * center) / total : available / 3;
+    const sideWidth = (available - centerWidth) / 2;
+    return [
+      start === undefined ? undefined : [0, sideWidth],
+      [sideWidth, centerWidth],
+      end === undefined ? undefined : [sideWidth + centerWidth, sideWidth],
+    ];
+  }
+  if (start !== undefined && end !== undefined) {
+    const total = start + end;
+    const startWidth = total > 0 ? (available * start) / total : available / 2;
+    return [[0, startWidth], undefined, [startWidth, available - startWidth]];
+  }
+  return [
+    start === undefined ? undefined : [0, available],
+    undefined,
+    end === undefined ? undefined : [0, available],
+  ];
+}
+
 export function marginBoxText(
   content: readonly PageMarginContentPart[] | undefined,
   pageNumber: number,
   totalPages: number,
-  namedString: (name: string, position: "first" | "start" | "last") => string = () => "",
+  namedString: (name: string, position: NamedStringPosition) => string = () => "",
 ): string {
   if (content === undefined) return "";
   return content
@@ -807,8 +1012,4 @@ export function marginBoxText(
       return namedString(part.name, part.position);
     })
     .join("");
-}
-
-export function cssPx(value: number): string {
-  return `${Number(value.toFixed(6))}px`;
 }

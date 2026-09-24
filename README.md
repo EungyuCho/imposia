@@ -110,9 +110,9 @@ Same input, same browser, pinned versions, median of 7 runs (Apple M4, Chromium 
 
 | Measurement | Imposia | Paged.js 0.4.3 | Vivliostyle 2.45.2 |
 | :--- | ---: | ---: | ---: |
-| Re-render after a one-word edit (50 pages) | **46 ms** | 217 ms | 254 ms |
-| Paginate 200 pages | **249 ms** | 851 ms | 2,554 ms |
-| Full browser bundle, gzip | **61.8 KiB** | 94.2 KiB | 215.2 KiB |
+| Re-render after a one-word edit (50 pages) | **30 ms** | 217 ms | 212 ms |
+| Paginate 200 pages | **131 ms** | 849 ms | 2,154 ms |
+| Full browser bundle, gzip | **59.4 KiB** | 94.2 KiB | 215.2 KiB |
 
 - All three produced the same page counts. Paged.js and Vivliostyle have no incremental update, so an edit renders them again from scratch; Imposia recommits through `controller.update()`.
 - Paged.js and Vivliostyle were called only through their documented entry points and loaded from jsDelivr, not added as dependencies. Method, versions, hashes, and caveats: [`docs/benchmarks.md`](./docs/benchmarks.md).
@@ -355,9 +355,10 @@ state for one generation:
 
 ### Page media and publishing CSS
 
-Stable page-media support includes A4, Letter, custom absolute dimensions,
-portrait and landscape orientation, host margins, supported authored `@page`
-selectors, and six margin boxes:
+Stable page-media support includes the CSS page-size keywords (A3–A5, B4, B5,
+Letter, Legal, Ledger), custom absolute dimensions, portrait
+and landscape orientation, host margins, `@page` selectors including `:nth()`,
+and all sixteen margin boxes with font, color, and alignment styles:
 
 ```css
 @page {

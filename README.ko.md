@@ -108,9 +108,9 @@ Imposia는 작업 흐름의 중심에 하나의 페이지 문서를 둡니다.
 
 | 측정 항목 | Imposia | Paged.js 0.4.3 | Vivliostyle 2.45.2 |
 | :--- | ---: | ---: | ---: |
-| 단어 하나 수정 후 다시 렌더링 (50페이지) | **46 ms** | 217 ms | 254 ms |
-| 200페이지 페이지 분할 | **249 ms** | 851 ms | 2,554 ms |
-| 전체 브라우저 번들, gzip | **61.8 KiB** | 94.2 KiB | 215.2 KiB |
+| 단어 하나 수정 후 다시 렌더링 (50페이지) | **30 ms** | 217 ms | 212 ms |
+| 200페이지 페이지 분할 | **131 ms** | 849 ms | 2,154 ms |
+| 전체 브라우저 번들, gzip | **59.4 KiB** | 94.2 KiB | 215.2 KiB |
 
 - 세 라이브러리 모두 같은 페이지 수를 냈습니다. Paged.js와 Vivliostyle은 증분 업데이트가 없어 수정할 때 처음부터 다시 렌더링하고, Imposia는 `controller.update()`로 다시 확정합니다.
 - Paged.js와 Vivliostyle은 문서화된 진입점으로만 호출했고, 의존성으로 추가하지 않고 jsDelivr에서 불러왔습니다. 측정 방법, 버전, 해시, 주의 사항: [`docs/benchmarks.md`](./docs/benchmarks.md)
@@ -346,8 +346,10 @@ canonical iframe 밖에 있으며, 한 번에 하나만 열리고 키보드로 �
 
 ### 페이지 미디어와 퍼블리싱 CSS
 
-안정 지원 범위에는 A4, Letter, 사용자 지정 절대 크기, 세로·가로 방향,
-호스트 여백, 지원되는 `@page` selector, 여섯 개의 margin box가 포함됩니다.
+안정 지원 범위에는 CSS 용지 크기 키워드(A3–A5, B4, B5,
+Letter, Legal, Ledger), 사용자 지정 절대 크기, 세로·가로 방향, 호스트 여백,
+`:nth()`를 포함한 `@page` selector, 열여섯 개 margin box 전체가 포함됩니다.
+margin box에는 글꼴·색·정렬 스타일을 지정할 수 있습니다.
 
 ```css
 @page {

@@ -28,18 +28,20 @@ const SCENARIOS = Object.freeze([
   Object.freeze({
     name: "Core · PageDocument",
     source: 'export { mountPageDocument } from "@imposia/core";',
-    // 56.7 KiB measured 2026-09-23, after Core switched to the postcss parser
-    // subpaths (62.0 KiB before). The ASA-424/425/426 escape hatches share
-    // their code with the runtime fallbacks, so removing them reclaims almost
-    // nothing; do not count on it to tighten this budget.
-    gzipBudgetBytes: 60 * KIBIBYTE,
+    // 59.4 KiB measured 2026-09-24, after the document-layout additions
+    // (margin boxes, per-entry numbering, grid column spans, table row
+    // splitting, raisable limits); 56.7 KiB on 2026-09-23. Raised from 60 KiB
+    // to restore about 5% headroom; see docs/bundle-size.md. The
+    // ASA-424/425/426 escape hatches share their code with the runtime
+    // fallbacks, so removing them reclaims almost nothing.
+    gzipBudgetBytes: 62 * KIBIBYTE,
   }),
   Object.freeze({
     name: "Core · Publication",
     source: 'export { mountPublication } from "@imposia/core";',
-    // 60.9 KiB measured 2026-09-23; publication adds outline/search over
-    // PageDocument.
-    gzipBudgetBytes: 64 * KIBIBYTE,
+    // 63.7 KiB measured 2026-09-24 (60.9 KiB on 2026-09-23); publication adds
+    // outline/search over PageDocument. Raised from 64 KiB with the route above.
+    gzipBudgetBytes: 67 * KIBIBYTE,
   }),
   Object.freeze({
     name: "Viewer · PageDocument",
@@ -51,14 +53,16 @@ const SCENARIOS = Object.freeze([
   Object.freeze({
     name: "Client · PageDocument",
     source: 'export { mountPageDocument, mountPageViewer } from "@imposia/client";',
-    // 65.3 KiB measured 2026-09-23 (Core pagination + page viewer).
-    gzipBudgetBytes: 69 * KIBIBYTE,
+    // 68.0 KiB measured 2026-09-24 (65.3 KiB on 2026-09-23; Core pagination +
+    // page viewer). Raised from 69 KiB with the Core routes.
+    gzipBudgetBytes: 71 * KIBIBYTE,
   }),
   Object.freeze({
     name: "React · PageViewer",
     source: 'export { ImposiaPageViewer } from "@imposia/react";',
-    // 67.2 KiB measured 2026-09-23; React/React DOM stay external.
-    gzipBudgetBytes: 71 * KIBIBYTE,
+    // 69.8 KiB measured 2026-09-24 (67.2 KiB on 2026-09-23); React/React DOM
+    // stay external. Raised from 71 KiB with the Core routes.
+    gzipBudgetBytes: 73 * KIBIBYTE,
   }),
 ]) satisfies readonly BundleScenario[];
 

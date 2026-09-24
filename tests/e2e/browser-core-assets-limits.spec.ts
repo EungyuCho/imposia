@@ -40,15 +40,18 @@ test.describe("browser core asset limits (Chromium)", () => {
             await controller?.destroy();
           }
         };
+        // The four size and time limits can be raised to these maximums
+        // (ADR 0015); the asset limits cannot be raised past their defaults.
         const hard = {
-          maxInputBytes: 5 * 1024 * 1024,
-          maxNodes: 100_000,
+          maxInputBytes: 32 * 1024 * 1024,
+          maxNodes: 1_000_000,
           maxAssetBytes: 25 * 1024 * 1024,
           maxAssetDepth: 8,
           maxAssetReferences: 512,
-          resourceDeadlineMs: 30_000,
-          maxPages: 10_000,
+          resourceDeadlineMs: 300_000,
+          maxPages: 50_000,
         } as const;
+
         const keys = Object.keys(hard) as (keyof typeof hard)[];
         const reject = (limits: PageLimits): boolean => {
           try {
@@ -59,6 +62,12 @@ test.describe("browser core asset limits (Chromium)", () => {
           }
         };
         const acceptedHard = (await run("<p>empty</p>", { limits: hard })) === undefined;
+        const raisedAboveDefault = !reject({
+          maxInputBytes: 5 * 1024 * 1024 + 1,
+          maxNodes: 100_001,
+          resourceDeadlineMs: 30_001,
+          maxPages: 10_001,
+        });
         const referenceRequests: string[] = [];
         const referenceFailure = await run('<img src="first.png"><img src="second.png">', {
           limits: { maxAssetReferences: 1 },
@@ -111,7 +120,7 @@ test.describe("browser core asset limits (Chromium)", () => {
           return { requests, failure };
         };
         return {
-          accepted: [acceptedHard, !reject({ maxAssetReferences: 512 })],
+          accepted: [acceptedHard, !reject({ maxAssetReferences: 512 }), raisedAboveDefault],
           invalid: keys.flatMap((key) => [reject({ [key]: hard[key] + 1 }), reject({ [key]: 0 })]),
           fractionalReference: reject({ maxAssetReferences: 1.5 }),
           reference: { requests: referenceRequests, failure: referenceFailure },
@@ -119,7 +128,7 @@ test.describe("browser core asset limits (Chromium)", () => {
           depth: { direct: await depthRun(1), nested: await depthRun(2) },
         };
       }, PNG_BYTES);
-      expect(observation.accepted).toEqual([true, true]);
+      expect(observation.accepted).toEqual([true, true, true]);
       expect(observation.invalid).toEqual(new Array(14).fill(true));
       expect(observation.fractionalReference).toBe(true);
       expect(observation.reference.requests).toEqual(["first.png"]);

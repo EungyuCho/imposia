@@ -30,7 +30,7 @@ const pageDocument = await controller.ready;
 | --- | --- |
 | `css` | `readonly string[]`. 함께 적용할 CSS입니다. |
 | `assetResolver` | 글꼴, 이미지, 미디어, 스타일시트 요청에 응답하는 비동기 리졸버입니다. |
-| `page` | `{ size?, orientation?, margin? }`. size는 `A4`, `Letter` 또는 사용자 정의 너비·높이를 받습니다. |
+| `page` | `{ size?, orientation?, margin? }`. size는 `A3`, `A4`, `A5`, `B4`, `B5`, `Letter`, `Legal`, `Ledger` 또는 사용자 정의 너비·높이를 받습니다. |
 | `limits` | 입력, 노드, 에셋, 시간 제한, 페이지, 레이아웃 패스, 생성 출력의 선택적 상한입니다. |
 | `headerTemplate`, `footerTemplate` | 머리말·꼬리말 장식 마크업입니다. |
 | `decorateBlankPages` | 빈 페이지에 장식을 적용할지 정합니다. |
@@ -48,20 +48,20 @@ const pageDocument = await controller.ready;
 
 <Accordion title="기본 제한값">
 
-모든 `limits` 필드는 선택 사항입니다. 필드를 생략하면 다음 기본값이 적용됩니다.
+모든 `limits` 필드는 선택 사항이며, 생략하면 기본값이 적용됩니다. 값은 얼마든지 낮출 수 있습니다. 최댓값이 있는 네 필드만 그 최댓값까지 올릴 수 있고, 나머지는 기본값보다 높일 수 없습니다.
 
-| 필드 | 기본값 |
-| --- | --- |
-| `maxInputBytes` | 5 MiB (`5 * 1024 * 1024`) |
-| `maxNodes` | 100,000 |
-| `maxAssetBytes` | 25 MiB (`25 * 1024 * 1024`) |
-| `maxAssetDepth` | 8 |
-| `maxAssetReferences` | 512 |
-| `resourceDeadlineMs` | 30,000 |
-| `maxPages` | 10,000 |
-| `maxLayoutPasses` | 8 |
-| `maxGeneratedFragments` | 400,000 |
-| `maxGeneratedRecords` | 10,000 |
+| 필드 | 기본값 | 최댓값 |
+| --- | --- | --- |
+| `maxInputBytes` | 5 MiB (`5 * 1024 * 1024`) | 32 MiB (`32 * 1024 * 1024`) |
+| `maxNodes` | 100,000 | 1,000,000 |
+| `maxAssetBytes` | 25 MiB (`25 * 1024 * 1024`) | 기본값과 같음 |
+| `maxAssetDepth` | 8 | 기본값과 같음 |
+| `maxAssetReferences` | 512 | 기본값과 같음 |
+| `resourceDeadlineMs` | 30,000 | 300,000 |
+| `maxPages` | 10,000 | 50,000 |
+| `maxLayoutPasses` | 8 | 기본값과 같음 |
+| `maxGeneratedFragments` | 400,000 | 기본값과 같음 |
+| `maxGeneratedRecords` | 10,000 | 기본값과 같음 |
 
 </Accordion>
 
@@ -172,7 +172,7 @@ const controller = mountPublication(host, {
 const publication = await controller.ready;
 ```
 
-`PublicationSnapshot`은 `metadata: { title, language?, identifier? }`와 순서가 있는 `entries`를 담습니다. 각 `entry`에는 공백과 제어 문자가 없는 고유한 `id`, `title`, 선택적 `baseUrl`, 그리고 `html` 또는 `lightDom` 중 정확히 하나가 필요합니다. `PublicationOptions`는 `PageDocumentOptions`와 같되 `extensions`가 `PublicationExtension[]`만 받습니다.
+`PublicationSnapshot`은 `metadata: { title, language?, identifier? }`와 순서가 있는 `entries`를 담습니다. 각 `entry`에는 공백과 제어 문자가 없는 고유한 `id`, `title`, 선택적 `baseUrl`, 그리고 `html` 또는 `lightDom` 중 정확히 하나가 필요합니다. `PublicationOptions`는 `PageDocumentOptions`와 같되 `extensions`가 `PublicationExtension[]`만 받고, `pageNumbering`이 추가됩니다. `pageNumbering: "entry"`를 주면 모든 entry가 새 페이지에서 시작하고, `counter(page)`, `counter(pages)`, `pageNumber`/`totalPages` 템플릿 토큰이 entry 안에서 셉니다. 청구서 여러 장을 한 번에 인쇄해도 각 청구서에 "Page 1 of 2"처럼 찍힙니다. 페이지 메타데이터, 이동, 검색, entry 페이지 범위, 확장의 `decoratePage` 입력, target 참조는 전체 기준을 유지합니다. 기본값 `"publication"`은 Publication 전체에 번호를 매깁니다.
 
 ### `PublicationController`
 

@@ -30,7 +30,7 @@ const pageDocument = await controller.ready;
 | --- | --- |
 | `css` | `readonly string[]`；附加的作者 CSS。 |
 | `assetResolver` | 处理字体、图片、媒体和样式表请求的异步解析器。 |
-| `page` | `{ size?, orientation?, margin? }`；size 接受 `A4`、`Letter` 或自定义宽高。 |
+| `page` | `{ size?, orientation?, margin? }`；size 接受 `A3`、`A4`、`A5`、`B4`、`B5`、`Letter`、`Legal`、`Ledger` 或自定义宽高。 |
 | `limits` | 可选的输入、节点、资源、期限、页数、布局轮次和生成产物上限。 |
 | `headerTemplate`、`footerTemplate` | 页面装饰标记。 |
 | `decorateBlankPages` | 空白页是否接受装饰。 |
@@ -48,20 +48,20 @@ const pageDocument = await controller.ready;
 
 <Accordion title="默认上限">
 
-每个 `limits` 字段都可省略；下面是省略时适用的默认值。
+每个 `limits` 字段都可省略，省略时使用默认值。数值可以随意调低。只有带最大值的四个字段可以调高到该最大值，其余字段不能高于默认值。
 
-| 字段 | 默认值 |
-| --- | --- |
-| `maxInputBytes` | 5 MiB（`5 * 1024 * 1024`） |
-| `maxNodes` | 100,000 |
-| `maxAssetBytes` | 25 MiB（`25 * 1024 * 1024`） |
-| `maxAssetDepth` | 8 |
-| `maxAssetReferences` | 512 |
-| `resourceDeadlineMs` | 30,000 |
-| `maxPages` | 10,000 |
-| `maxLayoutPasses` | 8 |
-| `maxGeneratedFragments` | 400,000 |
-| `maxGeneratedRecords` | 10,000 |
+| 字段 | 默认值 | 最大值 |
+| --- | --- | --- |
+| `maxInputBytes` | 5 MiB（`5 * 1024 * 1024`） | 32 MiB（`32 * 1024 * 1024`） |
+| `maxNodes` | 100,000 | 1,000,000 |
+| `maxAssetBytes` | 25 MiB（`25 * 1024 * 1024`） | 同默认值 |
+| `maxAssetDepth` | 8 | 同默认值 |
+| `maxAssetReferences` | 512 | 同默认值 |
+| `resourceDeadlineMs` | 30,000 | 300,000 |
+| `maxPages` | 10,000 | 50,000 |
+| `maxLayoutPasses` | 8 | 同默认值 |
+| `maxGeneratedFragments` | 400,000 | 同默认值 |
+| `maxGeneratedRecords` | 10,000 | 同默认值 |
 
 </Accordion>
 
@@ -172,7 +172,7 @@ const controller = mountPublication(host, {
 const publication = await controller.ready;
 ```
 
-`PublicationSnapshot` 包含 `metadata: { title, language?, identifier? }` 和有序条目。每个条目要求一个唯一且不含空白或控制字符的 `id`、一个 `title`、可选的 `baseUrl`，以及 `html` 或 `lightDom` 中恰好一个。`PublicationOptions` 与 `PageDocumentOptions` 相同，只是 `extensions` 只接受 `PublicationExtension[]`。
+`PublicationSnapshot` 包含 `metadata: { title, language?, identifier? }` 和有序条目。每个条目要求一个唯一且不含空白或控制字符的 `id`、一个 `title`、可选的 `baseUrl`，以及 `html` 或 `lightDom` 中恰好一个。`PublicationOptions` 与 `PageDocumentOptions` 相同，只是 `extensions` 只接受 `PublicationExtension[]`，并增加 `pageNumbering`。设为 `pageNumbering: "entry"` 时，每个条目从新页开始，`counter(page)`、`counter(pages)` 和 `pageNumber`/`totalPages` 模板令牌在条目内计数，因此批量打印发票时每张发票都显示“Page 1 of 2”。页面元数据、导航、搜索、条目页码范围、扩展的 `decoratePage` 输入和 target 引用仍按全局计数。默认值 `"publication"` 对整个 Publication 编号。
 
 ### `PublicationController`
 

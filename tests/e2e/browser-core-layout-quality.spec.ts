@@ -457,7 +457,7 @@ test.describe("Chromium Core fragmentation and layout quality", () => {
     }
   });
 
-  test("keeps an oversized table row intact and reports deterministic overflow", async ({
+  test("splits an oversized table row across pages without losing a line (ADR 0014)", async ({
     page,
     browserName,
   }) => {
@@ -515,9 +515,11 @@ test.describe("Chromium Core fragmentation and layout quality", () => {
       });
 
       expect(observation.pageCount).toBeGreaterThanOrEqual(2);
-      expect(observation.hugeRows).toBe(1);
-      expect(observation.hugeRowPages).toHaveLength(1);
-      expect(observation.hugeRowPages[0]).toBeGreaterThanOrEqual(0);
+      // One row fragment per page the row spans, on consecutive pages.
+      expect(observation.hugeRows).toBeGreaterThanOrEqual(2);
+      expect(observation.hugeRowPages).toEqual(
+        observation.hugeRowPages.map((_page, index) => (observation.hugeRowPages[0] ?? 0) + index),
+      );
       expect(
         markerOccurrences(observation.text, [
           "TABLE-PREFIX-A",
@@ -526,9 +528,8 @@ test.describe("Chromium Core fragmentation and layout quality", () => {
           ...observation.hugeLines,
         ]),
       ).toEqual([1, 1, 1, ...observation.hugeLines.map(() => 1)]);
-      expect(observation.warningCodes.filter((code) => code === "PAGE_OVERFLOW")).toEqual([
-        "PAGE_OVERFLOW",
-      ]);
+      expect(observation.warningCodes).not.toContain("PAGE_OVERFLOW");
+      expect(observation.warningCodes).not.toContain("UNSUPPORTED_LAYOUT");
     } finally {
       expect(errors).toEqual([]);
       expect(pageErrors).toEqual([]);
@@ -636,7 +637,7 @@ test.describe("Chromium Core fragmentation and layout quality", () => {
               .row-flex { display: flex; flex-direction: row; }
               .row-flex > * { flex: 1 1 0; }
               .spanning-grid { display: grid; grid-template-columns: 1fr 1fr; }
-              .spanning-grid .span { grid-column: 1 / -1; }
+              .spanning-grid .span { grid-row: span 2; }
             </style>
             <div class="unsupported row-flex"><div>${rowText}</div><div>ROW-FLEX-END</div></div>
             <div class="unsupported spanning-grid"><div class="span">${gridText}</div><div>SPAN-GRID-END</div></div>
@@ -753,4 +754,56 @@ test.describe("Chromium Core fragmentation and layout quality", () => {
       expect(pageErrors).toEqual([]);
     }
   });
+});
+
+test("keeps a transformed block atomic and moves it whole to the next page", async ({
+  page,
+  browserName,
+}) => {
+  const { errors, pageErrors } = captureBrowserErrors(page, browserName);
+  await page.goto("/examples/book.html");
+  try {
+    const observation = await page.evaluate(async () => {
+      const core = (await import("/packages/core/dist/index.js")) as CoreModule;
+      const host = document.body.appendChild(document.createElement("div"));
+      const lines = (prefix: string, count: number) =>
+        Array.from({ length: count }, (_value, index) => `<p>${prefix} ${index + 1}</p>`).join("");
+      const controller = core.mountPageDocument(host, {
+        html: `
+          <style>
+            @page { size: 148mm 210mm; margin: 12mm; }
+            p { margin: 0; font: 16px/24px serif; }
+          </style>
+          ${lines("Lead", 20)}
+          <div id="turned" style="transform: translateX(1px)">${lines("Turned", 12)}</div>
+        `,
+      });
+      try {
+        const ready = await controller.ready;
+        const frame = ready.iframe.contentDocument;
+        if (frame === null) throw new Error("Missing canonical frame.");
+        return {
+          pageCount: ready.pageCount,
+          turnedPages: [...frame.querySelectorAll("[data-imposia-page]")]
+            .filter((item) => (item.textContent ?? "").includes("Turned"))
+            .map((item) => item.getAttribute("data-imposia-page-number")),
+          turnedParagraphs: frame.querySelectorAll("#turned p").length,
+          turnedFragments: [...frame.querySelectorAll("div")].filter((item) =>
+            (item.getAttribute("style") ?? "").includes("translateX"),
+          ).length,
+        };
+      } finally {
+        await controller.destroy();
+        host.remove();
+      }
+    });
+
+    expect(observation.pageCount).toBe(2);
+    expect(observation.turnedPages).toEqual(["2"]);
+    expect(observation.turnedParagraphs).toBe(12);
+    expect(observation.turnedFragments).toBe(1);
+  } finally {
+    expect(errors).toEqual([]);
+    expect(pageErrors).toEqual([]);
+  }
 });

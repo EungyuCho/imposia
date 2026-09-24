@@ -44,8 +44,73 @@ renamed to `0.6.0.md` when this release ships.
   PDF bytes, so the viewer had no input from the rest of the toolkit.
   `mountPageViewer` is unchanged.
 
+### Added
+
+- A table row taller than a page is split across pages cell by cell instead
+  of staying atomic and being clipped. Each cell's content continues in the
+  same column on the next page under the repeated header, cells with nothing
+  left stay as empty shells, and the columns keep the widths the unsplit row
+  has. Rows that fit on a fresh page still move whole, so existing tables
+  paginate as before. `rowspan` clusters still stay atomic. See ADR 0014.
+- A host can raise four limits above their defaults, up to a fixed maximum:
+  `maxInputBytes` to 32 MiB, `maxNodes` to 1,000,000, `maxPages` to 50,000,
+  and `resourceDeadlineMs` to 300,000. The defaults are unchanged, and the
+  other limits still cannot be raised. A 5,000-page document mounts in about
+  5 s with raised limits; before, anything over 5 MiB of HTML was rejected.
+  See ADR 0015.
+- Grid fragmentation accepts items that span columns: `grid-column: span N`
+  and full-width `grid-column: 1 / -1`. Dashboard and report grids with a
+  full-width heading row or a two-column card used to stay atomic with
+  `UNSUPPORTED_LAYOUT` and overflow the page; they now break between
+  complete rows, and every continuation keeps the same columns. Row spans
+  and other explicit placement still stay atomic.
+- `PublicationOptions.pageNumbering: "entry"` numbers each Publication entry
+  on its own: every entry starts on a new page, and `counter(page)`,
+  `counter(pages)`, and the `pageNumber`/`totalPages` template tokens count
+  within the entry. A batch of invoices printed as one Publication shows
+  "Page 1 of 2" on each invoice instead of "Page 37 of 150". Page metadata,
+  navigation, search, entry page ranges, extension `decoratePage` input, and
+  target references stay global. The default `"publication"` is unchanged.
+- `@page` coverage closer to Paged.js and Vivliostyle:
+  - all sixteen margin boxes, adding the four corners and the
+    `@left-*`/`@right-*` side boxes;
+  - margin-box presentation declarations (font, color, text, alignment,
+    border, padding, `background-color`), cascaded per property across
+    matching `@page` rules. Previously every declaration except `content` was
+    dropped with `PAGE_RULE_UNSUPPORTED`;
+  - `string(name)` without a position, which defaults to `first`;
+  - content-sized top and bottom margin boxes: each box takes its share of
+    the edge from its max-content width, a center box stays centered, and
+    text wraps instead of being clipped at a fixed third of the page. A long
+    footer notice beside a short page number now uses the width it needs;
+  - the `:nth(An+B)` page selector, matched against the global page number;
+  - the page-size keywords `A3`, `A5`, `B4`, `B5`, `Legal`, and
+    `Ledger` in authored `size` and in the host `page.size`
+    option (new exported type `PageSizeKeyword`), plus `size` values that put
+    the orientation first, give only an orientation, or give one length for
+    a square sheet.
+
 ### Changed
 
+- Pagination no longer slows down as documents grow. Every placement used to
+  relay out all of the source still waiting to be placed and walk every page
+  placed so far, so time per page rose with document length. A 1,800-page
+  mount drops from 13.9 s to 1.6 s, a 1,000-page mount from 3.8 s to 0.84 s,
+  and a 200-page mount from 286 ms to 164 ms (Chromium, Apple M4). Page
+  structure is unchanged.
+- Preparation and post-pagination steps yield to the host between steps, so
+  the longest main-thread task of a 1,000-page mount drops from 207 ms to
+  63 ms. The committed frame carries one `@page` rule per distinct sheet size
+  instead of one per page; pages name their sheet with `data-imposia-sheet`.
+- A page carries a `[data-imposia-margin-box]` element only for boxes whose
+  resolved content is not empty; previously all six boxes were always
+  present, empty or not. This is private page DOM, but `finalizePage`
+  extensions and host stylesheets that queried it see fewer elements.
+- Core · PageDocument grows from 56.9 KiB to 59.4 KiB gzip for the additions
+  above; the four Core-bearing budgets were raised by 2–3 KiB to restore about
+  5% headroom (see `docs/bundle-size.md`), within its 60.0 KiB budget. The page-size constants moved
+  to their own module, so the Viewer route no longer carries the `@page`
+  parser and grows only by the new frame rules (11.6 KiB to 11.7 KiB).
 - Fonts declared with pre-RFC 8081 MIME spellings (`application/font-woff`,
   `application/x-font-woff`, `application/vnd.ms-opentype`, and nine more)
   are accepted and canonicalised onto the `font/*` tree; previously they were

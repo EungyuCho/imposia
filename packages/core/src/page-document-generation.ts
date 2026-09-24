@@ -1,5 +1,10 @@
 import { normalizeCss } from "./css-contracts.js";
-import { prepareDecoration, prepareDocument, prepareExtensionInput } from "./document.js";
+import {
+  type PreparedDocument,
+  prepareDecoration,
+  prepareDocumentCooperatively,
+  prepareExtensionInput,
+} from "./document.js";
 import { ImposiaError } from "./errors.js";
 import {
   type ResolvedPageAssets,
@@ -20,7 +25,13 @@ import {
   type ValidatedPageExtension,
   validateExtensions,
 } from "./page-document-extensions.js";
-import { abortError, FRAME_STYLE, frameStyle } from "./page-document-frame.js";
+import {
+  abortError,
+  FRAME_STYLE,
+  frameStyle,
+  PAGE_SHEET_ATTRIBUTE,
+  pageSheets,
+} from "./page-document-frame.js";
 import {
   cleanPublishingInternals,
   extractPublishingCss,
@@ -63,18 +74,23 @@ import type {
   PageSource,
   PageWarning,
 } from "./page-document-types.js";
-import { DEFAULT_PAGE_LIMITS, UNLOCATED_PAGE_WARNING_LOCATION } from "./page-document-types.js";
+import {
+  DEFAULT_PAGE_LIMITS,
+  MAXIMUM_PAGE_LIMITS,
+  UNLOCATED_PAGE_WARNING_LOCATION,
+} from "./page-document-types.js";
 import {
   type AuthoredPageRule,
   authoredPageName,
   cssPx,
+  distributeMarginBoxWidths,
   extractPageMediaCss,
   type HostPageOverrides,
   marginBoxText,
   normalizeHostPageOptions,
   PAGE_MARGIN_BOX_NAMES,
   type PageMarginBoxName,
-  type PageMarginContentPart,
+  type ResolvedMarginBox,
   resolvePageMedia,
 } from "./page-media.js";
 import {
@@ -83,8 +99,15 @@ import {
 } from "./publication-source.js";
 import { createWarningCollector, type DocumentWarning, type WarningCollector } from "./warnings.js";
 
+/**
+ * Private option key a Publication sets to number pages per entry. A symbol
+ * keeps it out of the public `PageDocumentOptions` shape.
+ */
+export const ENTRY_PAGE_NUMBERING: unique symbol = Symbol("imposia.entryPageNumbering");
+
 export interface PageGenerationSettings {
   css: readonly string[];
+  entryPageNumbering: boolean;
   assetResolver?: AssetResolver;
   headerTemplate?: string;
   footerTemplate?: string;
@@ -101,7 +124,7 @@ export interface BuiltGeneration {
   body: DocumentFragment;
   css: readonly string[];
   documentLanguage?: string;
-  pages: readonly BuiltPage[];
+  pages: readonly (BuiltPage & Readonly<{ bodyText: readonly string[] }>)[];
   warnings: readonly PageWarning[];
   warningSourceLocations: ReadonlyMap<string, BuiltWarningSourceLocation>;
   timings: Readonly<{ resourceMs: number; paginationMs: number }>;
@@ -127,7 +150,7 @@ export interface BuiltPage {
 interface PageParts extends BuiltPage {
   content: HTMLElement;
   decorated: boolean;
-  marginBoxes: ReadonlyMap<PageMarginBoxName, readonly PageMarginContentPart[]>;
+  marginBoxes: ReadonlyMap<PageMarginBoxName, ResolvedMarginBox>;
 }
 
 interface TableSplitRecord {
@@ -216,8 +239,8 @@ function limitError(name: keyof PageLimits, maximum: number): Error {
 }
 
 function normalizeLimit(name: keyof EffectivePageLimits, supplied: number | undefined): number {
-  const maximum = DEFAULT_PAGE_LIMITS[name];
-  if (supplied === undefined) return maximum;
+  const maximum = MAXIMUM_PAGE_LIMITS[name];
+  if (supplied === undefined) return DEFAULT_PAGE_LIMITS[name];
   if (
     !Number.isFinite(supplied) ||
     !Number.isInteger(supplied) ||
@@ -310,6 +333,8 @@ function snapshotExperimental(
 export function snapshotSettings(options: PageDocumentOptions): PageGenerationSettings {
   return {
     css: Object.freeze([...(options.css ?? [])]),
+    entryPageNumbering:
+      (options as Readonly<Record<symbol, unknown>>)[ENTRY_PAGE_NUMBERING] === true,
     ...(options.assetResolver === undefined ? {} : { assetResolver: options.assetResolver }),
     ...(options.headerTemplate === undefined ? {} : { headerTemplate: options.headerTemplate }),
     ...(options.footerTemplate === undefined ? {} : { footerTemplate: options.footerTemplate }),
@@ -380,14 +405,8 @@ function createPage(
   footer.setAttribute("data-imposia-page-footer", "");
   footer.style.gridRow = "3";
 
-  const marginBoxes = PAGE_MARGIN_BOX_NAMES.map((boxName) => {
-    const box = frameDocument.createElement("div");
-    box.setAttribute("data-imposia-margin-box", boxName);
-    return box;
-  });
-
   content.append(flow);
-  page.append(content, header, footer, ...marginBoxes);
+  page.append(content, header, footer);
   return {
     page,
     flow,
@@ -517,21 +536,138 @@ function decoratePage(
   return resourceBlocked;
 }
 
+/**
+ * Margin boxes are absolutely positioned inside the page margins and never
+ * take part in fragmentation, so they are created only at commit time and
+ * only for boxes whose resolved content is not empty.
+ */
 function resolveMarginBoxes(
   page: PageParts,
   pageNumber: number,
   totalPages: number,
   namedStrings?: ReadonlyMap<string, string>,
 ): void {
+  for (const stale of page.page.querySelectorAll(":scope > [data-imposia-margin-box]")) {
+    stale.remove();
+  }
+  const frameDocument = page.page.ownerDocument;
   for (const boxName of PAGE_MARGIN_BOX_NAMES) {
-    const box = page.page.querySelector<HTMLElement>(`[data-imposia-margin-box="${boxName}"]`);
-    if (box === null) throw new Error(`Page margin box ${boxName} is unavailable.`);
-    box.textContent = marginBoxText(
-      page.marginBoxes.get(boxName),
-      pageNumber,
-      totalPages,
-      (name, position) => namedStringValue(namedStrings, name, position),
+    const resolved = page.marginBoxes.get(boxName);
+    if (resolved === undefined) continue;
+    const text = marginBoxText(resolved.content, pageNumber, totalPages, (name, position) =>
+      namedStringValue(namedStrings, name, position),
     );
+    if (text === "") continue;
+    const box = frameDocument.createElement("div");
+    box.setAttribute("data-imposia-margin-box", boxName);
+    box.textContent = text;
+    applyMarginBoxStyle(box, resolved.style);
+    page.page.append(box);
+  }
+}
+
+/**
+ * The displayed page number and total for every page. Without entry
+ * numbering they are global. With it, a page belongs to the Publication entry
+ * whose content it carries first; a page without entry content (an inserted
+ * blank page) belongs to the entry before it.
+ */
+function pageNumbering(
+  pages: readonly PageParts[],
+  byEntry: boolean,
+): readonly (readonly [number, number])[] {
+  if (!byEntry) return pages.map((_page, index) => [index + 1, pages.length]);
+  let entry = 0;
+  const entries = pages.map((page) => {
+    const marker = page.flow.querySelector(`[${PUBLICATION_ENTRY_MARKER}]`);
+    const value = Number(marker?.getAttribute(PUBLICATION_ENTRY_MARKER));
+    if (marker !== null && Number.isInteger(value)) entry = value;
+    return entry;
+  });
+  const starts = new Map<number, number>();
+  const counts = new Map<number, number>();
+  for (const [index, value] of entries.entries()) {
+    if (!starts.has(value)) starts.set(value, index);
+    counts.set(value, (counts.get(value) ?? 0) + 1);
+  }
+  return entries.map((value, index) => [
+    index - (starts.get(value) ?? 0) + 1,
+    counts.get(value) ?? pages.length,
+  ]);
+}
+
+const MARGIN_BOX_EDGES = [
+  ["top-left", "top-center", "top-right"],
+  ["bottom-left", "bottom-center", "bottom-right"],
+] as const;
+
+/**
+ * Sizes the top and bottom margin boxes to their content. Every box is first
+ * set to its max-content width, all widths are read in one layout pass, and
+ * the resolved spans are then written back, so a document pays for one
+ * forced layout no matter how many pages carry margin boxes.
+ */
+function layoutMarginBoxWidths(pages: readonly PageParts[]): void {
+  const edges: { page: PageParts; boxes: (HTMLElement | undefined)[] }[] = [];
+  for (const page of pages) {
+    for (const names of MARGIN_BOX_EDGES) {
+      const boxes = names.map(
+        (name) =>
+          page.page.querySelector<HTMLElement>(`:scope > [data-imposia-margin-box="${name}"]`) ??
+          undefined,
+      );
+      if (boxes.every((box) => box === undefined)) continue;
+      for (const box of boxes) box?.style.setProperty("width", "max-content");
+      edges.push({ page, boxes });
+    }
+  }
+  const widths = edges.map(({ boxes }) =>
+    boxes.map((box) => (box === undefined ? undefined : box.getBoundingClientRect().width)),
+  );
+  for (const [index, { page, boxes }] of edges.entries()) {
+    const [start, center, end] = widths[index] ?? [];
+    const spans = distributeMarginBoxWidths(page.geometry.contentWidthCssPx, start, center, end);
+    for (const [slot, box] of boxes.entries()) {
+      const span = spans[slot];
+      if (box === undefined || span === undefined) continue;
+      box.style.setProperty("left", cssPx(page.geometry.margins.leftCssPx + span[0]));
+      box.style.setProperty("right", "auto");
+      box.style.setProperty("width", cssPx(span[1]));
+    }
+  }
+}
+
+const MARGIN_BOX_JUSTIFY: Readonly<Record<string, string>> = {
+  left: "flex-start",
+  start: "flex-start",
+  center: "center",
+  right: "flex-end",
+  end: "flex-end",
+};
+
+const MARGIN_BOX_ALIGN: Readonly<Record<string, string>> = {
+  top: "flex-start",
+  middle: "center",
+  bottom: "flex-end",
+};
+
+/**
+ * Applies authored margin-box declarations inline. A margin box lays its text
+ * out as a flex row, so `text-align` and `vertical-align` are also projected
+ * onto the flex alignment that places the text inside the box.
+ */
+function applyMarginBoxStyle(
+  box: HTMLElement,
+  style: readonly (readonly [property: string, value: string])[],
+): void {
+  for (const [property, value] of style) {
+    box.style.setProperty(property, value);
+    const keyword = value.toLowerCase();
+    if (property === "text-align" && MARGIN_BOX_JUSTIFY[keyword] !== undefined) {
+      box.style.setProperty("justify-content", MARGIN_BOX_JUSTIFY[keyword]);
+    } else if (property === "vertical-align" && MARGIN_BOX_ALIGN[keyword] !== undefined) {
+      box.style.setProperty("align-items", MARGIN_BOX_ALIGN[keyword]);
+    }
   }
 }
 
@@ -649,16 +785,28 @@ function hasSourceOrderedFlexItems(element: Element, view: Window): boolean {
   return true;
 }
 
-function isSafeGridChild(element: Element, view: Window): boolean {
+/**
+ * The number of columns an auto-placed grid item spans, or `undefined` when
+ * the item is placed in a way row fragmentation cannot reproduce. `span N`
+ * spans N columns from the placement cursor. `1 / -1` fills its own row,
+ * which sparse auto-placement treats exactly like spanning every column.
+ * Other explicit lines, named lines, and row spans are not supported.
+ */
+function gridColumnSpan(style: CSSStyleDeclaration, columnCount: number): number | undefined {
+  if (style.gridRowStart !== "auto" || style.gridRowEnd !== "auto") return undefined;
+  const start = style.gridColumnStart.trim().toLowerCase();
+  const end = style.gridColumnEnd.trim().toLowerCase();
+  if (start === "auto" && end === "auto") return 1;
+  if (start === "1" && end === "-1") return columnCount;
+  const match = /^span\s+(\d+)$/u.exec(start === "auto" ? end : end === "auto" ? start : "");
+  const span = Number(match?.[1]);
+  return Number.isSafeInteger(span) && span > 0 && span <= columnCount ? span : undefined;
+}
+
+function isSafeGridChild(element: Element, view: Window, columnCount: number): boolean {
   if (!isStaticOrderedChild(element, view)) return false;
   const style = view.getComputedStyle(element);
-  return (
-    style.display !== "contents" &&
-    style.gridColumnStart === "auto" &&
-    style.gridColumnEnd === "auto" &&
-    style.gridRowStart === "auto" &&
-    style.gridRowEnd === "auto"
-  );
+  return style.display !== "contents" && gridColumnSpan(style, columnCount) !== undefined;
 }
 
 function hasForcedGridDescendant(element: Element, view: Window): boolean {
@@ -677,7 +825,34 @@ interface ResolvedGridTracks {
   readonly rows: readonly string[];
 }
 
+const UNPLACED_SOURCE_ATTRIBUTE = "data-imposia-unplaced-source";
+
+/**
+ * Runs `read` with the unplaced source laid out. Firefox resolves
+ * layout-dependent computed values, such as grid track sizes, only for
+ * rendered elements, so a grid still in the skipped source must be rendered
+ * while its tracks are read. Chromium forces that layout on its own.
+ */
+function withSourceLayout<T>(element: Element, read: () => T): T {
+  const source = element.closest<HTMLElement>(`[${UNPLACED_SOURCE_ATTRIBUTE}]`);
+  if (source === null) return read();
+  source.style.removeProperty("content-visibility");
+  try {
+    return read();
+  } finally {
+    source.style.setProperty("content-visibility", "hidden");
+  }
+}
+
 function safeGridTracks(
+  element: Element,
+  style: CSSStyleDeclaration,
+  view: Window,
+): ResolvedGridTracks | undefined {
+  return withSourceLayout(element, () => resolvedGridTracks(element, style, view));
+}
+
+function resolvedGridTracks(
   element: Element,
   style: CSSStyleDeclaration,
   view: Window,
@@ -709,6 +884,10 @@ function safeGridTracks(
     { before: PageBreak | undefined; after: PageBreak | undefined }
   >();
   let itemIndex = 0;
+  // Sparse auto-placement cursor: an item that does not fit the rest of the
+  // row starts the next one, and a row ends when its columns are filled.
+  let rowIndex = 0;
+  let column = 0;
   for (const child of element.childNodes) {
     if (isNonFlowNode(child)) continue;
     if (child.nodeType !== Node.ELEMENT_NODE) return undefined;
@@ -716,14 +895,18 @@ function safeGridTracks(
     const childStyle = view.getComputedStyle(childElement);
     if (childStyle.display === "none") continue;
     if (
-      !isSafeGridChild(childElement, view) ||
+      !isSafeGridChild(childElement, view, columnCount) ||
       authoredPageName(childElement) !== undefined ||
       hasForcedGridDescendant(childElement, view)
     ) {
       return undefined;
     }
 
-    const rowIndex = Math.floor(itemIndex / columnCount);
+    const span = gridColumnSpan(childStyle, columnCount) ?? 1;
+    if (column > 0 && column + span > columnCount) {
+      rowIndex += 1;
+      column = 0;
+    }
     const breaks = rowBreaks.get(rowIndex) ?? { before: undefined, after: undefined };
     const before = pageBreak(childStyle.breakBefore);
     const after = pageBreak(childStyle.breakAfter);
@@ -737,11 +920,12 @@ function safeGridTracks(
     if (after !== "auto") breaks.after = after;
     rowBreaks.set(rowIndex, breaks);
     itemIndex += 1;
+    column += span;
   }
   const rows = topLevelTrackValues(rowTemplate);
   if (
     itemIndex === 0 ||
-    rows.length !== Math.ceil(itemIndex / columnCount) ||
+    rows.length !== (column === 0 ? rowIndex : rowIndex + 1) ||
     [...columns, ...rows].some((track) => absoluteCssPixels(track) === undefined)
   ) {
     return undefined;
@@ -994,7 +1178,7 @@ function safeMulticol(element: Element, style: CSSStyleDeclaration, view: Window
   if (
     style.position !== "static" ||
     style.cssFloat !== "none" ||
-    style.transform !== "none" ||
+    hasTransform(element, style) ||
     style.writingMode !== "horizontal-tb" ||
     style.direction !== "ltr" ||
     isInlineDisplay(style.display) ||
@@ -1039,7 +1223,7 @@ function safeMulticol(element: Element, style: CSSStyleDeclaration, view: Window
       descendantStyle.display.includes("grid") ||
       descendantStyle.display.includes("table") ||
       descendantStyle.display === "list-item" ||
-      descendantStyle.transform !== "none" ||
+      hasTransform(descendant, descendantStyle) ||
       descendantStyle.breakBefore.trim().toLowerCase() !== "auto" ||
       descendantStyle.breakAfter.trim().toLowerCase() !== "auto" ||
       (breakInside !== "auto" && breakInside !== "avoid") ||
@@ -1083,6 +1267,18 @@ function fragmentationLayout(
   return "normal";
 }
 
+/**
+ * Whether an element is transformed. The resolved `transform` of
+ * `getComputedStyle` is layout-dependent, so Chromium lays out the element to
+ * answer it, and for an element still in the skipped source that lays out the
+ * whole remaining source. The Typed OM computed value needs style only.
+ */
+function hasTransform(element: Element, style: CSSStyleDeclaration): boolean {
+  const map = (element as { computedStyleMap?: () => StylePropertyMapReadOnly }).computedStyleMap;
+  if (map === undefined) return style.transform !== "none";
+  return String(map.call(element).get("transform") ?? "none") !== "none";
+}
+
 function atomicElement(
   element: Element,
   style: CSSStyleDeclaration,
@@ -1092,7 +1288,7 @@ function atomicElement(
   if (layout !== "normal") return false;
   return (
     isReplacedElement(element) ||
-    style.transform !== "none" ||
+    hasTransform(element, style) ||
     style.position === "absolute" ||
     style.position === "fixed" ||
     style.position === "sticky"
@@ -1380,21 +1576,33 @@ function gridRowGroups(
   constraints: ReadonlyMap<Element, BreakConstraint>,
 ): readonly GridRowGroup[] {
   const groups: { nodes: Node[]; items: Element[] }[] = [];
+  const view = element.ownerDocument.defaultView;
   let nodes: Node[] = [];
   let items: Element[] = [];
+  let column = 0;
+  const closeRow = () => {
+    groups.push({ nodes, items });
+    nodes = [];
+    items = [];
+    column = 0;
+  };
   for (const child of element.childNodes) {
-    nodes.push(child);
     if (
-      child.nodeType === Node.ELEMENT_NODE &&
-      (constraints.get(child as Element)?.contributesToFlow ?? !isNonFlowNode(child))
+      child.nodeType !== Node.ELEMENT_NODE ||
+      !(constraints.get(child as Element)?.contributesToFlow ?? !isNonFlowNode(child))
     ) {
-      items.push(child as Element);
-      if (items.length === columnCount) {
-        groups.push({ nodes, items });
-        nodes = [];
-        items = [];
-      }
+      nodes.push(child);
+      continue;
     }
+    const span =
+      view === null
+        ? 1
+        : (gridColumnSpan(view.getComputedStyle(child as Element), columnCount) ?? 1);
+    if (column > 0 && column + span > columnCount) closeRow();
+    nodes.push(child);
+    items.push(child as Element);
+    column += span;
+    if (column >= columnCount) closeRow();
   }
   if (nodes.length > 0) {
     if (items.length === 0 && groups.length > 0) groups.at(-1)?.nodes.push(...nodes);
@@ -1672,6 +1880,30 @@ function createProbe(frameDocument: Document): HTMLElement {
     "position:absolute;top:0;left:-100000px;visibility:hidden;pointer-events:none;contain:layout style";
   frameDocument.body.append(probe);
   return probe;
+}
+
+const PROBE_PAGE_BUCKET_SIZE = 64;
+const PROBE_PAGE_BUCKET_ATTRIBUTE = "data-imposia-probe-pages";
+
+/**
+ * Appends a page to the probe inside a bucket of at most 64 pages. With every
+ * page a direct probe child, each forced layout walked all placed pages, so
+ * time per page grew with the page count past about a thousand pages. A full
+ * bucket stays clean, and layout reuses it as one cached child. Buckets keep
+ * document order, so counters and other order-dependent styles are unchanged.
+ */
+function appendProbePage(probe: HTMLElement, page: HTMLElement): void {
+  let bucket = probe.lastElementChild;
+  if (
+    bucket === null ||
+    !bucket.hasAttribute(PROBE_PAGE_BUCKET_ATTRIBUTE) ||
+    bucket.childElementCount >= PROBE_PAGE_BUCKET_SIZE
+  ) {
+    bucket = probe.ownerDocument.createElement("div");
+    bucket.setAttribute(PROBE_PAGE_BUCKET_ATTRIBUTE, "");
+    probe.append(bucket);
+  }
+  bucket.append(page);
 }
 
 function throwIfAborted(signal: AbortSignal): void {
@@ -3350,6 +3582,96 @@ class RecursiveFragmenter {
       return tableCursor;
     };
 
+    /**
+     * Splits a row that does not fit on a fresh table fragment (ADR 0014).
+     * The row stays on the current fragment with its cells emptied; then each
+     * cell's content is placed back with the block fragmenter, and whatever
+     * does not fit continues in that cell's shell on the next fragment. Each
+     * cell fits on its own against the same page, and a row is as tall as
+     * its tallest cell, so every fragment of the row fits.
+     */
+    const splitTallRow = async (row: Element, groupTemplate: Element): Promise<boolean> => {
+      const cells = [...row.children].filter((child) => {
+        const name = child.localName.toLowerCase();
+        return name === "td" || name === "th";
+      });
+      if (cells.length === 0 || cells.some((cell) => tableCellSpan(cell, "rowspan") !== 1)) {
+        return false;
+      }
+      // Under automatic table layout, the content placed in one cell changes
+      // every column's width, so a cell filled later would squeeze the cells
+      // already placed. Freeze the widths the full row has on this fragment
+      // before emptying it; continuation shells inherit them as clones.
+      const widths = cells.map((cell) => cell.getBoundingClientRect().width);
+      for (const [index, cell] of cells.entries()) {
+        const html = htmlElement(cell);
+        if (html === undefined) continue;
+        html.style.setProperty("box-sizing", "border-box");
+        html.style.setProperty("width", cssPx(widths[index] ?? 0));
+      }
+      const contents = cells.map((cell) => [...cell.childNodes]);
+      for (const cell of cells) cell.replaceChildren();
+      if (this.#cursorOverflows(tableCursor)) {
+        for (const [index, cell] of cells.entries()) cell.append(...(contents[index] ?? []));
+        return false;
+      }
+      const avoided = [row, ...cells].find((item) => this.#constraints.get(item)?.insideAvoid);
+      const avoidConstraint = avoided === undefined ? undefined : this.#constraints.get(avoided);
+      if (avoidConstraint !== undefined) {
+        this.#warnOnce(
+          "AVOID_RELAXED",
+          avoidConstraint,
+          "The table row is taller than a page and was split despite break-inside: avoid.",
+          "break-inside",
+          "avoid",
+          "Split the row between cells' lines.",
+        );
+      }
+      const fragments: { page: PageParts; cells: Element[] }[] = [
+        { page: tableCursor.page, cells },
+      ];
+      const fragmentCursor = (depth: number, index: number): FragmentCursor => {
+        const fragment = fragments[depth];
+        const cell = fragment?.cells[index];
+        if (fragment === undefined || cell === undefined) {
+          throw new Error("The table row fragment is unavailable.");
+        }
+        return {
+          page: fragment.page,
+          container: cell,
+          ...(tableCursor.overflowRoot === undefined
+            ? {}
+            : { overflowRoot: tableCursor.overflowRoot }),
+        };
+      };
+      const ensureFragment = (depth: number): void => {
+        while (fragments.length <= depth) {
+          const cursor = continueTable(parentAtFragment.page.name, groupTemplate);
+          const rowShell = this.#cloneFragment(row, false);
+          const cellShells = cells.map((cell) => this.#cloneFragment(cell, false));
+          rowShell.append(...cellShells);
+          cursor.container.append(rowShell);
+          fragments.push({ page: cursor.page, cells: cellShells });
+        }
+      };
+      for (const index of cells.keys()) {
+        let depth = 0;
+        const continueCell: ContinueFragment = () => {
+          depth += 1;
+          ensureFragment(depth);
+          return fragmentCursor(depth, index);
+        };
+        await this.placeFlowChildren(
+          contents[index] ?? [],
+          fragmentCursor(0, index),
+          continueCell,
+          "shell",
+        );
+      }
+      for (const fragment of fragments.slice(0, -1)) this.#markPageContent(fragment.page);
+      return true;
+    };
+
     let pendingBreakAfter: PageBreak = "auto";
     for (const { group, template, clusters } of groups) {
       const scheduled = this.#checkpoint();
@@ -3414,7 +3736,15 @@ class RecursiveFragmenter {
             furnitureOverflowed = reportFurnitureOverflow(tableCursor);
           }
           tableCursor.container.append(...cluster);
-          if (this.#cursorOverflows(tableCursor)) {
+          const tallRow = cluster.length === 1 ? cluster[0] : undefined;
+          if (
+            this.#cursorOverflows(tableCursor) &&
+            !furnitureOverflowed &&
+            tallRow !== undefined &&
+            (await splitTallRow(tallRow, template))
+          ) {
+            // The row was split cell by cell across fragments (ADR 0014).
+          } else if (this.#cursorOverflows(tableCursor)) {
             if (!furnitureOverflowed) {
               const clusterConstraint = this.#constraints.get(cluster[0] as Element);
               if (clusterConstraint !== undefined) {
@@ -3459,6 +3789,15 @@ export async function buildGeneration(
 ): Promise<BuiltGeneration> {
   const paginationStartedAt = performance.now();
   const deadlineAt = paginationStartedAt + settings.limits.resourceDeadlineMs;
+  // One scheduler for the whole generation. Preparation used to run parse,
+  // sanitize, copy, and publishing preparation back to back: 134 ms without
+  // a yield on a 1,000-page document, far past the slice budget.
+  const composeScheduler = createComposeScheduler(settings.compose);
+  const yieldBetweenStages = async (): Promise<void> => {
+    const scheduled = composeScheduler.checkpoint(signal);
+    if (scheduled !== undefined) await scheduled;
+    throwIfAborted(signal);
+  };
   const html = sourceHtml(source);
   ensureInputLimit(html, settings.limits);
   const extensions = validateExtensions(settings.extensions);
@@ -3519,7 +3858,11 @@ export async function buildGeneration(
             ),
           );
         }
-        const composed = composePublicationExtensionSource(publicationSource, entries);
+        const composed = composePublicationExtensionSource(
+          publicationSource,
+          entries,
+          settings.entryPageNumbering,
+        );
         const composedHtml = sourceHtml(composed);
         ensureTransformedInputLimit(composedHtml, settings.css, settings.limits);
         transformed = Object.freeze({ html: composedHtml, css: settings.css });
@@ -3531,13 +3874,21 @@ export async function buildGeneration(
     extensionWarnings.cleanup();
     throw error;
   }
-  let prepared: ReturnType<typeof prepareDocument>;
+  let prepared: PreparedDocument;
   try {
-    prepared = prepareDocument(transformed.html, {
-      ...(settings.headerTemplate === undefined ? {} : { headerTemplate: settings.headerTemplate }),
-      ...(settings.footerTemplate === undefined ? {} : { footerTemplate: settings.footerTemplate }),
-      allowRemoteResources: true,
-    });
+    prepared = await prepareDocumentCooperatively(
+      transformed.html,
+      {
+        ...(settings.headerTemplate === undefined
+          ? {}
+          : { headerTemplate: settings.headerTemplate }),
+        ...(settings.footerTemplate === undefined
+          ? {}
+          : { footerTemplate: settings.footerTemplate }),
+        allowRemoteResources: true,
+      },
+      yieldBetweenStages,
+    );
   } catch (error: unknown) {
     extensionWarnings.cleanup();
     throw error;
@@ -3550,6 +3901,7 @@ export async function buildGeneration(
   let assets: ResolvedPageAssets | undefined;
   const resourceStartedAt = performance.now();
   try {
+    await yieldBetweenStages();
     if (settings.assetResolver !== undefined) {
       assets = await resolvePageAssets(
         sanitizeAssetResolverInput(prepared.html),
@@ -3582,6 +3934,7 @@ export async function buildGeneration(
     if (preparedSemanticSource.documentLanguage !== undefined) {
       frameDocument.documentElement.lang = preparedSemanticSource.documentLanguage;
     }
+    await yieldBetweenStages();
     const semanticSourceFlow = frameDocument.createElement("div");
     semanticSourceFlow.append(preparedSemanticSource.fragment);
     const nodeCount = semanticSourceFlow.querySelectorAll("*").length;
@@ -3591,9 +3944,11 @@ export async function buildGeneration(
     let resourceBlocked =
       preparedSemanticSource.resourceBlocked ||
       sanitizeFrameContent(semanticSourceFlow, assets !== undefined, resolvedBlobUrls, true);
+    await yieldBetweenStages();
     const sourceFlow = semanticSourceFlow.cloneNode(true) as HTMLElement;
     resourceBlocked ||= sanitizeFrameContent(sourceFlow, assets !== undefined, resolvedBlobUrls);
     resourceBlocked ||= assets?.resourceBlocked ?? false;
+    await yieldBetweenStages();
 
     const sanitizedCss = (assets?.css ?? transformed.css).map((css) =>
       sanitizeCss(
@@ -3614,6 +3969,7 @@ export async function buildGeneration(
     for (const [index, style] of [...semanticStyles].entries()) {
       style.textContent = frameStyles[index]?.textContent ?? "";
     }
+    await yieldBetweenStages();
     const pageMedia: PaginationPageMedia = Object.freeze({
       rules: compiledPageMedia.rules,
       host: settings.page,
@@ -3625,11 +3981,13 @@ export async function buildGeneration(
       baseUrl: source.baseUrl,
       assets: assets?.semanticAssets ?? Object.freeze([]),
     });
+    await yieldBetweenStages();
     const publishing = preparePublishingContent(
       sourceFlow,
       compiledPageMedia.publishingRules,
       settings.limits,
     );
+    await yieldBetweenStages();
     // ASA-426: decided once per generation — every pass clones the same
     // source flow and stylesheet set, so the verdict cannot change between
     // passes. Inline styles are re-checked per subtree on the live pass DOM.
@@ -3647,7 +4005,6 @@ export async function buildGeneration(
     let overflowWarning: PageWarning | undefined;
     let warningSourceLocations: ReadonlyMap<string, BuiltWarningSourceLocation> = new Map();
     try {
-      const composeScheduler = createComposeScheduler(settings.compose);
       const paginate = async (generatedValues: ReadonlyMap<string, string>, passNumber: number) => {
         probe.replaceChildren();
         const passSource = sourceFlow.cloneNode(true) as HTMLElement;
@@ -3659,6 +4016,15 @@ export async function buildGeneration(
           settings.limits,
         );
         hoistFlowStyles(passSource);
+        // The unplaced source is never measured in place, but while it was
+        // laid out every placement relaid out all of it: a 1,000-page mount
+        // spent three quarters of its time there, and time per page grew with
+        // document length. Skipping its rendering keeps each forced layout
+        // local to the page being filled. Its style containment also keeps
+        // unplaced elements out of the counters of the pages placed after it,
+        // matching the committed document, which no longer holds them.
+        passSource.setAttribute(UNPLACED_SOURCE_ATTRIBUTE, "");
+        passSource.style.setProperty("content-visibility", "hidden");
         probe.append(passSource);
         await settlePaginationAssets(
           frameDocument,
@@ -3707,7 +4073,7 @@ export async function buildGeneration(
           const created = createPage(frameDocument, pageMedia, passPages.length + 1, name);
           reserveDecorationRows(frameDocument, created, pageSettings);
           passPages.push(created);
-          probe.append(created.page);
+          appendProbePage(probe, created.page);
           settings.onProgress?.(
             Object.freeze({
               completedPages: passPages.length,
@@ -3749,7 +4115,9 @@ export async function buildGeneration(
           continueRoot,
           "root",
         );
+        await yieldBetweenStages();
         const finalized = finalizePublishingPass(passPages, publishing, settings.experimental);
+        await yieldBetweenStages();
         return {
           pages: passPages,
           fragmentationWarnings: passFragmentationWarnings,
@@ -3832,7 +4200,10 @@ export async function buildGeneration(
       const fittedBeforeDecoration = decorationMayResize
         ? pages.map((page) => !pageOverflows(page))
         : [];
+      await yieldBetweenStages();
+      const numbering = pageNumbering(pages, settings.entryPageNumbering);
       for (const [index, page] of pages.entries()) {
+        const [pageNumber, totalPages] = numbering[index] ?? [index + 1, pages.length];
         resourceBlocked =
           decoratePage(
             frameDocument,
@@ -3844,9 +4215,10 @@ export async function buildGeneration(
             extensionWarnings,
             decorationWarnings,
           ) || resourceBlocked;
-        resolveDecorationTokens(page.page, index + 1, pages.length);
-        resolveMarginBoxes(page, index + 1, pages.length, accepted.publishing.namedStrings[index]);
+        resolveDecorationTokens(page.page, pageNumber, totalPages);
+        resolveMarginBoxes(page, pageNumber, totalPages, accepted.publishing.namedStrings[index]);
       }
+      layoutMarginBoxWidths(pages);
       if (
         overflowWarning === undefined &&
         pages.some((page, index) => fittedBeforeDecoration[index] === true && pageOverflows(page))
@@ -3858,8 +4230,11 @@ export async function buildGeneration(
           location: UNLOCATED_PAGE_WARNING_LOCATION,
         });
       }
+      await yieldBetweenStages();
       warningSourceLocations = collectWarningSourceLocations(pages);
+      await yieldBetweenStages();
       cleanPublishingInternals(pages);
+      await yieldBetweenStages();
       if (extensions.some((extension) => extension.finalizePage !== undefined)) {
         const fragmentsByPage = new Map<PageParts, PageExtensionTableFragment[]>();
         const continuationCounts = new Map<Element, number>();
@@ -3890,10 +4265,19 @@ export async function buildGeneration(
       for (const style of probeStyles) style.remove();
     }
 
-    const css = Object.freeze([
-      frameStyle(pages.map((page) => page.geometry)),
-      ...compiledPageMedia.css,
-    ]);
+    // Page text is read here, where yields are allowed, rather than inside
+    // the commit, which must stay one task.
+    const pageTexts: (readonly string[])[] = [];
+    for (const page of pages) {
+      pageTexts.push(bodyText(page.flow));
+      await yieldBetweenStages();
+    }
+    const geometries = pages.map((page) => page.geometry);
+    const { pageSheet } = pageSheets(geometries);
+    for (const [index, page] of pages.entries()) {
+      page.page.setAttribute(PAGE_SHEET_ATTRIBUTE, String(pageSheet[index]));
+    }
+    const css = Object.freeze([frameStyle(geometries), ...compiledPageMedia.css]);
 
     const warnings = [
       ...mappedDocumentWarnings([
@@ -3925,12 +4309,13 @@ export async function buildGeneration(
         ? {}
         : { documentLanguage: preparedSemanticSource.documentLanguage }),
       pages: Object.freeze(
-        pages.map(({ page, flow, blank, name, geometry }) => ({
+        pages.map(({ page, flow, blank, name, geometry }, index) => ({
           page,
           flow,
           blank,
           name,
           geometry,
+          bodyText: pageTexts[index] ?? Object.freeze([]),
         })),
       ),
       warnings: Object.freeze(warnings),

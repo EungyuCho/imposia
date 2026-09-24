@@ -14,6 +14,60 @@ Run `pnpm build` first. Both harnesses load the built
 `packages/core/dist/index.js` through `scripts/serve-viewer.mjs`, take warmup
 runs and then seven measured runs, and report the median.
 
+## Imposia harness
+
+`scripts/benchmark.ts` measures Imposia alone. Besides the everyday scenarios
+(a 99-page article, a 50-page report, a 100-entry Publication, print, and
+partial frames during rapid updates), it covers long documents:
+
+| Scenario | Input | What is measured |
+| --- | --- | --- |
+| `mount-1000` | 3,655 sections (997 pages) | Mount until `controller.ready` |
+| `mount-1000-blocking` | The same document | The longest gap between two `MessageChannel` pings during the mount, a lower bound on the longest main-thread task |
+| `mount-1000-heap` | The same document | `performance.memory.usedJSHeapSize` after GC while mounted, minus the reading before the mount (Chromium runs with `--enable-precise-memory-info --js-flags=--expose-gc`) |
+| `mount-1800` | 6,579 sections (1,795 pages) | Mount until `controller.ready` |
+| `mount-5000` | 18,275 sections (4,985 pages), with raised input and node limits | Mount until `controller.ready` |
+| `statement-table` | One table, 5,000 rows, a repeated `thead` (216 pages) | Mount until `controller.ready` |
+
+`--only <id,id>` runs a subset, and `--compare <bundle>` runs another build of
+`packages/core/dist/index.js` alternately with the current one.
+
+1,800 pages is close to the default ceiling for this input. The article is
+about 2.8 KB of HTML per page, so the 5 MiB `maxInputBytes` default stops it at
+about 1,850 pages. `mount-5000` raises `maxInputBytes` and `maxNodes`, which a
+host may do up to the maximums in ADR 0015.
+
+### Recorded results
+
+Captured 2026-09-24 on an Apple M4 with Chromium 149.0.7827.55, median of 7
+runs, `--compare` against `main` at `38675c5`:
+
+| Scenario | Pages | `38675c5` | This branch |
+| --- | ---: | ---: | ---: |
+| Mount a 99-page article | 99 | 123 ms | 80.5 ms |
+| Update one word in that article | 99 | 114.7 ms | 79 ms |
+| Mount a Publication of 100 entries | 100 | 90.7 ms | 78.3 ms |
+| Update one word in a 50-page report | 50 | 54.5 ms | 40 ms |
+| Mount a 200-page document | 200 | 286.2 ms | 163.6 ms |
+| Mount a 1,000-page document | 997 | 3798.8 ms | 838.6 ms |
+| Longest main-thread task in that mount | 997 | 207 ms | 63 ms |
+| JS heap retained by that document | 997 | 8.3 MB | 8.5 MB |
+| Mount a 1,800-page document | 1795 | 13876.5 ms | 1592.4 ms |
+| Mount a 5,000-row statement table | 216 | 1019.4 ms | 943.7 ms |
+| Mount a 5,000-page document, raised limits | 4985 | not possible | 5108.5 ms |
+
+`main` cannot run the 5,000-page scenario: its input and node limits cannot
+be raised. Three changes produce the difference:
+
+- The unplaced source is no longer laid out on every placement
+  (`content-visibility: hidden`), which removed growth with source length.
+- Placed pages sit in buckets of 64 in the probe, so a forced layout does not
+  walk every placed page, which removed growth with page count.
+- Preparation, publishing finalization, warning collection, and page text
+  extraction yield to the host between steps, and each print sheet size gets
+  one `@page` rule instead of one per page. What is left of the longest task
+  is mostly the atomic commit, which must stay one task.
+
 ## Comparison harness
 
 `scripts/benchmark-compare.ts` pins these versions and loads them from
@@ -92,14 +146,18 @@ half of Imposia's is recorded with an `error` instead of a number.
 
 ### Recorded results
 
-`benchmarks/comparison.json`, captured 2026-09-23 on an Apple M4 with Chromium
-149.0.7827.55 at commit `44594de`:
+`benchmarks/comparison.json`, captured 2026-09-24 on an Apple M4 with Chromium
+149.0.7827.55 at commit `4177daa`:
 
 | Scenario | Imposia | Paged.js 0.4.3 | Vivliostyle 2.45.2 |
 | --- | ---: | ---: | ---: |
-| `paginate-200` | 249 ms (200 pages) | 850.7 ms (200 pages) | 2554.1 ms (200 pages) |
-| `edit-50` | 45.9 ms (50 pages) | 216.7 ms (50 pages) | 253.7 ms (50 pages) |
-| `bundle` | 56.8 KiB | 94.2 KiB | 215.2 KiB |
+| `paginate-200` | 131.1 ms (200 pages) | 848.5 ms (200 pages) | 2153.7 ms (200 pages) |
+| `edit-50` | 30.3 ms (50 pages) | 216.7 ms (50 pages) | 211.9 ms (50 pages) |
+| `bundle` | 59.4 KiB | 94.2 KiB | 215.2 KiB |
+
+The 2026-09-23 capture at `44594de` recorded Imposia at 249 ms and 45.9 ms.
+The drop comes from `f33ded4`, which stopped relaying out the unplaced source
+on every placement (see the Imposia harness results below).
 
 To update the pinned versions, look up the current releases with
 `curl -s https://registry.npmjs.org/pagedjs/latest` and

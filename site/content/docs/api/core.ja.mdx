@@ -30,7 +30,7 @@ const pageDocument = await controller.ready;
 | --- | --- |
 | `css` | `readonly string[]`。追加のソース CSS です。 |
 | `assetResolver` | フォント、画像、メディア、スタイルシート要求のための非同期リゾルバーです。 |
-| `page` | `{ size?, orientation?, margin? }`。size は `A4`、`Letter`、または任意の幅・高さを受け取ります。 |
+| `page` | `{ size?, orientation?, margin? }`。size は `A3`、`A4`、`A5`、`B4`、`B5`、`Letter`、`Legal`、`Ledger`、または任意の幅・高さを受け取ります。 |
 | `limits` | 入力、ノード、アセット、期限、ページ、レイアウトパス、生成出力の上限です（任意）。 |
 | `headerTemplate`、`footerTemplate` | 装飾マークアップです。 |
 | `decorateBlankPages` | 空白ページにも装飾を適用するかどうかです。 |
@@ -48,20 +48,20 @@ const pageDocument = await controller.ready;
 
 <Accordion title="既定の上限">
 
-`limits` の各フィールドは任意です。省略したフィールドには、次の既定値が適用されます。
+`limits` の各フィールドは任意で、省略すると既定値が適用されます。値はいくらでも下げられます。上限値のある 4 つのフィールドだけはその上限値まで上げられ、それ以外は既定値より上げられません。
 
-| フィールド | 既定値 |
-| --- | --- |
-| `maxInputBytes` | 5 MiB（`5 * 1024 * 1024`） |
-| `maxNodes` | 100,000 |
-| `maxAssetBytes` | 25 MiB（`25 * 1024 * 1024`） |
-| `maxAssetDepth` | 8 |
-| `maxAssetReferences` | 512 |
-| `resourceDeadlineMs` | 30,000 |
-| `maxPages` | 10,000 |
-| `maxLayoutPasses` | 8 |
-| `maxGeneratedFragments` | 400,000 |
-| `maxGeneratedRecords` | 10,000 |
+| フィールド | 既定値 | 上限値 |
+| --- | --- | --- |
+| `maxInputBytes` | 5 MiB（`5 * 1024 * 1024`） | 32 MiB（`32 * 1024 * 1024`） |
+| `maxNodes` | 100,000 | 1,000,000 |
+| `maxAssetBytes` | 25 MiB（`25 * 1024 * 1024`） | 既定値と同じ |
+| `maxAssetDepth` | 8 | 既定値と同じ |
+| `maxAssetReferences` | 512 | 既定値と同じ |
+| `resourceDeadlineMs` | 30,000 | 300,000 |
+| `maxPages` | 10,000 | 50,000 |
+| `maxLayoutPasses` | 8 | 既定値と同じ |
+| `maxGeneratedFragments` | 400,000 | 既定値と同じ |
+| `maxGeneratedRecords` | 10,000 | 既定値と同じ |
 
 </Accordion>
 
@@ -172,7 +172,7 @@ const controller = mountPublication(host, {
 const publication = await controller.ready;
 ```
 
-`PublicationSnapshot` は `metadata: { title, language?, identifier? }` と、順序付きのエントリーを持ちます。各エントリーには、空白と制御文字を含まない一意の `id`、`title`、任意の `baseUrl`、そして `html` または `lightDom` のどちらか一方だけが必要です。`PublicationOptions` は `PageDocumentOptions` と同じですが、`extensions` だけは `PublicationExtension[]` のみを受け取ります。
+`PublicationSnapshot` は `metadata: { title, language?, identifier? }` と、順序付きのエントリーを持ちます。各エントリーには、空白と制御文字を含まない一意の `id`、`title`、任意の `baseUrl`、そして `html` または `lightDom` のどちらか一方だけが必要です。`PublicationOptions` は `PageDocumentOptions` と同じですが、`extensions` だけは `PublicationExtension[]` のみを受け取り、`pageNumbering` が加わります。`pageNumbering: "entry"` を指定すると、各エントリーは新しいページから始まり、`counter(page)`、`counter(pages)`、`pageNumber`/`totalPages` テンプレートトークンはエントリーの中で数えます。請求書をまとめて印刷しても、各請求書に「Page 1 of 2」のように入ります。ページメタデータ、移動、検索、エントリーのページ範囲、拡張の `decoratePage` 入力、target 参照は全体の番号のままです。既定値の `"publication"` は Publication 全体に番号を振ります。
 
 ### `PublicationController`
 

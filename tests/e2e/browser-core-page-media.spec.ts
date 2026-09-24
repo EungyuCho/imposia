@@ -504,3 +504,241 @@ test("unsupported authored page values recover with deterministic warnings and d
     expect(pageErrors).toEqual([]);
   }
 });
+
+test("sixteen margin boxes, :nth(), and margin-box styles render in their slots", async ({
+  page,
+  browserName,
+}) => {
+  test.skip(browserName !== "chromium", "Chromium owns structural paged-media assertions.");
+  const { errors, pageErrors } = captureBrowserErrors(page, browserName);
+
+  await page.goto("/examples/book.html");
+  try {
+    const observation = await page.evaluate(async () => {
+      type PageDocument = {
+        iframe: HTMLIFrameElement;
+        pageCount: number;
+        warnings: readonly { code: string }[];
+      };
+      type Controller = { ready: Promise<PageDocument>; destroy(): Promise<void> };
+      const modulePath = "/packages/core/dist/index.js";
+      const core = (await import(modulePath)) as {
+        mountPageDocument(
+          container: HTMLElement,
+          source: { html: string },
+          options?: unknown,
+        ): Controller;
+      };
+      const host = document.createElement("div");
+      document.body.replaceChildren(host);
+      const controller = core.mountPageDocument(host, {
+        html: `
+          <style>
+            @page {
+              size: A5;
+              margin: 20mm;
+              @top-left-corner { content: "TLC"; }
+              @top-right-corner { content: "TRC"; }
+              @bottom-left-corner { content: "BLC"; }
+              @bottom-right-corner { content: "BRC"; }
+              @left-top { content: "LT"; }
+              @left-middle { content: "LM"; }
+              @left-bottom { content: "LB"; }
+              @right-top { content: "RT"; }
+              @right-middle { content: "RM"; }
+              @right-bottom { content: "RB"; }
+              @bottom-center {
+                content: counter(page) " of " counter(pages);
+                font-size: 9pt;
+                color: rgb(200, 0, 0);
+                text-align: left;
+              }
+            }
+            @page :nth(2) { @top-center { content: string(chapter); } }
+            h1 { string-set: chapter content(); }
+          </style>
+          <h1>Opening</h1>
+          <p style="break-before: page">Second page, still in the opening chapter.</p>
+          <p style="break-before: page">Third page.</p>
+        `,
+      });
+
+      try {
+        const ready = await controller.ready;
+        const frameDocument = ready.iframe.contentDocument;
+        if (frameDocument === null) throw new Error("Missing canonical page document.");
+        const frameWindow = frameDocument.defaultView;
+        if (frameWindow === null) throw new Error("Missing canonical page window.");
+        const pages = [...frameDocument.querySelectorAll<HTMLElement>("[data-imposia-page]")];
+        const first = pages[0];
+        if (first === undefined) throw new Error("Missing first page.");
+        const origin = first.getBoundingClientRect();
+        const boxes = Object.fromEntries(
+          [...first.querySelectorAll<HTMLElement>("[data-imposia-margin-box]")].map((box) => {
+            const rect = box.getBoundingClientRect();
+            const style = frameWindow.getComputedStyle(box);
+            return [
+              box.getAttribute("data-imposia-margin-box"),
+              {
+                text: box.textContent,
+                left: rect.left - origin.left,
+                top: rect.top - origin.top,
+                width: rect.width,
+                height: rect.height,
+                fontSize: style.fontSize,
+                color: style.color,
+                justifyContent: style.justifyContent,
+              },
+            ];
+          }),
+        );
+        const topCenters = pages.map(
+          (item) =>
+            item.querySelector<HTMLElement>('[data-imposia-margin-box="top-center"]')
+              ?.textContent ?? null,
+        );
+        return {
+          pageCount: ready.pageCount,
+          warnings: ready.warnings.map((warning) => warning.code),
+          boxes,
+          topCenters,
+          sheet: { width: origin.width, height: origin.height },
+        };
+      } finally {
+        await controller.destroy();
+        host.replaceChildren();
+      }
+    });
+
+    const margin = 20 * CSS_PX_PER_MM;
+    const sheetWidth = 148 * CSS_PX_PER_MM;
+    const sheetHeight = 210 * CSS_PX_PER_MM;
+    const contentHeight = sheetHeight - 2 * margin;
+    expect(observation.pageCount).toBe(3);
+    expect(observation.warnings).toEqual([]);
+    expectCssPx(observation.sheet.width, sheetWidth);
+    expectCssPx(observation.sheet.height, sheetHeight);
+
+    const box = (name: string) => {
+      const value = observation.boxes[name];
+      if (value === undefined) throw new Error(`Missing margin box ${name}.`);
+      return value;
+    };
+    expect(box("top-left-corner").text).toBe("TLC");
+    expectCssPx(box("top-left-corner").left, 0);
+    expectCssPx(box("top-left-corner").width, margin);
+    expectCssPx(box("top-left-corner").height, margin);
+    expectCssPx(box("top-right-corner").left, sheetWidth - margin);
+    expectCssPx(box("bottom-left-corner").top, sheetHeight - margin);
+    expectCssPx(box("bottom-right-corner").left, sheetWidth - margin);
+    expectCssPx(box("bottom-right-corner").top, sheetHeight - margin);
+    for (const [name, index] of [
+      ["top", 0],
+      ["middle", 1],
+      ["bottom", 2],
+    ] as const) {
+      expectCssPx(box(`left-${name}`).left, 0);
+      expectCssPx(box(`right-${name}`).left, sheetWidth - margin);
+      expectCssPx(box(`left-${name}`).top, margin + (index * contentHeight) / 3);
+      expectCssPx(box(`left-${name}`).height, contentHeight / 3);
+      expectCssPx(box(`left-${name}`).width, margin);
+    }
+    expect(box("bottom-center").text).toBe("1 of 3");
+    expect(box("bottom-center").fontSize).toBe("12px");
+    expect(box("bottom-center").color).toBe("rgb(200, 0, 0)");
+    expect(box("bottom-center").justifyContent).toBe("flex-start");
+    expect(observation.boxes["top-center"]).toBeUndefined();
+    expect(observation.topCenters).toEqual([null, "Opening", null]);
+  } finally {
+    expect(errors).toEqual([]);
+    expect(pageErrors).toEqual([]);
+  }
+});
+
+test("top and bottom margin boxes take their width from their content and wrap long text", async ({
+  page,
+  browserName,
+}) => {
+  test.skip(browserName !== "chromium", "Chromium owns structural paged-media assertions.");
+  const { errors, pageErrors } = captureBrowserErrors(page, browserName);
+
+  await page.goto("/examples/book.html");
+  try {
+    const observation = await page.evaluate(async () => {
+      type PageDocument = { iframe: HTMLIFrameElement; warnings: readonly { code: string }[] };
+      type Controller = { ready: Promise<PageDocument>; destroy(): Promise<void> };
+      const modulePath = "/packages/core/dist/index.js";
+      const core = (await import(modulePath)) as {
+        mountPageDocument(container: HTMLElement, source: { html: string }): Controller;
+      };
+      const host = document.createElement("div");
+      document.body.replaceChildren(host);
+      const legal =
+        "Acme Corporation, 1 Example Street, Springfield. Registered in the Example Registry under number 0000000. This statement is confidential.";
+      const controller = core.mountPageDocument(host, {
+        html: `
+          <style>
+            @page {
+              size: A4;
+              margin: 20mm;
+              @bottom-left { content: "${legal}"; font-size: 8pt; }
+              @bottom-right { content: counter(page) " / " counter(pages); font-size: 8pt; }
+              @top-left { content: "L"; }
+              @top-center { content: "Quarterly statement"; }
+              @top-right { content: "Account 1234"; }
+            }
+          </style>
+          <p>Statement body</p>
+        `,
+      });
+      try {
+        const ready = await controller.ready;
+        const frameDocument = ready.iframe.contentDocument;
+        if (frameDocument === null) throw new Error("Missing canonical page document.");
+        const pageElement = frameDocument.querySelector<HTMLElement>("[data-imposia-page]");
+        if (pageElement === null) throw new Error("Missing page.");
+        const origin = pageElement.getBoundingClientRect();
+        const read = (name: string) => {
+          const box = pageElement.querySelector<HTMLElement>(`[data-imposia-margin-box="${name}"]`);
+          if (box === null) throw new Error(`Missing ${name}.`);
+          const rect = box.getBoundingClientRect();
+          return {
+            left: rect.left - origin.left,
+            width: rect.width,
+            clipped:
+              box.scrollWidth > box.clientWidth + 1 || box.scrollHeight > box.clientHeight + 1,
+          };
+        };
+        return {
+          warnings: ready.warnings.map((warning) => warning.code),
+          bottomLeft: read("bottom-left"),
+          bottomRight: read("bottom-right"),
+          topLeft: read("top-left"),
+          topCenter: read("top-center"),
+          topRight: read("top-right"),
+        };
+      } finally {
+        await controller.destroy();
+        host.replaceChildren();
+      }
+    });
+
+    const margin = 20 * CSS_PX_PER_MM;
+    const contentWidth = A4_WIDTH_CSS_PX - 2 * margin;
+    expect(observation.warnings).toEqual([]);
+    expectCssPx(observation.bottomLeft.left, margin);
+    expect(observation.bottomLeft.width).toBeGreaterThan(contentWidth * 0.8);
+    expect(observation.bottomLeft.clipped).toBe(false);
+    expectCssPx(
+      observation.bottomRight.left + observation.bottomRight.width,
+      margin + contentWidth,
+    );
+    expectCssPx(observation.bottomLeft.width + observation.bottomRight.width, contentWidth);
+    // The center box is centered: both side boxes share the wider side's width.
+    expectCssPx(observation.topLeft.width, observation.topRight.width);
+    expectCssPx(observation.topCenter.left + observation.topCenter.width / 2, A4_WIDTH_CSS_PX / 2);
+  } finally {
+    expect(errors).toEqual([]);
+    expect(pageErrors).toEqual([]);
+  }
+});

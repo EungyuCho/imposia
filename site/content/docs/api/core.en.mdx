@@ -30,7 +30,7 @@ const pageDocument = await controller.ready;
 | --- | --- |
 | `css` | `readonly string[]`; additional authored CSS. |
 | `assetResolver` | Async resolver for font, image, media, and stylesheet requests. |
-| `page` | `{ size?, orientation?, margin? }`; size accepts `A4`, `Letter`, or custom width/height. |
+| `page` | `{ size?, orientation?, margin? }`; size accepts `A3`, `A4`, `A5`, `B4`, `B5`, `Letter`, `Legal`, `Ledger`, or custom width/height. |
 | `limits` | Optional input, node, asset, deadline, page, layout-pass, and generated-output limits. |
 | `headerTemplate`, `footerTemplate` | Decoration markup. |
 | `decorateBlankPages` | Whether blank pages receive decorations. |
@@ -48,20 +48,20 @@ An `AssetResolver` receives `{ url, kind, baseUrl, signal }` and resolves to `{ 
 
 <Accordion title="Default limits">
 
-Every `limits` field is optional; these are the defaults that apply when a field is omitted.
+Every `limits` field is optional; the default applies when a field is omitted. A value may be lowered freely. Only the four fields with a maximum can be raised, up to that maximum; the others cannot go above their default.
 
-| Field | Default |
-| --- | --- |
-| `maxInputBytes` | 5 MiB (`5 * 1024 * 1024`) |
-| `maxNodes` | 100,000 |
-| `maxAssetBytes` | 25 MiB (`25 * 1024 * 1024`) |
-| `maxAssetDepth` | 8 |
-| `maxAssetReferences` | 512 |
-| `resourceDeadlineMs` | 30,000 |
-| `maxPages` | 10,000 |
-| `maxLayoutPasses` | 8 |
-| `maxGeneratedFragments` | 400,000 |
-| `maxGeneratedRecords` | 10,000 |
+| Field | Default | Maximum |
+| --- | --- | --- |
+| `maxInputBytes` | 5 MiB (`5 * 1024 * 1024`) | 32 MiB (`32 * 1024 * 1024`) |
+| `maxNodes` | 100,000 | 1,000,000 |
+| `maxAssetBytes` | 25 MiB (`25 * 1024 * 1024`) | same as default |
+| `maxAssetDepth` | 8 | same as default |
+| `maxAssetReferences` | 512 | same as default |
+| `resourceDeadlineMs` | 30,000 | 300,000 |
+| `maxPages` | 10,000 | 50,000 |
+| `maxLayoutPasses` | 8 | same as default |
+| `maxGeneratedFragments` | 400,000 | same as default |
+| `maxGeneratedRecords` | 10,000 | same as default |
 
 </Accordion>
 
@@ -172,7 +172,7 @@ const controller = mountPublication(host, {
 const publication = await controller.ready;
 ```
 
-`PublicationSnapshot` contains `metadata: { title, language?, identifier? }` and ordered entries. Each entry requires a unique `id` without whitespace or control characters, a `title`, optionally a `baseUrl`, and exactly one of `html` or `lightDom`. `PublicationOptions` contains `PageDocumentOptions` except that `extensions` accepts only `PublicationExtension[]`.
+`PublicationSnapshot` contains `metadata: { title, language?, identifier? }` and ordered entries. Each entry requires a unique `id` without whitespace or control characters, a `title`, optionally a `baseUrl`, and exactly one of `html` or `lightDom`. `PublicationOptions` contains `PageDocumentOptions` except that `extensions` accepts only `PublicationExtension[]`, plus `pageNumbering`. With `pageNumbering: "entry"`, every entry starts on a new page and `counter(page)`, `counter(pages)`, and the `pageNumber`/`totalPages` template tokens count within the entry, so a batch of invoices prints "Page 1 of 2" on each invoice. Page metadata, navigation, search, entry page ranges, extension `decoratePage` input, and target references stay global. The default `"publication"` numbers the whole Publication.
 
 ### `PublicationController`
 

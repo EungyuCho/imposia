@@ -527,8 +527,10 @@ commit they are relocated with the final generation number and page, and
 element — which is what the opt-in Viewer Inspector uses to draw its
 highlights in the top document (never inside the frame).
 
-**Limits are ceilings, not defaults.** User-supplied limits may only *lower*
-`DEFAULT_PAGE_LIMITS`; values above the default are rejected.
+**Most limits are ceilings.** User-supplied limits may only *lower*
+`DEFAULT_PAGE_LIMITS`, except `maxInputBytes`, `maxNodes`, `maxPages`, and
+`resourceDeadlineMs`, which a host may raise up to `MAXIMUM_PAGE_LIMITS`
+(ADR 0015). Values above the maximum are rejected.
 
 ---
 
@@ -547,7 +549,7 @@ input boundary" that pagination integrity is scoped to.
 Roughly: the package surface, committed sequence integrity, cooperative
 pagination, the React lifecycle, Publication + Reader navigation, search,
 thumbnails, the Inspector, presentation modes, the canonical DOM/staging/
-resolver/rollback machinery, authored `@page` rules and the six margin boxes,
+resolver/rollback machinery, authored `@page` rules and the sixteen margin boxes,
 breaks and parity and `break-inside: avoid`, widows/orphans, EPUB export, and
 native print are **Stable**. CJK line breaking, hyphenation, long tokens,
 tables, flex, grid, multicol, and local target references / named strings are

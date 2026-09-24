@@ -141,7 +141,10 @@ export interface PublicationExtension {
   finalizePage?(page: PageExtensionFinalizePageInput, context: PageExtensionContext): void;
 }
 
-export type PageSize = "A4" | "Letter" | { readonly width: string; readonly height: string };
+/** CSS Paged Media `<page-size>` keywords, in portrait orientation. */
+export type PageSizeKeyword = "A3" | "A4" | "A5" | "B4" | "B5" | "Letter" | "Legal" | "Ledger";
+
+export type PageSize = PageSizeKeyword | { readonly width: string; readonly height: string };
 
 export type PageOrientation = "portrait" | "landscape";
 
@@ -264,6 +267,19 @@ export const DEFAULT_PAGE_LIMITS = Object.freeze({
   maxLayoutPasses: 8,
   maxGeneratedFragments: 400_000,
   maxGeneratedRecords: 10_000,
+});
+
+/**
+ * The highest value a host may set for each limit. Most limits cannot be
+ * raised past their default. The four that bound document size and time can
+ * be raised by a host that paginates long, trusted documents (ADR 0015).
+ */
+export const MAXIMUM_PAGE_LIMITS = Object.freeze({
+  ...DEFAULT_PAGE_LIMITS,
+  maxInputBytes: 32 * 1024 * 1024,
+  maxNodes: 1_000_000,
+  resourceDeadlineMs: 300_000,
+  maxPages: 50_000,
 });
 
 export type EffectivePageLimits = Readonly<{

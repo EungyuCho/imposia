@@ -350,3 +350,133 @@ test("keeps unsupported Grid placement patterns atomic with deterministic locate
     expect(pageErrors).toEqual([]);
   }
 });
+
+test("fragments a dashboard grid whose items span columns between complete rows", async ({
+  page,
+  browserName,
+}) => {
+  test.skip(browserName !== "chromium", "Chromium is the structural pagination reference.");
+  const { errors, pageErrors } = captureBrowserErrors(page, browserName);
+  await page.goto("/examples/book.html");
+
+  // Per block: a full-width heading row, a 2+1 row, a 1+1+1 row, a lone card
+  // that leaves a hole because the next card spans all three columns, and
+  // that full-width card.
+  const block = ["full", "span 2", "1", "1", "1", "1", "1", "span 3"] as const;
+  const items = Array.from({ length: 5 }, (_value, blockIndex) =>
+    block.map((placement, index) => ({
+      marker: `DASH-${blockIndex + 1}-${index + 1}`,
+      placement,
+    })),
+  ).flat();
+  const spanOf = (placement: string) =>
+    placement === "full" ? 3 : placement.startsWith("span") ? Number(placement.slice(5)) : 1;
+  const expected = new Map<string, { row: number; column: number; span: number }>();
+  let row = 0;
+  let column = 0;
+  for (const item of items) {
+    const span = spanOf(item.placement);
+    if (column > 0 && column + span > 3) {
+      row += 1;
+      column = 0;
+    }
+    expected.set(item.marker, { row, column, span });
+    column += span;
+    if (column >= 3) {
+      row += 1;
+      column = 0;
+    }
+  }
+
+  try {
+    const observation = await page.evaluate(
+      async ({ items }) => {
+        const core = (await import("/packages/core/dist/index.js")) as CoreModule;
+        const host = document.createElement("div");
+        document.body.replaceChildren(host);
+        const controller = core.mountPageDocument(host, {
+          html: `
+            <style>
+              @page { size: A4; margin: 15mm; }
+              .dashboard {
+                display: grid;
+                grid-template-columns: 200px 200px 200px;
+                grid-auto-rows: 140px;
+                gap: 10px;
+              }
+              .dashboard > * { box-sizing: border-box; margin: 0; padding: 6px; border: 1px solid #999; }
+              .full { grid-column: 1 / -1; }
+            </style>
+            <main class="dashboard">
+              ${items
+                .map(
+                  (item) =>
+                    `<section data-dash="${item.marker}"${
+                      item.placement === "full"
+                        ? ' class="full"'
+                        : item.placement === "1"
+                          ? ""
+                          : ` style="grid-column: ${item.placement}"`
+                    }>${item.marker}</section>`,
+                )
+                .join("")}
+            </main>
+          `,
+        });
+        try {
+          const ready = await controller.ready;
+          const frameDocument = ready.iframe.contentDocument;
+          if (frameDocument === null) throw new Error("Missing canonical frame document.");
+          const pages = [...frameDocument.querySelectorAll<HTMLElement>("[data-imposia-page]")];
+          return {
+            pageCount: ready.pageCount,
+            fragments: frameDocument.querySelectorAll(".dashboard").length,
+            warningCodes: ready.warnings.map((warning) => warning.code),
+            placed: pages.flatMap((pageElement, pageIndex) =>
+              [...pageElement.querySelectorAll<HTMLElement>("[data-dash]")].map((element) => {
+                const grid = element.closest<HTMLElement>(".dashboard");
+                const gridLeft = grid?.getBoundingClientRect().left ?? Number.NaN;
+                const rect = element.getBoundingClientRect();
+                return {
+                  marker: element.dataset.dash ?? "",
+                  page: pageIndex,
+                  left: rect.left - gridLeft,
+                  top: Math.round(rect.top),
+                  width: rect.width,
+                };
+              }),
+            ),
+          };
+        } finally {
+          await controller.destroy();
+          host.remove();
+        }
+      },
+      { items },
+    );
+
+    expect(observation.warningCodes).not.toContain("UNSUPPORTED_LAYOUT");
+    expect(observation.pageCount).toBeGreaterThan(2);
+    expect(observation.fragments).toBe(observation.pageCount);
+    expect(observation.placed.map((item) => item.marker)).toEqual(items.map((item) => item.marker));
+    const rows = new Map<number, typeof observation.placed>();
+    for (const placed of observation.placed) {
+      const target = expected.get(placed.marker);
+      if (target === undefined) throw new Error(`Unexpected ${placed.marker}.`);
+      expect(placed.left, placed.marker).toBeCloseTo(target.column * 210, 0);
+      expect(placed.width, placed.marker).toBeCloseTo(
+        target.span * 200 + (target.span - 1) * 10,
+        0,
+      );
+      rows.set(target.row, [...(rows.get(target.row) ?? []), placed]);
+    }
+    // A row never splits across pages and its items share one top edge.
+    for (const members of rows.values()) {
+      expect(new Set(members.map((item) => item.page)).size).toBe(1);
+      expect(new Set(members.map((item) => item.top)).size).toBe(1);
+    }
+  } finally {
+    expect(errors).toEqual([]);
+    expect(pageErrors).toEqual([]);
+  }
+});

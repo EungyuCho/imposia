@@ -193,3 +193,27 @@ export function prepareDocument(
   enforceResourcePolicy(document, options, warnings);
   return { html: serializeDocument(document), ...decorations, warnings: warnings.finish() };
 }
+
+/**
+ * `prepareDocument` with a host yield between its whole-document steps.
+ * Pagination calls this form so a long source does not hold the main thread
+ * for the parse, the policy walks, and serialization in one task.
+ */
+export async function prepareDocumentCooperatively(
+  html: string,
+  options: PrepareDocumentOptions,
+  yieldToHost: () => Promise<void>,
+): Promise<PreparedDocument> {
+  const warnings = createWarningCollector();
+  const document = parseHtmlDocument(html);
+  await yieldToHost();
+  assignNodeOrders(document);
+  const decorations = extractDecorations(document, options, warnings);
+  await yieldToHost();
+  normalizeStyles(document, warnings);
+  await yieldToHost();
+  enforceResourcePolicy(document, options, warnings);
+  await yieldToHost();
+  const serialized = serializeDocument(document);
+  return { html: serialized, ...decorations, warnings: warnings.finish() };
+}
