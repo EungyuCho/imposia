@@ -1,1394 +1,671 @@
 import {
-  type ImposiaDocumentState,
   ImposiaPageViewer,
   type ImposiaPageViewerHandle,
-  type PageComposeProgress,
+  ImposiaPublicationViewer,
+  type ImposiaPublicationViewerHandle,
   type PageDocument,
-  type PageDocumentOptions,
-  type PageExtension,
-  type PageOrientation,
+  type PageViewerState,
+  type PublicationSnapshot,
 } from "@imposia/react";
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import {
+  BookOpen,
+  ChevronLeft,
+  ChevronRight,
+  CircleAlert,
+  CircleCheck,
+  Files,
+  FileText,
+  Hash,
+  LayoutDashboard,
+  type LucideIcon,
+  Minus,
+  PenLine,
+  Plus,
+  Printer,
+  Receipt,
+  Rows3,
+  Scissors,
+  ShieldCheck,
+  Sigma,
+  Table,
+  TriangleAlert,
+  Zap,
+} from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { initialEditorHtml, LiveEditor, useLiveEditorMetrics } from "./live-editor.js";
-import { useLiveRenderRunner } from "./live-render-runner.js";
-import { LiveRenderRunner } from "./live-render-runner-panel.js";
-import { DEFAULT_PAGE_PRESET, type PagePreset, PageSetup } from "./page-setup.js";
+import {
+  batchEntries,
+  type MarginId,
+  type NoticeIcon,
+  type Orientation,
+  type PageSetup,
+  type PageSizeId,
+  TEMPLATES,
+  type TemplateId,
+  templateHtml,
+} from "./templates.js";
 
-type SampleId = "integrity" | "editorial" | "brief" | "hangul" | "publishing";
-type DemoCase = "editor" | "stress" | "compatibility" | "output";
-type CodeMode = "react" | "core";
-type ExportStatus = "idle" | "exporting" | "success" | "error";
-type IntegrityStatus = "idle" | "running" | "verified" | "failed";
+const TEMPLATE_ICONS: Readonly<Record<TemplateId, LucideIcon>> = {
+  invoice: Receipt,
+  statement: Table,
+  report: LayoutDashboard,
+  agreement: FileText,
+  batch: Files,
+};
 
-type DemoSample = Readonly<{
-  id: SampleId;
-  index: string;
-  title: string;
-  summary: string;
-  html: string;
-}>;
+const NOTICE_ICONS: Readonly<Record<NoticeIcon, LucideIcon>> = {
+  rows: Rows3,
+  hash: Hash,
+  scissors: Scissors,
+  grid: LayoutDashboard,
+  files: Files,
+  pen: PenLine,
+  sum: Sigma,
+};
 
-type IntegrityPageRange = Readonly<{
-  page: number;
-  first: string;
-  last: string;
-  count: number;
-}>;
-
-type CommitProbePhase = "idle" | "failing" | "failed" | "recovering" | "superseding";
-
-type CommitProbe = Readonly<{
-  phase: CommitProbePhase;
-  startGeneration?: number | undefined;
-  endGeneration?: number | undefined;
-  revisionsIssued: number;
-  outcome?: string | undefined;
-}>;
-
-const IDLE_COMMIT_PROBE: CommitProbe = Object.freeze({ phase: "idle", revisionsIssued: 0 });
-
-let oversizedProbeFiller: string | undefined;
+const VIEWER_OPTIONS = { controls: false, mode: "continuous", zoom: 0.8 } as const;
+const BURST_UPDATES = 20;
 
 /**
- * Deterministically fails pagination in every engine: the source exceeds the
- * documented maxInputBytes limit (5 MiB), which Core rejects before parsing.
+ * Deterministically rejected by Core in every engine: the source exceeds the
+ * default 5 MiB `maxInputBytes`, so the update fails before any layout.
  */
-function probeOversizedHtml(): string {
-  oversizedProbeFiller ??= `<p hidden>${"#".repeat(6 * 1024 * 1024)}</p>`;
-  return oversizedProbeFiller;
+let brokenFiller: string | undefined;
+function brokenPayload(): string {
+  brokenFiller ??= `<p hidden>${"#".repeat(6 * 1024 * 1024)}</p>`;
+  return brokenFiller;
 }
 
-type IntegrityReport = Readonly<{
-  sourceTokenCount: number;
-  committedTokenCount: number;
-  exactSequence: boolean;
-  pageRanges: readonly IntegrityPageRange[];
+type DocumentInfo = Readonly<{ pageCount: number; ms: number; warnings: number }>;
+
+type Proof = Readonly<{
+  updates: number;
+  commits: number;
+  partialFrames: number;
+  result?: Readonly<{ kind: "ok" | "rejected"; text: string }> | undefined;
 }>;
 
-const documentStyle = `
-  :root {
-    color: #171a18;
-    background: #f6f1e7;
-    font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
-  }
-  body { color: #171a18; background: #f6f1e7; }
-  article, section { font-size: 15px; line-height: 1.68; }
-  h1, h2 { margin: 0; font-weight: 500; letter-spacing: -0.045em; }
-  h1 { max-width: 12ch; font-size: 48px; line-height: 0.98; }
-  h2 { max-width: 17ch; font-size: 32px; line-height: 1.05; }
-  p { max-width: 56ch; margin: 18px 0 0; }
-  .kicker {
-    margin: 0 0 34px;
-    color: #d9532b;
-    font: 700 9px/1.3 "SFMono-Regular", Consolas, monospace;
-    letter-spacing: 0.18em;
-    text-transform: uppercase;
-  }
-  .lede { max-width: 40ch; margin-top: 30px; font-size: 21px; line-height: 1.45; }
-  .rule { width: 56px; height: 2px; margin: 38px 0; background: #d9532b; }
-  .note {
-    max-width: 42ch;
-    margin-top: 34px;
-    padding: 18px 20px;
-    border-left: 2px solid #d9532b;
-    background: #ebe4d6;
-    font-style: italic;
-  }
-  .meta {
-    margin-top: 52px;
-    color: #66706c;
-    font: 700 9px/1.5 "SFMono-Regular", Consolas, monospace;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-  }
-  .number {
-    display: block;
-    margin-bottom: 30px;
-    color: #d9532b;
-    font: 500 70px/0.9 "Iowan Old Style", Georgia, serif;
-    letter-spacing: -0.08em;
-  }
-  .facts { margin: 36px 0 0; padding: 0; list-style: none; }
-  .facts li { padding: 12px 0; border-top: 1px solid #cfc8bb; }
-  .facts strong { display: inline-block; min-width: 130px; font-weight: 600; }
-  .demo-running-head {
-    color: #65706b;
-    font: 700 8px/1 "SFMono-Regular", Consolas, monospace;
-    letter-spacing: 0.15em;
-    text-transform: uppercase;
-  }
-  [lang="ko"] { font-family: "Apple SD Gothic Neo", "Noto Serif KR", Batang, serif; }
-  [lang="ko"] h1, [lang="ko"] h2 { word-break: keep-all; letter-spacing: -0.055em; }
-  [lang="ko"] p { word-break: keep-all; }
-`;
+type Segment<T extends string> = Readonly<{ value: T; label: string }>;
 
-const publishingDocumentCss = `
-  :root {
-    color: #18201d;
-    background: #f7f1e5;
-    font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
-  }
-  body { color: #18201d; background: #f7f1e5; }
-  article { font-size: 13px; line-height: 1.45; }
-  h1, h2, h3 { margin: 0; font-weight: 500; letter-spacing: -0.04em; }
-  h1 { font-size: 38px; line-height: 0.98; }
-  h2 { margin-top: 28px; font-size: 24px; line-height: 1.05; }
-  h3 { margin-top: 22px; font-size: 17px; }
-  p { max-width: 72ch; margin: 12px 0 0; }
-  .publishing-kicker {
-    margin: 0 0 16px;
-    color: #c9532c;
-    font: 800 8px/1.3 "SFMono-Regular", Consolas, monospace;
-    letter-spacing: 0.16em;
-    text-transform: uppercase;
-  }
-  .publishing-deck { max-width: 64ch; margin-top: 14px; font-size: 16px; }
-  .publishing-support {
-    display: grid;
-    gap: 4px;
-    margin-top: 18px;
-    padding: 10px 12px;
-    border-left: 2px solid #c9532c;
-    background: #ebe2d2;
-    font: 9px/1.55 "SFMono-Regular", Consolas, monospace;
-  }
-  .publishing-support strong { color: #c9532c; }
-  .publishing-table {
-    width: 100%;
-    margin-top: 18px;
-    border-collapse: collapse;
-    font: 10px/1.35 "SFMono-Regular", Consolas, monospace;
-  }
-  .publishing-table th,
-  .publishing-table td {
-    padding: 7px 9px;
-    border-top: 1px solid #cfc5b4;
-    text-align: left;
-    vertical-align: top;
-  }
-  .publishing-table th {
-    color: #66706c;
-    font-size: 8px;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-  }
-  .publishing-table thead { display: table-header-group; }
-  .publishing-table tr { break-inside: avoid; }
-  .publishing-reference { color: #c9532c; font-weight: 700; }
-  .publishing-reference::after { margin-left: 4px; color: #66706c; }
-  .publishing-reference-text::before { margin-right: 4px; color: #66706c; }
-  .publishing-footnote { font-size: 9px; }
-  .publishing-float {
-    margin: 18px 0;
-    padding: 10px 12px;
-    border: 1px solid #cfc5b4;
-    background: #fffaf0;
-  }
-  @page {
-    size: A4;
-    margin: 15mm 18mm 20mm 22mm;
-    @top-center { content: string(running-head, last) " · " counter(page) "/" counter(pages); }
-  }
-  @page :first {
-    @top-left { content: "IMPOSIA / PUBLISHING LAB"; }
-    @bottom-right { content: "STABLE SURFACE"; }
-  }
-  @page :left {
-    @bottom-left { content: "LEFT / " counter(page); }
-  }
-  @page :right {
-    @bottom-right { content: "RIGHT / " counter(page); }
-  }
-  h1, h2, h3 { string-set: running-head content; }
-  .publishing-reference::after { content: target-counter(attr(href), page); }
-  .publishing-reference-text::before { content: target-text(attr(href), content); }
-`;
-
-const publishingPlacementCss = `
-  .publishing-footnote { float: footnote; }
-  .publishing-float { float: top; float-reference: page; }
-`;
-
-const integrityTokens = Array.from(
-  { length: 96 },
-  (_, index) => `FLOW-${String(index + 1).padStart(3, "0")}`,
-);
-
-const integrityRows = integrityTokens
-  .map(
-    (token) => `
-      <p class="integrity-row">
-        <span data-integrity-token="${token}">${token}</span>
-        <span>Browser-owned HTML remains in source order across the committed page boundary.</span>
-      </p>
-    `,
-  )
-  .join("");
-
-const integrityDocumentCss = `
-  :root {
-    color: #17201d;
-    background: #f6f1e7;
-    font-family: "SFMono-Regular", "Cascadia Code", Consolas, monospace;
-  }
-  body { color: #17201d; background: #f6f1e7; }
-  article { font-size: 11px; line-height: 1.45; }
-  h1 { max-width: 14ch; margin: 0; font: 500 42px/0.98 "Iowan Old Style", Georgia, serif; letter-spacing: -0.05em; }
-  .integrity-kicker {
-    margin: 0 0 20px;
-    color: #a64020;
-    font-weight: 800;
-    letter-spacing: 0.16em;
-    text-transform: uppercase;
-  }
-  .integrity-deck { max-width: 60ch; margin: 20px 0 28px; font-size: 14px; }
-  .integrity-revision {
-    margin: 0 0 22px;
-    padding: 10px 12px;
-    border-left: 3px solid #ef6a3b;
-    background: #e8e0d1;
-    font-weight: 700;
-  }
-  .integrity-flow { border-bottom: 1px solid #c9c1b3; }
-  .integrity-row {
-    display: grid;
-    min-height: 31px;
-    grid-template-columns: 76px minmax(0, 1fr);
-    align-items: center;
-    gap: 12px;
-    margin: 0;
-    border-top: 1px solid #c9c1b3;
-    break-inside: avoid;
-  }
-  [data-integrity-token] { color: #a64020; font-weight: 800; }
-`;
-
-const publishingRows = [
-  ["01", "Geometry", "A4 portrait default", "Stable / four authored margins"],
-  ["02", "Page rules", "first · left · right", "Stable / margin-box furniture"],
-  ["03", "References", "target-counter", "Stable / local fragment"],
-  ["04", "References", "target-text", "Stable / local fragment"],
-  ["05", "Tables", "thead continuation", "Stable / repeated heading"],
-  ["06", "Strings", "running-head", "Stable / named string"],
-  ["07", "Assets", "resolver boundary", "Stable / browser-only"],
-  ["08", "Flow", "ordered source", "Stable / canonical DOM"],
-  ["09", "Warnings", "explicit recovery", "Constrained / visible"],
-  ["10", "Footnotes", "float: footnote", "Experimental / opt-in"],
-  ["11", "Page floats", "float-reference: page", "Experimental / bounded"],
-  ["12", "Pagination", "Chromium reference", "Constrained / layout engine"],
-  ["13", "Printing", "same iframe", "Stable / no duplicate"],
-  ["14", "Export", "EPUB 3", "Stable / deterministic"],
-  ["15", "Lifecycle", "abort + cleanup", "Stable / controller-owned"],
-  ["16", "Typography", "authored CSS", "Stable / isolated"],
-  ["17", "Progress", "state callbacks", "Stable / React-first"],
-  ["18", "Surface", "one document", "Stable / portable"],
-  ["19", "Geometry", "content box", "Stable / measured"],
-  ["20", "Page rules", "top-center", "Stable / margin box"],
-  ["21", "References", "fragment target", "Stable / local only"],
-  ["22", "Tables", "row grouping", "Stable / continuation"],
-  ["23", "Strings", "first / start / last", "Stable / running"],
-  ["24", "Assets", "blocked remote", "Constrained / explicit"],
-  ["25", "Flow", "widow recovery", "Constrained / warning"],
-  ["26", "Warnings", "source identity", "Constrained / inspectable"],
-  ["27", "Footnotes", "bounded area", "Experimental / fallback"],
-  ["28", "Page floats", "top placement", "Experimental / fallback"],
-  ["29", "Pagination", "page sides", "Stable / deterministic"],
-  ["30", "Printing", "canonical frame", "Stable / shared"],
-  ["31", "Export", "mimetype first", "Stable / EPUB ZIP"],
-  ["32", "Lifecycle", "release cleanup", "Stable / owned"],
-  ["33", "Typography", "CSS isolation", "Stable / iframe"],
-  ["34", "Progress", "ready state", "Stable / observable"],
-  ["35", "Surface", "responsive shell", "Stable / compact"],
-  ["36", "Contract", "evidence cue", "Stable / reviewed"],
-]
-  .map(
-    ([index, topic, value, posture]) =>
-      `<tr><td>${index}</td><td>${topic}</td><td>${value}</td><td>${posture}</td></tr>`,
-  )
-  .join("");
-
-const samples: Record<SampleId, DemoSample> = {
-  integrity: {
-    id: "integrity",
-    index: "01",
-    title: "CSR continuity proof",
-    summary: "Ninety-six source tokens, checked once and in order across every committed page.",
-    html: `
-      <style>${integrityDocumentCss}</style>
-      <article>
-        <p class="integrity-kicker">Imposia / pagination integrity</p>
-        <h1>No gaps at the fold.</h1>
-        <p class="integrity-deck">This specimen records a unique source token in every row. The host reads the committed page DOM back and proves that all ninety-six tokens still occur exactly once and in source order.</p>
-        <p class="integrity-revision">CSR source revision <span data-csr-revision>{{CSR_REVISION}}</span></p>
-        <div class="integrity-flow">${integrityRows}</div>
-      </article>
-    `,
-  },
-  editorial: {
-    id: "editorial",
-    index: "02",
-    title: "Editorial essay",
-    summary: "Three composed pages with running furniture and explicit page breaks.",
-    html: `
-      <style>${documentStyle}</style>
-      <article>
-        <p class="kicker">Morrow Journal · Issue 08</p>
-        <h1>The shape of quiet interfaces</h1>
-        <p class="lede">Good tools do not disappear. They become calm enough for the work to take the foreground.</p>
-        <div class="rule"></div>
-        <p>Publishing software is often judged by the surface it adds. The more useful measure is the friction it removes: stable rhythm, predictable breaks, and a page that remains itself from preview to print.</p>
-        <p class="meta">Essay / Systems / 6 minute read</p>
-      </article>
-      <section style="break-before: page">
-        <span class="number">02</span>
-        <p class="kicker">A page is a contract</p>
-        <h2>Structure before decoration</h2>
-        <p>Imposia keeps one canonical page DOM. Pagination, presentation, and browser print refer to the same iframe instead of copying a convenient approximation.</p>
-        <blockquote class="note">The viewer should reveal document structure, not manufacture a second one.</blockquote>
-      </section>
-      <section style="break-before: page">
-        <span class="number">03</span>
-        <p class="kicker">The useful boundary</p>
-        <h2>Extensions remain guests</h2>
-        <p>Ordered extensions may transform strings, admit assets, and add running furniture. Core still owns sanitization, resource resolution, aborts, rollback, and cleanup.</p>
-        <ul class="facts">
-          <li><strong>Input</strong> HTML and CSS</li>
-          <li><strong>Output</strong> Canonical browser pages</li>
-          <li><strong>Runtime</strong> Client only</li>
-        </ul>
-      </section>
-    `,
-  },
-  brief: {
-    id: "brief",
-    index: "03",
-    title: "Product brief",
-    summary: "A compact two-page product document with structured facts.",
-    html: `
-      <style>${documentStyle}</style>
-      <article>
-        <p class="kicker">Atlas release brief · 2026.07</p>
-        <h1>One document. One browser surface.</h1>
-        <p class="lede">A client-side publishing primitive for products that need preview, pagination, and print without a server renderer.</p>
-        <ul class="facts">
-          <li><strong>Primary</strong> React adapter</li>
-          <li><strong>Portable</strong> Framework-neutral client</li>
-          <li><strong>Boundary</strong> Resolver-mediated assets</li>
-        </ul>
-      </article>
-      <section style="break-before: page">
-        <p class="kicker">Release posture</p>
-        <h2>Small public surface, explicit guarantees</h2>
-        <p>The current contract covers ordered flow, page sides, decorations, warnings, canonical iframe lifecycle, and deterministic resource cleanup.</p>
-        <div class="rule"></div>
-        <p class="note">Chromium is the pagination reference. Firefox and WebKit preserve the shared API, isolation, and lifecycle contract.</p>
-        <p class="meta">Imposia / Browser publishing toolkit</p>
-      </section>
-    `,
-  },
-  hangul: {
-    id: "hangul",
-    index: "04",
-    title: "한국어 필드노트",
-    summary: "한글 조판과 명시적 페이지 나눔을 확인하는 두 페이지 샘플입니다.",
-    html: `
-      <style>${documentStyle}</style>
-      <article lang="ko">
-        <p class="kicker">서울 필드노트 · 여름호</p>
-        <h1>읽는 흐름을 해치지 않는 도구</h1>
-        <p class="lede">좋은 미리보기는 결과를 흉내 내지 않고, 실제 문서가 어떻게 페이지가 되는지 차분하게 보여줍니다.</p>
-        <div class="rule"></div>
-        <p>브라우저 안에서 만들어진 하나의 페이지 DOM을 미리보기와 인쇄가 함께 사용합니다. 화면마다 문서를 복제하지 않으므로 구조와 순서가 흔들리지 않습니다.</p>
-        <p class="meta">기록 / 브라우저 조판 / 클라이언트 런타임</p>
-      </article>
-      <section lang="ko" style="break-before: page">
-        <span class="number">02</span>
-        <p class="kicker">확장 가능한 경계</p>
-        <h2>기능은 더하되 소유권은 넘기지 않습니다</h2>
-        <p>확장은 선언된 순서로 실행되지만 문서 DOM이나 네트워크에 직접 접근하지 않습니다. 입력 정리, 자산 허용, 경고, 중단과 정리는 언제나 Core의 경계 안에 남습니다.</p>
-        <blockquote class="note">플러그인은 조합할 수 있어야 하고, 핵심 계약은 예측 가능해야 합니다.</blockquote>
-      </section>
-    `,
-  },
-  publishing: {
-    id: "publishing",
-    index: "05",
-    title: "Publishing contract",
-    summary:
-      "A4 page rules, local references, repeated table heads, and opt-in publishing features.",
-    html: `
-      <style>${publishingDocumentCss}</style>
-      <article class="publishing-document">
-        <p class="publishing-kicker">Imposia / publishing lab / contract specimen</p>
-        <h1>Pages that carry their own evidence</h1>
-        <p class="publishing-deck">A deliberately dense document surface for checking geometry, running furniture, safe local references, and bounded experimental placement.</p>
-        <div class="publishing-support">
-          <span><strong>Stable</strong> A4 geometry, authored page selectors, named strings, and deterministic EPUB export.</span>
-          <span><strong>Constrained</strong> local target references, table continuation, and Chromium-reference pagination.</span>
-          <span><strong>Experimental</strong> footnote and page-float markers are opt-in and remain bounded.</span>
-        </div>
-        <aside class="publishing-float">
-          <strong>Page-float probe.</strong> This bounded callout opts into page-referenced top placement.
-        </aside>
-        <h2 id="geometry">Geometry is an authored contract</h2>
-        <p>The authored page rules pin A4 with four named margins. First, left, and right furniture follow the latest named section.</p>
-        <p>Read the <a class="publishing-reference" href="#table-title">table page</a> and <a class="publishing-reference-text" href="#table-title">table heading</a> through safe local fragments.</p>
-        <h2 id="table-title">A repeated table head</h2>
-        <table class="publishing-table">
-          <thead><tr><th>Index</th><th>Concern</th><th>Authored signal</th><th>Support posture</th></tr></thead>
-          <tbody>${publishingRows}</tbody>
-        </table>
-        <h2>Placement stays explicit</h2>
-        <p>One note is anchored to a local footnote target: <span id="rights-anchor" data-footnote-anchor="rights">rights and recovery remain visible</span>.</p>
-        <aside class="publishing-footnote" data-footnote="rights">Footnote probe: this note is experimental and falls back to normal flow when the bounded area cannot fit.</aside>
-        <p class="publishing-support"><strong>Manual QA cue</strong> Check the Sheet metric, the top and bottom furniture, repeated table headings, the two local references, and the explicit support labels above.</p>
-      </article>
-    `,
-  },
-};
-
-const snippets: Record<CodeMode, string> = {
-  react: `import { ImposiaPageViewer, type ImposiaPageViewerHandle } from "@imposia/react";
-import "@imposia/react/styles.css";
-import { useRef } from "react";
-
-const viewer = useRef<ImposiaPageViewerHandle>(null);
-
-<ImposiaPageViewer
-  ref={viewer}
-  source={{ html }}
-  documentOptions={{ page: { size: "A4", orientation: "portrait" }, extensions }}
-  onReady={({ pageCount }) => setPages(pageCount)}
-/>
-
-await viewer.current?.print();`,
-  core: `import { mountPageDocument, mountPageViewer } from "@imposia/client";
-
-const controller = mountPageDocument(host, { html }, {
-  page: { size: "A4", orientation: "portrait" },
-  extensions,
-});
-const pageDocument = await controller.ready;
-const viewer = mountPageViewer(host, pageDocument);
-
-await controller.print();`,
-};
-
-function ImposiaMark() {
+function Segmented<T extends string>({
+  label,
+  options,
+  value,
+  onChange,
+}: {
+  label: string;
+  options: readonly Segment<T>[];
+  value: T;
+  onChange: (value: T) => void;
+}) {
   return (
-    <svg className="demo-brand-mark" viewBox="0 0 72 72" aria-hidden="true" focusable="false">
-      <path
-        className="demo-brand-mark-outline"
-        d="M36 20 18 9 4 17l18 11v17L4 56l16 9 16-10V20Zm0 0L54 9l14 8-18 11v17l18 11-16 9-16-10V20Z"
-      />
-      <path className="demo-brand-mark-fold" d="m22 28 14-8v16L22 28Zm14 27V39l14 9-14 7Z" />
-    </svg>
-  );
-}
-
-function statusLabel(state: ImposiaDocumentState["status"]): string {
-  if (state === "ready") return "Ready";
-  if (state === "loading") return "Paginating";
-  if (state === "error") return "Error";
-  return "Idle";
-}
-
-function exportStatusLabel(
-  status: ExportStatus,
-  message: string | undefined,
-  ready: boolean,
-): string {
-  if (status === "exporting") return "Exporting…";
-  if (status === "success") return "EPUB downloaded";
-  if (status === "error") return message ?? "Export failed";
-  return ready ? "EPUB ready" : "Awaiting document";
-}
-
-function inspectIntegrity(pageDocument: PageDocument): IntegrityReport {
-  const frameDocument = pageDocument.iframe.contentDocument;
-  if (frameDocument === null) {
-    return {
-      sourceTokenCount: integrityTokens.length,
-      committedTokenCount: 0,
-      exactSequence: false,
-      pageRanges: [],
-    };
-  }
-
-  const pageRanges = [...frameDocument.querySelectorAll<HTMLElement>("[data-imposia-page]")]
-    .map((pageElement, index): IntegrityPageRange | undefined => {
-      const tokens = [
-        ...pageElement.querySelectorAll<HTMLElement>("[data-integrity-token]"),
-      ].flatMap((element) => {
-        const token = element.dataset.integrityToken;
-        return token === undefined ? [] : [token];
-      });
-      const first = tokens[0];
-      const last = tokens.at(-1);
-      if (first === undefined || last === undefined) return undefined;
-      return { page: index + 1, first, last, count: tokens.length };
-    })
-    .filter((range): range is IntegrityPageRange => range !== undefined);
-  const committedTokens = pageRanges.flatMap((range) => {
-    const first = integrityTokens.indexOf(range.first);
-    return first < 0 ? [] : integrityTokens.slice(first, first + range.count);
-  });
-  const domTokens = [
-    ...frameDocument.querySelectorAll<HTMLElement>("[data-imposia-page] [data-integrity-token]"),
-  ].flatMap((element) => {
-    const token = element.dataset.integrityToken;
-    return token === undefined ? [] : [token];
-  });
-  const exactSequence =
-    domTokens.length === integrityTokens.length &&
-    domTokens.every((token, index) => token === integrityTokens[index]) &&
-    committedTokens.every((token, index) => token === domTokens[index]);
-
-  return {
-    sourceTokenCount: integrityTokens.length,
-    committedTokenCount: domTokens.length,
-    exactSequence,
-    pageRanges,
-  };
-}
-
-function App() {
-  const viewerRef = useRef<ImposiaPageViewerHandle>(null);
-  const sampleHeadingId = useId();
-  const runtimeHeadingId = useId();
-  const codeHeadingId = useId();
-  const exportHeadingId = useId();
-  const integrityHeadingId = useId();
-  const commitProbeHeadingId = useId();
-  const [demoCase, setDemoCase] = useState<DemoCase>("editor");
-  const [sampleId, setSampleId] = useState<SampleId>("editorial");
-  const [pagePreset, setPagePreset] = useState<PagePreset>(DEFAULT_PAGE_PRESET);
-  const [pageOrientation, setPageOrientation] = useState<PageOrientation>("portrait");
-  const [extensionsEnabled, setExtensionsEnabled] = useState(true);
-  const [experimentalPlacementEnabled, setExperimentalPlacementEnabled] = useState(false);
-  const [codeMode, setCodeMode] = useState<CodeMode>("react");
-  const [state, setState] = useState<ImposiaDocumentState>({ status: "idle" });
-  const [pageDocument, setPageDocument] = useState<PageDocument>();
-  const [error, setError] = useState<string>();
-  const [exportStatus, setExportStatus] = useState<ExportStatus>("idle");
-  const [exportMessage, setExportMessage] = useState<string>();
-  const [csrRevision, setCsrRevision] = useState(0);
-  const [editorHtml, setEditorHtml] = useState(initialEditorHtml);
-  const [editorRevision, setEditorRevision] = useState(0);
-  const [integrityStatus, setIntegrityStatus] = useState<IntegrityStatus>("idle");
-  const [integrityReport, setIntegrityReport] = useState<IntegrityReport>();
-  const [commitProbe, setCommitProbeState] = useState<CommitProbe>(IDLE_COMMIT_PROBE);
-  const [probeFailActive, setProbeFailActive] = useState(false);
-  const [probeFailRevision, setProbeFailRevision] = useState(0);
-  const commitProbeRef = useRef<CommitProbe>(IDLE_COMMIT_PROBE);
-  const supersedeTargetRef = useRef<number | undefined>(undefined);
-  const setCommitProbe = useCallback((next: CommitProbe) => {
-    commitProbeRef.current = next;
-    setCommitProbeState(next);
-  }, []);
-  const pendingCsrRevisionRef = useRef<number | undefined>(undefined);
-  const csrBurstTimeoutsRef = useRef<number[]>([]);
-  const extensionsEnabledRef = useRef(extensionsEnabled);
-  const sampleIdRef = useRef(sampleId);
-  const demoCaseRef = useRef(demoCase);
-  useEffect(() => {
-    demoCaseRef.current = demoCase;
-  }, [demoCase]);
-  const requestLiveRevision = useCallback((revision: number) => {
-    setCsrRevision(revision);
-  }, []);
-  const editorPagination = useLiveEditorMetrics();
-  const handleEditorChange = useCallback(
-    (html: string, requestedAt: number) => {
-      const revision = editorPagination.requestRevision(requestedAt);
-      setEditorHtml(html);
-      setEditorRevision(revision);
-    },
-    [editorPagination.requestRevision],
-  );
-  const isCanonicalIntegrityIntact = useCallback(() => {
-    const frameDocument = viewerRef.current?.current?.iframe.contentDocument;
-    if (frameDocument === null || frameDocument === undefined) return false;
-    return (
-      frameDocument.querySelectorAll("[data-imposia-page] [data-integrity-token]").length ===
-      integrityTokens.length
-    );
-  }, []);
-  const getCanonicalIframe = useCallback(() => viewerRef.current?.current?.iframe, []);
-  const liveRender = useLiveRenderRunner({
-    currentRevision: csrRevision,
-    enabled: demoCase === "stress" && sampleId === "integrity",
-    onRequestRevision: requestLiveRevision,
-    isCanonicalIntact: isCanonicalIntegrityIntact,
-    getCanonicalIframe,
-  });
-  const handleComposeProgress = useCallback(
-    (progress: PageComposeProgress) => {
-      liveRender.recordProgress(progress);
-    },
-    [liveRender.recordProgress],
-  );
-  const runningHeadExtension = useMemo<PageExtension>(
-    () => ({
-      name: "demo/running-head",
-      decoratePage(page, context) {
-        if (
-          !extensionsEnabledRef.current ||
-          sampleIdRef.current === "integrity" ||
-          demoCaseRef.current === "editor" ||
-          demoCaseRef.current === "output"
-        )
-          return undefined;
-        context.warn({
-          code: "EXTENSION_DEMO_ACTIVE",
-          message: "The publishing-lab running-head extension is active.",
-        });
-        if (page.blank) return undefined;
-        return {
-          headerHtml:
-            '<span class="demo-running-head">Extension / live · {{pageNumber}} / {{totalPages}}</span>',
-        };
-      },
-    }),
-    [],
-  );
-  const sample = samples[sampleId];
-  const source = useMemo(() => {
-    if (demoCase === "editor" || demoCase === "output") {
-      return {
-        html: `<style>${documentStyle}</style><article data-editor-revision="${editorRevision}">${editorHtml}</article>`,
-      };
-    }
-    const selectedHtml =
-      sample.id === "publishing" && experimentalPlacementEnabled
-        ? sample.html.replace("</style>", `${publishingPlacementCss}</style>`)
-        : sample.html;
-    const html =
-      sample.id === "integrity"
-        ? selectedHtml.replace("{{CSR_REVISION}}", String(csrRevision))
-        : selectedHtml;
-    if (probeFailActive && sample.id === "integrity") {
-      return { html: html + probeOversizedHtml() };
-    }
-    return { html };
-  }, [
-    csrRevision,
-    demoCase,
-    editorHtml,
-    editorRevision,
-    experimentalPlacementEnabled,
-    probeFailActive,
-    sample,
-  ]);
-  const sourceRevision = `case:${demoCase};${extensionsEnabled ? "extensions:on" : "extensions:off"};${experimentalPlacementEnabled ? "placement:on" : "placement:off"};csr:${csrRevision};editor:${editorRevision};probe:${probeFailActive ? "fail" : "ok"}:${probeFailRevision}`;
-  const activeTitle =
-    demoCase === "editor" || demoCase === "output" ? "Live editor document" : sample.title;
-  const documentOptions = useMemo<PageDocumentOptions>(
-    () => ({
-      extensions: [runningHeadExtension],
-      experimental: { footnotes: true, pageFloats: true },
-      page: { size: pagePreset.size, orientation: pageOrientation },
-      onProgress: handleComposeProgress,
-    }),
-    [handleComposeProgress, pageOrientation, pagePreset, runningHeadExtension],
-  );
-
-  const cancelCsrBurst = () => {
-    for (const timeoutId of csrBurstTimeoutsRef.current) window.clearTimeout(timeoutId);
-    csrBurstTimeoutsRef.current = [];
-    pendingCsrRevisionRef.current = undefined;
-  };
-
-  useEffect(
-    () => () => {
-      for (const timeoutId of csrBurstTimeoutsRef.current) window.clearTimeout(timeoutId);
-      csrBurstTimeoutsRef.current = [];
-      pendingCsrRevisionRef.current = undefined;
-    },
-    [],
-  );
-
-  const handleReady = (nextDocument: PageDocument) => {
-    setPageDocument(nextDocument);
-    setError(undefined);
-    if (demoCase === "editor" || demoCase === "output") {
-      const editorRevisionText =
-        nextDocument.iframe.contentDocument?.querySelector<HTMLElement>("[data-editor-revision]")
-          ?.dataset.editorRevision;
-      const committedEditorRevision =
-        editorRevisionText === undefined ? Number.NaN : Number(editorRevisionText);
-      if (Number.isFinite(committedEditorRevision)) {
-        editorPagination.recordCommit(committedEditorRevision);
-      }
-      setIntegrityReport(undefined);
-      setIntegrityStatus("idle");
-      pendingCsrRevisionRef.current = undefined;
-      return;
-    }
-    if (sample.id !== "integrity") {
-      setIntegrityReport(undefined);
-      setIntegrityStatus("idle");
-      pendingCsrRevisionRef.current = undefined;
-      return;
-    }
-
-    const report = inspectIntegrity(nextDocument);
-    setIntegrityReport(report);
-    const committedRevisionText =
-      nextDocument.iframe.contentDocument?.querySelector<HTMLElement>(
-        "[data-csr-revision]",
-      )?.textContent;
-    const committedRevision =
-      committedRevisionText === undefined ? Number.NaN : Number(committedRevisionText);
-    if (Number.isFinite(committedRevision)) {
-      liveRender.recordCommit({
-        revision: committedRevision,
-        generation: nextDocument.generation,
-        exactSequence: report.exactSequence,
-      });
-    }
-    const pendingRevision = pendingCsrRevisionRef.current;
-    if (pendingRevision !== undefined && csrRevision >= pendingRevision) {
-      setIntegrityStatus(report.exactSequence ? "verified" : "failed");
-      pendingCsrRevisionRef.current = undefined;
-    } else if (pendingRevision === undefined) {
-      setIntegrityStatus(report.exactSequence ? "verified" : "failed");
-    }
-
-    const probe = commitProbeRef.current;
-    if (probe.phase === "superseding") {
-      const target = supersedeTargetRef.current;
-      if (
-        target !== undefined &&
-        Number.isFinite(committedRevision) &&
-        committedRevision >= target
-      ) {
-        supersedeTargetRef.current = undefined;
-        const generations =
-          probe.startGeneration === undefined
-            ? undefined
-            : nextDocument.generation - probe.startGeneration;
-        setCommitProbe({
-          ...probe,
-          phase: "idle",
-          endGeneration: nextDocument.generation,
-          outcome:
-            generations === 1
-              ? `2 revisions, 1 commit: revision ${target - 1} was superseded before it could appear.`
-              : `2 revisions committed across ${generations ?? "?"} generations: no supersession this run.`,
-        });
-      }
-    } else if (probe.phase === "recovering") {
-      setCommitProbe({
-        ...probe,
-        phase: "idle",
-        endGeneration: nextDocument.generation,
-        outcome: `Recovered: generation ${nextDocument.generation} replaced the survivor in one swap.`,
-      });
-    }
-  };
-
-  const handleError = (nextError: unknown) => {
-    const probe = commitProbeRef.current;
-    if (probe.phase === "failing") {
-      // The failing revision is the observation, not a defect: the committed
-      // generation is untouched, so the integrity verdict must not change.
-      const message = nextError instanceof Error ? nextError.message : String(nextError);
-      setCommitProbe({
-        ...probe,
-        phase: "failed",
-        endGeneration: viewerRef.current?.current?.generation,
-        outcome: `Rejected: ${message} Generation ${probe.startGeneration ?? "?"} stayed visible; nothing partial rendered.`,
-      });
-      setError(message);
-      return;
-    }
-    cancelCsrBurst();
-    liveRender.cancel();
-    setIntegrityReport(undefined);
-    setIntegrityStatus(sampleIdRef.current === "integrity" ? "failed" : "idle");
-    setError(nextError instanceof Error ? nextError.message : String(nextError));
-  };
-
-  const handleStateChange = (nextState: ImposiaDocumentState) => {
-    setState(nextState);
-    if (nextState.status === "loading") {
-      setExportStatus("idle");
-      setExportMessage(undefined);
-    }
-  };
-
-  const markDocumentLoading = () => {
-    cancelCsrBurst();
-    liveRender.cancel();
-    setCommitProbe(IDLE_COMMIT_PROBE);
-    setProbeFailActive(false);
-    supersedeTargetRef.current = undefined;
-    setIntegrityReport(undefined);
-    setIntegrityStatus("idle");
-    setState(
-      pageDocument === undefined
-        ? { status: "loading" }
-        : { status: "loading", document: pageDocument },
-    );
-    setExportStatus("idle");
-    setExportMessage(undefined);
-  };
-
-  const handleSampleChange = (nextSampleId: SampleId) => {
-    if (nextSampleId === sampleId) return;
-    markDocumentLoading();
-    sampleIdRef.current = nextSampleId;
-    setIntegrityStatus(nextSampleId === "integrity" ? "running" : "idle");
-    setSampleId(nextSampleId);
-  };
-
-  const handleCaseChange = (nextCase: DemoCase) => {
-    if (nextCase === demoCase) return;
-    markDocumentLoading();
-    setDemoCase(nextCase);
-    if (nextCase === "stress") {
-      sampleIdRef.current = "integrity";
-      setSampleId("integrity");
-    } else if (nextCase === "compatibility") {
-      sampleIdRef.current = "publishing";
-      setSampleId("publishing");
-    }
-  };
-
-  const runCsrBurst = () => {
-    if (integrityStatus === "running") return;
-    liveRender.cancel();
-    cancelCsrBurst();
-    const targetRevision = csrRevision + 3;
-    pendingCsrRevisionRef.current = targetRevision;
-    setIntegrityStatus("running");
-    for (const delay of [0, 16, 32]) {
-      const timeoutId = window.setTimeout(() => {
-        csrBurstTimeoutsRef.current = csrBurstTimeoutsRef.current.filter(
-          (candidate) => candidate !== timeoutId,
-        );
-        setCsrRevision((revision) => revision + 1);
-      }, delay);
-      csrBurstTimeoutsRef.current.push(timeoutId);
-    }
-  };
-
-  const runFailedRevision = () => {
-    if (state.status !== "ready" || probeFailActive || integrityStatus === "running") return;
-    liveRender.cancel();
-    cancelCsrBurst();
-    setCommitProbe({
-      phase: "failing",
-      startGeneration: viewerRef.current?.current?.generation,
-      revisionsIssued: 1,
-    });
-    setProbeFailRevision((revision) => revision + 1);
-    setProbeFailActive(true);
-  };
-
-  const recoverFailedRevision = () => {
-    if (!probeFailActive) return;
-    setCommitProbe({ ...commitProbeRef.current, phase: "recovering" });
-    setProbeFailActive(false);
-  };
-
-  const runSupersession = () => {
-    if (state.status !== "ready" || probeFailActive || integrityStatus === "running") return;
-    liveRender.cancel();
-    cancelCsrBurst();
-    supersedeTargetRef.current = csrRevision + 2;
-    setCommitProbe({
-      phase: "superseding",
-      startGeneration: viewerRef.current?.current?.generation,
-      revisionsIssued: 2,
-    });
-    setCsrRevision((revision) => revision + 1);
-    window.setTimeout(() => setCsrRevision((revision) => revision + 1), 0);
-  };
-
-  const handleOrientationChange = (nextOrientation: PageOrientation) => {
-    if (nextOrientation === pageOrientation) return;
-    markDocumentLoading();
-    setPageOrientation(nextOrientation);
-  };
-
-  const handlePagePresetChange = (nextPreset: PagePreset) => {
-    if (nextPreset.id === pagePreset.id) return;
-    markDocumentLoading();
-    setPagePreset(nextPreset);
-  };
-
-  const handleExport = async () => {
-    const nextDocument = pageDocument;
-    if (nextDocument === undefined || state.status !== "ready") return;
-
-    setExportStatus("exporting");
-    setExportMessage(undefined);
-    try {
-      const exportSampleId = demoCase === "editor" || demoCase === "output" ? "editor" : sample.id;
-      const blob = await nextDocument.exportEpub({
-        metadata: {
-          title: activeTitle,
-          language: exportSampleId === "hangul" ? "ko" : "en",
-          identifier: `urn:imposia:demo:${exportSampleId}`,
-          modified: "2026-01-01T00:00:00Z",
-        },
-      });
-      const objectUrl = URL.createObjectURL(blob);
-      try {
-        const anchor = document.createElement("a");
-        try {
-          anchor.href = objectUrl;
-          anchor.download = `imposia-${exportSampleId}.epub`;
-          anchor.hidden = true;
-          document.body.append(anchor);
-          anchor.click();
-        } finally {
-          anchor.remove();
-        }
-      } finally {
-        window.setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
-      }
-      setExportStatus("success");
-    } catch (nextError: unknown) {
-      const message = nextError instanceof Error ? nextError.message : String(nextError);
-      setExportStatus("error");
-      setExportMessage(`Export failed: ${message}`);
-    }
-  };
-
-  const handlePrint = async () => {
-    const viewer = viewerRef.current;
-    if (viewer === null || state.status !== "ready") return;
-
-    try {
-      await viewer.print();
-      setError(undefined);
-    } catch (nextError: unknown) {
-      handleError(nextError instanceof Error ? nextError : new Error(String(nextError)));
-    }
-  };
-
-  return (
-    <div className="demo-shell">
-      <aside className="demo-panel" aria-label="Imposia demo controls">
-        <header className="demo-brand">
-          <ImposiaMark />
-          <div>
-            <strong>Imposia</strong>
-            <span>Integrity lab / 0.2.0</span>
-          </div>
-        </header>
-
-        <section className="demo-intro">
-          <p className="demo-eyebrow">CSR HTML → complete pages</p>
-          <h1>Edit HTML. Keep complete pages.</h1>
-          <p>
-            Change a client-rendered document directly, then inspect stress, compatibility, and
-            output as focused cases instead of one crowded control surface.
-          </p>
-        </section>
-
-        <nav className="demo-case-nav" aria-label="Demo cases">
-          {(
-            [
-              ["editor", "Live editor"],
-              ["stress", "Stress"],
-              ["compatibility", "Compatibility"],
-              ["output", "Output"],
-            ] as const
-          ).map(([caseId, label]) => (
-            <button
-              type="button"
-              key={caseId}
-              data-demo-case={caseId}
-              aria-pressed={demoCase === caseId}
-              onClick={() => handleCaseChange(caseId)}
-            >
-              {label}
-            </button>
-          ))}
-        </nav>
-
-        {demoCase === "editor" ? (
-          <LiveEditor
-            html={editorHtml}
-            metrics={editorPagination.metrics}
-            onChange={handleEditorChange}
-          />
-        ) : null}
-
-        {demoCase === "stress" && sample.id === "integrity" ? (
-          <section
-            className="demo-control-section demo-integrity-section"
-            aria-labelledby={integrityHeadingId}
-          >
-            <div className="demo-section-heading">
-              <h2 id={integrityHeadingId}>Pagination integrity</h2>
-              <span>
-                {integrityStatus === "running"
-                  ? "checking"
-                  : integrityReport?.exactSequence
-                    ? "exact sequence"
-                    : "not verified"}
-              </span>
-            </div>
-            <output
-              className={`demo-integrity-status demo-integrity-status-${integrityStatus}`}
-              data-testid="integrity-status"
-              aria-live="polite"
-            >
-              <strong data-testid="integrity-count">
-                {integrityReport === undefined
-                  ? "— / 96"
-                  : `${integrityReport.committedTokenCount} / ${integrityReport.sourceTokenCount}`}
-              </strong>
-              <span>
-                {integrityStatus === "running"
-                  ? "Checking the next committed generation…"
-                  : integrityReport?.exactSequence
-                    ? `Exact and ordered · CSR revision ${csrRevision}`
-                    : "The committed sequence does not match the source."}
-              </span>
-            </output>
-            <ol className="demo-integrity-ranges" data-testid="integrity-page-ranges">
-              {integrityReport?.pageRanges.map((range) => (
-                <li key={range.page}>
-                  <span>Page {range.page}</span>
-                  <code>
-                    {range.first} → {range.last}
-                  </code>
-                  <small>{range.count} tokens</small>
-                </li>
-              ))}
-            </ol>
-            <button
-              type="button"
-              className="demo-output-button"
-              data-testid="run-csr-burst"
-              onClick={runCsrBurst}
-              disabled={integrityStatus === "running" || liveRender.snapshot.status === "running"}
-            >
-              Run 3-update CSR burst
-            </button>
-            <LiveRenderRunner
-              snapshot={liveRender.snapshot}
-              disabled={integrityStatus === "running"}
-              onStart={liveRender.start}
-              onCancel={liveRender.cancel}
-            />
-          </section>
-        ) : null}
-
-        {demoCase === "stress" && sample.id === "integrity" ? (
-          <section
-            className="demo-control-section demo-commit-probe"
-            aria-labelledby={commitProbeHeadingId}
-          >
-            <div className="demo-section-heading">
-              <h2 id={commitProbeHeadingId}>Commit protection</h2>
-              <span>{commitProbe.phase === "idle" ? "deterministic" : commitProbe.phase}</span>
-            </div>
-            <p className="demo-commit-probe-copy">
-              Watch the workspace while each procedure runs: the committed pages and their
-              generation number stay visible until one complete winning generation replaces them. A
-              failed revision is rejected whole, and a superseded revision never appears.
-            </p>
-            <div className="demo-commit-probe-actions">
-              <button
-                type="button"
-                className="demo-output-button"
-                data-testid="run-failed-revision"
-                onClick={runFailedRevision}
-                disabled={
-                  state.status !== "ready" ||
-                  probeFailActive ||
-                  integrityStatus === "running" ||
-                  liveRender.snapshot.status === "running"
-                }
-              >
-                Submit a failing revision
-              </button>
-              <button
-                type="button"
-                className="demo-output-button"
-                data-testid="recover-failed-revision"
-                onClick={recoverFailedRevision}
-                disabled={!probeFailActive}
-              >
-                Recover with a valid revision
-              </button>
-              <button
-                type="button"
-                className="demo-output-button"
-                data-testid="run-supersession"
-                onClick={runSupersession}
-                disabled={
-                  state.status !== "ready" ||
-                  probeFailActive ||
-                  integrityStatus === "running" ||
-                  liveRender.snapshot.status === "running"
-                }
-              >
-                Race two revisions
-              </button>
-            </div>
-            <dl className="demo-commit-probe-evidence">
-              <div>
-                <dt>Start generation</dt>
-                <dd data-testid="commit-probe-start">{commitProbe.startGeneration ?? "—"}</dd>
-              </div>
-              <div>
-                <dt>Committed generation</dt>
-                <dd data-testid="commit-probe-end">{commitProbe.endGeneration ?? "—"}</dd>
-              </div>
-              <div>
-                <dt>Revisions issued</dt>
-                <dd data-testid="commit-probe-revisions">
-                  {commitProbe.revisionsIssued === 0 ? "—" : commitProbe.revisionsIssued}
-                </dd>
-              </div>
-            </dl>
-            <output
-              className="demo-commit-probe-outcome"
-              data-testid="commit-probe-outcome"
-              aria-live="polite"
-            >
-              {commitProbe.outcome ?? "Idle. Run a procedure to record an observation."}
-            </output>
-          </section>
-        ) : null}
-
-        {demoCase === "compatibility" ? (
-          <>
-            <section className="demo-control-section" aria-labelledby={sampleHeadingId}>
-              <div className="demo-section-heading">
-                <h2 id={sampleHeadingId}>Document specimen</h2>
-                <span>{String(Object.keys(samples).length).padStart(2, "0")} sources</span>
-              </div>
-              <div className="demo-sample-list">
-                {Object.values(samples).map((candidate) => (
-                  <button
-                    type="button"
-                    className="demo-sample"
-                    data-sample-id={candidate.id}
-                    aria-pressed={sampleId === candidate.id}
-                    key={candidate.id}
-                    onClick={() => handleSampleChange(candidate.id)}
-                  >
-                    <span>{candidate.index}</span>
-                    <strong>{candidate.title}</strong>
-                    <small>{candidate.summary}</small>
-                  </button>
-                ))}
-              </div>
-            </section>
-
-            <section className="demo-control-section" aria-labelledby={runtimeHeadingId}>
-              <div className="demo-section-heading">
-                <h2 id={runtimeHeadingId}>Runtime boundary</h2>
-                <span>{extensionsEnabled ? "decorated" : "undecorated"}</span>
-              </div>
-              <div className="demo-runtime-controls">
-                <PageSetup
-                  preset={pagePreset}
-                  orientation={pageOrientation}
-                  onPresetChange={handlePagePresetChange}
-                  onOrientationChange={handleOrientationChange}
-                />
-                <label className="demo-switch">
-                  <span>
-                    <strong>Running-head extension</strong>
-                    <small>Ordered, sanitized, controller-lifetime</small>
-                  </span>
-                  <input
-                    type="checkbox"
-                    checked={extensionsEnabled}
-                    onChange={(event) => {
-                      markDocumentLoading();
-                      const nextExtensionsEnabled = event.currentTarget.checked;
-                      extensionsEnabledRef.current = nextExtensionsEnabled;
-                      setExtensionsEnabled(nextExtensionsEnabled);
-                    }}
-                  />
-                  <i aria-hidden="true"></i>
-                </label>
-                {sample.id === "publishing" ? (
-                  <label className="demo-switch">
-                    <span>
-                      <strong>Experimental placement</strong>
-                      <small>Authored footnotes + page floats / opt-in</small>
-                    </span>
-                    <input
-                      type="checkbox"
-                      checked={experimentalPlacementEnabled}
-                      onChange={(event) => {
-                        markDocumentLoading();
-                        setExperimentalPlacementEnabled(event.currentTarget.checked);
-                      }}
-                    />
-                    <i aria-hidden="true"></i>
-                  </label>
-                ) : null}
-              </div>
-            </section>
-          </>
-        ) : null}
-
-        {demoCase === "output" ? (
-          <section
-            className="demo-control-section demo-export-section"
-            aria-labelledby={exportHeadingId}
-          >
-            <div className="demo-section-heading">
-              <h2 id={exportHeadingId}>Portable output</h2>
-              <span>PDF / EPUB</span>
-            </div>
-            <div className="demo-output-actions">
-              <div className="demo-export-action">
-                <div className="demo-export-copy">
-                  <strong>Print or save the current pages</strong>
-                  <small>Native browser dialog / canonical iframe</small>
-                </div>
-                <button
-                  type="button"
-                  className="demo-output-button demo-print-button"
-                  onClick={() => void handlePrint()}
-                  disabled={state.status !== "ready"}
-                >
-                  Print / Save PDF
-                </button>
-              </div>
-              <div className="demo-export-action">
-                <div className="demo-export-copy">
-                  <strong>Download the semantic document</strong>
-                  <small>Deterministic EPUB 3 / browser-only</small>
-                </div>
-                <button
-                  type="button"
-                  className="demo-output-button demo-export-button"
-                  onClick={() => void handleExport()}
-                  disabled={
-                    state.status !== "ready" ||
-                    pageDocument === undefined ||
-                    exportStatus === "exporting"
-                  }
-                >
-                  Download EPUB
-                </button>
-                <output
-                  className={`demo-export-status demo-export-status-${exportStatus}`}
-                  data-testid="demo-export-status"
-                  aria-live="polite"
-                >
-                  {exportStatusLabel(
-                    exportStatus,
-                    exportMessage,
-                    state.status === "ready" && pageDocument !== undefined,
-                  )}
-                </output>
-              </div>
-            </div>
-          </section>
-        ) : null}
-
-        {demoCase === "compatibility" || demoCase === "output" ? (
-          <section className="demo-code" aria-labelledby={codeHeadingId}>
-            <div className="demo-code-tabs">
-              <h2 id={codeHeadingId}>Use the surface</h2>
-              <fieldset className="demo-code-mode" aria-label="API example">
-                {(["react", "core"] as const).map((mode) => (
-                  <button
-                    type="button"
-                    aria-pressed={codeMode === mode}
-                    key={mode}
-                    onClick={() => setCodeMode(mode)}
-                  >
-                    {mode === "react" ? "React" : "Core"}
-                  </button>
-                ))}
-              </fieldset>
-            </div>
-            <pre data-testid="demo-code-snippet">
-              <code>{snippets[codeMode]}</code>
-            </pre>
-          </section>
-        ) : null}
-      </aside>
-
-      <section className="demo-workspace" aria-label="Live document preview">
-        <header className="demo-workspace-header">
-          <div>
-            <span className={`demo-status demo-status-${state.status}`}>
-              <i aria-hidden="true"></i>
-              {statusLabel(state.status)}
-            </span>
-            <strong>{activeTitle}</strong>
-          </div>
-          <dl className="demo-metrics" aria-label="Document metrics">
-            <div>
-              <dt>Pages</dt>
-              <dd data-testid="metric-pages">{pageDocument?.pageCount ?? "—"}</dd>
-            </div>
-            <div>
-              <dt>Generation</dt>
-              <dd data-testid="metric-generation">{pageDocument?.generation ?? "—"}</dd>
-            </div>
-            <div>
-              <dt>Warnings</dt>
-              <dd data-testid="metric-warnings">{pageDocument?.warnings.length ?? "—"}</dd>
-            </div>
-            <div>
-              <dt>Layout</dt>
-              <dd>
-                {pageDocument === undefined
-                  ? "—"
-                  : `${Math.round(pageDocument.timings.totalMs)} ms`}
-              </dd>
-            </div>
-            <div>
-              <dt>Sheet</dt>
-              <dd data-testid="metric-sheet">
-                {pageDocument?.pages[0]?.geometry === undefined
-                  ? "—"
-                  : `${Math.round(pageDocument.pages[0].geometry.sheetWidthCssPx)} × ${Math.round(pageDocument.pages[0].geometry.sheetHeightCssPx)} px`}
-              </dd>
-            </div>
-          </dl>
-        </header>
-
-        <div className="demo-preview">
-          <div className="demo-preview-label" aria-hidden="true">
-            <span>Live browser output</span>
-            <span>Use the viewer rail to move, zoom, and switch modes</span>
-          </div>
-          <div className="demo-preview-surface" data-testid="demo-preview-surface">
-            <ImposiaPageViewer
-              ref={viewerRef}
-              source={source}
-              sourceRevision={sourceRevision}
-              documentOptions={documentOptions}
-              documentOptionsRevision={`${pagePreset.id}:${pageOrientation}`}
-              viewerOptions={{ mode: "continuous", zoom: 0.9 }}
-              className="demo-viewer"
-              onReady={handleReady}
-              onError={handleError}
-              onStateChange={handleStateChange}
-            />
-          </div>
-          {error === undefined ? null : (
-            <p className="demo-error" role="alert">
-              {error}
-            </p>
-          )}
-        </div>
-      </section>
+    // biome-ignore lint/a11y/useSemanticElements: a segmented control is a group of pressed buttons
+    <div aria-label={label} className="pg-segmented" role="group">
+      {options.map((option) => (
+        <button
+          aria-pressed={option.value === value}
+          key={option.value}
+          onClick={() => onChange(option.value)}
+          type="button"
+        >
+          {option.label}
+        </button>
+      ))}
     </div>
   );
 }
 
-const app = document.querySelector("#app");
-if (app === null) throw new Error("Imposia demo host is missing.");
-createRoot(app).render(<App />);
+function GithubMark({ size = 15 }: { size?: number }) {
+  return (
+    <svg aria-hidden="true" height={size} viewBox="0 0 24 24" width={size}>
+      <path
+        d="M12 .5a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.52-1.33-1.28-1.69-1.28-1.69-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.68 0-1.26.45-2.28 1.19-3.09-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a10.9 10.9 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.83 1.19 3.09 0 4.41-2.7 5.38-5.26 5.67.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5Z"
+        fill="currentColor"
+      />
+    </svg>
+  );
+}
+
+function Logo() {
+  return (
+    <a className="pg-logo" href="/">
+      <span aria-hidden="true" className="pg-logo-mark">
+        <BookOpen size={14} strokeWidth={2.4} />
+      </span>
+      <span className="pg-logo-text">Imposia</span>
+      <span className="pg-pill">Playground</span>
+    </a>
+  );
+}
+
+function pageLabel(state: PageViewerState | undefined, fallbackCount: number | undefined): string {
+  if (state === undefined) return fallbackCount === undefined ? "…" : `${fallbackCount} pages`;
+  return `${state.page} / ${state.pageCount}`;
+}
+
+function App() {
+  const pageViewer = useRef<ImposiaPageViewerHandle>(null);
+  const publicationViewer = useRef<ImposiaPublicationViewerHandle>(null);
+  const [templateId, setTemplateId] = useState<TemplateId>("statement");
+  const [counts, setCounts] = useState<Record<TemplateId, number>>(
+    () =>
+      Object.fromEntries(TEMPLATES.map((item) => [item.id, item.countDefault])) as Record<
+        TemplateId,
+        number
+      >,
+  );
+  const [names, setNames] = useState<Record<TemplateId, string>>(
+    () =>
+      Object.fromEntries(TEMPLATES.map((item) => [item.id, item.nameDefault])) as Record<
+        TemplateId,
+        string
+      >,
+  );
+  const [page, setPage] = useState<PageSetup>({
+    size: "A4",
+    orientation: "portrait",
+    margin: "normal",
+  });
+  const [tab, setTab] = useState<"notice" | "code">("notice");
+  const [mode, setMode] = useState<"continuous" | "spread">("continuous");
+  const [zoom, setZoom] = useState<number>(VIEWER_OPTIONS.zoom);
+  const [viewerState, setViewerState] = useState<PageViewerState>();
+  const [info, setInfo] = useState<DocumentInfo>();
+  const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
+  const [error, setError] = useState<string>();
+  const [broken, setBroken] = useState(false);
+  const [proof, setProof] = useState<Proof>({ updates: 0, commits: 0, partialFrames: 0 });
+  const committedPageCounts = useRef(new Map<number, number>());
+  const burstTimers = useRef<number[]>([]);
+
+  const template = TEMPLATES.find((item) => item.id === templateId) ?? TEMPLATES[0];
+  if (template === undefined) throw new Error("No playground templates.");
+  const input = useMemo(
+    () => ({ count: counts[templateId], name: names[templateId], page }),
+    [counts, names, page, templateId],
+  );
+
+  const source = useMemo(() => {
+    if (templateId === "batch") return undefined;
+    const html = templateHtml(templateId, input);
+    return { html: broken ? html + brokenPayload() : html };
+  }, [broken, input, templateId]);
+
+  const snapshot = useMemo<PublicationSnapshot | undefined>(() => {
+    if (templateId !== "batch") return undefined;
+    const entries = batchEntries(input).map((entry, index) =>
+      broken && index === 0 ? { ...entry, html: entry.html + brokenPayload() } : entry,
+    );
+    return {
+      metadata: { title: "September invoices", language: "en" },
+      entries,
+    };
+  }, [broken, input, templateId]);
+
+  // Every source or snapshot change is one update sent to Imposia.
+  const sourceKey = source ?? snapshot;
+  useEffect(() => {
+    if (sourceKey === undefined) return;
+    setProof((current) => ({ ...current, updates: current.updates + 1 }));
+    setStatus("loading");
+  }, [sourceKey]);
+
+  const currentIframe = useCallback(
+    () =>
+      (templateId === "batch" ? publicationViewer.current : pageViewer.current)?.current?.iframe,
+    [templateId],
+  );
+
+  // Watch every rendered frame: a frame is half-built when the canonical frame
+  // shows a generation whose page count differs from what that generation
+  // committed. Imposia swaps complete page sets, so this stays at zero.
+  useEffect(() => {
+    let frame = 0;
+    const sample = () => {
+      const frameDocument = currentIframe()?.contentDocument;
+      const stamp = Number(frameDocument?.documentElement.getAttribute("data-imposia-generation"));
+      const expected = committedPageCounts.current.get(stamp);
+      if (frameDocument && expected !== undefined) {
+        const shown = frameDocument.querySelectorAll("[data-imposia-page]").length;
+        if (shown !== expected) {
+          setProof((current) => ({ ...current, partialFrames: current.partialFrames + 1 }));
+        }
+      }
+      frame = requestAnimationFrame(sample);
+    };
+    frame = requestAnimationFrame(sample);
+    return () => cancelAnimationFrame(frame);
+  }, [currentIframe]);
+
+  useEffect(
+    () => () => {
+      for (const timer of burstTimers.current) window.clearTimeout(timer);
+    },
+    [],
+  );
+
+  const handleReady = useCallback((document: PageDocument) => {
+    committedPageCounts.current.set(document.generation, document.pageCount);
+    setInfo({
+      pageCount: document.pageCount,
+      ms: Math.round(document.timings.totalMs),
+      warnings: document.warnings.length,
+    });
+    setStatus("ready");
+    setError(undefined);
+    setProof((current) => ({ ...current, commits: current.commits + 1 }));
+  }, []);
+
+  const brokenRef = useRef(broken);
+  brokenRef.current = broken;
+  const handleError = useCallback((reason: unknown) => {
+    const message = reason instanceof Error ? reason.message : String(reason);
+    if (brokenRef.current) {
+      setProof((current) => ({
+        ...current,
+        result: {
+          kind: "rejected",
+          text: "Broken update rejected. The previous pages stayed on screen.",
+        },
+      }));
+      // Send a valid update again; it replaces the survivor in one swap.
+      setBroken(false);
+      return;
+    }
+    setStatus("error");
+    setError(message);
+  }, []);
+
+  const selectTemplate = (id: TemplateId) => {
+    if (id === templateId) return;
+    committedPageCounts.current.clear();
+    setInfo(undefined);
+    setViewerState(undefined);
+    setMode("continuous");
+    setZoom(VIEWER_OPTIONS.zoom);
+    setTemplateId(id);
+  };
+
+  const setCount = (value: number) => setCounts((current) => ({ ...current, [templateId]: value }));
+  const setName = (value: string) => setNames((current) => ({ ...current, [templateId]: value }));
+
+  const runBurst = () => {
+    for (const timer of burstTimers.current) window.clearTimeout(timer);
+    const base = counts[templateId];
+    burstTimers.current = Array.from({ length: BURST_UPDATES }, (_value, index) =>
+      window.setTimeout(() => {
+        const step = index === BURST_UPDATES - 1 ? 0 : index % 2 === 0 ? 1 : 2;
+        setCounts((current) => ({
+          ...current,
+          [templateId]: Math.min(template.countMax, Math.max(template.countMin, base + step)),
+        }));
+      }, index * 12),
+    );
+    setProof((current) => ({
+      ...current,
+      result: {
+        kind: "ok",
+        text: "Rapid edits sent back to back. Every frame showed a complete page set.",
+      },
+    }));
+  };
+
+  const runBroken = () => {
+    if (status !== "ready") return;
+    setBroken(true);
+  };
+
+  const changeMode = (next: "continuous" | "spread") => {
+    setMode(next);
+    (templateId === "batch" ? publicationViewer.current : pageViewer.current)?.setMode(next);
+  };
+
+  const changeZoom = (delta: number) => {
+    const next = Math.round(Math.min(1.6, Math.max(0.4, zoom + delta)) * 10) / 10;
+    setZoom(next);
+    pageViewer.current?.setZoom(next);
+  };
+
+  const print = () => {
+    const viewer = templateId === "batch" ? publicationViewer.current : pageViewer.current;
+    void viewer?.print().catch((reason: unknown) => handleError(reason));
+  };
+
+  const ready = status === "ready" || info !== undefined;
+
+  return (
+    <div className="pg-app">
+      <header className="pg-topbar">
+        <Logo />
+        <nav aria-label="Links" className="pg-topbar-links">
+          <a href="/en/docs">
+            <BookOpen aria-hidden="true" size={15} />
+            Docs
+          </a>
+          <a href="https://github.com/EungyuCho/imposia">
+            <GithubMark />
+            GitHub
+          </a>
+          <span aria-hidden="true" className="pg-sep" />
+          <button
+            aria-label="Print / Save as PDF"
+            className="pg-primary"
+            disabled={!ready}
+            onClick={print}
+            type="button"
+          >
+            <Printer aria-hidden="true" size={15} />
+            <span>Print / Save as PDF</span>
+          </button>
+        </nav>
+      </header>
+
+      <div className="pg-workspace">
+        <aside aria-label="Document controls" className="pg-sidebar">
+          <section className="pg-section">
+            <h2 className="pg-label">Template</h2>
+            <div className="pg-templates">
+              {TEMPLATES.map((item) => {
+                const Icon = TEMPLATE_ICONS[item.id];
+                return (
+                  <button
+                    aria-pressed={item.id === templateId}
+                    className="pg-template"
+                    key={item.id}
+                    onClick={() => selectTemplate(item.id)}
+                    type="button"
+                  >
+                    <span aria-hidden="true" className="pg-template-icon">
+                      <Icon size={16} />
+                    </span>
+                    <span className="pg-template-text">
+                      <strong>{item.title}</strong>
+                      <span>{item.summary}</span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+
+          <section className="pg-section">
+            <h2 className="pg-label">Data</h2>
+            <label className="pg-slider">
+              <span className="pg-slider-head">
+                <span>{template.countLabel}</span>
+                <output className="pg-mono">{counts[templateId].toLocaleString("en-US")}</output>
+              </span>
+              <input
+                max={template.countMax}
+                min={template.countMin}
+                onChange={(event) => setCount(Number(event.currentTarget.value))}
+                type="range"
+                value={counts[templateId]}
+              />
+              <span className="pg-slider-scale pg-mono">
+                <span>{template.countMin}</span>
+                <span>{template.countMax.toLocaleString("en-US")}</span>
+              </span>
+            </label>
+            <label className="pg-field">
+              <span>{template.nameLabel}</span>
+              <input
+                maxLength={60}
+                onChange={(event) => setName(event.currentTarget.value)}
+                type="text"
+                value={names[templateId]}
+              />
+            </label>
+          </section>
+
+          <section className="pg-section">
+            <h2 className="pg-label">Page</h2>
+            <Segmented<PageSizeId>
+              label="Paper size"
+              onChange={(size) => setPage((current) => ({ ...current, size }))}
+              options={[
+                { value: "A4", label: "A4" },
+                { value: "Letter", label: "Letter" },
+                { value: "A5", label: "A5" },
+              ]}
+              value={page.size}
+            />
+            <Segmented<Orientation>
+              label="Orientation"
+              onChange={(orientation) => setPage((current) => ({ ...current, orientation }))}
+              options={[
+                { value: "portrait", label: "Portrait" },
+                { value: "landscape", label: "Landscape" },
+              ]}
+              value={page.orientation}
+            />
+            <Segmented<MarginId>
+              label="Margins"
+              onChange={(margin) => setPage((current) => ({ ...current, margin }))}
+              options={[
+                { value: "narrow", label: "Narrow" },
+                { value: "normal", label: "Normal" },
+                { value: "wide", label: "Wide" },
+              ]}
+              value={page.margin}
+            />
+          </section>
+        </aside>
+
+        <main className="pg-viewer">
+          <div className="pg-viewer-bar">
+            <Segmented<"continuous" | "spread">
+              label="View"
+              onChange={changeMode}
+              options={[
+                { value: "continuous", label: "Scroll" },
+                { value: "spread", label: "Spread" },
+              ]}
+              value={mode}
+            />
+            {templateId === "batch" ? (
+              <span className="pg-mono pg-viewer-pages">
+                {pageLabel(undefined, info?.pageCount)}
+              </span>
+            ) : (
+              <span className="pg-viewer-nav">
+                <button
+                  aria-label="Previous page"
+                  disabled={!ready || (viewerState?.page ?? 1) <= 1}
+                  onClick={() => pageViewer.current?.previousPage()}
+                  type="button"
+                >
+                  <ChevronLeft aria-hidden="true" size={15} />
+                </button>
+                <span aria-live="polite" className="pg-mono pg-viewer-pages">
+                  {pageLabel(viewerState, info?.pageCount)}
+                </span>
+                <button
+                  aria-label="Next page"
+                  disabled={!ready || (viewerState?.page ?? 1) >= (viewerState?.pageCount ?? 1)}
+                  onClick={() => pageViewer.current?.nextPage()}
+                  type="button"
+                >
+                  <ChevronRight aria-hidden="true" size={15} />
+                </button>
+              </span>
+            )}
+            {templateId === "batch" ? (
+              <span />
+            ) : (
+              <span className="pg-viewer-zoom">
+                <button aria-label="Zoom out" onClick={() => changeZoom(-0.1)} type="button">
+                  <Minus aria-hidden="true" size={14} />
+                </button>
+                <span className="pg-mono">{Math.round(zoom * 100)}%</span>
+                <button aria-label="Zoom in" onClick={() => changeZoom(0.1)} type="button">
+                  <Plus aria-hidden="true" size={14} />
+                </button>
+              </span>
+            )}
+          </div>
+
+          <div className="pg-stage">
+            {templateId === "batch" && snapshot !== undefined ? (
+              <ImposiaPublicationViewer
+                className="pg-host"
+                key="batch"
+                onError={handleError}
+                onReady={handleReady}
+                publicationOptions={{ pageNumbering: "entry" }}
+                ref={publicationViewer}
+                snapshot={snapshot}
+                viewerOptions={VIEWER_OPTIONS}
+              />
+            ) : source !== undefined ? (
+              <ImposiaPageViewer
+                className="pg-host"
+                key="document"
+                onError={handleError}
+                onReady={handleReady}
+                onViewerStateChange={setViewerState}
+                ref={pageViewer}
+                source={source}
+                viewerOptions={VIEWER_OPTIONS}
+              />
+            ) : null}
+          </div>
+
+          <div className="pg-status" role="status">
+            {status === "error" ? (
+              <span className="pg-status-item pg-status-error">
+                <CircleAlert aria-hidden="true" size={13} />
+                {error}
+              </span>
+            ) : (
+              <span className="pg-status-item">
+                <span
+                  aria-hidden="true"
+                  className={status === "ready" ? "pg-dot is-ready" : "pg-dot"}
+                />
+                <strong>{status === "ready" ? "Committed" : "Paginating"}</strong>
+                {info !== undefined ? (
+                  <span>
+                    {info.pageCount} {info.pageCount === 1 ? "page" : "pages"} · composed in{" "}
+                    {info.ms} ms
+                  </span>
+                ) : null}
+              </span>
+            )}
+            {info !== undefined ? (
+              <span className="pg-status-item">
+                {info.warnings === 0 ? (
+                  <CircleCheck aria-hidden="true" className="pg-ok" size={13} />
+                ) : (
+                  <TriangleAlert aria-hidden="true" className="pg-warn" size={13} />
+                )}
+                {info.warnings === 0
+                  ? "No warnings"
+                  : `${info.warnings} ${info.warnings === 1 ? "warning" : "warnings"}`}
+              </span>
+            ) : null}
+          </div>
+        </main>
+
+        <aside aria-label="About this document" className="pg-panel">
+          <div className="pg-tabs" role="tablist">
+            <button
+              aria-selected={tab === "notice"}
+              onClick={() => setTab("notice")}
+              role="tab"
+              type="button"
+            >
+              What to notice
+            </button>
+            <button
+              aria-selected={tab === "code"}
+              onClick={() => setTab("code")}
+              role="tab"
+              type="button"
+            >
+              Code
+            </button>
+          </div>
+
+          {tab === "notice" ? (
+            <div className="pg-notices">
+              {template.notices.map((notice) => {
+                const Icon = NOTICE_ICONS[notice.icon];
+                return (
+                  <article className="pg-notice" key={notice.title}>
+                    <span aria-hidden="true" className="pg-notice-icon">
+                      <Icon size={15} />
+                    </span>
+                    <div>
+                      <h3>{notice.title}</h3>
+                      <p>{notice.body}</p>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          ) : (
+            <pre className="pg-code">
+              <code>{template.code}</code>
+            </pre>
+          )}
+
+          <section aria-labelledby="pg-proof-title" className="pg-proof">
+            <h3 id="pg-proof-title">Try to break it</h3>
+            <p>
+              Updates finish off-screen. The pages you see are always one complete set, even while
+              you drag the slider.
+            </p>
+            <dl className="pg-proof-stats">
+              <div>
+                <dt>Updates sent</dt>
+                <dd className="pg-mono">{proof.updates}</dd>
+              </div>
+              <div>
+                <dt>Committed</dt>
+                <dd className="pg-mono">{proof.commits}</dd>
+              </div>
+              <div>
+                <dt>Half-built frames</dt>
+                <dd className={proof.partialFrames === 0 ? "pg-mono pg-good" : "pg-mono"}>
+                  {proof.partialFrames}
+                </dd>
+              </div>
+            </dl>
+            <div className="pg-proof-actions">
+              <button className="pg-outline" disabled={!ready} onClick={runBurst} type="button">
+                <Zap aria-hidden="true" size={14} />
+                Send {BURST_UPDATES} rapid edits
+              </button>
+              <button
+                className="pg-outline"
+                disabled={status !== "ready" || broken}
+                onClick={runBroken}
+                type="button"
+              >
+                <TriangleAlert aria-hidden="true" size={14} />
+                Send a broken update
+              </button>
+            </div>
+            {proof.result !== undefined ? (
+              <p
+                className={
+                  proof.result.kind === "rejected"
+                    ? "pg-proof-result is-guarded"
+                    : "pg-proof-result"
+                }
+              >
+                <ShieldCheck aria-hidden="true" size={14} />
+                {proof.result.text}
+              </p>
+            ) : null}
+          </section>
+        </aside>
+      </div>
+    </div>
+  );
+}
+
+const host = document.getElementById("app");
+if (host === null) throw new Error("Missing #app host.");
+createRoot(host).render(<App />);

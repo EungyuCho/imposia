@@ -47,7 +47,8 @@ renamed to `0.6.0.md` when this release ships.
 ### Added
 
 - A table row taller than a page is split across pages cell by cell instead
-  of staying atomic and being clipped. Each cell's content continues in the
+  of staying atomic and being clipped. A row taller than the whole page starts
+  directly under the rows before it instead of leaving that page empty. Each cell's content continues in the
   same column on the next page under the repeated header, cells with nothing
   left stay as empty shells, and the columns keep the widths the unsplit row
   has. Rows that fit on a fresh page still move whole, so existing tables
@@ -92,6 +93,13 @@ renamed to `0.6.0.md` when this release ships.
 
 ### Changed
 
+- The hosted demo at `/examples/demo/` is now the Imposia Playground: five
+  business documents (invoice, account statement, quarterly report, service
+  agreement, and an invoice batch numbered per invoice) with live data, page
+  setup, Print / Save as PDF, and "try to break it" controls that count
+  half-built frames and show a rejected update leaving the pages on screen.
+  It replaces the publishing lab's stress, compatibility, and EPUB cases and
+  follows the landing page's design (`design/demo.pen`).
 - Removed the `0.5.0` escape hatches `experimental.forceSequentialPlacement`,
   `experimental.forceLegacyLineEnds`, and
   `experimental.forceFullConstraintCapture` on the announced one-release

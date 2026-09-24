@@ -99,9 +99,9 @@ and navigation, warnings, page metadata, Viewer presentation, and native print
 must refer to that same generation. These fixture-scoped observations do not
 authorize an unqualified claim about arbitrary HTML/CSS.
 
-The public React publishing lab demonstrates those host page options with A4
-portrait as its initial sheet, common A/ISO B/Letter size presets, and explicit
-portrait/landscape controls.
+The public Playground demonstrates page setup with A4 portrait as its initial
+sheet, A4/Letter/A5 presets, portrait/landscape, and three margin widths, all
+authored as `@page` rules so a change is an ordinary source update.
 
 The public document is structural: page count, dimensions, page-side and named
 context, blank markers, ordered body text, decorations, warnings, timings, and the
