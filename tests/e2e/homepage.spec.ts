@@ -66,7 +66,9 @@ test("the GNB demo link loads the standalone demo document", async ({ page, brow
   await page.goto("/en/docs");
 
   try {
-    const demoLink = page.locator("#nd-sidebar").getByRole("link", { name: "Demo", exact: true });
+    const demoLink = page
+      .locator("#nd-subnav")
+      .getByRole("link", { name: "Examples", exact: true });
     await expect(demoLink).toHaveAttribute("href", "/examples/demo/index.html");
     await demoLink.click();
 
@@ -80,7 +82,7 @@ test("the GNB demo link loads the standalone demo document", async ({ page, brow
   }
 });
 
-test("the GNB exposes the GitHub repository next to the locale control", async ({
+test("the GNB exposes the GitHub repository beside the navigation links, as on the landing page", async ({
   page,
   browserName,
 }) => {
@@ -93,7 +95,10 @@ test("the GNB exposes the GitHub repository next to the locale control", async (
     const languageTrigger = page
       .getByRole("button", { name: /choose a language|language|locale/i })
       .first();
-    const githubLink = page.getByRole("link", { name: "GitHub", exact: true }).first();
+    const githubLink = page
+      .locator("#nd-subnav")
+      .getByRole("link", { name: "GitHub", exact: true })
+      .first();
 
     await expect(languageTrigger).toBeVisible();
     await expect(githubLink).toBeVisible();
@@ -106,7 +111,8 @@ test("the GNB exposes the GitHub repository next to the locale control", async (
     ]);
     expect(languageBox).not.toBeNull();
     expect(githubBox).not.toBeNull();
-    expect(githubBox?.x).toBeGreaterThan(languageBox?.x ?? Number.POSITIVE_INFINITY);
+    // Links, then GitHub, on the left; the locale control on the right.
+    expect(githubBox?.x).toBeLessThan(languageBox?.x ?? Number.NEGATIVE_INFINITY);
   } finally {
     assertNoBrowserErrors(captured);
   }

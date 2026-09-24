@@ -19,7 +19,7 @@ for (const route of SITE_DOC_ROUTES) {
 
   match(
     html,
-    /id="(?:nd-nav|nd-docs-layout)"/,
+    /id="(?:nd-nav|nd-docs-layout|nd-notebook-layout)"/,
     `Expected /${path} to contain the rendered site shell.`,
   );
   match(html, new RegExp(`<html lang="${locale}"`), `Expected /${path} to declare ${locale}.`);

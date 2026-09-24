@@ -1,5 +1,5 @@
-import { DocsLayout } from "fumadocs-ui/layouts/docs";
-import { DocsBody, DocsDescription, DocsPage, DocsTitle } from "fumadocs-ui/layouts/docs/page";
+import { DocsLayout } from "fumadocs-ui/layouts/notebook";
+import { DocsBody, DocsDescription, DocsPage, DocsTitle } from "fumadocs-ui/layouts/notebook/page";
 import type { MetaFunction } from "react-router";
 import { Link, Navigate, useParams } from "react-router";
 import { isSupportedLocale } from "../../lib/i18n";
@@ -73,7 +73,12 @@ export default function DocumentationRoute() {
   const missing = notFoundCopy[lang];
 
   return (
-    <DocsLayout {...baseOptions(lang)} themeSwitch={{ enabled: false }} tree={tree}>
+    <DocsLayout
+      {...baseOptions(lang)}
+      nav={{ ...baseOptions(lang).nav, mode: "top" }}
+      themeSwitch={{ enabled: false }}
+      tree={tree}
+    >
       {page ? (
         <DocsPage full={page.data.full} toc={page.data.toc}>
           <DocsTitle>{page.data.title}</DocsTitle>

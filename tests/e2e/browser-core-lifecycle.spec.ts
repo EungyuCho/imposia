@@ -680,3 +680,39 @@ test("keeps failed initial generations atomic and rejects print without current"
     expect(pageErrors).toEqual([]);
   }
 });
+
+test("keeps the canonical frame invisible until the first generation commits", async ({
+  page,
+  browserName,
+}) => {
+  const { errors, pageErrors } = captureBrowserErrors(page, browserName);
+  await page.goto("/examples/book.html");
+  try {
+    const observation = await page.evaluate(async () => {
+      const core = (await import("/packages/core/dist/index.js")) as {
+        mountPageDocument(
+          host: HTMLElement,
+          source: { html: string },
+        ): { ready: Promise<{ iframe: HTMLIFrameElement }>; destroy(): Promise<void> };
+      };
+      const host = document.body.appendChild(document.createElement("div"));
+      const controller = core.mountPageDocument(host, {
+        html: Array.from({ length: 200 }, (_value, index) => `<p>Paragraph ${index}</p>`).join(""),
+      });
+      const frame = host.querySelector<HTMLIFrameElement>(
+        "iframe[data-imposia-frame='page-document']",
+      );
+      const before = frame === null ? null : getComputedStyle(frame).visibility;
+      const ready = await controller.ready;
+      const after = getComputedStyle(ready.iframe).visibility;
+      await controller.destroy();
+      host.remove();
+      return { before, after };
+    });
+    // An empty frame would show as a blank box until pagination finishes.
+    expect(observation).toEqual({ before: "hidden", after: "visible" });
+  } finally {
+    expect(errors).toEqual([]);
+    expect(pageErrors).toEqual([]);
+  }
+});

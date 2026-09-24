@@ -150,6 +150,30 @@ test("rapid edits never show a half-built page set, and a broken update keeps th
   }
 });
 
+test("spread view labels and steps through page pairs", async ({ page, browserName }) => {
+  test.skip(
+    browserName !== "chromium",
+    "Viewer presentation is checked in the Chromium reference.",
+  );
+  const { errors, pageErrors } = captureBrowserErrors(page, browserName);
+  // The viewer shows a spread only in a stage at least 720px wide.
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/examples/demo/");
+  try {
+    await waitForCommit(page);
+    const pages = page.locator(".pg-viewer-pages");
+    await page.getByRole("group", { name: "View" }).getByRole("button", { name: "Spread" }).click();
+    await expect(pages).toHaveText(/^1–2 \/ \d+$/);
+    await page.getByRole("button", { name: "Next page" }).click();
+    await expect(pages).toHaveText(/^3–4 \/ \d+$/);
+    await page.getByRole("button", { name: "Previous page" }).click();
+    await expect(pages).toHaveText(/^1–2 \/ \d+$/);
+  } finally {
+    expect(errors).toEqual([]);
+    expect(pageErrors).toEqual([]);
+  }
+});
+
 test("Print / Save as PDF opens the browser print dialog from the top window", async ({
   page,
   browserName,
