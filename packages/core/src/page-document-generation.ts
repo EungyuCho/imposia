@@ -770,16 +770,28 @@ function hasSourceOrderedFlexItems(element: Element, view: Window): boolean {
   return true;
 }
 
-function isSafeGridChild(element: Element, view: Window): boolean {
+/**
+ * The number of columns an auto-placed grid item spans, or `undefined` when
+ * the item is placed in a way row fragmentation cannot reproduce. `span N`
+ * spans N columns from the placement cursor. `1 / -1` fills its own row,
+ * which sparse auto-placement treats exactly like spanning every column.
+ * Other explicit lines, named lines, and row spans are not supported.
+ */
+function gridColumnSpan(style: CSSStyleDeclaration, columnCount: number): number | undefined {
+  if (style.gridRowStart !== "auto" || style.gridRowEnd !== "auto") return undefined;
+  const start = style.gridColumnStart.trim().toLowerCase();
+  const end = style.gridColumnEnd.trim().toLowerCase();
+  if (start === "auto" && end === "auto") return 1;
+  if (start === "1" && end === "-1") return columnCount;
+  const match = /^span\s+(\d+)$/u.exec(start === "auto" ? end : end === "auto" ? start : "");
+  const span = Number(match?.[1]);
+  return Number.isSafeInteger(span) && span > 0 && span <= columnCount ? span : undefined;
+}
+
+function isSafeGridChild(element: Element, view: Window, columnCount: number): boolean {
   if (!isStaticOrderedChild(element, view)) return false;
   const style = view.getComputedStyle(element);
-  return (
-    style.display !== "contents" &&
-    style.gridColumnStart === "auto" &&
-    style.gridColumnEnd === "auto" &&
-    style.gridRowStart === "auto" &&
-    style.gridRowEnd === "auto"
-  );
+  return style.display !== "contents" && gridColumnSpan(style, columnCount) !== undefined;
 }
 
 function hasForcedGridDescendant(element: Element, view: Window): boolean {
@@ -857,6 +869,10 @@ function resolvedGridTracks(
     { before: PageBreak | undefined; after: PageBreak | undefined }
   >();
   let itemIndex = 0;
+  // Sparse auto-placement cursor: an item that does not fit the rest of the
+  // row starts the next one, and a row ends when its columns are filled.
+  let rowIndex = 0;
+  let column = 0;
   for (const child of element.childNodes) {
     if (isNonFlowNode(child)) continue;
     if (child.nodeType !== Node.ELEMENT_NODE) return undefined;
@@ -864,14 +880,18 @@ function resolvedGridTracks(
     const childStyle = view.getComputedStyle(childElement);
     if (childStyle.display === "none") continue;
     if (
-      !isSafeGridChild(childElement, view) ||
+      !isSafeGridChild(childElement, view, columnCount) ||
       authoredPageName(childElement) !== undefined ||
       hasForcedGridDescendant(childElement, view)
     ) {
       return undefined;
     }
 
-    const rowIndex = Math.floor(itemIndex / columnCount);
+    const span = gridColumnSpan(childStyle, columnCount) ?? 1;
+    if (column > 0 && column + span > columnCount) {
+      rowIndex += 1;
+      column = 0;
+    }
     const breaks = rowBreaks.get(rowIndex) ?? { before: undefined, after: undefined };
     const before = pageBreak(childStyle.breakBefore);
     const after = pageBreak(childStyle.breakAfter);
@@ -885,11 +905,12 @@ function resolvedGridTracks(
     if (after !== "auto") breaks.after = after;
     rowBreaks.set(rowIndex, breaks);
     itemIndex += 1;
+    column += span;
   }
   const rows = topLevelTrackValues(rowTemplate);
   if (
     itemIndex === 0 ||
-    rows.length !== Math.ceil(itemIndex / columnCount) ||
+    rows.length !== (column === 0 ? rowIndex : rowIndex + 1) ||
     [...columns, ...rows].some((track) => absoluteCssPixels(track) === undefined)
   ) {
     return undefined;
@@ -1540,21 +1561,33 @@ function gridRowGroups(
   constraints: ReadonlyMap<Element, BreakConstraint>,
 ): readonly GridRowGroup[] {
   const groups: { nodes: Node[]; items: Element[] }[] = [];
+  const view = element.ownerDocument.defaultView;
   let nodes: Node[] = [];
   let items: Element[] = [];
+  let column = 0;
+  const closeRow = () => {
+    groups.push({ nodes, items });
+    nodes = [];
+    items = [];
+    column = 0;
+  };
   for (const child of element.childNodes) {
-    nodes.push(child);
     if (
-      child.nodeType === Node.ELEMENT_NODE &&
-      (constraints.get(child as Element)?.contributesToFlow ?? !isNonFlowNode(child))
+      child.nodeType !== Node.ELEMENT_NODE ||
+      !(constraints.get(child as Element)?.contributesToFlow ?? !isNonFlowNode(child))
     ) {
-      items.push(child as Element);
-      if (items.length === columnCount) {
-        groups.push({ nodes, items });
-        nodes = [];
-        items = [];
-      }
+      nodes.push(child);
+      continue;
     }
+    const span =
+      view === null
+        ? 1
+        : (gridColumnSpan(view.getComputedStyle(child as Element), columnCount) ?? 1);
+    if (column > 0 && column + span > columnCount) closeRow();
+    nodes.push(child);
+    items.push(child as Element);
+    column += span;
+    if (column >= columnCount) closeRow();
   }
   if (nodes.length > 0) {
     if (items.length === 0 && groups.length > 0) groups.at(-1)?.nodes.push(...nodes);

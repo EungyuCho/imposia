@@ -636,7 +636,7 @@ test.describe("Chromium Core fragmentation and layout quality", () => {
               .row-flex { display: flex; flex-direction: row; }
               .row-flex > * { flex: 1 1 0; }
               .spanning-grid { display: grid; grid-template-columns: 1fr 1fr; }
-              .spanning-grid .span { grid-column: 1 / -1; }
+              .spanning-grid .span { grid-row: span 2; }
             </style>
             <div class="unsupported row-flex"><div>${rowText}</div><div>ROW-FLEX-END</div></div>
             <div class="unsupported spanning-grid"><div class="span">${gridText}</div><div>SPAN-GRID-END</div></div>

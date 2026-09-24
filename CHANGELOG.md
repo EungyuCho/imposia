@@ -46,6 +46,12 @@ renamed to `0.6.0.md` when this release ships.
 
 ### Added
 
+- Grid fragmentation accepts items that span columns: `grid-column: span N`
+  and full-width `grid-column: 1 / -1`. Dashboard and report grids with a
+  full-width heading row or a two-column card used to stay atomic with
+  `UNSUPPORTED_LAYOUT` and overflow the page; they now break between
+  complete rows, and every continuation keeps the same columns. Row spans
+  and other explicit placement still stay atomic.
 - `PublicationOptions.pageNumbering: "entry"` numbers each Publication entry
   on its own: every entry starts on a new page, and `counter(page)`,
   `counter(pages)`, and the `pageNumber`/`totalPages` template tokens count
@@ -83,8 +89,8 @@ renamed to `0.6.0.md` when this release ships.
   resolved content is not empty; previously all six boxes were always
   present, empty or not. This is private page DOM, but `finalizePage`
   extensions and host stylesheets that queried it see fewer elements.
-- Core · PageDocument grows from 56.9 KiB to 58.3 KiB gzip for the `@page`
-  and page-numbering additions above, within its 60.0 KiB budget. The page-size constants moved
+- Core · PageDocument grows from 56.9 KiB to 58.6 KiB gzip for the additions
+  above, within its 60.0 KiB budget. The page-size constants moved
   to their own module, so the Viewer route no longer carries the `@page`
   parser and grows only by the new frame rules (11.6 KiB to 11.7 KiB).
 - Fonts declared with pre-RFC 8081 MIME spellings (`application/font-woff`,

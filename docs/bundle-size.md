@@ -61,20 +61,20 @@ The ASA-424/425/426 escape hatches share their code with runtime fallbacks, so
 removing them reclaims almost nothing; the 0.5.0 expectation below that their
 removal would tighten the budgets does not hold.
 
-### `@page` coverage and per-entry numbering (2026-09-24)
+### Document-layout additions (2026-09-24)
 
 The sixteen margin boxes, margin-box styles, content-sized margin-box widths,
-`:nth()`, the added page-size keywords, and per-entry Publication page
-numbering were measured against the commit before them on
+`:nth()`, the added page-size keywords, per-entry Publication page numbering,
+the unplaced-source layout fix, and column-spanning grid items were measured against the commit before them on
 the same machine. The budgets are unchanged:
 
 | Consumer route | Before (gzip) | After (gzip) | Gzip budget | Headroom |
 | --- | ---: | ---: | ---: | ---: |
-| Core · PageDocument | 56.9 KiB | 58.3 KiB | 60.0 KiB | 1.7 KiB |
-| Core · Publication | 61.1 KiB | 62.6 KiB | 64.0 KiB | 1.4 KiB |
+| Core · PageDocument | 56.9 KiB | 58.6 KiB | 60.0 KiB | 1.4 KiB |
+| Core · Publication | 61.1 KiB | 62.9 KiB | 64.0 KiB | 1.1 KiB |
 | Viewer · PageDocument | 11.6 KiB | 11.7 KiB | 13.0 KiB | 1.3 KiB |
-| Client · PageDocument | 65.5 KiB | 67.0 KiB | 69.0 KiB | 2.0 KiB |
-| React · PageViewer | 67.4 KiB | 68.8 KiB | 71.0 KiB | 2.2 KiB |
+| Client · PageDocument | 65.5 KiB | 67.3 KiB | 69.0 KiB | 1.7 KiB |
+| React · PageViewer | 67.4 KiB | 69.1 KiB | 71.0 KiB | 1.9 KiB |
 
 Headroom on the Core routes is now below the 5% target. The next Core
 addition that does not fit should record a budget decision rather than
