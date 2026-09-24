@@ -596,6 +596,35 @@ function pageNumbering(
   ]);
 }
 
+/**
+ * A warning when the document, or a Publication entry, runs right to left.
+ * Core paginates with left-to-right page progression only: page 1 is a
+ * right-hand page and spreads pair left to right, which is the wrong binding
+ * side for a right-to-left book (ASA-434, stage 1). Read while the pages are
+ * still styled in the probe.
+ */
+function rightToLeftWarning(pages: readonly PageParts[]): PageWarning | undefined {
+  const rtl = pages.some((page) => {
+    const view = page.flow.ownerDocument.defaultView;
+    if (view === null) return false;
+    if (view.getComputedStyle(page.flow).direction === "rtl") return true;
+    return [...page.flow.querySelectorAll(`:scope > [${PUBLICATION_ENTRY_MARKER}]`)].some(
+      (entry) => view.getComputedStyle(entry).direction === "rtl",
+    );
+  });
+  if (!rtl) return undefined;
+  return Object.freeze({
+    code: "UNSUPPORTED_FRAGMENTATION_CONTEXT",
+    message: "Right-to-left page progression is not supported.",
+    sourceIdentity: undefined,
+    location: UNLOCATED_PAGE_WARNING_LOCATION,
+    property: "direction",
+    value: "rtl",
+    recovery:
+      "Paginated with left-to-right page progression: page 1 is a right-hand page and spreads pair left to right. Text direction inside pages is preserved.",
+  });
+}
+
 const MARGIN_BOX_EDGES = [
   ["top-left", "top-center", "top-right"],
   ["bottom-left", "bottom-center", "bottom-right"],
@@ -3976,7 +4005,12 @@ export async function buildGeneration(
       warnings: pageMediaWarnings,
     });
     const semanticSnapshot = createPageSemanticSnapshot({
-      html: semanticSourceFlow.innerHTML,
+      // The declared direction rides on a wrapper so the reflowable EPUB keeps
+      // right-to-left text right to left.
+      html:
+        preparedSemanticSource.documentDirection === undefined
+          ? semanticSourceFlow.innerHTML
+          : `<div dir="${preparedSemanticSource.documentDirection}">${semanticSourceFlow.innerHTML}</div>`,
       css: compiledPageMedia.css,
       baseUrl: source.baseUrl,
       assets: assets?.semanticAssets ?? Object.freeze([]),
@@ -4003,6 +4037,7 @@ export async function buildGeneration(
     let fragmentationWarnings: PageWarning[] = [];
     let publishingWarnings: readonly PageWarning[] = Object.freeze([]);
     let overflowWarning: PageWarning | undefined;
+    let directionWarning: PageWarning | undefined;
     let warningSourceLocations: ReadonlyMap<string, BuiltWarningSourceLocation> = new Map();
     try {
       const paginate = async (generatedValues: ReadonlyMap<string, string>, passNumber: number) => {
@@ -4071,6 +4106,9 @@ export async function buildGeneration(
             throw new ImposiaError("PAGE_LIMIT", "Page limit exceeded.");
           }
           const created = createPage(frameDocument, pageMedia, passPages.length + 1, name);
+          if (preparedSemanticSource.documentDirection !== undefined) {
+            created.flow.setAttribute("dir", preparedSemanticSource.documentDirection);
+          }
           reserveDecorationRows(frameDocument, created, pageSettings);
           passPages.push(created);
           appendProbePage(probe, created.page);
@@ -4200,6 +4238,7 @@ export async function buildGeneration(
       const fittedBeforeDecoration = decorationMayResize
         ? pages.map((page) => !pageOverflows(page))
         : [];
+      directionWarning = rightToLeftWarning(pages);
       await yieldBetweenStages();
       const numbering = pageNumbering(pages, settings.entryPageNumbering);
       for (const [index, page] of pages.entries()) {
@@ -4290,6 +4329,7 @@ export async function buildGeneration(
       ...fragmentationWarnings,
     ];
     if (overflowWarning !== undefined) warnings.push(overflowWarning);
+    if (directionWarning !== undefined) warnings.push(directionWarning);
     if (resourceBlocked) {
       warnings.push(
         ...resourceBlockedWarnings(

@@ -153,6 +153,14 @@ renamed to `0.6.0.md` when this release ships.
 
 ### Fixed
 
+- A `dir="rtl"` on the source `<html>` or `<body>` was dropped, so
+  right-to-left text rendered left to right with no warning. The declared
+  direction now reaches every page's content, Publication entries keep their
+  own, and the EPUB semantic source carries it. Right-to-left documents also
+  emit one `UNSUPPORTED_FRAGMENTATION_CONTEXT` warning (`property:
+  "direction"`, `value: "rtl"`), because page progression stays left to
+  right. (ASA-434, stage 1)
+
 - `@imposia/react/styles.css` imports `@imposia/client/styles.css` instead of
   `@imposia/viewer/styles.css`. `@imposia/viewer` is not a direct dependency
   of `@imposia/react`, so under strict package layouts such as pnpm's the

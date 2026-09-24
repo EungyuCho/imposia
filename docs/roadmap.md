@@ -392,7 +392,8 @@ is now closed: the transient was root-caused, shown to predate `0.5.0`, and
 fixed without loosening the invariant. The publication work (ASA-443) that
 outranked new capability outright is likewise done. What the rule now
 promotes is the Publish milestone's remaining debts — ASA-444 and ASA-434
-stage 1 under item 1, ASA-449's gate coverage under item 4 — ahead of any
+stage 1 under item 1 (stage 1 has since shipped: a declared `dir` is kept and
+right-to-left documents warn), ASA-449's gate coverage under item 4 — ahead of any
 Proof-milestone evidence task, and ASA-450 ahead of ASA-444 because the
 rollback contract needs its regression pin before that refactor edits the
 same region.

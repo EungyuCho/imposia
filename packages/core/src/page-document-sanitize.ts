@@ -15,6 +15,25 @@ export interface PreparedFragment {
   fragment: DocumentFragment;
   resourceBlocked: boolean;
   documentLanguage?: string;
+  documentDirection?: DocumentDirection;
+}
+
+export type DocumentDirection = "ltr" | "rtl" | "auto";
+
+/**
+ * The `dir` a parsed document declares for its content: the body's, else the
+ * root element's. Pages receive the body's children, so without this the
+ * declaration was dropped and right-to-left text rendered left to right.
+ */
+export function declaredDirection(parsed: Document): DocumentDirection | undefined {
+  const value = (
+    parsed.body?.getAttribute("dir") ??
+    parsed.documentElement.getAttribute("dir") ??
+    ""
+  )
+    .trim()
+    .toLowerCase();
+  return value === "ltr" || value === "rtl" || value === "auto" ? value : undefined;
 }
 
 export { prepareDocument } from "./document.js";
@@ -103,10 +122,12 @@ export function copyPreparedBody(
     fragment.append(frameDocument.importNode(child, true));
   }
   const documentLanguage = parsed.documentElement.getAttribute("lang");
+  const documentDirection = declaredDirection(parsed);
   return {
     fragment,
     resourceBlocked: headResourceBlocked || bodyResourceBlocked,
     ...(documentLanguage === null ? {} : { documentLanguage: documentLanguage.trim() }),
+    ...(documentDirection === undefined ? {} : { documentDirection }),
   };
 }
 
