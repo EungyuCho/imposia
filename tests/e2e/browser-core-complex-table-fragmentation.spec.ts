@@ -213,7 +213,7 @@ test("repeats table headers and footers while keeping rowspan clusters and colsp
   }
 });
 
-test("keeps an oversized long-cell row atomic with one deterministic located warning", async ({
+test("splits an oversized long-cell row across fragments deterministically (ADR 0014)", async ({
   page,
   browserName,
 }) => {
@@ -262,9 +262,14 @@ test("keeps an oversized long-cell row atomic with one deterministic located war
           return {
             pageCount: ready.pageCount,
             longRowCount: longRows.length,
-            longRowPage: pages.findIndex((pageElement) =>
-              longRows.some((row) => pageElement.contains(row)),
-            ),
+            longRowPages: pages
+              .map((pageElement, index) =>
+                longRows.some((row) => pageElement.contains(row)) ? index : -1,
+              )
+              .filter((index) => index >= 0),
+            headerRowsOnLongRowPages: pages
+              .filter((pageElement) => longRows.some((row) => pageElement.contains(row)))
+              .map((pageElement) => pageElement.querySelectorAll("thead tr").length),
             markerCounts: Object.fromEntries(
               ["LONG-PREFIX-A", "LONG-PREFIX-B", "LONG-CELL-END", ...lines].map((marker) => [
                 marker,
@@ -294,21 +299,16 @@ test("keeps an oversized long-cell row atomic with one deterministic located war
     });
 
     expect(observation.first.pageCount).toBeGreaterThanOrEqual(2);
-    expect(observation.first.longRowCount).toBe(1);
-    expect(observation.first.longRowPage).toBeGreaterThanOrEqual(0);
+    // The row is split into one fragment per page it spans, each under the
+    // repeated header, and no line is lost or repeated.
+    expect(observation.first.longRowCount).toBeGreaterThanOrEqual(2);
+    expect(observation.first.longRowPages).toHaveLength(observation.first.longRowCount);
+    expect(observation.first.headerRowsOnLongRowPages.every((count) => count === 1)).toBe(true);
     expect(Object.values(observation.first.markerCounts).every((count) => count === 1)).toBe(true);
-    expect(observation.first.locatedWarnings).toHaveLength(1);
-    expect(observation.first.locatedWarnings).toEqual(observation.second.locatedWarnings);
-    expect(observation.first.locatedWarnings[0]).toMatchObject({
-      code: "UNSUPPORTED_LAYOUT",
-      property: "display",
-      value: "table-row",
-      recovery: "Kept the row cluster atomic.",
-    });
-    expect(observation.first.locatedWarnings[0]?.sourceIdentity).toMatch(/^source-\d+:tr$/u);
-    expect(observation.first.overflowCount).toBe(1);
+    expect(observation.first.locatedWarnings).toEqual([]);
+    expect(observation.first.overflowCount).toBe(0);
     expect(observation.first.pageCount).toBe(observation.second.pageCount);
-    expect(observation.first.longRowPage).toBe(observation.second.longRowPage);
+    expect(observation.first.longRowPages).toEqual(observation.second.longRowPages);
     expect(observation.first.markerCounts).toEqual(observation.second.markerCounts);
   } finally {
     expect(errors).toEqual([]);

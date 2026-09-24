@@ -61,25 +61,27 @@ The ASA-424/425/426 escape hatches share their code with runtime fallbacks, so
 removing them reclaims almost nothing; the 0.5.0 expectation below that their
 removal would tighten the budgets does not hold.
 
-### Document-layout additions (2026-09-24)
+### Document-layout additions and budget decision (2026-09-24)
 
 The sixteen margin boxes, margin-box styles, content-sized margin-box widths,
 `:nth()`, the added page-size keywords, per-entry Publication page numbering,
-the pagination performance changes, raisable limits, and column-spanning grid
-items were measured against the commit before them on
-the same machine. The budgets are unchanged:
+the pagination performance changes, raisable limits (ADR 0015),
+column-spanning grid items, and table row splitting (ADR 0014) were measured
+against the commit before them on the same machine:
 
-| Consumer route | Before (gzip) | After (gzip) | Gzip budget | Headroom |
-| --- | ---: | ---: | ---: | ---: |
-| Core · PageDocument | 56.9 KiB | 58.9 KiB | 60.0 KiB | 1.1 KiB |
-| Core · Publication | 61.1 KiB | 63.2 KiB | 64.0 KiB | 0.8 KiB |
-| Viewer · PageDocument | 11.6 KiB | 11.8 KiB | 13.0 KiB | 1.2 KiB |
-| Client · PageDocument | 65.5 KiB | 67.6 KiB | 69.0 KiB | 1.4 KiB |
-| React · PageViewer | 67.4 KiB | 69.4 KiB | 71.0 KiB | 1.6 KiB |
+| Consumer route | Before (gzip) | After (gzip) | Old budget | New budget | Headroom |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Core · PageDocument | 56.9 KiB | 59.4 KiB | 60.0 KiB | 62.0 KiB | 2.6 KiB |
+| Core · Publication | 61.1 KiB | 63.7 KiB | 64.0 KiB | 67.0 KiB | 3.3 KiB |
+| Viewer · PageDocument | 11.6 KiB | 11.8 KiB | 13.0 KiB | 13.0 KiB | 1.2 KiB |
+| Client · PageDocument | 65.5 KiB | 68.0 KiB | 69.0 KiB | 71.0 KiB | 3.0 KiB |
+| React · PageViewer | 67.4 KiB | 69.8 KiB | 71.0 KiB | 73.0 KiB | 3.2 KiB |
 
-Headroom on the Core routes is now below the 5% target. The next Core
-addition that does not fit should record a budget decision rather than
-absorb it silently.
+Decision: raise the four Core-bearing budgets to restore roughly 5%
+headroom. The 2.5 KiB of growth buys document features that removed silent
+content loss (row splitting, content-sized footers) or unsupported layouts
+(spanning grid items), and a pagination path that stays linear to 10,000
+pages. The Viewer route did not grow past its budget, so it keeps 13 KiB.
 
 ### 0.5.0 baseline (2026-08-20)
 

@@ -3582,6 +3582,96 @@ class RecursiveFragmenter {
       return tableCursor;
     };
 
+    /**
+     * Splits a row that does not fit on a fresh table fragment (ADR 0014).
+     * The row stays on the current fragment with its cells emptied; then each
+     * cell's content is placed back with the block fragmenter, and whatever
+     * does not fit continues in that cell's shell on the next fragment. Each
+     * cell fits on its own against the same page, and a row is as tall as
+     * its tallest cell, so every fragment of the row fits.
+     */
+    const splitTallRow = async (row: Element, groupTemplate: Element): Promise<boolean> => {
+      const cells = [...row.children].filter((child) => {
+        const name = child.localName.toLowerCase();
+        return name === "td" || name === "th";
+      });
+      if (cells.length === 0 || cells.some((cell) => tableCellSpan(cell, "rowspan") !== 1)) {
+        return false;
+      }
+      // Under automatic table layout, the content placed in one cell changes
+      // every column's width, so a cell filled later would squeeze the cells
+      // already placed. Freeze the widths the full row has on this fragment
+      // before emptying it; continuation shells inherit them as clones.
+      const widths = cells.map((cell) => cell.getBoundingClientRect().width);
+      for (const [index, cell] of cells.entries()) {
+        const html = htmlElement(cell);
+        if (html === undefined) continue;
+        html.style.setProperty("box-sizing", "border-box");
+        html.style.setProperty("width", cssPx(widths[index] ?? 0));
+      }
+      const contents = cells.map((cell) => [...cell.childNodes]);
+      for (const cell of cells) cell.replaceChildren();
+      if (this.#cursorOverflows(tableCursor)) {
+        for (const [index, cell] of cells.entries()) cell.append(...(contents[index] ?? []));
+        return false;
+      }
+      const avoided = [row, ...cells].find((item) => this.#constraints.get(item)?.insideAvoid);
+      const avoidConstraint = avoided === undefined ? undefined : this.#constraints.get(avoided);
+      if (avoidConstraint !== undefined) {
+        this.#warnOnce(
+          "AVOID_RELAXED",
+          avoidConstraint,
+          "The table row is taller than a page and was split despite break-inside: avoid.",
+          "break-inside",
+          "avoid",
+          "Split the row between cells' lines.",
+        );
+      }
+      const fragments: { page: PageParts; cells: Element[] }[] = [
+        { page: tableCursor.page, cells },
+      ];
+      const fragmentCursor = (depth: number, index: number): FragmentCursor => {
+        const fragment = fragments[depth];
+        const cell = fragment?.cells[index];
+        if (fragment === undefined || cell === undefined) {
+          throw new Error("The table row fragment is unavailable.");
+        }
+        return {
+          page: fragment.page,
+          container: cell,
+          ...(tableCursor.overflowRoot === undefined
+            ? {}
+            : { overflowRoot: tableCursor.overflowRoot }),
+        };
+      };
+      const ensureFragment = (depth: number): void => {
+        while (fragments.length <= depth) {
+          const cursor = continueTable(parentAtFragment.page.name, groupTemplate);
+          const rowShell = this.#cloneFragment(row, false);
+          const cellShells = cells.map((cell) => this.#cloneFragment(cell, false));
+          rowShell.append(...cellShells);
+          cursor.container.append(rowShell);
+          fragments.push({ page: cursor.page, cells: cellShells });
+        }
+      };
+      for (const index of cells.keys()) {
+        let depth = 0;
+        const continueCell: ContinueFragment = () => {
+          depth += 1;
+          ensureFragment(depth);
+          return fragmentCursor(depth, index);
+        };
+        await this.placeFlowChildren(
+          contents[index] ?? [],
+          fragmentCursor(0, index),
+          continueCell,
+          "shell",
+        );
+      }
+      for (const fragment of fragments.slice(0, -1)) this.#markPageContent(fragment.page);
+      return true;
+    };
+
     let pendingBreakAfter: PageBreak = "auto";
     for (const { group, template, clusters } of groups) {
       const scheduled = this.#checkpoint();
@@ -3646,7 +3736,15 @@ class RecursiveFragmenter {
             furnitureOverflowed = reportFurnitureOverflow(tableCursor);
           }
           tableCursor.container.append(...cluster);
-          if (this.#cursorOverflows(tableCursor)) {
+          const tallRow = cluster.length === 1 ? cluster[0] : undefined;
+          if (
+            this.#cursorOverflows(tableCursor) &&
+            !furnitureOverflowed &&
+            tallRow !== undefined &&
+            (await splitTallRow(tallRow, template))
+          ) {
+            // The row was split cell by cell across fragments (ADR 0014).
+          } else if (this.#cursorOverflows(tableCursor)) {
             if (!furnitureOverflowed) {
               const clusterConstraint = this.#constraints.get(cluster[0] as Element);
               if (clusterConstraint !== undefined) {

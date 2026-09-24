@@ -46,6 +46,12 @@ renamed to `0.6.0.md` when this release ships.
 
 ### Added
 
+- A table row taller than a page is split across pages cell by cell instead
+  of staying atomic and being clipped. Each cell's content continues in the
+  same column on the next page under the repeated header, cells with nothing
+  left stay as empty shells, and the columns keep the widths the unsplit row
+  has. Rows that fit on a fresh page still move whole, so existing tables
+  paginate as before. `rowspan` clusters still stay atomic. See ADR 0014.
 - A host can raise four limits above their defaults, up to a fixed maximum:
   `maxInputBytes` to 32 MiB, `maxNodes` to 1,000,000, `maxPages` to 50,000,
   and `resourceDeadlineMs` to 300,000. The defaults are unchanged, and the
@@ -100,8 +106,9 @@ renamed to `0.6.0.md` when this release ships.
   resolved content is not empty; previously all six boxes were always
   present, empty or not. This is private page DOM, but `finalizePage`
   extensions and host stylesheets that queried it see fewer elements.
-- Core · PageDocument grows from 56.9 KiB to 58.9 KiB gzip for the additions
-  above, within its 60.0 KiB budget. The page-size constants moved
+- Core · PageDocument grows from 56.9 KiB to 59.4 KiB gzip for the additions
+  above; the four Core-bearing budgets were raised by 2–3 KiB to restore about
+  5% headroom (see `docs/bundle-size.md`), within its 60.0 KiB budget. The page-size constants moved
   to their own module, so the Viewer route no longer carries the `@page`
   parser and grows only by the new frame rules (11.6 KiB to 11.7 KiB).
 - Fonts declared with pre-RFC 8081 MIME spellings (`application/font-woff`,

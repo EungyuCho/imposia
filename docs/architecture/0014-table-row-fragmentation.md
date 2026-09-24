@@ -1,6 +1,6 @@
 # ADR 0014: fragment table rows taller than a page
 
-Status: proposed
+Status: accepted
 
 ## Context
 
@@ -44,8 +44,10 @@ Anything else keeps the current atomic behavior and warning.
 
 The row is split cell by cell against the same page:
 
-1. Place the row on the fresh fragment with every cell emptied, keeping each
-   cell's attributes, so the row box and column positions exist.
+1. Measure each cell's width while the full row sits on the fresh fragment,
+   and pin it on the cell (`box-sizing: border-box; width: <px>`). Then empty
+   every cell, keeping its attributes, so the row box and column positions
+   exist.
 2. For each cell in source order, return its content and fragment it with the
    existing block fragmenter, using the cell as the cursor container and the
    page as the overflow root. The content that fits stays; the rest is
@@ -58,6 +60,12 @@ The row is split cell by cell against the same page:
    and borders line up.
 4. If the continuation row still does not fit, repeat from step 2 on the next
    fragment.
+
+Pinning the widths is required, not cosmetic. Under automatic table layout
+the content placed in one cell changes every column's width, so a cell filled
+later would squeeze the cells already placed on the page, and they would
+overflow. The pinned widths are the ones the unsplit row has, which is what
+browser print shows.
 
 Cell content goes through the fragmenter that already handles block flow,
 text lines, widows and orphans, and the supported table, flex, grid, and
@@ -74,9 +82,10 @@ it produces today.
   internal forced break is outside `safeTableStructure` and stays atomic.
 - `vertical-align: middle` and `bottom` apply to each part separately, as in
   browser print.
-- Continuation tables already repeat `thead`, `tfoot`, and `colgroup`. Column
-  widths can still differ between fragments under automatic table layout;
-  `createTableColgroupExtension()` remains the opt-in that freezes them.
+- Continuation tables already repeat `thead`, `tfoot`, and `colgroup`. The
+  fragments of a split row share its pinned widths; other continuation
+  fragments can still differ in column width under automatic table layout,
+  and `createTableColgroupExtension()` remains the opt-in that freezes them.
 - `finalizePage` receives each continuation table in `tableFragments` as
   today. A split row adds no new extension field.
 
@@ -105,11 +114,16 @@ it produces today.
   not change.
 - Cost: one extra fragmentation pass per cell of a split row. Rows that fit
   pay nothing.
-- Bundle: an estimated 1–2 KiB gzip on the Core routes. The Core ·
-  PageDocument route has 1.4 KiB of headroom, so this change needs a recorded
-  budget decision in `docs/bundle-size.md`.
+- A split row's cells carry an inline `width` and `box-sizing` in the
+  committed document.
+- Bundle: about 0.5 KiB gzip on the Core routes. The budgets were raised with
+  a recorded decision in `docs/bundle-size.md`.
 
 ## Verification
+
+Implemented in `tests/e2e/browser-core-table-row-fragmentation.spec.ts`, and
+the earlier atomic long-cell test in
+`browser-core-complex-table-fragmentation.spec.ts` now asserts the split.
 
 - A conformance fixture: a statement table whose notes cell holds several
   pages of paragraphs next to short date and amount cells, with a continuity

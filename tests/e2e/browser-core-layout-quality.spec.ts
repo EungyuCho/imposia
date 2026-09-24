@@ -457,7 +457,7 @@ test.describe("Chromium Core fragmentation and layout quality", () => {
     }
   });
 
-  test("keeps an oversized table row intact and reports deterministic overflow", async ({
+  test("splits an oversized table row across pages without losing a line (ADR 0014)", async ({
     page,
     browserName,
   }) => {
@@ -515,9 +515,11 @@ test.describe("Chromium Core fragmentation and layout quality", () => {
       });
 
       expect(observation.pageCount).toBeGreaterThanOrEqual(2);
-      expect(observation.hugeRows).toBe(1);
-      expect(observation.hugeRowPages).toHaveLength(1);
-      expect(observation.hugeRowPages[0]).toBeGreaterThanOrEqual(0);
+      // One row fragment per page the row spans, on consecutive pages.
+      expect(observation.hugeRows).toBeGreaterThanOrEqual(2);
+      expect(observation.hugeRowPages).toEqual(
+        observation.hugeRowPages.map((_page, index) => (observation.hugeRowPages[0] ?? 0) + index),
+      );
       expect(
         markerOccurrences(observation.text, [
           "TABLE-PREFIX-A",
@@ -526,9 +528,8 @@ test.describe("Chromium Core fragmentation and layout quality", () => {
           ...observation.hugeLines,
         ]),
       ).toEqual([1, 1, 1, ...observation.hugeLines.map(() => 1)]);
-      expect(observation.warningCodes.filter((code) => code === "PAGE_OVERFLOW")).toEqual([
-        "PAGE_OVERFLOW",
-      ]);
+      expect(observation.warningCodes).not.toContain("PAGE_OVERFLOW");
+      expect(observation.warningCodes).not.toContain("UNSUPPORTED_LAYOUT");
     } finally {
       expect(errors).toEqual([]);
       expect(pageErrors).toEqual([]);
