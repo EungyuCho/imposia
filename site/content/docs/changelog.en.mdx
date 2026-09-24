@@ -5,6 +5,19 @@ description: See what changed in each published Imposia package version.
 
 This page summarizes each versioned Imposia release. `@imposia/core`, `@imposia/viewer`, `@imposia/client`, and `@imposia/react` use the same version number; the complete record is the repository's [CHANGELOG.md](https://github.com/EungyuCho/imposia/blob/main/CHANGELOG.md).
 
+## 0.6.0 — September 24, 2026
+
+Business documents paginate the way they are written, long documents stay fast, and printing matches the preview more closely. Four changes are breaking; see the [migration note](https://github.com/EungyuCho/imposia/blob/main/docs/migrations/0.6.0.md).
+
+- Breaking: printing preserves backgrounds, hoisted print font families are renamed, the React status unions gained `"aborted"`, and the PDF.js viewer `mountViewer` was removed.
+- All sixteen `@page` margin boxes, with font, color, alignment, border, and padding styles; top and bottom boxes sized to their content; `@page :nth()`; and the A3, A5, B4, B5, Legal, and Ledger page sizes.
+- `PublicationOptions.pageNumbering: "entry"` numbers each Publication entry on its own, so every invoice in a batch reads "Page 1 of N".
+- Table rows taller than a page split cell by cell, and grids with column-spanning items break between rows.
+- `UNSUPPORTED_LAYOUT` fires only when keeping a layout whole costs content; a row of `display: flex` cards no longer warns.
+- A declared `dir="rtl"` is kept, and right-to-left documents warn that page progression stays left to right.
+- Pagination stays linear to 10,000 pages, and hosts can raise the input, node, page, and deadline limits.
+- The `0.5.0` experimental escape hatches were removed on schedule.
+
 ## 0.5.0 — August 20, 2026
 
 Core parses with the browser's native parser, and a pagination performance batch reduced layout-measurement work on long documents.

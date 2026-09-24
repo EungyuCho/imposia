@@ -5,6 +5,19 @@ description: 공개된 Imposia 패키지 버전별 변경 사항을 확인합니
 
 이 페이지는 버전이 매겨진 Imposia 릴리스를 요약합니다. `@imposia/core`, `@imposia/viewer`, `@imposia/client`, `@imposia/react`는 같은 버전 번호를 사용하며, 전체 기록은 저장소의 [CHANGELOG.md](https://github.com/EungyuCho/imposia/blob/main/CHANGELOG.md)에 있습니다.
 
+## 0.6.0 — 2026년 9월 24일
+
+업무 문서를 작성한 모양 그대로 페이지로 나누고, 긴 문서도 빠르게 처리하며, 인쇄 결과가 미리보기와 더 가까워졌습니다. 호환되지 않는 변경이 네 가지 있으니 [마이그레이션 노트](https://github.com/EungyuCho/imposia/blob/main/docs/migrations/0.6.0.md)를 확인하세요.
+
+- 호환되지 않는 변경: 인쇄 시 배경을 유지하고, 인쇄용으로 옮기는 글꼴 이름을 바꾸며, React 상태 유니온에 `"aborted"`가 추가됐고, PDF.js 뷰어 `mountViewer`를 제거했습니다.
+- `@page` margin box 16개 전체와 글꼴·색·정렬·테두리·여백 스타일, 내용에 맞춰 폭을 나누는 위·아래 박스, `@page :nth()`, A3·A5·B4·B5·Legal·Ledger 용지를 지원합니다.
+- `PublicationOptions.pageNumbering: "entry"`로 Publication의 entry마다 페이지 번호를 따로 매깁니다. 청구서 묶음의 청구서마다 "Page 1 of N"이 찍힙니다.
+- 한 페이지보다 긴 표 행은 셀 단위로 나뉘고, 열을 병합한 grid 항목도 행 단위로 페이지를 나눕니다.
+- `UNSUPPORTED_LAYOUT`은 레이아웃을 통째로 유지해서 내용이 손실될 때만 알립니다. `display: flex`로 카드를 한 줄 배치하는 정도로는 더 이상 경고하지 않습니다.
+- `dir="rtl"` 선언을 유지하고, 오른쪽에서 왼쪽으로 쓰는 문서에는 페이지 진행 방향이 왼쪽에서 오른쪽으로 유지된다는 경고를 냅니다.
+- 10,000페이지까지 문서 길이에 비례하는 시간으로 페이지를 나누고, 호스트가 입력·노드·페이지·시간 한도를 올릴 수 있습니다.
+- `0.5.0`의 실험용 escape hatch를 예정대로 제거했습니다.
+
 ## 0.5.0 — 2026년 8월 20일
 
 Core가 브라우저 네이티브 파서로 HTML을 해석하고, 페이지네이션 성능 개선으로 긴 문서의 레이아웃 측정 작업을 줄였습니다.
