@@ -5,6 +5,19 @@ description: 查看每个已发布的 Imposia 包版本的变化。
 
 本页汇总 Imposia 的每个已发布版本。`@imposia/core`、`@imposia/viewer`、`@imposia/client` 和 `@imposia/react` 使用相同的版本号；完整记录见仓库中的 [CHANGELOG.md](https://github.com/EungyuCho/imposia/blob/main/CHANGELOG.md)。
 
+## 0.6.0 — 2026年9月24日
+
+业务文档按编写时的样子分页，长文档保持快速，打印结果与预览更一致。本版本有四项不兼容变更，请阅读[迁移说明](https://github.com/EungyuCho/imposia/blob/main/docs/migrations/0.6.0.md)。
+
+- 不兼容变更：打印时保留背景，打印时提升的字体族会重命名，React 状态联合类型新增 `"aborted"`，并移除了 PDF.js 查看器 `mountViewer`。
+- 支持全部 16 个 `@page` 页边距框及其字体、颜色、对齐、边框和内边距样式，上下页边距框按内容分配宽度，支持 `@page :nth()` 以及 A3、A5、B4、B5、Legal、Ledger 纸张。
+- `PublicationOptions.pageNumbering: "entry"` 为 Publication 的每个条目单独编页，批量发票中的每张发票都显示 “Page 1 of N”。
+- 超过一页的表格行按单元格拆分，跨列的 grid 项目也按行分页。
+- 只有在整体保留布局会丢失内容时才报告 `UNSUPPORTED_LAYOUT`；用 `display: flex` 排成一行的卡片不再告警。
+- 保留声明的 `dir="rtl"`，从右到左的文档会提示页面顺序仍为从左到右。
+- 分页时间随文档长度线性增长，直到 10,000 页；宿主可以调高输入、节点、页数和时间上限。
+- 按计划移除了 `0.5.0` 的实验性回退开关。
+
 ## 0.5.0 — 2026年8月20日
 
 Core 改用浏览器原生解析器，一批分页性能优化减少了长文档的布局测量工作。

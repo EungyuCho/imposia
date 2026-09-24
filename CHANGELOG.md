@@ -5,13 +5,17 @@ versioning for its published package interfaces. What that means before `1.0`
 — what counts as public, and what a minor release is allowed to break — is in
 [`docs/api-policy.md`](docs/api-policy.md).
 
-## 0.6.0 — Unreleased
+## 0.6.0 — 2026-09-24
 
-Minor release for the asset and print pipeline. Four changes are breaking —
-two print defaults, one status union, and the removed PDF viewer — and each
-has an upgrade path in
-[`docs/migrations/unreleased.md`](docs/migrations/unreleased.md), which is
-renamed to `0.6.0.md` when this release ships.
+Minor release for document layout, long documents, and the print pipeline.
+Business documents paginate the way they are written: all sixteen `@page`
+margin boxes with styles, per-document page numbers in a Publication, grids
+with spanning items, and table rows taller than a page. Pagination stays
+linear to 10,000 pages, and hosts can raise the size limits. Four changes are
+breaking — two print defaults, one status union, and the removed PDF viewer —
+and each has an upgrade path in
+[`docs/migrations/0.6.0.md`](docs/migrations/0.6.0.md), which also lists the
+layout changes that can alter page counts or warnings without a code change.
 
 ### Breaking
 
@@ -93,6 +97,9 @@ renamed to `0.6.0.md` when this release ships.
 
 ### Changed
 
+- `@imposia/core` bundles `postcss` 8.5.28 (was 8.5.26). No advisory; the
+  development-only `browserslist` and `vitest` alerts were cleared at the same
+  time and do not reach the packages.
 - `UNSUPPORTED_LAYOUT` is reported only when keeping an unsupported layout
   whole costs something: it overflows the page, spills sideways out of its own
   box (the extra columns of a fixed-height multicol), or holds a forced break
