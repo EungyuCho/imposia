@@ -35,13 +35,39 @@ const DEFAULT_GEOMETRY: PageGeometry = Object.freeze({
   contentHeightCssPx: A4_HEIGHT_CSS_PX - 2 * DEFAULT_PAGE_MARGIN_CSS_PX,
 });
 
+export const PAGE_SHEET_ATTRIBUTE = "data-imposia-sheet";
+
+/**
+ * The print sheet of every page, as an index into the document's distinct
+ * sheet sizes. Pages of one size share one named `@page` rule: a rule and a
+ * selector per page made style matching quadratic in the page count.
+ */
+export function pageSheets(geometries: readonly PageGeometry[]): Readonly<{
+  sheets: readonly PageGeometry[];
+  pageSheet: readonly number[];
+}> {
+  const sheets: PageGeometry[] = [];
+  const indexes = new Map<string, number>();
+  const pageSheet = geometries.map((geometry) => {
+    const key = `${geometry.sheetWidthCssPx}x${geometry.sheetHeightCssPx}`;
+    let index = indexes.get(key);
+    if (index === undefined) {
+      index = sheets.length + 1;
+      indexes.set(key, index);
+      sheets.push(geometry);
+    }
+    return index;
+  });
+  return { sheets, pageSheet };
+}
+
 export function frameStyle(geometries: readonly PageGeometry[]): string {
   const first = geometries[0] ?? DEFAULT_GEOMETRY;
-  const namedSheets = geometries
-    .map(
+  const namedSheets = pageSheets(geometries)
+    .sheets.map(
       (geometry, index) =>
         `@page imposia-sheet-${index + 1}{size:${cssPx(geometry.sheetWidthCssPx)} ${cssPx(geometry.sheetHeightCssPx)};margin:0}` +
-        `[data-imposia-page-number="${index + 1}"]{page:imposia-sheet-${index + 1}!important}`,
+        `[${PAGE_SHEET_ATTRIBUTE}="${index + 1}"]{page:imposia-sheet-${index + 1}!important}`,
     )
     .join("");
   return [

@@ -12,7 +12,6 @@ import {
 } from "./page-document-frame.js";
 import {
   type BuiltWarningSourceLocation,
-  bodyText,
   buildGeneration,
   snapshotSettings,
 } from "./page-document-generation.js";
@@ -376,7 +375,7 @@ function createPageDocumentController(
           );
           canonicalReplaced = true;
           const pages = Object.freeze(
-            generation.pages.map(({ flow, blank, name, geometry }, index) => {
+            generation.pages.map(({ bodyText, blank, name, geometry }, index) => {
               const side = index % 2 === 0 ? ("right" as const) : ("left" as const);
               const context = Object.freeze({ side, name, blank });
               return Object.freeze({
@@ -388,7 +387,7 @@ function createPageDocumentController(
                 geometry,
                 widthCssPx: geometry.sheetWidthCssPx,
                 heightCssPx: geometry.sheetHeightCssPx,
-                bodyText: bodyText(flow),
+                bodyText,
               });
             }),
           );

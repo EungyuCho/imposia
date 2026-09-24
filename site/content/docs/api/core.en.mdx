@@ -48,20 +48,20 @@ An `AssetResolver` receives `{ url, kind, baseUrl, signal }` and resolves to `{ 
 
 <Accordion title="Default limits">
 
-Every `limits` field is optional; these are the defaults that apply when a field is omitted.
+Every `limits` field is optional; the default applies when a field is omitted. A value may be lowered freely. Only the four fields with a maximum can be raised, up to that maximum; the others cannot go above their default.
 
-| Field | Default |
-| --- | --- |
-| `maxInputBytes` | 5 MiB (`5 * 1024 * 1024`) |
-| `maxNodes` | 100,000 |
-| `maxAssetBytes` | 25 MiB (`25 * 1024 * 1024`) |
-| `maxAssetDepth` | 8 |
-| `maxAssetReferences` | 512 |
-| `resourceDeadlineMs` | 30,000 |
-| `maxPages` | 10,000 |
-| `maxLayoutPasses` | 8 |
-| `maxGeneratedFragments` | 400,000 |
-| `maxGeneratedRecords` | 10,000 |
+| Field | Default | Maximum |
+| --- | --- | --- |
+| `maxInputBytes` | 5 MiB (`5 * 1024 * 1024`) | 32 MiB (`32 * 1024 * 1024`) |
+| `maxNodes` | 100,000 | 1,000,000 |
+| `maxAssetBytes` | 25 MiB (`25 * 1024 * 1024`) | same as default |
+| `maxAssetDepth` | 8 | same as default |
+| `maxAssetReferences` | 512 | same as default |
+| `resourceDeadlineMs` | 30,000 | 300,000 |
+| `maxPages` | 10,000 | 50,000 |
+| `maxLayoutPasses` | 8 | same as default |
+| `maxGeneratedFragments` | 400,000 | same as default |
+| `maxGeneratedRecords` | 10,000 | same as default |
 
 </Accordion>
 

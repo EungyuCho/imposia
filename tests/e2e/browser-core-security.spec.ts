@@ -268,3 +268,69 @@ test("enforces input, node, and resolver deadline limits", async ({ page, browse
     expect(pageErrors).toEqual([]);
   }
 });
+
+test("a host can raise the input limit above its default up to the maximum", async ({
+  page,
+  browserName,
+}) => {
+  const { errors, pageErrors } = captureBrowserErrors(page, browserName);
+
+  await page.goto("/examples/book.html");
+  try {
+    const observation = await page.evaluate(async () => {
+      type Controller = { ready: Promise<{ pageCount: number }>; destroy(): Promise<void> };
+      const core = (await import("/packages/core/dist/index.js")) as {
+        mountPageDocument(
+          container: HTMLElement,
+          source: { html: string },
+          options?: Record<string, unknown>,
+        ): Controller;
+      };
+      // Six MiB of comment keeps the source over the default without adding pages.
+      const html = `<p>Large source</p><!--${"a".repeat(6 * 1024 * 1024)}-->`;
+      const mount = async (options?: Record<string, unknown>) => {
+        const host = document.body.appendChild(document.createElement("div"));
+        let controller: Controller | undefined;
+        try {
+          controller = core.mountPageDocument(host, { html }, options);
+          return { pageCount: (await controller.ready).pageCount };
+        } catch (error: unknown) {
+          return { error: error instanceof Error ? error.message : "unknown" };
+        } finally {
+          await controller?.destroy();
+          host.remove();
+        }
+      };
+      const aboveMaximum = (() => {
+        try {
+          core.mountPageDocument(
+            document.body,
+            { html: "<p>x</p>" },
+            {
+              limits: { maxInputBytes: 32 * 1024 * 1024 + 1 },
+            },
+          );
+          return "";
+        } catch (error: unknown) {
+          return error instanceof Error ? error.message : "unknown";
+        }
+      })();
+      return {
+        defaultLimit: await mount(),
+        raised: await mount({ limits: { maxInputBytes: 8 * 1024 * 1024 } }),
+        aboveMaximum,
+      };
+    });
+
+    expect(observation.defaultLimit).toEqual({
+      error: "Page source exceeds the 5242880-byte input limit.",
+    });
+    expect(observation.raised).toEqual({ pageCount: 1 });
+    expect(observation.aboveMaximum).toBe(
+      "maxInputBytes must be a finite positive number no greater than 33554432.",
+    );
+  } finally {
+    expect(errors).toEqual([]);
+    expect(pageErrors).toEqual([]);
+  }
+});

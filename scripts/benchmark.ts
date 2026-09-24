@@ -58,7 +58,7 @@ const SCENARIOS: readonly Scenario[] = Object.freeze([
   { id: "mount-1000", description: "Mount a 1,000-page document", unit: "ms" },
   {
     id: "mount-1000-blocking",
-    description: "Longest main-thread block while mounting the 1,000-page document",
+    description: "Longest main-thread task while mounting the 1,000-page document (0 below 50 ms)",
     unit: "ms",
   },
   {
@@ -69,6 +69,12 @@ const SCENARIOS: readonly Scenario[] = Object.freeze([
   // 1,800 pages is near the ceiling: this article is about 2.8 KB of HTML
   // per page, so the 5 MiB input limit is reached at about 1,850 pages.
   { id: "mount-1800", description: "Mount a 1,800-page document", unit: "ms" },
+  // Past the defaults: a host may raise the input and node limits (ADR 0015).
+  {
+    id: "mount-5000",
+    description: "Mount a 5,000-page document with raised input and node limits",
+    unit: "ms",
+  },
   {
     id: "statement-table",
     description: "Mount a statement whose table has 5,000 rows and a repeated header",
@@ -124,7 +130,11 @@ function runScenario(page: Page, id: string, coreUrl: string): Promise<Sample> {
       };
       const core = (await import(coreUrl)) as {
         committedFrameGeneration(frameDocument: globalThis.Document): number | undefined;
-        mountPageDocument(host: HTMLElement, source: { html: string }): Controller;
+        mountPageDocument(
+          host: HTMLElement,
+          source: { html: string },
+          options?: { limits?: Readonly<Record<string, number>> },
+        ): Controller;
         mountPublication(
           host: HTMLElement,
           snapshot: {
@@ -135,7 +145,7 @@ function runScenario(page: Page, id: string, coreUrl: string): Promise<Sample> {
       };
       const sentence = "The quick brown fox jumps over the lazy dog near the riverbank. ";
       // 360 sections make 99 pages, 182 make 50, and 731 make 200; the
-      // 1,000- and 1,800-page scenarios scale that ratio.
+      // 1,000-, 1,800-, and 5,000-page scenarios scale that ratio.
       const article = (word: string, sections = 360) =>
         Array.from(
           { length: sections },
@@ -193,39 +203,44 @@ function runScenario(page: Page, id: string, coreUrl: string): Promise<Sample> {
         value = performance.now() - startedAt;
       } else {
         const sections =
-          id === "mount-1800"
-            ? 6579
-            : id.startsWith("mount-1000")
-              ? 3655
-              : id === "large-mount"
-                ? 731
-                : id === "document-mount" || id === "document-update" || id === "first-frame"
-                  ? 360
-                  : 182;
+          id === "mount-5000"
+            ? 18275
+            : id === "mount-1800"
+              ? 6579
+              : id.startsWith("mount-1000")
+                ? 3655
+                : id === "large-mount"
+                  ? 731
+                  : id === "document-mount" || id === "document-update" || id === "first-frame"
+                    ? 360
+                    : 182;
         const html = article("alpha", sections);
         const gc = (globalThis as { gc?: () => void }).gc;
         gc?.();
         const heapBefore =
           (performance as { memory?: { usedJSHeapSize: number } }).memory?.usedJSHeapSize ?? 0;
-        // A MessageChannel ping loop observes how long the main thread stays
-        // blocked: the gap between two pings is at least the longest task.
+        // The Long Tasks API reports every main-thread task of 50 ms or more.
+        // A ping loop would overstate blocking: Core yields with
+        // scheduler.yield(), whose continuations run ahead of queued tasks
+        // while input and rendering still get their turn.
         let blocking = 0;
-        let probing = id === "mount-1000-blocking";
-        const channel = new MessageChannel();
-        let lastPing = performance.now();
-        channel.port1.onmessage = () => {
-          const now = performance.now();
-          blocking = Math.max(blocking, now - lastPing);
-          lastPing = now;
-          if (probing) channel.port2.postMessage(undefined);
-        };
-        if (probing) channel.port2.postMessage(undefined);
+        const longTasks = new PerformanceObserver((list) => {
+          for (const entry of list.getEntries()) blocking = Math.max(blocking, entry.duration);
+        });
+        if (id === "mount-1000-blocking") longTasks.observe({ type: "longtask" });
         const startedAt = performance.now();
-        controller = core.mountPageDocument(host, { html });
+        controller = core.mountPageDocument(
+          host,
+          { html },
+          id === "mount-5000"
+            ? { limits: { maxInputBytes: 16 * 1024 * 1024, maxNodes: 500_000 } }
+            : undefined,
+        );
         const ready = await controller.ready;
         value = performance.now() - startedAt;
-        probing = false;
-        channel.port1.close();
+        await new Promise((settle) => setTimeout(settle, 0));
+        for (const entry of longTasks.takeRecords()) blocking = Math.max(blocking, entry.duration);
+        longTasks.disconnect();
         pageCount = ready.pageCount;
         if (id === "mount-1000-blocking") {
           value = blocking;

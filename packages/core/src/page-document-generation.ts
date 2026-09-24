@@ -1,5 +1,10 @@
 import { normalizeCss } from "./css-contracts.js";
-import { prepareDecoration, prepareDocument, prepareExtensionInput } from "./document.js";
+import {
+  type PreparedDocument,
+  prepareDecoration,
+  prepareDocumentCooperatively,
+  prepareExtensionInput,
+} from "./document.js";
 import { ImposiaError } from "./errors.js";
 import {
   type ResolvedPageAssets,
@@ -20,7 +25,13 @@ import {
   type ValidatedPageExtension,
   validateExtensions,
 } from "./page-document-extensions.js";
-import { abortError, FRAME_STYLE, frameStyle } from "./page-document-frame.js";
+import {
+  abortError,
+  FRAME_STYLE,
+  frameStyle,
+  PAGE_SHEET_ATTRIBUTE,
+  pageSheets,
+} from "./page-document-frame.js";
 import {
   cleanPublishingInternals,
   extractPublishingCss,
@@ -63,7 +74,11 @@ import type {
   PageSource,
   PageWarning,
 } from "./page-document-types.js";
-import { DEFAULT_PAGE_LIMITS, UNLOCATED_PAGE_WARNING_LOCATION } from "./page-document-types.js";
+import {
+  DEFAULT_PAGE_LIMITS,
+  MAXIMUM_PAGE_LIMITS,
+  UNLOCATED_PAGE_WARNING_LOCATION,
+} from "./page-document-types.js";
 import {
   type AuthoredPageRule,
   authoredPageName,
@@ -109,7 +124,7 @@ export interface BuiltGeneration {
   body: DocumentFragment;
   css: readonly string[];
   documentLanguage?: string;
-  pages: readonly BuiltPage[];
+  pages: readonly (BuiltPage & Readonly<{ bodyText: readonly string[] }>)[];
   warnings: readonly PageWarning[];
   warningSourceLocations: ReadonlyMap<string, BuiltWarningSourceLocation>;
   timings: Readonly<{ resourceMs: number; paginationMs: number }>;
@@ -224,8 +239,8 @@ function limitError(name: keyof PageLimits, maximum: number): Error {
 }
 
 function normalizeLimit(name: keyof EffectivePageLimits, supplied: number | undefined): number {
-  const maximum = DEFAULT_PAGE_LIMITS[name];
-  if (supplied === undefined) return maximum;
+  const maximum = MAXIMUM_PAGE_LIMITS[name];
+  if (supplied === undefined) return DEFAULT_PAGE_LIMITS[name];
   if (
     !Number.isFinite(supplied) ||
     !Number.isInteger(supplied) ||
@@ -1865,6 +1880,30 @@ function createProbe(frameDocument: Document): HTMLElement {
     "position:absolute;top:0;left:-100000px;visibility:hidden;pointer-events:none;contain:layout style";
   frameDocument.body.append(probe);
   return probe;
+}
+
+const PROBE_PAGE_BUCKET_SIZE = 64;
+const PROBE_PAGE_BUCKET_ATTRIBUTE = "data-imposia-probe-pages";
+
+/**
+ * Appends a page to the probe inside a bucket of at most 64 pages. With every
+ * page a direct probe child, each forced layout walked all placed pages, so
+ * time per page grew with the page count past about a thousand pages. A full
+ * bucket stays clean, and layout reuses it as one cached child. Buckets keep
+ * document order, so counters and other order-dependent styles are unchanged.
+ */
+function appendProbePage(probe: HTMLElement, page: HTMLElement): void {
+  let bucket = probe.lastElementChild;
+  if (
+    bucket === null ||
+    !bucket.hasAttribute(PROBE_PAGE_BUCKET_ATTRIBUTE) ||
+    bucket.childElementCount >= PROBE_PAGE_BUCKET_SIZE
+  ) {
+    bucket = probe.ownerDocument.createElement("div");
+    bucket.setAttribute(PROBE_PAGE_BUCKET_ATTRIBUTE, "");
+    probe.append(bucket);
+  }
+  bucket.append(page);
 }
 
 function throwIfAborted(signal: AbortSignal): void {
@@ -3652,6 +3691,15 @@ export async function buildGeneration(
 ): Promise<BuiltGeneration> {
   const paginationStartedAt = performance.now();
   const deadlineAt = paginationStartedAt + settings.limits.resourceDeadlineMs;
+  // One scheduler for the whole generation. Preparation used to run parse,
+  // sanitize, copy, and publishing preparation back to back: 134 ms without
+  // a yield on a 1,000-page document, far past the slice budget.
+  const composeScheduler = createComposeScheduler(settings.compose);
+  const yieldBetweenStages = async (): Promise<void> => {
+    const scheduled = composeScheduler.checkpoint(signal);
+    if (scheduled !== undefined) await scheduled;
+    throwIfAborted(signal);
+  };
   const html = sourceHtml(source);
   ensureInputLimit(html, settings.limits);
   const extensions = validateExtensions(settings.extensions);
@@ -3728,13 +3776,21 @@ export async function buildGeneration(
     extensionWarnings.cleanup();
     throw error;
   }
-  let prepared: ReturnType<typeof prepareDocument>;
+  let prepared: PreparedDocument;
   try {
-    prepared = prepareDocument(transformed.html, {
-      ...(settings.headerTemplate === undefined ? {} : { headerTemplate: settings.headerTemplate }),
-      ...(settings.footerTemplate === undefined ? {} : { footerTemplate: settings.footerTemplate }),
-      allowRemoteResources: true,
-    });
+    prepared = await prepareDocumentCooperatively(
+      transformed.html,
+      {
+        ...(settings.headerTemplate === undefined
+          ? {}
+          : { headerTemplate: settings.headerTemplate }),
+        ...(settings.footerTemplate === undefined
+          ? {}
+          : { footerTemplate: settings.footerTemplate }),
+        allowRemoteResources: true,
+      },
+      yieldBetweenStages,
+    );
   } catch (error: unknown) {
     extensionWarnings.cleanup();
     throw error;
@@ -3747,6 +3803,7 @@ export async function buildGeneration(
   let assets: ResolvedPageAssets | undefined;
   const resourceStartedAt = performance.now();
   try {
+    await yieldBetweenStages();
     if (settings.assetResolver !== undefined) {
       assets = await resolvePageAssets(
         sanitizeAssetResolverInput(prepared.html),
@@ -3779,6 +3836,7 @@ export async function buildGeneration(
     if (preparedSemanticSource.documentLanguage !== undefined) {
       frameDocument.documentElement.lang = preparedSemanticSource.documentLanguage;
     }
+    await yieldBetweenStages();
     const semanticSourceFlow = frameDocument.createElement("div");
     semanticSourceFlow.append(preparedSemanticSource.fragment);
     const nodeCount = semanticSourceFlow.querySelectorAll("*").length;
@@ -3788,9 +3846,11 @@ export async function buildGeneration(
     let resourceBlocked =
       preparedSemanticSource.resourceBlocked ||
       sanitizeFrameContent(semanticSourceFlow, assets !== undefined, resolvedBlobUrls, true);
+    await yieldBetweenStages();
     const sourceFlow = semanticSourceFlow.cloneNode(true) as HTMLElement;
     resourceBlocked ||= sanitizeFrameContent(sourceFlow, assets !== undefined, resolvedBlobUrls);
     resourceBlocked ||= assets?.resourceBlocked ?? false;
+    await yieldBetweenStages();
 
     const sanitizedCss = (assets?.css ?? transformed.css).map((css) =>
       sanitizeCss(
@@ -3811,6 +3871,7 @@ export async function buildGeneration(
     for (const [index, style] of [...semanticStyles].entries()) {
       style.textContent = frameStyles[index]?.textContent ?? "";
     }
+    await yieldBetweenStages();
     const pageMedia: PaginationPageMedia = Object.freeze({
       rules: compiledPageMedia.rules,
       host: settings.page,
@@ -3822,11 +3883,13 @@ export async function buildGeneration(
       baseUrl: source.baseUrl,
       assets: assets?.semanticAssets ?? Object.freeze([]),
     });
+    await yieldBetweenStages();
     const publishing = preparePublishingContent(
       sourceFlow,
       compiledPageMedia.publishingRules,
       settings.limits,
     );
+    await yieldBetweenStages();
     // ASA-426: decided once per generation — every pass clones the same
     // source flow and stylesheet set, so the verdict cannot change between
     // passes. Inline styles are re-checked per subtree on the live pass DOM.
@@ -3844,7 +3907,6 @@ export async function buildGeneration(
     let overflowWarning: PageWarning | undefined;
     let warningSourceLocations: ReadonlyMap<string, BuiltWarningSourceLocation> = new Map();
     try {
-      const composeScheduler = createComposeScheduler(settings.compose);
       const paginate = async (generatedValues: ReadonlyMap<string, string>, passNumber: number) => {
         probe.replaceChildren();
         const passSource = sourceFlow.cloneNode(true) as HTMLElement;
@@ -3913,7 +3975,7 @@ export async function buildGeneration(
           const created = createPage(frameDocument, pageMedia, passPages.length + 1, name);
           reserveDecorationRows(frameDocument, created, pageSettings);
           passPages.push(created);
-          probe.append(created.page);
+          appendProbePage(probe, created.page);
           settings.onProgress?.(
             Object.freeze({
               completedPages: passPages.length,
@@ -3955,7 +4017,9 @@ export async function buildGeneration(
           continueRoot,
           "root",
         );
+        await yieldBetweenStages();
         const finalized = finalizePublishingPass(passPages, publishing, settings.experimental);
+        await yieldBetweenStages();
         return {
           pages: passPages,
           fragmentationWarnings: passFragmentationWarnings,
@@ -4038,6 +4102,7 @@ export async function buildGeneration(
       const fittedBeforeDecoration = decorationMayResize
         ? pages.map((page) => !pageOverflows(page))
         : [];
+      await yieldBetweenStages();
       const numbering = pageNumbering(pages, settings.entryPageNumbering);
       for (const [index, page] of pages.entries()) {
         const [pageNumber, totalPages] = numbering[index] ?? [index + 1, pages.length];
@@ -4067,8 +4132,11 @@ export async function buildGeneration(
           location: UNLOCATED_PAGE_WARNING_LOCATION,
         });
       }
+      await yieldBetweenStages();
       warningSourceLocations = collectWarningSourceLocations(pages);
+      await yieldBetweenStages();
       cleanPublishingInternals(pages);
+      await yieldBetweenStages();
       if (extensions.some((extension) => extension.finalizePage !== undefined)) {
         const fragmentsByPage = new Map<PageParts, PageExtensionTableFragment[]>();
         const continuationCounts = new Map<Element, number>();
@@ -4099,10 +4167,19 @@ export async function buildGeneration(
       for (const style of probeStyles) style.remove();
     }
 
-    const css = Object.freeze([
-      frameStyle(pages.map((page) => page.geometry)),
-      ...compiledPageMedia.css,
-    ]);
+    // Page text is read here, where yields are allowed, rather than inside
+    // the commit, which must stay one task.
+    const pageTexts: (readonly string[])[] = [];
+    for (const page of pages) {
+      pageTexts.push(bodyText(page.flow));
+      await yieldBetweenStages();
+    }
+    const geometries = pages.map((page) => page.geometry);
+    const { pageSheet } = pageSheets(geometries);
+    for (const [index, page] of pages.entries()) {
+      page.page.setAttribute(PAGE_SHEET_ATTRIBUTE, String(pageSheet[index]));
+    }
+    const css = Object.freeze([frameStyle(geometries), ...compiledPageMedia.css]);
 
     const warnings = [
       ...mappedDocumentWarnings([
@@ -4134,12 +4211,13 @@ export async function buildGeneration(
         ? {}
         : { documentLanguage: preparedSemanticSource.documentLanguage }),
       pages: Object.freeze(
-        pages.map(({ page, flow, blank, name, geometry }) => ({
+        pages.map(({ page, flow, blank, name, geometry }, index) => ({
           page,
           flow,
           blank,
           name,
           geometry,
+          bodyText: pageTexts[index] ?? Object.freeze([]),
         })),
       ),
       warnings: Object.freeze(warnings),

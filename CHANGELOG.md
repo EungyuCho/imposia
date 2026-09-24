@@ -46,6 +46,12 @@ renamed to `0.6.0.md` when this release ships.
 
 ### Added
 
+- A host can raise four limits above their defaults, up to a fixed maximum:
+  `maxInputBytes` to 32 MiB, `maxNodes` to 1,000,000, `maxPages` to 50,000,
+  and `resourceDeadlineMs` to 300,000. The defaults are unchanged, and the
+  other limits still cannot be raised. A 5,000-page document mounts in about
+  5 s with raised limits; before, anything over 5 MiB of HTML was rejected.
+  See ADR 0015.
 - Grid fragmentation accepts items that span columns: `grid-column: span N`
   and full-width `grid-column: 1 / -1`. Dashboard and report grids with a
   full-width heading row or a two-column card used to stay atomic with
@@ -81,15 +87,20 @@ renamed to `0.6.0.md` when this release ships.
 ### Changed
 
 - Pagination no longer slows down as documents grow. Every placement used to
-  relay out all of the source still waiting to be placed, so time per page
-  rose with document length. A 1,800-page mount drops from 14.0 s to 2.0 s,
-  a 1,000-page mount from 3.8 s to 0.94 s, and a 200-page mount from 290 ms
-  to 166 ms (Chromium, Apple M4). Page structure is unchanged.
+  relay out all of the source still waiting to be placed and walk every page
+  placed so far, so time per page rose with document length. A 1,800-page
+  mount drops from 13.9 s to 1.6 s, a 1,000-page mount from 3.8 s to 0.84 s,
+  and a 200-page mount from 286 ms to 164 ms (Chromium, Apple M4). Page
+  structure is unchanged.
+- Preparation and post-pagination steps yield to the host between steps, so
+  the longest main-thread task of a 1,000-page mount drops from 207 ms to
+  63 ms. The committed frame carries one `@page` rule per distinct sheet size
+  instead of one per page; pages name their sheet with `data-imposia-sheet`.
 - A page carries a `[data-imposia-margin-box]` element only for boxes whose
   resolved content is not empty; previously all six boxes were always
   present, empty or not. This is private page DOM, but `finalizePage`
   extensions and host stylesheets that queried it see fewer elements.
-- Core · PageDocument grows from 56.9 KiB to 58.6 KiB gzip for the additions
+- Core · PageDocument grows from 56.9 KiB to 58.9 KiB gzip for the additions
   above, within its 60.0 KiB budget. The page-size constants moved
   to their own module, so the Viewer route no longer carries the `@page`
   parser and grows only by the new frame rules (11.6 KiB to 11.7 KiB).

@@ -26,38 +26,47 @@ partial frames during rapid updates), it covers long documents:
 | `mount-1000-blocking` | The same document | The longest gap between two `MessageChannel` pings during the mount, a lower bound on the longest main-thread task |
 | `mount-1000-heap` | The same document | `performance.memory.usedJSHeapSize` after GC while mounted, minus the reading before the mount (Chromium runs with `--enable-precise-memory-info --js-flags=--expose-gc`) |
 | `mount-1800` | 6,579 sections (1,795 pages) | Mount until `controller.ready` |
+| `mount-5000` | 18,275 sections (4,985 pages), with raised input and node limits | Mount until `controller.ready` |
 | `statement-table` | One table, 5,000 rows, a repeated `thead` (216 pages) | Mount until `controller.ready` |
 
 `--only <id,id>` runs a subset, and `--compare <bundle>` runs another build of
 `packages/core/dist/index.js` alternately with the current one.
 
-1,800 pages is close to the ceiling for this input. The article is about
-2.8 KB of HTML per page, and `limits.maxInputBytes` cannot be raised above
-5 MiB, so a document of this density stops at about 1,850 pages. A caller can
-lower the limits but not raise them.
+1,800 pages is close to the default ceiling for this input. The article is
+about 2.8 KB of HTML per page, so the 5 MiB `maxInputBytes` default stops it at
+about 1,850 pages. `mount-5000` raises `maxInputBytes` and `maxNodes`, which a
+host may do up to the maximums in ADR 0015.
 
 ### Recorded results
 
 Captured 2026-09-24 on an Apple M4 with Chromium 149.0.7827.55, median of 7
 runs, `--compare` against `main` at `38675c5`:
 
-| Scenario | Pages | `38675c5` | `f33ded4` |
+| Scenario | Pages | `38675c5` | This branch |
 | --- | ---: | ---: | ---: |
-| Mount a 99-page article | 99 | 122.3 ms | 80.3 ms |
-| Update one word in that article | 99 | 119.1 ms | 76.6 ms |
-| Mount a Publication of 100 entries | 100 | 91.6 ms | 81 ms |
-| Update one word in a 50-page report | 50 | 56.3 ms | 40.3 ms |
-| Mount a 200-page document | 200 | 289.7 ms | 165.8 ms |
-| Mount a 1,000-page document | 997 | 3827.1 ms | 941.4 ms |
-| Longest main-thread block in that mount | 997 | 331 ms | 123.9 ms |
+| Mount a 99-page article | 99 | 123 ms | 80.5 ms |
+| Update one word in that article | 99 | 114.7 ms | 79 ms |
+| Mount a Publication of 100 entries | 100 | 90.7 ms | 78.3 ms |
+| Update one word in a 50-page report | 50 | 54.5 ms | 40 ms |
+| Mount a 200-page document | 200 | 286.2 ms | 163.6 ms |
+| Mount a 1,000-page document | 997 | 3798.8 ms | 838.6 ms |
+| Longest main-thread task in that mount | 997 | 207 ms | 63 ms |
 | JS heap retained by that document | 997 | 8.3 MB | 8.5 MB |
-| Mount a 1,800-page document | 1795 | 13995.5 ms | 1978.3 ms |
-| Mount a 5,000-row statement table | 216 | 1042.6 ms | 981 ms |
+| Mount a 1,800-page document | 1795 | 13876.5 ms | 1592.4 ms |
+| Mount a 5,000-row statement table | 216 | 1019.4 ms | 943.7 ms |
+| Mount a 5,000-page document, raised limits | 4985 | not possible | 5108.5 ms |
 
-Before `f33ded4`, time per page grew with document length because every
-placement relaid out the whole unplaced source. The longest main-thread block
-is still far above the 8 ms yield budget, so some step between yields does not
-scale with the budget; that is the next thing to profile.
+`main` cannot run the 5,000-page scenario: its input and node limits cannot
+be raised. Three changes produce the difference:
+
+- The unplaced source is no longer laid out on every placement
+  (`content-visibility: hidden`), which removed growth with source length.
+- Placed pages sit in buckets of 64 in the probe, so a forced layout does not
+  walk every placed page, which removed growth with page count.
+- Preparation, publishing finalization, warning collection, and page text
+  extraction yield to the host between steps, and each print sheet size gets
+  one `@page` rule instead of one per page. What is left of the longest task
+  is mostly the atomic commit, which must stay one task.
 
 ## Comparison harness
 

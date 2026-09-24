@@ -65,16 +65,17 @@ removal would tighten the budgets does not hold.
 
 The sixteen margin boxes, margin-box styles, content-sized margin-box widths,
 `:nth()`, the added page-size keywords, per-entry Publication page numbering,
-the unplaced-source layout fix, and column-spanning grid items were measured against the commit before them on
+the pagination performance changes, raisable limits, and column-spanning grid
+items were measured against the commit before them on
 the same machine. The budgets are unchanged:
 
 | Consumer route | Before (gzip) | After (gzip) | Gzip budget | Headroom |
 | --- | ---: | ---: | ---: | ---: |
-| Core · PageDocument | 56.9 KiB | 58.6 KiB | 60.0 KiB | 1.4 KiB |
-| Core · Publication | 61.1 KiB | 62.9 KiB | 64.0 KiB | 1.1 KiB |
-| Viewer · PageDocument | 11.6 KiB | 11.7 KiB | 13.0 KiB | 1.3 KiB |
-| Client · PageDocument | 65.5 KiB | 67.3 KiB | 69.0 KiB | 1.7 KiB |
-| React · PageViewer | 67.4 KiB | 69.1 KiB | 71.0 KiB | 1.9 KiB |
+| Core · PageDocument | 56.9 KiB | 58.9 KiB | 60.0 KiB | 1.1 KiB |
+| Core · Publication | 61.1 KiB | 63.2 KiB | 64.0 KiB | 0.8 KiB |
+| Viewer · PageDocument | 11.6 KiB | 11.8 KiB | 13.0 KiB | 1.2 KiB |
+| Client · PageDocument | 65.5 KiB | 67.6 KiB | 69.0 KiB | 1.4 KiB |
+| React · PageViewer | 67.4 KiB | 69.4 KiB | 71.0 KiB | 1.6 KiB |
 
 Headroom on the Core routes is now below the 5% target. The next Core
 addition that does not fit should record a budget decision rather than

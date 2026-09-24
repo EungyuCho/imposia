@@ -48,20 +48,20 @@ const pageDocument = await controller.ready;
 
 <Accordion title="기본 제한값">
 
-모든 `limits` 필드는 선택 사항입니다. 필드를 생략하면 다음 기본값이 적용됩니다.
+모든 `limits` 필드는 선택 사항이며, 생략하면 기본값이 적용됩니다. 값은 얼마든지 낮출 수 있습니다. 최댓값이 있는 네 필드만 그 최댓값까지 올릴 수 있고, 나머지는 기본값보다 높일 수 없습니다.
 
-| 필드 | 기본값 |
-| --- | --- |
-| `maxInputBytes` | 5 MiB (`5 * 1024 * 1024`) |
-| `maxNodes` | 100,000 |
-| `maxAssetBytes` | 25 MiB (`25 * 1024 * 1024`) |
-| `maxAssetDepth` | 8 |
-| `maxAssetReferences` | 512 |
-| `resourceDeadlineMs` | 30,000 |
-| `maxPages` | 10,000 |
-| `maxLayoutPasses` | 8 |
-| `maxGeneratedFragments` | 400,000 |
-| `maxGeneratedRecords` | 10,000 |
+| 필드 | 기본값 | 최댓값 |
+| --- | --- | --- |
+| `maxInputBytes` | 5 MiB (`5 * 1024 * 1024`) | 32 MiB (`32 * 1024 * 1024`) |
+| `maxNodes` | 100,000 | 1,000,000 |
+| `maxAssetBytes` | 25 MiB (`25 * 1024 * 1024`) | 기본값과 같음 |
+| `maxAssetDepth` | 8 | 기본값과 같음 |
+| `maxAssetReferences` | 512 | 기본값과 같음 |
+| `resourceDeadlineMs` | 30,000 | 300,000 |
+| `maxPages` | 10,000 | 50,000 |
+| `maxLayoutPasses` | 8 | 기본값과 같음 |
+| `maxGeneratedFragments` | 400,000 | 기본값과 같음 |
+| `maxGeneratedRecords` | 10,000 | 기본값과 같음 |
 
 </Accordion>
 

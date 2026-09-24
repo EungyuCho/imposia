@@ -269,6 +269,19 @@ export const DEFAULT_PAGE_LIMITS = Object.freeze({
   maxGeneratedRecords: 10_000,
 });
 
+/**
+ * The highest value a host may set for each limit. Most limits cannot be
+ * raised past their default. The four that bound document size and time can
+ * be raised by a host that paginates long, trusted documents (ADR 0015).
+ */
+export const MAXIMUM_PAGE_LIMITS = Object.freeze({
+  ...DEFAULT_PAGE_LIMITS,
+  maxInputBytes: 32 * 1024 * 1024,
+  maxNodes: 1_000_000,
+  resourceDeadlineMs: 300_000,
+  maxPages: 50_000,
+});
+
 export type EffectivePageLimits = Readonly<{
   [Key in keyof typeof DEFAULT_PAGE_LIMITS]: number;
 }>;

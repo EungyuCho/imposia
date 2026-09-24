@@ -48,20 +48,20 @@ const pageDocument = await controller.ready;
 
 <Accordion title="默认上限">
 
-每个 `limits` 字段都可省略；下面是省略时适用的默认值。
+每个 `limits` 字段都可省略，省略时使用默认值。数值可以随意调低。只有带最大值的四个字段可以调高到该最大值，其余字段不能高于默认值。
 
-| 字段 | 默认值 |
-| --- | --- |
-| `maxInputBytes` | 5 MiB（`5 * 1024 * 1024`） |
-| `maxNodes` | 100,000 |
-| `maxAssetBytes` | 25 MiB（`25 * 1024 * 1024`） |
-| `maxAssetDepth` | 8 |
-| `maxAssetReferences` | 512 |
-| `resourceDeadlineMs` | 30,000 |
-| `maxPages` | 10,000 |
-| `maxLayoutPasses` | 8 |
-| `maxGeneratedFragments` | 400,000 |
-| `maxGeneratedRecords` | 10,000 |
+| 字段 | 默认值 | 最大值 |
+| --- | --- | --- |
+| `maxInputBytes` | 5 MiB（`5 * 1024 * 1024`） | 32 MiB（`32 * 1024 * 1024`） |
+| `maxNodes` | 100,000 | 1,000,000 |
+| `maxAssetBytes` | 25 MiB（`25 * 1024 * 1024`） | 同默认值 |
+| `maxAssetDepth` | 8 | 同默认值 |
+| `maxAssetReferences` | 512 | 同默认值 |
+| `resourceDeadlineMs` | 30,000 | 300,000 |
+| `maxPages` | 10,000 | 50,000 |
+| `maxLayoutPasses` | 8 | 同默认值 |
+| `maxGeneratedFragments` | 400,000 | 同默认值 |
+| `maxGeneratedRecords` | 10,000 | 同默认值 |
 
 </Accordion>
 

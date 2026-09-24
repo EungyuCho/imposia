@@ -48,20 +48,20 @@ const pageDocument = await controller.ready;
 
 <Accordion title="既定の上限">
 
-`limits` の各フィールドは任意です。省略したフィールドには、次の既定値が適用されます。
+`limits` の各フィールドは任意で、省略すると既定値が適用されます。値はいくらでも下げられます。上限値のある 4 つのフィールドだけはその上限値まで上げられ、それ以外は既定値より上げられません。
 
-| フィールド | 既定値 |
-| --- | --- |
-| `maxInputBytes` | 5 MiB（`5 * 1024 * 1024`） |
-| `maxNodes` | 100,000 |
-| `maxAssetBytes` | 25 MiB（`25 * 1024 * 1024`） |
-| `maxAssetDepth` | 8 |
-| `maxAssetReferences` | 512 |
-| `resourceDeadlineMs` | 30,000 |
-| `maxPages` | 10,000 |
-| `maxLayoutPasses` | 8 |
-| `maxGeneratedFragments` | 400,000 |
-| `maxGeneratedRecords` | 10,000 |
+| フィールド | 既定値 | 上限値 |
+| --- | --- | --- |
+| `maxInputBytes` | 5 MiB（`5 * 1024 * 1024`） | 32 MiB（`32 * 1024 * 1024`） |
+| `maxNodes` | 100,000 | 1,000,000 |
+| `maxAssetBytes` | 25 MiB（`25 * 1024 * 1024`） | 既定値と同じ |
+| `maxAssetDepth` | 8 | 既定値と同じ |
+| `maxAssetReferences` | 512 | 既定値と同じ |
+| `resourceDeadlineMs` | 30,000 | 300,000 |
+| `maxPages` | 10,000 | 50,000 |
+| `maxLayoutPasses` | 8 | 既定値と同じ |
+| `maxGeneratedFragments` | 400,000 | 既定値と同じ |
+| `maxGeneratedRecords` | 10,000 | 既定値と同じ |
 
 </Accordion>
 
