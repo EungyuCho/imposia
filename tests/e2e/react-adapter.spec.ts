@@ -304,7 +304,7 @@ test("React Inspector handles and option toggles preserve the reading position",
         html: `
           <h1>React Inspector</h1>
           <section style="display: flex; flex-direction: row; break-before: page">
-            <span>Unsupported A</span><span>Unsupported B</span>
+            <span>Unsupported A</span><span style="break-before: page">Unsupported B</span>
           </section>
         `,
       });

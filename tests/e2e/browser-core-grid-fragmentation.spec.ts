@@ -201,7 +201,7 @@ test("fragments source-ordered repeated Grid rows while honoring row break and f
   }
 });
 
-test("keeps unsupported Grid placement patterns atomic with deterministic located warnings", async ({
+test("keeps unsupported Grid placement patterns atomic and warns, located, when they overflow", async ({
   page,
   browserName,
 }) => {
@@ -230,7 +230,7 @@ test("keeps unsupported Grid placement patterns atomic with deterministic locate
                 grid-template-columns: repeat(2, minmax(0, 1fr));
                 grid-auto-flow: row;
                 box-sizing: border-box;
-                height: 280px;
+                height: 1400px;
                 margin: 0;
               }
               .unsupported-grid > p { box-sizing: border-box; height: 120px; margin: 0; }

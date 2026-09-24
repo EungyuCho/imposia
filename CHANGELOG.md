@@ -93,6 +93,14 @@ renamed to `0.6.0.md` when this release ships.
 
 ### Changed
 
+- `UNSUPPORTED_LAYOUT` is reported only when keeping an unsupported layout
+  whole costs something: it overflows the page, spills sideways out of its own
+  box (the extra columns of a fixed-height multicol), or holds a forced break
+  that is not honored. A row of cards in `display: flex`, or any other
+  unsupported box that fits or moves whole to the next page, loses nothing and
+  no longer warns; before, nearly every document with a flex header carried
+  the warning. Layout is unchanged. Code that counted these warnings sees
+  fewer, and the spill case is new.
 - The hosted demo at `/examples/demo/` is now the Imposia Playground: five
   business documents (invoice, account statement, quarterly report, service
   agreement, and an invoice batch numbered per invoice) with live data, page

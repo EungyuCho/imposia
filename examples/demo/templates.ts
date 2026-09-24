@@ -82,9 +82,9 @@ const BASE_CSS = `
   p { margin: 0 0 6pt; }
   .muted { color: #6b6b75; }
   .mono { font-family: "Geist Mono", ui-monospace, Menlo, Consolas, monospace; }
-  .brand { font-weight: 700; letter-spacing: 0.02em; }
-  .brand i { display: inline-block; width: 12pt; height: 12pt; margin-right: 6pt; border-radius: 3pt; vertical-align: -2pt; background: linear-gradient(135deg, #4f46e5, #7c3aed); }
-  .head { display: grid; grid-template-columns: 1fr auto; align-items: start; gap: 16pt; margin-bottom: 16pt; }
+  .brand { display: flex; align-items: center; gap: 6pt; font-weight: 700; letter-spacing: 0.02em; }
+  .brand i { display: inline-block; width: 12pt; height: 12pt; border-radius: 3pt; background: linear-gradient(135deg, #4f46e5, #7c3aed); }
+  .head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16pt; margin-bottom: 16pt; }
   .meta { display: grid; grid-template-columns: auto auto; gap: 2pt 12pt; font-size: 8.5pt; }
   .meta dt { color: #6b6b75; }
   .meta dd { margin: 0; font-weight: 600; text-align: right; }
@@ -208,7 +208,7 @@ function statement({ count, name, page }: TemplateInput): string {
        @top-right { content: ${cssString(name)}; ${MARGIN_BOX_STYLE} }
        @bottom-right { content: "Page " counter(page) " of " counter(pages); ${MARGIN_BOX_STYLE} }`,
     )}
-    .summary { display: grid; grid-template-columns: auto auto auto; justify-content: start; gap: 24pt; margin: 10pt 0 14pt; }
+    .summary { display: flex; gap: 24pt; margin: 10pt 0 14pt; }
     .summary span, .summary strong { display: block; }
     .summary strong { font-size: 13pt; }
   </style>
@@ -271,9 +271,9 @@ function report({ count, name, page }: TemplateInput): string {
     .value { margin: 2pt 0 0; font-size: 15pt; font-weight: 700; }
     .up { margin: 0; color: #059669; font-size: 8pt; }
     .down { margin: 0; color: #dc2626; font-size: 8pt; }
-    .spark { display: grid; grid-template-columns: repeat(12, 1fr); grid-template-rows: 34pt; align-items: end; gap: 2pt; margin-top: 6pt; }
-    .spark span { border-radius: 1.5pt; background: linear-gradient(#7c3aed, #4f46e5); }
-    .wide .spark { grid-template-rows: 64pt; }
+    .spark { display: flex; align-items: flex-end; gap: 2pt; height: 34pt; margin-top: 6pt; }
+    .spark span { flex: 1; border-radius: 1.5pt; background: linear-gradient(#7c3aed, #4f46e5); }
+    .wide .spark { height: 64pt; }
   </style>
   <div class="head"><div class="brand"><i></i>${escapeHtml(name.toUpperCase())}</div><span class="muted">Quarterly business review · Q3 2026</span></div>
   <div class="grid">

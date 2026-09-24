@@ -187,8 +187,11 @@ Per element, `captureBreakConstraints` classifies a `FragmentationLayout`:
 predicates — e.g. a table is only split when its structure is recognizable
 (bounded spans, well-formed `thead`/`tfoot`/`colgroup`), a grid only when tracks
 are explicit and unnamed with row auto-flow, multicol only for a tightly
-enumerated horizontal LTR subset. Anything else is kept **atomic** on one page
-and reported with `UNSUPPORTED_LAYOUT`.
+enumerated horizontal LTR subset. Anything else is kept **atomic** on one page.
+It is reported with `UNSUPPORTED_LAYOUT` only when that costs something — the
+box overflows the page, spills sideways out of itself, or holds a forced break
+that is not honored — so an ordinary row of `display: flex` cards that fits
+stays silent.
 
 This is the mechanism behind the compatibility matrix's Constrained tier: the
 tier is not documentation about code, it is a description of these predicates.
