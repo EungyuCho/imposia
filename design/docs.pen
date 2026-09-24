@@ -1,0 +1,1901 @@
+{
+  "version": "2.18",
+  "children": [
+    {
+      "type": "frame",
+      "id": "4GY08",
+      "name": "Docs — Desktop",
+      "x": 0,
+      "y": 0,
+      "width": 1440,
+      "height": 1100,
+      "fill": "$bg",
+      "clip": true,
+      "children": [
+        {
+          "type": "frame",
+          "id": "ayJKP",
+          "name": "Tint",
+          "width": "fill_container",
+          "height": "fill_container",
+          "fill": {
+            "type": "gradient",
+            "gradientType": "radial",
+            "enabled": true,
+            "rotation": 0,
+            "size": {
+              "width": 0.8,
+              "height": 0.7
+            },
+            "colors": [
+              {
+                "color": "#ECEAFF",
+                "position": 0
+              },
+              {
+                "color": "#F6F6F400",
+                "position": 1
+              }
+            ],
+            "center": {
+              "x": 0.9,
+              "y": 0.0
+            }
+          },
+          "layout": "vertical",
+          "clip": true,
+          "children": [
+            {
+              "type": "frame",
+              "id": "QfDPr",
+              "name": "Nav",
+              "width": "fill_container",
+              "height": 64,
+              "padding": [
+                0,
+                40
+              ],
+              "justifyContent": "space_between",
+              "alignItems": "center",
+              "stroke": "$line",
+              "strokeWidth": {
+                "bottom": 1
+              },
+              "fill": "$bg",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "Na1He",
+                  "name": "Nav Left",
+                  "gap": 24,
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "PVNPk",
+                      "name": "Logo",
+                      "gap": 8,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "IZ4SO",
+                          "name": "Logo Mark",
+                          "width": 24,
+                          "height": 24,
+                          "fill": {
+                            "type": "gradient",
+                            "gradientType": "linear",
+                            "enabled": true,
+                            "rotation": 135,
+                            "size": {
+                              "height": 1
+                            },
+                            "colors": [
+                              {
+                                "color": "$brand",
+                                "position": 0
+                              },
+                              {
+                                "color": "$brand-2",
+                                "position": 1
+                              }
+                            ]
+                          },
+                          "cornerRadius": 6,
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "icon",
+                              "id": "gCtjf",
+                              "name": "Logo Icon",
+                              "width": 14,
+                              "height": 14,
+                              "icon": "book-open",
+                              "library": "lucide",
+                              "fill": "#FFFFFF"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "cMz9C",
+                          "name": "Logo Text",
+                          "fill": "$ink",
+                          "content": "Imposia",
+                          "fontFamily": "$font",
+                          "fontSize": 16,
+                          "fontWeight": "700"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "C3J27",
+                      "name": "Link",
+                      "fill": "$brand",
+                      "content": "Docs",
+                      "fontFamily": "$font",
+                      "fontSize": 14,
+                      "fontWeight": "600"
+                    },
+                    {
+                      "type": "text",
+                      "id": "XDCG2",
+                      "name": "Link",
+                      "fill": "$ink-2",
+                      "content": "Examples",
+                      "fontFamily": "$font",
+                      "fontSize": 14,
+                      "fontWeight": "500"
+                    },
+                    {
+                      "type": "text",
+                      "id": "LmlZG",
+                      "name": "Link",
+                      "fill": "$ink-2",
+                      "content": "API",
+                      "fontFamily": "$font",
+                      "fontSize": 14,
+                      "fontWeight": "500"
+                    },
+                    {
+                      "type": "icon",
+                      "id": "EONYl",
+                      "name": "Icon github",
+                      "width": 17,
+                      "height": 17,
+                      "icon": "github",
+                      "library": "lucide",
+                      "fill": "$ink-2"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "oOsFa",
+                  "name": "Nav Right",
+                  "gap": 16,
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon",
+                      "id": "dcm4p",
+                      "name": "Icon languages",
+                      "width": 17,
+                      "height": 17,
+                      "icon": "languages",
+                      "library": "lucide",
+                      "fill": "$ink-2"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "CL1mH",
+                      "name": "Sidebar Toggle",
+                      "width": 32,
+                      "height": 32,
+                      "cornerRadius": 999,
+                      "fill": "$surface-2",
+                      "stroke": "$line",
+                      "strokeWidth": 1,
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "MbXDu",
+                          "name": "Icon panel-left",
+                          "width": 16,
+                          "height": 16,
+                          "icon": "panel-left",
+                          "library": "lucide",
+                          "fill": "$ink-2"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "DmO46",
+              "name": "Docs Body",
+              "width": "fill_container",
+              "height": "fill_container",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "y4EMf",
+                  "name": "Sidebar",
+                  "width": 280,
+                  "height": "fill_container",
+                  "layout": "vertical",
+                  "gap": 22,
+                  "padding": [
+                    28,
+                    20,
+                    28,
+                    32
+                  ],
+                  "stroke": "$line",
+                  "strokeWidth": {
+                    "right": 1
+                  },
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "2Rann",
+                      "name": "Group Start here",
+                      "layout": "vertical",
+                      "gap": 2,
+                      "width": "fill_container",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "sye9b",
+                          "name": "Group Title",
+                          "fill": "$ink-3",
+                          "content": "START HERE",
+                          "fontFamily": "$mono",
+                          "fontSize": 11,
+                          "fontWeight": "600",
+                          "letterSpacing": 0.6
+                        },
+                        {
+                          "type": "frame",
+                          "id": "TquWo",
+                          "name": "Item Overview",
+                          "width": "fill_container",
+                          "padding": [
+                            7,
+                            10,
+                            7,
+                            10
+                          ],
+                          "cornerRadius": 8,
+                          "alignItems": "center",
+                          "gap": 6,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "AJ71f",
+                              "name": "Label",
+                              "fill": "$ink-2",
+                              "content": "Overview",
+                              "fontFamily": "$font",
+                              "fontSize": 14,
+                              "fontWeight": "500",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "Xgzg2",
+                          "name": "Item Build your first page",
+                          "width": "fill_container",
+                          "padding": [
+                            7,
+                            10,
+                            7,
+                            10
+                          ],
+                          "cornerRadius": 8,
+                          "alignItems": "center",
+                          "gap": 6,
+                          "fill": "$brand-soft",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "GsbeK",
+                              "name": "Label",
+                              "fill": "$brand",
+                              "content": "Build your first page",
+                              "fontFamily": "$font",
+                              "fontSize": 14,
+                              "fontWeight": "600",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "ipTga",
+                      "name": "Group Concepts",
+                      "layout": "vertical",
+                      "gap": 2,
+                      "width": "fill_container",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "9AW7h",
+                          "name": "Group Title",
+                          "fill": "$ink-3",
+                          "content": "CONCEPTS",
+                          "fontFamily": "$mono",
+                          "fontSize": 11,
+                          "fontWeight": "600",
+                          "letterSpacing": 0.6
+                        },
+                        {
+                          "type": "frame",
+                          "id": "TzAeK",
+                          "name": "Item Why Imposia",
+                          "width": "fill_container",
+                          "padding": [
+                            7,
+                            10,
+                            7,
+                            10
+                          ],
+                          "cornerRadius": 8,
+                          "alignItems": "center",
+                          "gap": 6,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "76dEy",
+                              "name": "Label",
+                              "fill": "$ink-2",
+                              "content": "Why Imposia",
+                              "fontFamily": "$font",
+                              "fontSize": 14,
+                              "fontWeight": "500",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "vftva",
+                          "name": "Item Publishing model",
+                          "width": "fill_container",
+                          "padding": [
+                            7,
+                            10,
+                            7,
+                            10
+                          ],
+                          "cornerRadius": 8,
+                          "alignItems": "center",
+                          "gap": 6,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "OmXRr",
+                              "name": "Label",
+                              "fill": "$ink-2",
+                              "content": "Publishing model",
+                              "fontFamily": "$font",
+                              "fontSize": 14,
+                              "fontWeight": "500",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "Lt4bn",
+                      "name": "Group Guides",
+                      "layout": "vertical",
+                      "gap": 2,
+                      "width": "fill_container",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "nar3Z",
+                          "name": "Group Title",
+                          "fill": "$ink-3",
+                          "content": "GUIDES",
+                          "fontFamily": "$mono",
+                          "fontSize": 11,
+                          "fontWeight": "600",
+                          "letterSpacing": 0.6
+                        },
+                        {
+                          "type": "frame",
+                          "id": "RJmCG",
+                          "name": "Item React publishing",
+                          "width": "fill_container",
+                          "padding": [
+                            7,
+                            10,
+                            7,
+                            10
+                          ],
+                          "cornerRadius": 8,
+                          "alignItems": "center",
+                          "gap": 6,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "dDZFl",
+                              "name": "Label",
+                              "fill": "$ink-2",
+                              "content": "React publishing",
+                              "fontFamily": "$font",
+                              "fontSize": 14,
+                              "fontWeight": "500",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "PyhzA",
+                          "name": "Item Load images and fonts",
+                          "width": "fill_container",
+                          "padding": [
+                            7,
+                            10,
+                            7,
+                            10
+                          ],
+                          "cornerRadius": 8,
+                          "alignItems": "center",
+                          "gap": 6,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "mUXiA",
+                              "name": "Label",
+                              "fill": "$ink-2",
+                              "content": "Load images and fonts",
+                              "fontFamily": "$font",
+                              "fontSize": 14,
+                              "fontWeight": "500",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "E1Ki3",
+                      "name": "Group API reference",
+                      "layout": "vertical",
+                      "gap": 2,
+                      "width": "fill_container",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "NDi9L",
+                          "name": "Group Title",
+                          "fill": "$ink-3",
+                          "content": "API REFERENCE",
+                          "fontFamily": "$mono",
+                          "fontSize": 11,
+                          "fontWeight": "600",
+                          "letterSpacing": 0.6
+                        },
+                        {
+                          "type": "frame",
+                          "id": "Kgcjn",
+                          "name": "Item React API",
+                          "width": "fill_container",
+                          "padding": [
+                            7,
+                            10,
+                            7,
+                            10
+                          ],
+                          "cornerRadius": 8,
+                          "alignItems": "center",
+                          "gap": 6,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "lz2MP",
+                              "name": "Label",
+                              "fill": "$ink-2",
+                              "content": "React API",
+                              "fontFamily": "$font",
+                              "fontSize": 14,
+                              "fontWeight": "500",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "v1sye",
+                          "name": "Item Core API",
+                          "width": "fill_container",
+                          "padding": [
+                            7,
+                            10,
+                            7,
+                            10
+                          ],
+                          "cornerRadius": 8,
+                          "alignItems": "center",
+                          "gap": 6,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "CqaXN",
+                              "name": "Label",
+                              "fill": "$ink-2",
+                              "content": "Core API",
+                              "fontFamily": "$font",
+                              "fontSize": 14,
+                              "fontWeight": "500",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "paMxx",
+                          "name": "Item Viewer API",
+                          "width": "fill_container",
+                          "padding": [
+                            7,
+                            10,
+                            7,
+                            10
+                          ],
+                          "cornerRadius": 8,
+                          "alignItems": "center",
+                          "gap": 6,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "efnLO",
+                              "name": "Label",
+                              "fill": "$ink-2",
+                              "content": "Viewer API",
+                              "fontFamily": "$font",
+                              "fontSize": 14,
+                              "fontWeight": "500",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "8JmR8",
+                      "name": "Group Project",
+                      "layout": "vertical",
+                      "gap": 2,
+                      "width": "fill_container",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "UmkVO",
+                          "name": "Group Title",
+                          "fill": "$ink-3",
+                          "content": "PROJECT",
+                          "fontFamily": "$mono",
+                          "fontSize": 11,
+                          "fontWeight": "600",
+                          "letterSpacing": 0.6
+                        },
+                        {
+                          "type": "frame",
+                          "id": "6o0Np",
+                          "name": "Item Changelog",
+                          "width": "fill_container",
+                          "padding": [
+                            7,
+                            10,
+                            7,
+                            10
+                          ],
+                          "cornerRadius": 8,
+                          "alignItems": "center",
+                          "gap": 6,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "ylOjt",
+                              "name": "Label",
+                              "fill": "$ink-2",
+                              "content": "Changelog",
+                              "fontFamily": "$font",
+                              "fontSize": 14,
+                              "fontWeight": "500",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "rKwtP",
+                  "name": "Content",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 22,
+                  "padding": [
+                    40,
+                    56,
+                    64,
+                    56
+                  ],
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "5MFsH",
+                      "name": "Breadcrumb",
+                      "gap": 6,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "Adggc",
+                          "name": "B",
+                          "fill": "$ink-3",
+                          "content": "Docs",
+                          "fontFamily": "$font",
+                          "fontSize": 13,
+                          "fontWeight": "500"
+                        },
+                        {
+                          "type": "icon",
+                          "id": "G9qpV",
+                          "name": "Icon chevron-right",
+                          "width": 13,
+                          "height": 13,
+                          "icon": "chevron-right",
+                          "library": "lucide",
+                          "fill": "$ink-3"
+                        },
+                        {
+                          "type": "text",
+                          "id": "TzqA0",
+                          "name": "B",
+                          "fill": "$ink-3",
+                          "content": "Start here",
+                          "fontFamily": "$font",
+                          "fontSize": 13,
+                          "fontWeight": "500"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "l7Uei",
+                      "name": "Title",
+                      "fill": "$ink",
+                      "content": "Build your first page",
+                      "fontFamily": "$font",
+                      "fontSize": 40,
+                      "fontWeight": "700",
+                      "letterSpacing": -1.2
+                    },
+                    {
+                      "type": "text",
+                      "id": "oEJP2",
+                      "name": "Description",
+                      "fill": "$ink-2",
+                      "content": "Add Imposia to a React app, render HTML as A4 pages, then print or save them as PDF.",
+                      "fontFamily": "$font",
+                      "fontSize": 18,
+                      "fontWeight": "normal",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "lineHeight": 1.5
+                    },
+                    {
+                      "type": "frame",
+                      "id": "NNern",
+                      "name": "Divider",
+                      "width": "fill_container",
+                      "height": 1,
+                      "fill": "$line",
+                      "children": []
+                    },
+                    {
+                      "type": "text",
+                      "id": "66nVb",
+                      "name": "Body",
+                      "fill": "$ink",
+                      "content": "This guide adds a paginated preview to an existing React app. When you finish, the same component will show your HTML as A4 pages and open the browser's native print flow.",
+                      "fontFamily": "$font",
+                      "fontSize": 16,
+                      "fontWeight": "normal",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "lineHeight": 1.7
+                    },
+                    {
+                      "type": "frame",
+                      "id": "iLc7b",
+                      "name": "Callout",
+                      "width": "fill_container",
+                      "gap": 12,
+                      "padding": [
+                        14,
+                        16
+                      ],
+                      "fill": "$surface",
+                      "cornerRadius": 12,
+                      "stroke": "$line",
+                      "strokeWidth": 1,
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "dclsx",
+                          "name": "Callout Icon",
+                          "width": 28,
+                          "height": 28,
+                          "cornerRadius": 7,
+                          "fill": "$brand-soft",
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "icon",
+                              "id": "erACp",
+                              "name": "Icon info",
+                              "width": 15,
+                              "height": 15,
+                              "icon": "info",
+                              "library": "lucide",
+                              "fill": "$brand"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "USHL8",
+                          "name": "Callout Text",
+                          "layout": "vertical",
+                          "gap": 4,
+                          "width": "fill_container",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "HKifx",
+                              "name": "Title",
+                              "fill": "$ink",
+                              "content": "Before you begin",
+                              "fontFamily": "$font",
+                              "fontSize": 14,
+                              "fontWeight": "600"
+                            },
+                            {
+                              "type": "text",
+                              "id": "i5CvQ",
+                              "name": "Body",
+                              "fill": "$ink-2",
+                              "content": "You need React 18 or later and a client-side browser environment. Imposia does not render pages in Node.js or during server-side rendering.",
+                              "fontFamily": "$font",
+                              "fontSize": 14,
+                              "fontWeight": "normal",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "lineHeight": 1.55
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "uieeC",
+                      "name": "Step 1",
+                      "gap": 12,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "9cbMO",
+                          "name": "Step Badge",
+                          "width": 28,
+                          "height": 28,
+                          "cornerRadius": 999,
+                          "fill": "$brand-soft",
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "E6wSt",
+                              "name": "N",
+                              "fill": "$brand",
+                              "content": "1",
+                              "fontFamily": "$mono",
+                              "fontSize": 13,
+                              "fontWeight": "700"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "eEeUt",
+                          "name": "Step Title",
+                          "fill": "$ink",
+                          "content": "Install the React package",
+                          "fontFamily": "$font",
+                          "fontSize": 20,
+                          "fontWeight": "700"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "1IfHW",
+                      "name": "Code Block",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "fill": "$surface",
+                      "cornerRadius": 12,
+                      "stroke": "$line",
+                      "strokeWidth": 1,
+                      "clip": true,
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "Ohq4A",
+                          "name": "Tabs",
+                          "gap": 18,
+                          "padding": [
+                            0,
+                            16
+                          ],
+                          "width": "fill_container",
+                          "stroke": "$line",
+                          "strokeWidth": {
+                            "bottom": 1
+                          },
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "7VVTi",
+                              "name": "Tab pnpm",
+                              "padding": [
+                                10,
+                                0
+                              ],
+                              "stroke": "$brand",
+                              "strokeWidth": {
+                                "bottom": 2
+                              },
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "IxVc5",
+                                  "name": "T",
+                                  "fill": "$brand",
+                                  "content": "pnpm",
+                                  "fontFamily": "$font",
+                                  "fontSize": 13,
+                                  "fontWeight": "600"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "fRE5e",
+                              "name": "Tab npm",
+                              "padding": [
+                                10,
+                                0
+                              ],
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "Y96vw",
+                                  "name": "T",
+                                  "fill": "$ink-3",
+                                  "content": "npm",
+                                  "fontFamily": "$font",
+                                  "fontSize": 13,
+                                  "fontWeight": "500"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "b3FKa",
+                              "name": "Tab yarn",
+                              "padding": [
+                                10,
+                                0
+                              ],
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "32A8Y",
+                                  "name": "T",
+                                  "fill": "$ink-3",
+                                  "content": "yarn",
+                                  "fontFamily": "$font",
+                                  "fontSize": 13,
+                                  "fontWeight": "500"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "aMeff",
+                              "name": "Tab bun",
+                              "padding": [
+                                10,
+                                0
+                              ],
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "NQyyL",
+                                  "name": "T",
+                                  "fill": "$ink-3",
+                                  "content": "bun",
+                                  "fontFamily": "$font",
+                                  "fontSize": 13,
+                                  "fontWeight": "500"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "SLDCD",
+                          "name": "Code",
+                          "layout": "vertical",
+                          "gap": 6,
+                          "padding": [
+                            14,
+                            16
+                          ],
+                          "width": "fill_container",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "Uvy7V",
+                              "name": "Line",
+                              "fill": "$ink",
+                              "content": "pnpm add @imposia/react react react-dom",
+                              "fontFamily": "$mono",
+                              "fontSize": 13,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "6Fq5a",
+                      "name": "Step 2",
+                      "gap": 12,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "Ebo9S",
+                          "name": "Step Badge",
+                          "width": 28,
+                          "height": 28,
+                          "cornerRadius": 999,
+                          "fill": "$brand-soft",
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "GbtMf",
+                              "name": "N",
+                              "fill": "$brand",
+                              "content": "2",
+                              "fontFamily": "$mono",
+                              "fontSize": 13,
+                              "fontWeight": "700"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "hFXNQ",
+                          "name": "Step Title",
+                          "fill": "$ink",
+                          "content": "Render a page document",
+                          "fontFamily": "$font",
+                          "fontSize": 20,
+                          "fontWeight": "700"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "w152c",
+                      "name": "Code Block",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "fill": "$surface",
+                      "cornerRadius": 12,
+                      "stroke": "$line",
+                      "strokeWidth": 1,
+                      "clip": true,
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "vQ7CF",
+                          "name": "File",
+                          "gap": 8,
+                          "padding": [
+                            10,
+                            16
+                          ],
+                          "width": "fill_container",
+                          "alignItems": "center",
+                          "stroke": "$line",
+                          "strokeWidth": {
+                            "bottom": 1
+                          },
+                          "children": [
+                            {
+                              "type": "icon",
+                              "id": "xtjRN",
+                              "name": "Icon file-code",
+                              "width": 14,
+                              "height": 14,
+                              "icon": "file-code",
+                              "library": "lucide",
+                              "fill": "$ink-3"
+                            },
+                            {
+                              "type": "text",
+                              "id": "mHkW5",
+                              "name": "Name",
+                              "fill": "$ink-2",
+                              "content": "app/preview.tsx",
+                              "fontFamily": "$mono",
+                              "fontSize": 12,
+                              "fontWeight": "500"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "uniiF",
+                          "name": "Code",
+                          "layout": "vertical",
+                          "gap": 6,
+                          "padding": [
+                            14,
+                            16
+                          ],
+                          "width": "fill_container",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "5puzQ",
+                              "name": "Line",
+                              "fill": "$ink",
+                              "content": "import { ImposiaPageViewer } from \"@imposia/react\";",
+                              "fontFamily": "$mono",
+                              "fontSize": 13,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "qmOBZ",
+                              "name": "Line",
+                              "fill": "$ink",
+                              "content": "import \"@imposia/react/styles.css\";",
+                              "fontFamily": "$mono",
+                              "fontSize": 13,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "ZW6m4",
+                              "name": "Line",
+                              "fill": "$ink",
+                              "content": "",
+                              "fontFamily": "$mono",
+                              "fontSize": 13,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "nyoL6",
+                              "name": "Line",
+                              "fill": "$ink",
+                              "content": "<ImposiaPageViewer source={{ html }} />",
+                              "fontFamily": "$mono",
+                              "fontSize": 13,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "3McRT",
+                      "name": "Pager",
+                      "gap": 12,
+                      "width": "fill_container",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "7n1Ay",
+                          "name": "Prev",
+                          "layout": "vertical",
+                          "gap": 2,
+                          "padding": [
+                            14,
+                            16
+                          ],
+                          "width": "fill_container",
+                          "fill": "$surface",
+                          "cornerRadius": 12,
+                          "stroke": "$line",
+                          "strokeWidth": 1,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "Te8r0",
+                              "name": "K",
+                              "fill": "$ink-3",
+                              "content": "Previous",
+                              "fontFamily": "$font",
+                              "fontSize": 12,
+                              "fontWeight": "500"
+                            },
+                            {
+                              "type": "text",
+                              "id": "khCEr",
+                              "name": "V",
+                              "fill": "$ink",
+                              "content": "Overview",
+                              "fontFamily": "$font",
+                              "fontSize": 15,
+                              "fontWeight": "600"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "ue1cr",
+                          "name": "Next",
+                          "layout": "vertical",
+                          "gap": 2,
+                          "padding": [
+                            14,
+                            16
+                          ],
+                          "width": "fill_container",
+                          "fill": "$surface",
+                          "cornerRadius": 12,
+                          "stroke": "$line",
+                          "strokeWidth": 1,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "OHFRu",
+                              "name": "K",
+                              "fill": "$ink-3",
+                              "content": "Next",
+                              "fontFamily": "$font",
+                              "fontSize": 12,
+                              "fontWeight": "500",
+                              "textAlign": "right",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container"
+                            },
+                            {
+                              "type": "text",
+                              "id": "T11NC",
+                              "name": "V",
+                              "fill": "$brand",
+                              "content": "Why Imposia",
+                              "fontFamily": "$font",
+                              "fontSize": 15,
+                              "fontWeight": "600",
+                              "textAlign": "right",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "5UyiC",
+                  "name": "TOC",
+                  "width": 240,
+                  "layout": "vertical",
+                  "gap": 6,
+                  "padding": [
+                    40,
+                    24,
+                    0,
+                    0
+                  ],
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "1rpXj",
+                      "name": "TOC Head",
+                      "gap": 8,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "YKbPi",
+                          "name": "Icon align-left",
+                          "width": 14,
+                          "height": 14,
+                          "icon": "align-left",
+                          "library": "lucide",
+                          "fill": "$ink-3"
+                        },
+                        {
+                          "type": "text",
+                          "id": "zDmbX",
+                          "name": "H",
+                          "fill": "$ink-2",
+                          "content": "On this page",
+                          "fontFamily": "$font",
+                          "fontSize": 13,
+                          "fontWeight": "600"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "gOIPO",
+                      "name": "TOC Install the React package",
+                      "padding": [
+                        4,
+                        0,
+                        4,
+                        12
+                      ],
+                      "stroke": "$brand",
+                      "strokeWidth": {
+                        "left": 2
+                      },
+                      "width": "fill_container",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "YdOhC",
+                          "name": "T",
+                          "fill": "$brand",
+                          "content": "Install the React package",
+                          "fontFamily": "$font",
+                          "fontSize": 13,
+                          "fontWeight": "600"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "mm0Eq",
+                      "name": "TOC Render a page document",
+                      "padding": [
+                        4,
+                        0,
+                        4,
+                        12
+                      ],
+                      "stroke": "$line",
+                      "strokeWidth": {
+                        "left": 1
+                      },
+                      "width": "fill_container",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "Zx9eR",
+                          "name": "T",
+                          "fill": "$ink-3",
+                          "content": "Render a page document",
+                          "fontFamily": "$font",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "ITclo",
+                      "name": "TOC Confirm the result",
+                      "padding": [
+                        4,
+                        0,
+                        4,
+                        12
+                      ],
+                      "stroke": "$line",
+                      "strokeWidth": {
+                        "left": 1
+                      },
+                      "width": "fill_container",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "lTaWE",
+                          "name": "T",
+                          "fill": "$ink-3",
+                          "content": "Confirm the result",
+                          "fontFamily": "$font",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "8HGNW",
+                      "name": "TOC Show progress and failures",
+                      "padding": [
+                        4,
+                        0,
+                        4,
+                        12
+                      ],
+                      "stroke": "$line",
+                      "strokeWidth": {
+                        "left": 1
+                      },
+                      "width": "fill_container",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "rXwIS",
+                          "name": "T",
+                          "fill": "$ink-3",
+                          "content": "Show progress and failures",
+                          "fontFamily": "$font",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "5ofA7",
+                      "name": "TOC Next steps",
+                      "padding": [
+                        4,
+                        0,
+                        4,
+                        12
+                      ],
+                      "stroke": "$line",
+                      "strokeWidth": {
+                        "left": 1
+                      },
+                      "width": "fill_container",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "kz2YS",
+                          "name": "T",
+                          "fill": "$ink-3",
+                          "content": "Next steps",
+                          "fontFamily": "$font",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "gmANb",
+      "name": "Docs — Mobile",
+      "x": 1520,
+      "y": 0,
+      "width": 390,
+      "fill": "$bg",
+      "layout": "vertical",
+      "clip": true,
+      "children": [
+        {
+          "type": "frame",
+          "id": "56EHu",
+          "name": "Nav",
+          "width": "fill_container",
+          "height": 56,
+          "padding": [
+            0,
+            16
+          ],
+          "justifyContent": "space_between",
+          "alignItems": "center",
+          "stroke": "$line",
+          "strokeWidth": {
+            "bottom": 1
+          },
+          "fill": "$bg",
+          "children": [
+            {
+              "type": "frame",
+              "id": "69Z7z",
+              "name": "Logo",
+              "gap": 8,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "hFfSk",
+                  "name": "Logo Mark",
+                  "width": 24,
+                  "height": 24,
+                  "fill": {
+                    "type": "gradient",
+                    "gradientType": "linear",
+                    "enabled": true,
+                    "rotation": 135,
+                    "size": {
+                      "height": 1
+                    },
+                    "colors": [
+                      {
+                        "color": "$brand",
+                        "position": 0
+                      },
+                      {
+                        "color": "$brand-2",
+                        "position": 1
+                      }
+                    ]
+                  },
+                  "cornerRadius": 6,
+                  "justifyContent": "center",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon",
+                      "id": "6zIZK",
+                      "name": "Logo Icon",
+                      "width": 14,
+                      "height": 14,
+                      "icon": "book-open",
+                      "library": "lucide",
+                      "fill": "#FFFFFF"
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "id": "e7IDA",
+                  "name": "Logo Text",
+                  "fill": "$ink",
+                  "content": "Imposia",
+                  "fontFamily": "$font",
+                  "fontSize": 16,
+                  "fontWeight": "700"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "vB507",
+              "name": "Nav Right",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "icon",
+                  "id": "rpEFi",
+                  "name": "Icon panel-left",
+                  "width": 18,
+                  "height": 18,
+                  "icon": "panel-left",
+                  "library": "lucide",
+                  "fill": "$ink"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "ybIcH",
+          "name": "Content",
+          "width": "fill_container",
+          "layout": "vertical",
+          "gap": 18,
+          "padding": [
+            20,
+            16,
+            40,
+            16
+          ],
+          "children": [
+            {
+              "type": "frame",
+              "id": "P7Thn",
+              "name": "Section Switch",
+              "width": "fill_container",
+              "padding": [
+                10,
+                12
+              ],
+              "fill": "$surface",
+              "cornerRadius": 10,
+              "stroke": "$line",
+              "strokeWidth": 1,
+              "justifyContent": "space_between",
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "vDuPn",
+                  "name": "S",
+                  "fill": "$ink-2",
+                  "content": "Install the React package",
+                  "fontFamily": "$font",
+                  "fontSize": 13,
+                  "fontWeight": "500"
+                },
+                {
+                  "type": "icon",
+                  "id": "gU30Z",
+                  "name": "Icon chevron-down",
+                  "width": 14,
+                  "height": 14,
+                  "icon": "chevron-down",
+                  "library": "lucide",
+                  "fill": "$ink-3"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "p5yft",
+              "name": "Title",
+              "fill": "$ink",
+              "content": "Build your first page",
+              "fontFamily": "$font",
+              "fontSize": 30,
+              "fontWeight": "700",
+              "letterSpacing": -0.8,
+              "textGrowth": "fixed-width",
+              "width": "fill_container"
+            },
+            {
+              "type": "text",
+              "id": "IY7uq",
+              "name": "Description",
+              "fill": "$ink-2",
+              "content": "Add Imposia to a React app, render HTML as A4 pages, then print or save them as PDF.",
+              "fontFamily": "$font",
+              "fontSize": 16,
+              "fontWeight": "normal",
+              "textGrowth": "fixed-width",
+              "width": "fill_container",
+              "lineHeight": 1.5
+            },
+            {
+              "type": "frame",
+              "id": "IvRY6",
+              "name": "Callout",
+              "width": "fill_container",
+              "gap": 12,
+              "padding": [
+                14,
+                16
+              ],
+              "fill": "$surface",
+              "cornerRadius": 12,
+              "stroke": "$line",
+              "strokeWidth": 1,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "GfcCv",
+                  "name": "Callout Icon",
+                  "width": 28,
+                  "height": 28,
+                  "cornerRadius": 7,
+                  "fill": "$brand-soft",
+                  "justifyContent": "center",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon",
+                      "id": "6T2bw",
+                      "name": "Icon info",
+                      "width": 15,
+                      "height": 15,
+                      "icon": "info",
+                      "library": "lucide",
+                      "fill": "$brand"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "eBZcl",
+                  "name": "Callout Text",
+                  "layout": "vertical",
+                  "gap": 4,
+                  "width": "fill_container",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "JAXrF",
+                      "name": "Title",
+                      "fill": "$ink",
+                      "content": "Before you begin",
+                      "fontFamily": "$font",
+                      "fontSize": 14,
+                      "fontWeight": "600"
+                    },
+                    {
+                      "type": "text",
+                      "id": "6bnZ3",
+                      "name": "Body",
+                      "fill": "$ink-2",
+                      "content": "You need React 18 or later and a client-side browser environment. Imposia does not render pages in Node.js or during server-side rendering.",
+                      "fontFamily": "$font",
+                      "fontSize": 14,
+                      "fontWeight": "normal",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "lineHeight": 1.55
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "8SfWo",
+              "name": "Step 1",
+              "gap": 12,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "UH1RS",
+                  "name": "Step Badge",
+                  "width": 28,
+                  "height": 28,
+                  "cornerRadius": 999,
+                  "fill": "$brand-soft",
+                  "justifyContent": "center",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "iEjH5",
+                      "name": "N",
+                      "fill": "$brand",
+                      "content": "1",
+                      "fontFamily": "$mono",
+                      "fontSize": 13,
+                      "fontWeight": "700"
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "id": "C84FL",
+                  "name": "Step Title",
+                  "fill": "$ink",
+                  "content": "Install the React package",
+                  "fontFamily": "$font",
+                  "fontSize": 20,
+                  "fontWeight": "700"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "IhGaM",
+              "name": "Code Block",
+              "width": "fill_container",
+              "layout": "vertical",
+              "fill": "$surface",
+              "cornerRadius": 12,
+              "stroke": "$line",
+              "strokeWidth": 1,
+              "clip": true,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "35Nnt",
+                  "name": "Tabs",
+                  "gap": 18,
+                  "padding": [
+                    0,
+                    16
+                  ],
+                  "width": "fill_container",
+                  "stroke": "$line",
+                  "strokeWidth": {
+                    "bottom": 1
+                  },
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "UJOkH",
+                      "name": "Tab pnpm",
+                      "padding": [
+                        10,
+                        0
+                      ],
+                      "stroke": "$brand",
+                      "strokeWidth": {
+                        "bottom": 2
+                      },
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "CHJs1",
+                          "name": "T",
+                          "fill": "$brand",
+                          "content": "pnpm",
+                          "fontFamily": "$font",
+                          "fontSize": 13,
+                          "fontWeight": "600"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "tQy92",
+                      "name": "Tab npm",
+                      "padding": [
+                        10,
+                        0
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "G16Jq",
+                          "name": "T",
+                          "fill": "$ink-3",
+                          "content": "npm",
+                          "fontFamily": "$font",
+                          "fontSize": 13,
+                          "fontWeight": "500"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "rKFmA",
+                  "name": "Code",
+                  "layout": "vertical",
+                  "gap": 6,
+                  "padding": [
+                    14,
+                    16
+                  ],
+                  "width": "fill_container",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "2j9IH",
+                      "name": "Line",
+                      "fill": "$ink",
+                      "content": "pnpm add @imposia/react",
+                      "fontFamily": "$mono",
+                      "fontSize": 13,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "variables": {
+    "bg": {
+      "type": "color",
+      "value": "#F6F6F4"
+    },
+    "surface": {
+      "type": "color",
+      "value": "#FFFFFF"
+    },
+    "surface-2": {
+      "type": "color",
+      "value": "#EFEFEC"
+    },
+    "ink": {
+      "type": "color",
+      "value": "#16161A"
+    },
+    "ink-2": {
+      "type": "color",
+      "value": "#55555E"
+    },
+    "ink-3": {
+      "type": "color",
+      "value": "#8A8A93"
+    },
+    "line": {
+      "type": "color",
+      "value": "#E3E3DF"
+    },
+    "brand": {
+      "type": "color",
+      "value": "#4F46E5"
+    },
+    "brand-2": {
+      "type": "color",
+      "value": "#7C3AED"
+    },
+    "brand-soft": {
+      "type": "color",
+      "value": "#EEF0FF"
+    },
+    "code-bg": {
+      "type": "color",
+      "value": "#141418"
+    },
+    "code-ink": {
+      "type": "color",
+      "value": "#E7E7EA"
+    },
+    "font": {
+      "type": "string",
+      "value": "Geist"
+    },
+    "mono": {
+      "type": "string",
+      "value": "Geist Mono"
+    }
+  },
+  "fileToken": "c2fe4407-7c2a-4510-9b7a-4d4be466fd1a"
+}

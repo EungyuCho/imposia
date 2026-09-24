@@ -3,21 +3,39 @@
 @import "fumadocs-ui/css/preset.css";
 
 :root {
-  --imposia-page: #f5f5f3;
+  /* Tokens from design/landing.pen and design/docs.pen. */
+  --imposia-bg: #f6f6f4;
   --imposia-surface: #ffffff;
-  --imposia-ink: #171715;
-  --imposia-muted: #71716d;
-  --imposia-line: #e2e1dc;
-  --imposia-coral: #ef6a3b;
-  --imposia-coral-hover: #d95732;
-  --imposia-coral-soft: #fff0e9;
-  --imposia-code: #1b1c1a;
-  --imposia-code-ink: #f4f2ec;
-  --imposia-success: #5f9d78;
-  --imposia-display:
-    "Iowan Old Style", "Palatino Linotype", "Book Antiqua", "Noto Serif KR", "Noto Serif JP", serif;
-  --color-fd-primary: var(--imposia-coral);
-  --fd-layout-width: 1180px;
+  --imposia-surface-2: #efefec;
+  --imposia-ink: #16161a;
+  --imposia-ink-2: #55555e;
+  --imposia-ink-3: #8a8a93;
+  --imposia-line: #e3e3df;
+  --imposia-brand: #4f46e5;
+  --imposia-brand-2: #7c3aed;
+  --imposia-brand-soft: #eef0ff;
+  --imposia-font:
+    Geist, system-ui, -apple-system, "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR",
+    "Noto Sans JP", "Noto Sans SC", sans-serif;
+  --imposia-mono: "Geist Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+
+  --color-fd-background: var(--imposia-bg);
+  --color-fd-foreground: var(--imposia-ink);
+  --color-fd-muted: var(--imposia-surface-2);
+  --color-fd-muted-foreground: var(--imposia-ink-2);
+  --color-fd-popover: var(--imposia-surface);
+  --color-fd-popover-foreground: var(--imposia-ink);
+  --color-fd-card: var(--imposia-surface);
+  --color-fd-card-foreground: var(--imposia-ink);
+  --color-fd-border: var(--imposia-line);
+  --color-fd-primary: var(--imposia-brand);
+  --color-fd-primary-foreground: #ffffff;
+  --color-fd-secondary: var(--imposia-surface-2);
+  --color-fd-secondary-foreground: var(--imposia-ink);
+  --color-fd-accent: var(--imposia-brand-soft);
+  --color-fd-accent-foreground: var(--imposia-brand);
+  --color-fd-ring: var(--imposia-brand);
+  --fd-layout-width: 1440px;
   color-scheme: light;
 }
 
@@ -34,25 +52,20 @@ body.imposia-root {
   min-height: 100vh;
   margin: 0;
   overflow-x: hidden;
-  background:
-    linear-gradient(90deg, transparent 0, transparent calc(100% - 1px), rgba(23, 23, 21, 0.035) 0) 0
-    0 / 6rem 6rem,
-    radial-gradient(circle at 85% 8%, rgba(239, 106, 59, 0.1), transparent 30rem),
-    var(--imposia-page);
+  background: radial-gradient(60rem 36rem at 92% -8%, #eceaff, transparent 70%), var(--imposia-bg);
   color: var(--imposia-ink);
-  font-family:
-    Geist, "Avenir Next", "Segoe UI", "Noto Sans KR", "Noto Sans JP", "Noto Sans SC", sans-serif;
+  font-family: var(--imposia-font);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
 }
 
 ::selection {
-  background: var(--imposia-coral);
+  background: var(--imposia-brand);
   color: white;
 }
 
 :where(a, button):focus-visible {
-  outline: 3px solid color-mix(in srgb, var(--imposia-coral) 48%, transparent);
+  outline: 3px solid color-mix(in srgb, var(--imposia-brand) 45%, transparent);
   outline-offset: 3px;
 }
 
@@ -84,4 +97,113 @@ body.imposia-root {
     scroll-behavior: auto;
     transition-duration: 0.01ms;
   }
+}
+
+/* Logo, as on the landing page. */
+.imposia-logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--imposia-ink);
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.imposia-mark {
+  display: inline-flex;
+  width: 24px;
+  height: 24px;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  background: linear-gradient(135deg, var(--imposia-brand), var(--imposia-brand-2));
+}
+
+/* Docs shell, following design/docs.pen. */
+
+/* Info callouts and the other info accents use the brand indigo. */
+:root {
+  --color-fd-info: var(--imposia-brand);
+}
+
+/* The header matches the landing navigation: 64px tall, 40px side padding. */
+#nd-subnav [data-header-body] {
+  height: 64px;
+  border-color: var(--imposia-line);
+}
+
+@media (min-width: 768px) {
+  #nd-subnav [data-header-body] {
+    padding-inline: 40px;
+  }
+}
+
+/* On wide screens the links sit beside the logo, as on the landing page,
+   and only the language and sidebar controls stay on the right. */
+@media (min-width: 1024px) {
+  #nd-subnav [data-header-body] > div:first-child {
+    flex: none;
+    margin-inline-end: 24px;
+  }
+
+  #nd-subnav [data-header-body] > div:last-child {
+    justify-content: flex-start;
+  }
+
+  #nd-subnav [data-header-body] > div:last-child > div:last-child {
+    margin-inline-start: auto;
+  }
+}
+
+#nd-subnav [data-header-body] a[data-active] {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+/* Sidebar group titles read as the landing's small mono labels. */
+#nd-sidebar p:not(:has(a)) {
+  color: var(--imposia-ink-3);
+  font: 600 11px / 1.2 var(--imposia-mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+#nd-sidebar a[data-active="true"] {
+  font-weight: 600;
+}
+
+/* Titles use the landing's tighter heading rhythm. */
+article h1,
+#nd-page h1 {
+  letter-spacing: -0.025em;
+}
+
+article :where(h2, h3) {
+  letter-spacing: -0.01em;
+}
+
+/* Steps: numbered brand badges instead of grey discs. */
+.fd-step::before {
+  background-color: var(--imposia-brand-soft);
+  color: var(--imposia-brand);
+  font-family: var(--imposia-mono);
+  font-weight: 700;
+}
+
+/* Code blocks and cards sit on white with the landing's hairline and radius. */
+figure.shiki,
+[data-card] {
+  border-color: var(--imposia-line);
+}
+
+figure.shiki {
+  border-radius: 12px;
+  box-shadow: none;
+}
+
+/* Callouts: a flat card, like the landing's install box. */
+article div:has(> [role="none"]) {
+  border-color: var(--imposia-line);
+  box-shadow: 0 2px 8px rgb(22 22 26 / 5%);
 }
