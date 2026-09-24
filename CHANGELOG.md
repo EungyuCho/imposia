@@ -92,6 +92,12 @@ renamed to `0.6.0.md` when this release ships.
 
 ### Changed
 
+- Removed the `0.5.0` escape hatches `experimental.forceSequentialPlacement`,
+  `experimental.forceLegacyLineEnds`, and
+  `experimental.forceFullConstraintCapture` on the announced one-release
+  schedule (ASA-444). The paths they selected remain as runtime fallbacks,
+  so the bundle is unchanged. The three document-level equivalence specs that
+  needed the hatches were retired; the function-level line-ends oracle stays.
 - Pagination no longer slows down as documents grow. Every placement used to
   relay out all of the source still waiting to be placed and walk every page
   placed so far, so time per page rose with document length. A 1,800-page

@@ -70,6 +70,8 @@ all. Two kinds live there:
   the field while it earns confidence, and they are removed in the next minor
   — that removal is not a breaking change under this policy, it is the
   announced schedule. Reaching for one is a bug report, not a configuration.
+  The three `0.5.0` hatches were removed on the `0.6.0` line (ASA-444); a
+  caller that still passes one is ignored, and the fast path runs.
 
 If an escape hatch is load-bearing for your application, say so on the issue
 that owns its removal before that release ships.

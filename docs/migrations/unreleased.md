@@ -154,6 +154,14 @@ requiring a code change (CHANGELOG has the full entries):
   `maxPages`, and `resourceDeadlineMs` accept values above their defaults, up
   to 32 MiB, 1,000,000, 50,000, and 300,000. Defaults are unchanged. Code that
   relied on an above-default value throwing now gets a mount instead.
+- **The `0.5.0` escape hatches are gone** (ASA-444).
+  `experimental.forceSequentialPlacement`, `experimental.forceLegacyLineEnds`,
+  and `experimental.forceFullConstraintCapture` are no longer part of
+  `ExperimentalPageFeatures`. TypeScript callers that still set one stop
+  compiling; JavaScript callers are ignored and get the fast path, which the
+  equivalence oracles showed produces the same output. As announced in
+  [`api-policy.md`](../api-policy.md), this is the scheduled removal, not a
+  breaking change.
 - **New opt-ins.** `PublicationOptions.pageNumbering: "entry"` numbers each
   entry on its own; `@page :nth(An+B)`, all sixteen margin boxes, and the
   `A3`, `A5`, `B4`, `B5`, `Legal`, and `Ledger` page sizes are accepted.

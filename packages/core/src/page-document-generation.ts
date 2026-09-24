@@ -287,21 +287,6 @@ function snapshotExperimental(
   ) {
     throw new TypeError("experimental.forceConvergencePasses must be a boolean.");
   }
-  if (
-    record.forceSequentialPlacement !== undefined &&
-    typeof record.forceSequentialPlacement !== "boolean"
-  ) {
-    throw new TypeError("experimental.forceSequentialPlacement must be a boolean.");
-  }
-  if (
-    record.forceFullConstraintCapture !== undefined &&
-    typeof record.forceFullConstraintCapture !== "boolean"
-  ) {
-    throw new TypeError("experimental.forceFullConstraintCapture must be a boolean.");
-  }
-  if (record.forceLegacyLineEnds !== undefined && typeof record.forceLegacyLineEnds !== "boolean") {
-    throw new TypeError("experimental.forceLegacyLineEnds must be a boolean.");
-  }
   if (record.onDebugCounters !== undefined && typeof record.onDebugCounters !== "function") {
     throw new TypeError("experimental.onDebugCounters must be a function.");
   }
@@ -311,15 +296,6 @@ function snapshotExperimental(
     ...(record.forceConvergencePasses === undefined
       ? {}
       : { forceConvergencePasses: record.forceConvergencePasses }),
-    ...(record.forceSequentialPlacement === undefined
-      ? {}
-      : { forceSequentialPlacement: record.forceSequentialPlacement }),
-    ...(record.forceFullConstraintCapture === undefined
-      ? {}
-      : { forceFullConstraintCapture: record.forceFullConstraintCapture }),
-    ...(record.forceLegacyLineEnds === undefined
-      ? {}
-      : { forceLegacyLineEnds: record.forceLegacyLineEnds }),
     ...(record.onDebugCounters === undefined
       ? {}
       : {
@@ -2043,7 +2019,7 @@ function htmlElement(element: Element): HTMLElement | undefined {
  * The legacy per-grapheme line-boundary scan: a boundary is recorded between
  * consecutive rect-bearing graphemes whose rect tops differ by more than the
  * overflow tolerance. Kept verbatim (with a checkpoint stride) as the
- * authoritative fallback and the experimental.forceLegacyLineEnds path.
+ * authoritative fallback when the fast path cannot prove equivalence.
  */
 async function renderedLineEndsSequential(
   text: Text,
@@ -2397,8 +2373,6 @@ interface RecursiveFragmenterOptions {
   readonly reportOverflow: () => void;
   readonly warnings: PageWarning[];
   readonly tableSplits: TableSplitRecord[];
-  readonly forceSequentialPlacement: boolean;
-  readonly forceLegacyLineEnds: boolean;
 }
 
 interface PlacementRun {
@@ -2420,8 +2394,6 @@ class RecursiveFragmenter {
   readonly #tableSplits: TableSplitRecord[];
   readonly #warned = new Set<string>();
   readonly #pageContent = new Map<PageParts, number>();
-  readonly #forceSequentialPlacement: boolean;
-  readonly #forceLegacyLineEnds: boolean;
   #generatedFragments = 0;
   #generatedRecords = 0;
   #chunksPlaced = 0;
@@ -2442,8 +2414,6 @@ class RecursiveFragmenter {
     this.#reportOverflow = options.reportOverflow;
     this.#warnings = options.warnings;
     this.#tableSplits = options.tableSplits;
-    this.#forceSequentialPlacement = options.forceSequentialPlacement;
-    this.#forceLegacyLineEnds = options.forceLegacyLineEnds;
   }
 
   get debugCounters(): Readonly<Record<string, number>> {
@@ -2457,19 +2427,16 @@ class RecursiveFragmenter {
 
   /**
    * Rendered line boundaries for a text node: the fast path when it can prove
-   * equivalence, the sequential per-grapheme scan otherwise (and always under
-   * experimental.forceLegacyLineEnds).
+   * equivalence, the sequential per-grapheme scan otherwise.
    */
   async #renderedLineEnds(text: Text): Promise<readonly number[]> {
     const graphemes = await graphemeEnds(text, this.#checkpoint);
-    if (!this.#forceLegacyLineEnds) {
-      const fast = await renderedLineEndsFast(text, graphemes, this.#checkpoint);
-      if (fast !== undefined) {
-        this.#lineEndsFastPath += 1;
-        return fast;
-      }
-      this.#lineEndsFallbacks += 1;
+    const fast = await renderedLineEndsFast(text, graphemes, this.#checkpoint);
+    if (fast !== undefined) {
+      this.#lineEndsFastPath += 1;
+      return fast;
     }
+    this.#lineEndsFallbacks += 1;
     return await renderedLineEndsSequential(text, graphemes, this.#checkpoint);
   }
 
@@ -2795,7 +2762,6 @@ class RecursiveFragmenter {
     pendingBreakAfter: PageBreak,
   ): PlacementRun | undefined {
     if (
-      this.#forceSequentialPlacement ||
       pendingBreakAfter !== "auto" ||
       cursor.overflowRoot !== undefined ||
       cursor.page.name !== undefined
@@ -4025,9 +3991,10 @@ export async function buildGeneration(
     // ASA-426: decided once per generation — every pass clones the same
     // source flow and stylesheet set, so the verdict cannot change between
     // passes. Inline styles are re-checked per subtree on the live pass DOM.
-    const atomicInteriorSkipEligible =
-      settings.experimental.forceFullConstraintCapture !== true &&
-      cssAllowsAtomicInteriorSkip(compiledPageMedia.css, sourceFlow);
+    const atomicInteriorSkipEligible = cssAllowsAtomicInteriorSkip(
+      compiledPageMedia.css,
+      sourceFlow,
+    );
     const probeCss = Object.freeze([FRAME_STYLE, ...compiledPageMedia.css]);
     const body = frameDocument.createDocumentFragment();
     const probeStyles = appendProbeStyles(frameDocument, probeCss);
@@ -4137,8 +4104,6 @@ export async function buildGeneration(
           reportOverflow,
           warnings: passFragmentationWarnings,
           tableSplits: passTableSplits,
-          forceSequentialPlacement: settings.experimental.forceSequentialPlacement === true,
-          forceLegacyLineEnds: settings.experimental.forceLegacyLineEnds === true,
         });
         await fragmenter.prepare();
         const initialPage = allocatePage(undefined);

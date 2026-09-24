@@ -715,7 +715,8 @@ the compiled `dist/page-document-generation.js`). The convention:
   it — they are added and removed together. In particular, the sequential
   line-ends path remains the authoritative fallback even after ASA-444 removes
   the `forceLegacyLineEnds` hatch, so ASA-444 must not delete the seam or its
-  oracle spec as "legacy".
+  oracle spec as "legacy". ASA-444 kept both; it removed only the three
+  document-level equivalence specs, which could not run without the hatches.
 - **dist internals are not a contract.** Only the `"."` entry of the exports
   map is public API. The per-module `dist/*.js` files (tsc output left in
   place next to the bundled `index.js`) do ship in the tarball and are

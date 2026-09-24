@@ -141,6 +141,12 @@ bundles is removed on the schedule the repository itself recorded.
    that needed the hatch during the exposure window, and an ASA-438 outcome
    that does not implicate the fast paths. Re-measure the four Core-bearing
    routes and tighten the budgets back to roughly 5% headroom.
+   *Done on the 0.6.0 line:* the three document-level equivalence oracles
+   were green at the removal commit, the repository has no issue that needed
+   a hatch, and ASA-438 was root-caused without implicating the fast paths.
+   The function-level line-ends oracle and its seam stay. The removal
+   reclaimed almost no bytes, so the budgets were re-measured but not
+   tightened (see `bundle-size.md`).
 3. **Failure visibility inside the shipped surface.** RTL documents currently
    paginate with the wrong page progression and *no warning* (ASA-434,
    stage 1) — that contradicts the constraint that unsupported input warns
