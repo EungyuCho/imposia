@@ -184,13 +184,8 @@ test("moves a block taller than a page to a fresh page when less than one line r
       // 480px of the 496px content box: less than one 24px line remains.
       const spacer = '<div style="height:480px"></div>';
       const normalize = (value: string) => value.replace(/\s+/gu, " ").trim();
-      const scenarios: readonly { name: string; html: string; experimental?: object }[] = [
+      const scenarios: readonly { name: string; html: string }[] = [
         { name: "plain", html: `${spacer}<p>${tallText("plain")}</p>` },
-        {
-          name: "plain-sequential",
-          html: `${spacer}<p>${tallText("sequential")}</p>`,
-          experimental: { forceSequentialPlacement: true },
-        },
         {
           name: "line-block",
           html: `${spacer}<p>${Array.from(
@@ -222,11 +217,7 @@ test("moves a block taller than a page to a fresh page when less than one line r
         const host = document.createElement("div");
         document.body.replaceChildren(host);
         const sourceDocument = new DOMParser().parseFromString(scenario.html, "text/html");
-        const controller = core.mountPageDocument(
-          host,
-          { html: scenario.html },
-          { css, ...(scenario.experimental ? { experimental: scenario.experimental } : {}) },
-        );
+        const controller = core.mountPageDocument(host, { html: scenario.html }, { css });
         try {
           const ready = await controller.ready;
           const frameDocument = ready.iframe.contentDocument;
@@ -261,7 +252,6 @@ test("moves a block taller than a page to a fresh page when less than one line r
 
     expect(observations.map(({ name }) => name)).toEqual([
       "plain",
-      "plain-sequential",
       "line-block",
       "rich",
       "table",

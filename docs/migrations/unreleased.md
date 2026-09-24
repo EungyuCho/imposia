@@ -130,6 +130,42 @@ requiring a code change (CHANGELOG has the full entries):
   the engine-level fallback from a failing woff2 to a later candidate no
   longer exists for collapsed lists. Candidates carrying `tech()` are never
   chosen; lists without a plain woff2 entry are requested as authored.
+- **A table row taller than a page is split across pages** (ADR 0014).
+  Such a row used to stay atomic with `UNSUPPORTED_LAYOUT` and
+  `PAGE_OVERFLOW`, and the part below the page edge was clipped. It now
+  continues cell by cell on the following pages, so the page count of those
+  documents grows and the two warnings disappear. The split row's cells carry
+  an inline `box-sizing` and `width` that pin the column widths. Rows that fit
+  on a fresh page, and `rowspan` clusters, behave as before.
+- **Grids with column-spanning items fragment** instead of staying atomic.
+  `grid-column: span N` and `grid-column: 1 / -1` no longer produce
+  `UNSUPPORTED_LAYOUT`; the grid breaks between complete rows.
+- **Top and bottom margin boxes size to their content.** A long footer next
+  to a short page number takes the width it needs and wraps instead of being
+  clipped at a third of the page. Margin-box declarations other than
+  `content` (font, color, alignment, border, padding, background color) now
+  apply instead of being dropped with `PAGE_RULE_UNSUPPORTED`.
+- **Page DOM details.** A page carries a `[data-imposia-margin-box]` element
+  only for boxes whose content is not empty, and every page carries a
+  `data-imposia-sheet` attribute naming its print sheet. Both are private page
+  DOM; code that queried the six always-present margin-box elements from a
+  `finalizePage` extension or a host stylesheet sees fewer elements.
+- **Limits can be raised** (ADR 0015). `maxInputBytes`, `maxNodes`,
+  `maxPages`, and `resourceDeadlineMs` accept values above their defaults, up
+  to 32 MiB, 1,000,000, 50,000, and 300,000. Defaults are unchanged. Code that
+  relied on an above-default value throwing now gets a mount instead.
+- **The `0.5.0` escape hatches are gone** (ASA-444).
+  `experimental.forceSequentialPlacement`, `experimental.forceLegacyLineEnds`,
+  and `experimental.forceFullConstraintCapture` are no longer part of
+  `ExperimentalPageFeatures`. TypeScript callers that still set one stop
+  compiling; JavaScript callers are ignored and get the fast path, which the
+  equivalence oracles showed produces the same output. As announced in
+  [`api-policy.md`](../api-policy.md), this is the scheduled removal, not a
+  breaking change.
+- **New opt-ins.** `PublicationOptions.pageNumbering: "entry"` numbers each
+  entry on its own; `@page :nth(An+B)`, all sixteen margin boxes, and the
+  `A3`, `A5`, `B4`, `B5`, `Legal`, and `Ledger` page sizes are accepted.
+  Nothing changes until a document or option uses them.
 
 ## What does not change
 
@@ -139,6 +175,7 @@ requiring a code change (CHANGELOG has the full entries):
   allowlist.
 - Determinism. The print family counter names only the transient stylesheet
   in the top document; it never reaches pages or warnings.
-- Every committed-document, page Viewer, and EPUB contract. The changes above
-  are confined to asset resolution, print output, the React status unions, and
-  the removed PDF viewer.
+- Every committed-document, page Viewer, and EPUB contract. The breaking
+  changes above are confined to asset resolution, print output, the React
+  status unions, and the removed PDF viewer; the layout changes only add
+  supported input or restore content that was clipped.

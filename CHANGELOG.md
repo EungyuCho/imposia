@@ -92,6 +92,12 @@ renamed to `0.6.0.md` when this release ships.
 
 ### Changed
 
+- Removed the `0.5.0` escape hatches `experimental.forceSequentialPlacement`,
+  `experimental.forceLegacyLineEnds`, and
+  `experimental.forceFullConstraintCapture` on the announced one-release
+  schedule (ASA-444). The paths they selected remain as runtime fallbacks,
+  so the bundle is unchanged. The three document-level equivalence specs that
+  needed the hatches were retired; the function-level line-ends oracle stays.
 - Pagination no longer slows down as documents grow. Every placement used to
   relay out all of the source still waiting to be placed and walk every page
   placed so far, so time per page rose with document length. A 1,800-page
@@ -152,6 +158,14 @@ renamed to `0.6.0.md` when this release ships.
   after a commit now pays the index build (about 64 ms at that size).
 
 ### Fixed
+
+- A `dir="rtl"` on the source `<html>` or `<body>` was dropped, so
+  right-to-left text rendered left to right with no warning. The declared
+  direction now reaches every page's content, Publication entries keep their
+  own, and the EPUB semantic source carries it. Right-to-left documents also
+  emit one `UNSUPPORTED_FRAGMENTATION_CONTEXT` warning (`property:
+  "direction"`, `value: "rtl"`), because page progression stays left to
+  right. (ASA-434, stage 1)
 
 - `@imposia/react/styles.css` imports `@imposia/client/styles.css` instead of
   `@imposia/viewer/styles.css`. `@imposia/viewer` is not a direct dependency

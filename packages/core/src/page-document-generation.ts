@@ -287,21 +287,6 @@ function snapshotExperimental(
   ) {
     throw new TypeError("experimental.forceConvergencePasses must be a boolean.");
   }
-  if (
-    record.forceSequentialPlacement !== undefined &&
-    typeof record.forceSequentialPlacement !== "boolean"
-  ) {
-    throw new TypeError("experimental.forceSequentialPlacement must be a boolean.");
-  }
-  if (
-    record.forceFullConstraintCapture !== undefined &&
-    typeof record.forceFullConstraintCapture !== "boolean"
-  ) {
-    throw new TypeError("experimental.forceFullConstraintCapture must be a boolean.");
-  }
-  if (record.forceLegacyLineEnds !== undefined && typeof record.forceLegacyLineEnds !== "boolean") {
-    throw new TypeError("experimental.forceLegacyLineEnds must be a boolean.");
-  }
   if (record.onDebugCounters !== undefined && typeof record.onDebugCounters !== "function") {
     throw new TypeError("experimental.onDebugCounters must be a function.");
   }
@@ -311,15 +296,6 @@ function snapshotExperimental(
     ...(record.forceConvergencePasses === undefined
       ? {}
       : { forceConvergencePasses: record.forceConvergencePasses }),
-    ...(record.forceSequentialPlacement === undefined
-      ? {}
-      : { forceSequentialPlacement: record.forceSequentialPlacement }),
-    ...(record.forceFullConstraintCapture === undefined
-      ? {}
-      : { forceFullConstraintCapture: record.forceFullConstraintCapture }),
-    ...(record.forceLegacyLineEnds === undefined
-      ? {}
-      : { forceLegacyLineEnds: record.forceLegacyLineEnds }),
     ...(record.onDebugCounters === undefined
       ? {}
       : {
@@ -594,6 +570,35 @@ function pageNumbering(
     index - (starts.get(value) ?? 0) + 1,
     counts.get(value) ?? pages.length,
   ]);
+}
+
+/**
+ * A warning when the document, or a Publication entry, runs right to left.
+ * Core paginates with left-to-right page progression only: page 1 is a
+ * right-hand page and spreads pair left to right, which is the wrong binding
+ * side for a right-to-left book (ASA-434, stage 1). Read while the pages are
+ * still styled in the probe.
+ */
+function rightToLeftWarning(pages: readonly PageParts[]): PageWarning | undefined {
+  const rtl = pages.some((page) => {
+    const view = page.flow.ownerDocument.defaultView;
+    if (view === null) return false;
+    if (view.getComputedStyle(page.flow).direction === "rtl") return true;
+    return [...page.flow.querySelectorAll(`:scope > [${PUBLICATION_ENTRY_MARKER}]`)].some(
+      (entry) => view.getComputedStyle(entry).direction === "rtl",
+    );
+  });
+  if (!rtl) return undefined;
+  return Object.freeze({
+    code: "UNSUPPORTED_FRAGMENTATION_CONTEXT",
+    message: "Right-to-left page progression is not supported.",
+    sourceIdentity: undefined,
+    location: UNLOCATED_PAGE_WARNING_LOCATION,
+    property: "direction",
+    value: "rtl",
+    recovery:
+      "Paginated with left-to-right page progression: page 1 is a right-hand page and spreads pair left to right. Text direction inside pages is preserved.",
+  });
 }
 
 const MARGIN_BOX_EDGES = [
@@ -2014,7 +2019,7 @@ function htmlElement(element: Element): HTMLElement | undefined {
  * The legacy per-grapheme line-boundary scan: a boundary is recorded between
  * consecutive rect-bearing graphemes whose rect tops differ by more than the
  * overflow tolerance. Kept verbatim (with a checkpoint stride) as the
- * authoritative fallback and the experimental.forceLegacyLineEnds path.
+ * authoritative fallback when the fast path cannot prove equivalence.
  */
 async function renderedLineEndsSequential(
   text: Text,
@@ -2368,8 +2373,6 @@ interface RecursiveFragmenterOptions {
   readonly reportOverflow: () => void;
   readonly warnings: PageWarning[];
   readonly tableSplits: TableSplitRecord[];
-  readonly forceSequentialPlacement: boolean;
-  readonly forceLegacyLineEnds: boolean;
 }
 
 interface PlacementRun {
@@ -2391,8 +2394,6 @@ class RecursiveFragmenter {
   readonly #tableSplits: TableSplitRecord[];
   readonly #warned = new Set<string>();
   readonly #pageContent = new Map<PageParts, number>();
-  readonly #forceSequentialPlacement: boolean;
-  readonly #forceLegacyLineEnds: boolean;
   #generatedFragments = 0;
   #generatedRecords = 0;
   #chunksPlaced = 0;
@@ -2413,8 +2414,6 @@ class RecursiveFragmenter {
     this.#reportOverflow = options.reportOverflow;
     this.#warnings = options.warnings;
     this.#tableSplits = options.tableSplits;
-    this.#forceSequentialPlacement = options.forceSequentialPlacement;
-    this.#forceLegacyLineEnds = options.forceLegacyLineEnds;
   }
 
   get debugCounters(): Readonly<Record<string, number>> {
@@ -2428,19 +2427,16 @@ class RecursiveFragmenter {
 
   /**
    * Rendered line boundaries for a text node: the fast path when it can prove
-   * equivalence, the sequential per-grapheme scan otherwise (and always under
-   * experimental.forceLegacyLineEnds).
+   * equivalence, the sequential per-grapheme scan otherwise.
    */
   async #renderedLineEnds(text: Text): Promise<readonly number[]> {
     const graphemes = await graphemeEnds(text, this.#checkpoint);
-    if (!this.#forceLegacyLineEnds) {
-      const fast = await renderedLineEndsFast(text, graphemes, this.#checkpoint);
-      if (fast !== undefined) {
-        this.#lineEndsFastPath += 1;
-        return fast;
-      }
-      this.#lineEndsFallbacks += 1;
+    const fast = await renderedLineEndsFast(text, graphemes, this.#checkpoint);
+    if (fast !== undefined) {
+      this.#lineEndsFastPath += 1;
+      return fast;
     }
+    this.#lineEndsFallbacks += 1;
     return await renderedLineEndsSequential(text, graphemes, this.#checkpoint);
   }
 
@@ -2766,7 +2762,6 @@ class RecursiveFragmenter {
     pendingBreakAfter: PageBreak,
   ): PlacementRun | undefined {
     if (
-      this.#forceSequentialPlacement ||
       pendingBreakAfter !== "auto" ||
       cursor.overflowRoot !== undefined ||
       cursor.page.name !== undefined
@@ -3976,7 +3971,12 @@ export async function buildGeneration(
       warnings: pageMediaWarnings,
     });
     const semanticSnapshot = createPageSemanticSnapshot({
-      html: semanticSourceFlow.innerHTML,
+      // The declared direction rides on a wrapper so the reflowable EPUB keeps
+      // right-to-left text right to left.
+      html:
+        preparedSemanticSource.documentDirection === undefined
+          ? semanticSourceFlow.innerHTML
+          : `<div dir="${preparedSemanticSource.documentDirection}">${semanticSourceFlow.innerHTML}</div>`,
       css: compiledPageMedia.css,
       baseUrl: source.baseUrl,
       assets: assets?.semanticAssets ?? Object.freeze([]),
@@ -3991,9 +3991,10 @@ export async function buildGeneration(
     // ASA-426: decided once per generation — every pass clones the same
     // source flow and stylesheet set, so the verdict cannot change between
     // passes. Inline styles are re-checked per subtree on the live pass DOM.
-    const atomicInteriorSkipEligible =
-      settings.experimental.forceFullConstraintCapture !== true &&
-      cssAllowsAtomicInteriorSkip(compiledPageMedia.css, sourceFlow);
+    const atomicInteriorSkipEligible = cssAllowsAtomicInteriorSkip(
+      compiledPageMedia.css,
+      sourceFlow,
+    );
     const probeCss = Object.freeze([FRAME_STYLE, ...compiledPageMedia.css]);
     const body = frameDocument.createDocumentFragment();
     const probeStyles = appendProbeStyles(frameDocument, probeCss);
@@ -4003,6 +4004,7 @@ export async function buildGeneration(
     let fragmentationWarnings: PageWarning[] = [];
     let publishingWarnings: readonly PageWarning[] = Object.freeze([]);
     let overflowWarning: PageWarning | undefined;
+    let directionWarning: PageWarning | undefined;
     let warningSourceLocations: ReadonlyMap<string, BuiltWarningSourceLocation> = new Map();
     try {
       const paginate = async (generatedValues: ReadonlyMap<string, string>, passNumber: number) => {
@@ -4071,6 +4073,9 @@ export async function buildGeneration(
             throw new ImposiaError("PAGE_LIMIT", "Page limit exceeded.");
           }
           const created = createPage(frameDocument, pageMedia, passPages.length + 1, name);
+          if (preparedSemanticSource.documentDirection !== undefined) {
+            created.flow.setAttribute("dir", preparedSemanticSource.documentDirection);
+          }
           reserveDecorationRows(frameDocument, created, pageSettings);
           passPages.push(created);
           appendProbePage(probe, created.page);
@@ -4099,8 +4104,6 @@ export async function buildGeneration(
           reportOverflow,
           warnings: passFragmentationWarnings,
           tableSplits: passTableSplits,
-          forceSequentialPlacement: settings.experimental.forceSequentialPlacement === true,
-          forceLegacyLineEnds: settings.experimental.forceLegacyLineEnds === true,
         });
         await fragmenter.prepare();
         const initialPage = allocatePage(undefined);
@@ -4200,6 +4203,7 @@ export async function buildGeneration(
       const fittedBeforeDecoration = decorationMayResize
         ? pages.map((page) => !pageOverflows(page))
         : [];
+      directionWarning = rightToLeftWarning(pages);
       await yieldBetweenStages();
       const numbering = pageNumbering(pages, settings.entryPageNumbering);
       for (const [index, page] of pages.entries()) {
@@ -4290,6 +4294,7 @@ export async function buildGeneration(
       ...fragmentationWarnings,
     ];
     if (overflowWarning !== undefined) warnings.push(overflowWarning);
+    if (directionWarning !== undefined) warnings.push(directionWarning);
     if (resourceBlocked) {
       warnings.push(
         ...resourceBlockedWarnings(

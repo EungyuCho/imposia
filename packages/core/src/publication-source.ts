@@ -1,7 +1,7 @@
 import { ImposiaError } from "./errors.js";
 import { cssReferences, inlineCss, parseCss, replaceCssRange } from "./page-document-assets-css.js";
 import { sameDocumentFragment, srcsetCandidates } from "./page-document-assets-html.js";
-import { isLightDomSource, sourceHtml } from "./page-document-sanitize.js";
+import { declaredDirection, isLightDomSource, sourceHtml } from "./page-document-sanitize.js";
 import type {
   PageExtensionEntryMetadata,
   PageExtensionPublicationMetadata,
@@ -192,6 +192,8 @@ function prepareEntryMarkup(
   const wrapper = frameDocument.createElement("section");
   wrapper.setAttribute(PUBLICATION_ENTRY_MARKER, String(index));
   if (startsPage) wrapper.setAttribute("style", "break-before: page");
+  const direction = declaredDirection(parsed);
+  if (direction !== undefined) wrapper.setAttribute("dir", direction);
   for (const node of [
     ...parsed.head.querySelectorAll('style,link[rel~="stylesheet" i]'),
     ...parsed.body.childNodes,

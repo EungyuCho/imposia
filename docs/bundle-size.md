@@ -111,9 +111,15 @@ and `experimental.forceFullConstraintCapture`. Code splitting cannot preserve
 the previous limit, because the two paths are selected per element inside one
 hot pagination loop — a dynamic import boundary would have to be crossed per
 node. Tree shaking cannot drop either path either, since the choice is a
-runtime option rather than a build-time constant. This increase is therefore
-expected to be temporary: the hatches are scheduled for removal one release
-after they land, and these budgets should be tightened again at that point.
+runtime option rather than a build-time constant. This increase was
+expected to be temporary: the hatches were scheduled for removal one release
+after they landed, and these budgets were to be tightened again at that point.
+
+The hatches were removed on the 0.6.0 line (ASA-444). The replaced paths stay
+as runtime fallbacks, so the removal changed Core · PageDocument by less than
+0.1 KiB gzip (59.4 KiB before, 59.5 KiB after, which also includes the
+right-to-left fix). The budgets set on 2026-09-24 already leave about 4–5%
+headroom, so they were not tightened.
 Even at 60.0 KiB the route remains 43.6 KiB below its pre-ASA-404 size.
 
 These are source-level consumer scenarios rather than package tarball sizes:
