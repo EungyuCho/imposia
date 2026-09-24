@@ -140,7 +140,11 @@ function Logo() {
 
 function pageLabel(state: PageViewerState | undefined, fallbackCount: number | undefined): string {
   if (state === undefined) return fallbackCount === undefined ? "…" : `${fallbackCount} pages`;
-  return `${state.page} / ${state.pageCount}`;
+  if (state.effectiveMode !== "spread") return `${state.page} / ${state.pageCount}`;
+  // Without a cover page, spreads pair 1–2, 3–4, and so on.
+  const start = state.page % 2 === 1 ? state.page : state.page - 1;
+  const end = Math.min(state.pageCount, start + 1);
+  return `${start === end ? start : `${start}–${end}`} / ${state.pageCount}`;
 }
 
 function App() {

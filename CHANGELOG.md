@@ -5,6 +5,16 @@ versioning for its published package interfaces. What that means before `1.0`
 — what counts as public, and what a minor release is allowed to break — is in
 [`docs/api-policy.md`](docs/api-policy.md).
 
+## Unreleased
+
+### Fixed
+
+- The canonical frame stays invisible until the first generation commits.
+  Until then it is an empty 300×150 box, and it showed at the host's top-left
+  corner for as long as the first pagination took. React viewer hosts also
+  keep it invisible until the Viewer adopts and sizes it, which removes the
+  last frame of that flash.
+
 ## 0.6.0 — 2026-09-24
 
 Minor release for document layout, long documents, and the print pipeline.

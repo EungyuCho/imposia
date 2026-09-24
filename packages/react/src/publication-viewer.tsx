@@ -349,6 +349,7 @@ export const ImposiaPublicationViewer = forwardRef<
       ref={lifecycle.hostRef}
       className={className}
       style={style}
+      data-imposia-viewer-host=""
       data-imposia-react-status={state.status}
       data-imposia-generation={publication?.generation}
       aria-busy={state.status === "loading" ? "true" : "false"}

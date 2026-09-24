@@ -242,6 +242,14 @@
   justify-items: center;
 }
 
+/* A React viewer host owns its frame from the start, but the Viewer adopts and
+   sizes it only after the first commit reaches React. Until then the frame is
+   an unsized box in the host's corner, so keep it invisible. */
+[data-imposia-viewer-host]
+  > iframe[data-imposia-frame="page-document"]:not(.imposia-canonical-frame) {
+  visibility: hidden;
+}
+
 .imposia-page-viewer .imposia-canonical-frame {
   grid-row: 2;
   align-self: start;

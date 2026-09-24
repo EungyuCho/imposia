@@ -208,6 +208,11 @@ function createPageDocumentController(
   iframe.setAttribute("data-imposia-frame", "page-document");
   iframe.setAttribute("sandbox", PAGE_DOCUMENT_FRAME_SANDBOX.join(" "));
   iframe.srcdoc = FRAME_DOCUMENT;
+  // Hidden until the first generation commits: an empty frame would otherwise
+  // show as a blank 300x150 box at the container's corner for as long as the
+  // first pagination takes, before any Viewer sizes it. Visibility keeps the
+  // frame's layout, so sizes read from it are unchanged.
+  iframe.style.visibility = "hidden";
   container.append(iframe);
 
   let current: PageDocument | undefined;
@@ -428,6 +433,7 @@ function createPageDocumentController(
             current = document;
             if (previous !== undefined) releaseSnapshot(previous);
             committed = true;
+            iframe.style.removeProperty("visibility");
             for (const url of oldBlobUrls) URL.revokeObjectURL(url);
             return document;
           } catch (error: unknown) {
