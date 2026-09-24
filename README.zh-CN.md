@@ -105,9 +105,9 @@ Imposia 将一份页面文档放在整个工作流的中心。
 
 | 测量项目 | Imposia | Paged.js 0.4.3 | Vivliostyle 2.45.2 |
 | :--- | ---: | ---: | ---: |
-| 修改一个词后重新渲染（50 页） | **30 ms** | 217 ms | 216 ms |
-| 为 200 页分页 | **131 ms** | 846 ms | 2,140 ms |
-| 完整浏览器包，gzip | **58.5 KiB** | 94.2 KiB | 215.2 KiB |
+| 修改一个词后重新渲染（50 页） | **30 ms** | 217 ms | 212 ms |
+| 为 200 页分页 | **131 ms** | 849 ms | 2,154 ms |
+| 完整浏览器包，gzip | **59.4 KiB** | 94.2 KiB | 215.2 KiB |
 
 - 三者得到的页数相同。Paged.js 和 Vivliostyle 没有增量更新，编辑时会从头重新渲染；Imposia 通过 `controller.update()` 重新提交。
 - Paged.js 和 Vivliostyle 只通过其文档化的入口调用，从 jsDelivr 加载而未作为依赖加入。方法、版本、哈希与注意事项：[`docs/benchmarks.md`](./docs/benchmarks.md)

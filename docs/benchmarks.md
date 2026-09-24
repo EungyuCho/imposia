@@ -147,13 +147,13 @@ half of Imposia's is recorded with an `error` instead of a number.
 ### Recorded results
 
 `benchmarks/comparison.json`, captured 2026-09-24 on an Apple M4 with Chromium
-149.0.7827.55 at commit `f33ded4`:
+149.0.7827.55 at commit `4177daa`:
 
 | Scenario | Imposia | Paged.js 0.4.3 | Vivliostyle 2.45.2 |
 | --- | ---: | ---: | ---: |
-| `paginate-200` | 130.5 ms (200 pages) | 846.4 ms (200 pages) | 2140.1 ms (200 pages) |
-| `edit-50` | 29.9 ms (50 pages) | 216.6 ms (50 pages) | 215.6 ms (50 pages) |
-| `bundle` | 58.5 KiB | 94.2 KiB | 215.2 KiB |
+| `paginate-200` | 131.1 ms (200 pages) | 848.5 ms (200 pages) | 2153.7 ms (200 pages) |
+| `edit-50` | 30.3 ms (50 pages) | 216.7 ms (50 pages) | 211.9 ms (50 pages) |
+| `bundle` | 59.4 KiB | 94.2 KiB | 215.2 KiB |
 
 The 2026-09-23 capture at `44594de` recorded Imposia at 249 ms and 45.9 ms.
 The drop comes from `f33ded4`, which stopped relaying out the unplaced source
