@@ -172,7 +172,7 @@ const controller = mountPublication(host, {
 const publication = await controller.ready;
 ```
 
-`PublicationSnapshot` contains `metadata: { title, language?, identifier? }` and ordered entries. Each entry requires a unique `id` without whitespace or control characters, a `title`, optionally a `baseUrl`, and exactly one of `html` or `lightDom`. `PublicationOptions` contains `PageDocumentOptions` except that `extensions` accepts only `PublicationExtension[]`.
+`PublicationSnapshot` contains `metadata: { title, language?, identifier? }` and ordered entries. Each entry requires a unique `id` without whitespace or control characters, a `title`, optionally a `baseUrl`, and exactly one of `html` or `lightDom`. `PublicationOptions` contains `PageDocumentOptions` except that `extensions` accepts only `PublicationExtension[]`, plus `pageNumbering`. With `pageNumbering: "entry"`, every entry starts on a new page and `counter(page)`, `counter(pages)`, and the `pageNumber`/`totalPages` template tokens count within the entry, so a batch of invoices prints "Page 1 of 2" on each invoice. Page metadata, navigation, search, entry page ranges, extension `decoratePage` input, and target references stay global. The default `"publication"` numbers the whole Publication.
 
 ### `PublicationController`
 

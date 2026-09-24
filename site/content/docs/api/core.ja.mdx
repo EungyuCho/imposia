@@ -172,7 +172,7 @@ const controller = mountPublication(host, {
 const publication = await controller.ready;
 ```
 
-`PublicationSnapshot` は `metadata: { title, language?, identifier? }` と、順序付きのエントリーを持ちます。各エントリーには、空白と制御文字を含まない一意の `id`、`title`、任意の `baseUrl`、そして `html` または `lightDom` のどちらか一方だけが必要です。`PublicationOptions` は `PageDocumentOptions` と同じですが、`extensions` だけは `PublicationExtension[]` のみを受け取ります。
+`PublicationSnapshot` は `metadata: { title, language?, identifier? }` と、順序付きのエントリーを持ちます。各エントリーには、空白と制御文字を含まない一意の `id`、`title`、任意の `baseUrl`、そして `html` または `lightDom` のどちらか一方だけが必要です。`PublicationOptions` は `PageDocumentOptions` と同じですが、`extensions` だけは `PublicationExtension[]` のみを受け取り、`pageNumbering` が加わります。`pageNumbering: "entry"` を指定すると、各エントリーは新しいページから始まり、`counter(page)`、`counter(pages)`、`pageNumber`/`totalPages` テンプレートトークンはエントリーの中で数えます。請求書をまとめて印刷しても、各請求書に「Page 1 of 2」のように入ります。ページメタデータ、移動、検索、エントリーのページ範囲、拡張の `decoratePage` 入力、target 参照は全体の番号のままです。既定値の `"publication"` は Publication 全体に番号を振ります。
 
 ### `PublicationController`
 

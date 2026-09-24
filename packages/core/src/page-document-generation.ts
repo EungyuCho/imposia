@@ -84,8 +84,15 @@ import {
 } from "./publication-source.js";
 import { createWarningCollector, type DocumentWarning, type WarningCollector } from "./warnings.js";
 
+/**
+ * Private option key a Publication sets to number pages per entry. A symbol
+ * keeps it out of the public `PageDocumentOptions` shape.
+ */
+export const ENTRY_PAGE_NUMBERING: unique symbol = Symbol("imposia.entryPageNumbering");
+
 export interface PageGenerationSettings {
   css: readonly string[];
+  entryPageNumbering: boolean;
   assetResolver?: AssetResolver;
   headerTemplate?: string;
   footerTemplate?: string;
@@ -311,6 +318,8 @@ function snapshotExperimental(
 export function snapshotSettings(options: PageDocumentOptions): PageGenerationSettings {
   return {
     css: Object.freeze([...(options.css ?? [])]),
+    entryPageNumbering:
+      (options as Readonly<Record<symbol, unknown>>)[ENTRY_PAGE_NUMBERING] === true,
     ...(options.assetResolver === undefined ? {} : { assetResolver: options.assetResolver }),
     ...(options.headerTemplate === undefined ? {} : { headerTemplate: options.headerTemplate }),
     ...(options.footerTemplate === undefined ? {} : { footerTemplate: options.footerTemplate }),
@@ -540,6 +549,36 @@ function resolveMarginBoxes(
     applyMarginBoxStyle(box, resolved.style);
     page.page.append(box);
   }
+}
+
+/**
+ * The displayed page number and total for every page. Without entry
+ * numbering they are global. With it, a page belongs to the Publication entry
+ * whose content it carries first; a page without entry content (an inserted
+ * blank page) belongs to the entry before it.
+ */
+function pageNumbering(
+  pages: readonly PageParts[],
+  byEntry: boolean,
+): readonly (readonly [number, number])[] {
+  if (!byEntry) return pages.map((_page, index) => [index + 1, pages.length]);
+  let entry = 0;
+  const entries = pages.map((page) => {
+    const marker = page.flow.querySelector(`[${PUBLICATION_ENTRY_MARKER}]`);
+    const value = Number(marker?.getAttribute(PUBLICATION_ENTRY_MARKER));
+    if (marker !== null && Number.isInteger(value)) entry = value;
+    return entry;
+  });
+  const starts = new Map<number, number>();
+  const counts = new Map<number, number>();
+  for (const [index, value] of entries.entries()) {
+    if (!starts.has(value)) starts.set(value, index);
+    counts.set(value, (counts.get(value) ?? 0) + 1);
+  }
+  return entries.map((value, index) => [
+    index - (starts.get(value) ?? 0) + 1,
+    counts.get(value) ?? pages.length,
+  ]);
 }
 
 const MARGIN_BOX_EDGES = [
@@ -3601,7 +3640,11 @@ export async function buildGeneration(
             ),
           );
         }
-        const composed = composePublicationExtensionSource(publicationSource, entries);
+        const composed = composePublicationExtensionSource(
+          publicationSource,
+          entries,
+          settings.entryPageNumbering,
+        );
         const composedHtml = sourceHtml(composed);
         ensureTransformedInputLimit(composedHtml, settings.css, settings.limits);
         transformed = Object.freeze({ html: composedHtml, css: settings.css });
@@ -3914,7 +3957,9 @@ export async function buildGeneration(
       const fittedBeforeDecoration = decorationMayResize
         ? pages.map((page) => !pageOverflows(page))
         : [];
+      const numbering = pageNumbering(pages, settings.entryPageNumbering);
       for (const [index, page] of pages.entries()) {
+        const [pageNumber, totalPages] = numbering[index] ?? [index + 1, pages.length];
         resourceBlocked =
           decoratePage(
             frameDocument,
@@ -3926,8 +3971,8 @@ export async function buildGeneration(
             extensionWarnings,
             decorationWarnings,
           ) || resourceBlocked;
-        resolveDecorationTokens(page.page, index + 1, pages.length);
-        resolveMarginBoxes(page, index + 1, pages.length, accepted.publishing.namedStrings[index]);
+        resolveDecorationTokens(page.page, pageNumber, totalPages);
+        resolveMarginBoxes(page, pageNumber, totalPages, accepted.publishing.namedStrings[index]);
       }
       layoutMarginBoxWidths(pages);
       if (

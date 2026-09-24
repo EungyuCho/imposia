@@ -692,3 +692,119 @@ test("destroy aborts active Publication work and removes canonical and staging f
     expect(pageErrors).toEqual([]);
   }
 });
+
+test("numbers pages per entry so a batch of invoices restarts at page 1 of its own total", async ({
+  page,
+  browserName,
+}) => {
+  test.skip(browserName !== "chromium", "Chromium owns structural pagination assertions.");
+  const { errors, pageErrors } = captureBrowserErrors(page, browserName);
+
+  await page.goto("/examples/book.html");
+  try {
+    const observation = await page.evaluate(async () => {
+      const core = await import("/packages/core/dist/index.js");
+      const host = document.body.appendChild(document.createElement("div"));
+      const invoice = (number: number, pages: number) =>
+        `<style>@page { @bottom-right { content: "Page " counter(page) " of " counter(pages); } }</style>` +
+        `<h1>Invoice ${number}</h1>` +
+        Array.from(
+          { length: pages - 1 },
+          (_value, index) =>
+            `<p style="break-before: page">Invoice ${number} line ${index + 2}</p>`,
+        ).join("");
+      const snapshot = {
+        metadata: { title: "Invoices", language: "en" },
+        entries: [
+          { id: "inv-1", title: "Invoice 1", html: invoice(1, 2) },
+          { id: "inv-2", title: "Invoice 2", html: invoice(2, 1) },
+          { id: "inv-3", title: "Invoice 3", html: invoice(3, 3) },
+        ],
+      };
+      const read = (publication: {
+        iframe: HTMLIFrameElement;
+        entries: readonly unknown[];
+        pages: readonly { number: number }[];
+      }) => {
+        const frameDocument = publication.iframe.contentDocument;
+        if (frameDocument === null) throw new Error("Missing canonical frame document.");
+        return {
+          entries: publication.entries,
+          pageNumbers: publication.pages.map((item) => item.number),
+          footers: [...frameDocument.querySelectorAll("[data-imposia-page]")].map((item) => ({
+            box:
+              item.querySelector('[data-imposia-margin-box="bottom-right"]')?.textContent ?? null,
+            template: item.querySelector("[data-imposia-page-footer]")?.textContent?.trim() ?? "",
+          })),
+        };
+      };
+      const invalid = (() => {
+        try {
+          core.mountPublication(host, snapshot, { pageNumbering: "chapter" as never });
+          return "";
+        } catch (error: unknown) {
+          return error instanceof core.ImposiaError ? error.code : "unknown";
+        }
+      })();
+      const controller = core.mountPublication(host, snapshot, {
+        pageNumbering: "entry",
+        footerTemplate: '<span class="pageNumber"></span>/<span class="totalPages"></span>',
+      });
+      try {
+        const first = read(await controller.ready);
+        const updated = read(
+          await controller.update({
+            ...snapshot,
+            entries: [snapshot.entries[1], snapshot.entries[0]].filter(
+              (entry): entry is (typeof snapshot.entries)[number] => entry !== undefined,
+            ),
+          }),
+        );
+        const extended = core.mountPublication(host, snapshot, {
+          pageNumbering: "entry",
+          extensions: [
+            {
+              name: "test/entry-note",
+              transformEntry(input: { html: string }) {
+                return { html: `${input.html}<p>Note</p>` };
+              },
+            },
+          ],
+        });
+        const withExtension = read(await extended.ready);
+        await extended.destroy();
+        return { invalid, first, updated, withExtension };
+      } finally {
+        await controller.destroy();
+        host.remove();
+      }
+    });
+
+    expect(observation.invalid).toBe("INVALID_PUBLICATION");
+    expect(observation.first.entries).toEqual([
+      { id: "inv-1", title: "Invoice 1", pageRange: { start: 1, end: 2 } },
+      { id: "inv-2", title: "Invoice 2", pageRange: { start: 3, end: 3 } },
+      { id: "inv-3", title: "Invoice 3", pageRange: { start: 4, end: 6 } },
+    ]);
+    expect(observation.first.pageNumbers).toEqual([1, 2, 3, 4, 5, 6]);
+    expect(observation.first.footers).toEqual([
+      { box: "Page 1 of 2", template: "1/2" },
+      { box: "Page 2 of 2", template: "2/2" },
+      { box: "Page 1 of 1", template: "1/1" },
+      { box: "Page 1 of 3", template: "1/3" },
+      { box: "Page 2 of 3", template: "2/3" },
+      { box: "Page 3 of 3", template: "3/3" },
+    ]);
+    expect(observation.withExtension.footers.map((footer) => footer.box)).toEqual(
+      observation.first.footers.map((footer) => footer.box),
+    );
+    expect(observation.updated.footers.map((footer) => footer.box)).toEqual([
+      "Page 1 of 1",
+      "Page 1 of 2",
+      "Page 2 of 2",
+    ]);
+  } finally {
+    expect(errors).toEqual([]);
+    expect(pageErrors).toEqual([]);
+  }
+});

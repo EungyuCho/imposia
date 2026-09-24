@@ -172,7 +172,7 @@ const controller = mountPublication(host, {
 const publication = await controller.ready;
 ```
 
-`PublicationSnapshot` 包含 `metadata: { title, language?, identifier? }` 和有序条目。每个条目要求一个唯一且不含空白或控制字符的 `id`、一个 `title`、可选的 `baseUrl`，以及 `html` 或 `lightDom` 中恰好一个。`PublicationOptions` 与 `PageDocumentOptions` 相同，只是 `extensions` 只接受 `PublicationExtension[]`。
+`PublicationSnapshot` 包含 `metadata: { title, language?, identifier? }` 和有序条目。每个条目要求一个唯一且不含空白或控制字符的 `id`、一个 `title`、可选的 `baseUrl`，以及 `html` 或 `lightDom` 中恰好一个。`PublicationOptions` 与 `PageDocumentOptions` 相同，只是 `extensions` 只接受 `PublicationExtension[]`，并增加 `pageNumbering`。设为 `pageNumbering: "entry"` 时，每个条目从新页开始，`counter(page)`、`counter(pages)` 和 `pageNumber`/`totalPages` 模板令牌在条目内计数，因此批量打印发票时每张发票都显示“Page 1 of 2”。页面元数据、导航、搜索、条目页码范围、扩展的 `decoratePage` 输入和 target 引用仍按全局计数。默认值 `"publication"` 对整个 Publication 编号。
 
 ### `PublicationController`
 
