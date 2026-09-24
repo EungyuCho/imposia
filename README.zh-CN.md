@@ -336,8 +336,10 @@ Contents、Search 与 Page thumbnails 位于 canonical iframe 之外，互斥显
 
 ### 页面媒体与出版 CSS
 
-稳定支持范围包括 A4、Letter、自定义绝对尺寸、纵向与横向、宿主边距、支持的
-`@page` 选择器以及六个页边距框：
+稳定支持范围包括 CSS 纸张尺寸关键字（A3–A5、B4、B5、JIS-B4、JIS-B5、Letter、
+Legal、Ledger）、自定义绝对尺寸、纵向与横向、宿主边距、包含 `:nth()` 的
+`@page` 选择器，以及全部十六个页边距框。页边距框支持字体、颜色、对齐样式，
+以及罗马数字和字母页码：
 
 ```css
 @page {

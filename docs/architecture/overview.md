@@ -547,7 +547,7 @@ input boundary" that pagination integrity is scoped to.
 Roughly: the package surface, committed sequence integrity, cooperative
 pagination, the React lifecycle, Publication + Reader navigation, search,
 thumbnails, the Inspector, presentation modes, the canonical DOM/staging/
-resolver/rollback machinery, authored `@page` rules and the six margin boxes,
+resolver/rollback machinery, authored `@page` rules and the sixteen margin boxes,
 breaks and parity and `break-inside: avoid`, widows/orphans, EPUB export, and
 native print are **Stable**. CJK line breaking, hyphenation, long tokens,
 tables, flex, grid, multicol, and local target references / named strings are

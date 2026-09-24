@@ -18,7 +18,7 @@ const CSS_IDENTIFIER = /^-?(?:[_a-z]|[^\0-\x7f])(?:[-_a-z0-9]|[^\0-\x7f])*$/i;
 
 type TargetKind = "target-counter" | "target-text";
 type TargetPosition = "before" | "after";
-type StringPosition = "first" | "start" | "last";
+type StringPosition = "first" | "start" | "last" | "first-except";
 type SelectorSpecificity = readonly [ids: number, classes: number, elements: number];
 type StringSource =
   | Readonly<{ type: "content" }>
@@ -1097,6 +1097,7 @@ function resolveNamedStrings(
         values.set(namedStringKey(name, "first"), firstValue);
         values.set(namedStringKey(name, "start"), startValue);
         values.set(namedStringKey(name, "last"), lastValue);
+        values.set(namedStringKey(name, "first-except"), first === undefined ? entryValue : "");
         entry.set(name, lastValue);
       }
       return values;

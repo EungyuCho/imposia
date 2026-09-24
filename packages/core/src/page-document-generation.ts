@@ -74,7 +74,7 @@ import {
   normalizeHostPageOptions,
   PAGE_MARGIN_BOX_NAMES,
   type PageMarginBoxName,
-  type PageMarginContentPart,
+  type ResolvedMarginBox,
   resolvePageMedia,
 } from "./page-media.js";
 import {
@@ -127,7 +127,7 @@ export interface BuiltPage {
 interface PageParts extends BuiltPage {
   content: HTMLElement;
   decorated: boolean;
-  marginBoxes: ReadonlyMap<PageMarginBoxName, readonly PageMarginContentPart[]>;
+  marginBoxes: ReadonlyMap<PageMarginBoxName, ResolvedMarginBox>;
 }
 
 interface TableSplitRecord {
@@ -380,14 +380,8 @@ function createPage(
   footer.setAttribute("data-imposia-page-footer", "");
   footer.style.gridRow = "3";
 
-  const marginBoxes = PAGE_MARGIN_BOX_NAMES.map((boxName) => {
-    const box = frameDocument.createElement("div");
-    box.setAttribute("data-imposia-margin-box", boxName);
-    return box;
-  });
-
   content.append(flow);
-  page.append(content, header, footer, ...marginBoxes);
+  page.append(content, header, footer);
   return {
     page,
     flow,
@@ -517,21 +511,67 @@ function decoratePage(
   return resourceBlocked;
 }
 
+/**
+ * Margin boxes are absolutely positioned inside the page margins and never
+ * take part in fragmentation, so they are created only at commit time and
+ * only for boxes whose resolved content is not empty.
+ */
 function resolveMarginBoxes(
   page: PageParts,
   pageNumber: number,
   totalPages: number,
   namedStrings?: ReadonlyMap<string, string>,
 ): void {
+  for (const stale of page.page.querySelectorAll(":scope > [data-imposia-margin-box]")) {
+    stale.remove();
+  }
+  const frameDocument = page.page.ownerDocument;
   for (const boxName of PAGE_MARGIN_BOX_NAMES) {
-    const box = page.page.querySelector<HTMLElement>(`[data-imposia-margin-box="${boxName}"]`);
-    if (box === null) throw new Error(`Page margin box ${boxName} is unavailable.`);
-    box.textContent = marginBoxText(
-      page.marginBoxes.get(boxName),
-      pageNumber,
-      totalPages,
-      (name, position) => namedStringValue(namedStrings, name, position),
+    const resolved = page.marginBoxes.get(boxName);
+    if (resolved === undefined) continue;
+    const text = marginBoxText(resolved.content, pageNumber, totalPages, (name, position) =>
+      namedStringValue(namedStrings, name, position),
     );
+    if (text === "") continue;
+    const box = frameDocument.createElement("div");
+    box.setAttribute("data-imposia-margin-box", boxName);
+    box.textContent = text;
+    applyMarginBoxStyle(box, resolved.style);
+    page.page.append(box);
+  }
+}
+
+const MARGIN_BOX_JUSTIFY: Readonly<Record<string, string>> = {
+  left: "flex-start",
+  start: "flex-start",
+  center: "center",
+  right: "flex-end",
+  end: "flex-end",
+};
+
+const MARGIN_BOX_ALIGN: Readonly<Record<string, string>> = {
+  top: "flex-start",
+  middle: "center",
+  bottom: "flex-end",
+};
+
+/**
+ * Applies authored margin-box declarations inline. A margin box lays its text
+ * out as a flex row, so `text-align` and `vertical-align` are also projected
+ * onto the flex alignment that places the text inside the box.
+ */
+function applyMarginBoxStyle(
+  box: HTMLElement,
+  style: readonly (readonly [property: string, value: string])[],
+): void {
+  for (const [property, value] of style) {
+    box.style.setProperty(property, value);
+    const keyword = value.toLowerCase();
+    if (property === "text-align" && MARGIN_BOX_JUSTIFY[keyword] !== undefined) {
+      box.style.setProperty("justify-content", MARGIN_BOX_JUSTIFY[keyword]);
+    } else if (property === "vertical-align" && MARGIN_BOX_ALIGN[keyword] !== undefined) {
+      box.style.setProperty("align-items", MARGIN_BOX_ALIGN[keyword]);
+    }
   }
 }
 

@@ -4,9 +4,9 @@ import {
   A4_WIDTH_CSS_PX,
   cssPx,
   DEFAULT_PAGE_MARGIN_CSS_PX,
-} from "./page-media.js";
+} from "./page-units.js";
 
-export { A4_HEIGHT_CSS_PX, A4_WIDTH_CSS_PX } from "./page-media.js";
+export { A4_HEIGHT_CSS_PX, A4_WIDTH_CSS_PX } from "./page-units.js";
 export const FRAME_CSP =
   "default-src 'none'; script-src 'none'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'; style-src 'unsafe-inline'; img-src 'none'; font-src 'none'; media-src 'none'";
 export const FRAME_BLOB_CSP =
@@ -59,6 +59,14 @@ export function frameStyle(geometries: readonly PageGeometry[]): string {
     '[data-imposia-margin-box$="-left"]{left:var(--imposia-margin-left);width:calc(var(--imposia-content-width)/3);justify-content:flex-start;text-align:left}',
     '[data-imposia-margin-box$="-center"]{left:calc(var(--imposia-margin-left) + var(--imposia-content-width)/3);width:calc(var(--imposia-content-width)/3);justify-content:center;text-align:center}',
     '[data-imposia-margin-box$="-right"]{right:var(--imposia-margin-right);width:calc(var(--imposia-content-width)/3);justify-content:flex-end;text-align:right}',
+    '[data-imposia-margin-box$="-left-corner"]{left:0;width:var(--imposia-margin-left);justify-content:flex-end;text-align:right}',
+    '[data-imposia-margin-box$="-right-corner"]{right:0;width:var(--imposia-margin-right);justify-content:flex-start;text-align:left}',
+    '[data-imposia-margin-box^="left-"]{left:0;width:var(--imposia-margin-left)}',
+    '[data-imposia-margin-box^="right-"]{right:0;width:var(--imposia-margin-right)}',
+    '[data-imposia-margin-box^="left-"],[data-imposia-margin-box^="right-"]{height:calc(var(--imposia-content-height)/3);justify-content:center;text-align:center}',
+    '[data-imposia-margin-box$="-top"]{top:var(--imposia-margin-top);align-items:flex-start}',
+    '[data-imposia-margin-box$="-middle"]{top:calc(var(--imposia-margin-top) + var(--imposia-content-height)/3)}',
+    '[data-imposia-margin-box$="-bottom"]{top:calc(var(--imposia-margin-top) + var(--imposia-content-height)*2/3);align-items:flex-end}',
     // Committed pages only: the browser skips rendering work for off-screen
     // pages. Pages carry explicit sizes, so scroll geometry is unchanged, and
     // measurement frames (no geometries) and print keep full rendering.

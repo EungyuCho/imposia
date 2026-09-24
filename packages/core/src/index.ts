@@ -55,6 +55,7 @@ export type {
   PageOptions,
   PageOrientation,
   PageSize,
+  PageSizeKeyword,
   PageSource,
   PageTimings,
   PageWarning,

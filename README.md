@@ -355,9 +355,11 @@ state for one generation:
 
 ### Page media and publishing CSS
 
-Stable page-media support includes A4, Letter, custom absolute dimensions,
-portrait and landscape orientation, host margins, supported authored `@page`
-selectors, and six margin boxes:
+Stable page-media support includes the CSS page-size keywords (A3–A5, B4, B5,
+JIS-B4, JIS-B5, Letter, Legal, Ledger), custom absolute dimensions, portrait
+and landscape orientation, host margins, `@page` selectors including `:nth()`,
+and all sixteen margin boxes with styling and roman or alphabetic page
+counters:
 
 ```css
 @page {
