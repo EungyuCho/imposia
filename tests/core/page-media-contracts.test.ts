@@ -3,8 +3,8 @@ import { describe, expect, it } from "vitest";
 import { prepareDocument } from "../../packages/core/src/document.js";
 import type { PageContext } from "../../packages/core/src/page-document-types.js";
 import {
+  distributeMarginBoxWidths,
   extractPageMediaCss,
-  formatPageCounter,
   marginBoxText,
   normalizeHostPageOptions,
   parseMarginBoxContent,
@@ -76,7 +76,6 @@ describe("CSS Paged Media coverage shared with Paged.js and Vivliostyle", () => 
     ["A5", 148 * MM, 210 * MM],
     ["a3", 297 * MM, 420 * MM],
     ["B5", 176 * MM, 250 * MM],
-    ["JIS-B5", 182 * MM, 257 * MM],
     ["legal", 8.5 * 96, 14 * 96],
     ["ledger", 11 * 96, 17 * 96],
   ])("accepts the %s page-size keyword", (keyword, width, height) => {
@@ -108,7 +107,7 @@ describe("CSS Paged Media coverage shared with Paged.js and Vivliostyle", () => 
   });
 
   it("accepts the new keywords as host page sizes", () => {
-    expect(normalizeHostPageOptions({ size: "JIS-B5" }).size?.widthCssPx).toBeCloseTo(182 * MM, 6);
+    expect(normalizeHostPageOptions({ size: "Legal" }).size?.heightCssPx).toBeCloseTo(14 * 96, 6);
     expect(() => normalizeHostPageOptions({ size: "a5" as never })).toThrow(/A5/);
   });
 
@@ -168,23 +167,16 @@ describe("CSS Paged Media coverage shared with Paged.js and Vivliostyle", () => 
     }
   });
 
-  it("formats page counters with the predefined counter styles", () => {
-    const content = parseMarginBoxContent(
-      'counter(page, lower-roman) "/" counter(pages, upper-roman) " " counter(page, upper-alpha) " " counter(page, decimal-leading-zero)',
+  it("keeps page counters decimal and rejects counter styles", () => {
+    expect(marginBoxText(parseMarginBoxContent('counter(page) "/" counter(pages)'), 4, 12)).toBe(
+      "4/12",
     );
-    expect(marginBoxText(content, 4, 1994)).toBe("iv/MCMXCIV D 04");
-    expect(marginBoxText(parseMarginBoxContent("counter(page, lower-latin)"), 28, 28)).toBe("ab");
-    expect(marginBoxText(parseMarginBoxContent("counter(page, lower-greek)"), 2, 2)).toBe("β");
-    expect(formatPageCounter(4000, "upper-roman")).toBe("4000");
-    expect(parseMarginBoxContent("counter(page, fancy-style)")).toBeUndefined();
+    expect(parseMarginBoxContent("counter(page, lower-roman)")).toBeUndefined();
   });
 
-  it("defaults string() to first and supports first-except", () => {
+  it("defaults string() to first", () => {
     expect(parseMarginBoxContent("string(title)")).toEqual([
       { type: "string", name: "title", position: "first" },
-    ]);
-    expect(parseMarginBoxContent("string(title, first-except)")).toEqual([
-      { type: "string", name: "title", position: "first-except" },
     ]);
   });
 
@@ -234,5 +226,32 @@ describe("CSS Paged Media coverage shared with Paged.js and Vivliostyle", () => 
       1,
     );
     expect(resolved.marginBoxes.size).toBe(0);
+  });
+
+  it("sizes side boxes to their content and keeps a center box centered", () => {
+    expect(distributeMarginBoxWidths(600, 300, undefined, 100)).toEqual([
+      [0, 450],
+      undefined,
+      [450, 150],
+    ]);
+    expect(distributeMarginBoxWidths(600, 50, 200, 100)).toEqual([
+      [0, 150],
+      [150, 300],
+      [450, 150],
+    ]);
+    expect(distributeMarginBoxWidths(600, undefined, 80, undefined)).toEqual([
+      undefined,
+      [0, 600],
+      undefined,
+    ]);
+    expect(distributeMarginBoxWidths(600, undefined, undefined, 40)).toEqual([
+      undefined,
+      undefined,
+      [0, 600],
+    ]);
+    // Content wider than the edge shrinks every box in proportion.
+    const [start, , end] = distributeMarginBoxWidths(600, 900, undefined, 300);
+    expect(start).toEqual([0, 450]);
+    expect(end).toEqual([450, 150]);
   });
 });

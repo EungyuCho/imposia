@@ -68,6 +68,7 @@ import {
   type AuthoredPageRule,
   authoredPageName,
   cssPx,
+  distributeMarginBoxWidths,
   extractPageMediaCss,
   type HostPageOverrides,
   marginBoxText,
@@ -538,6 +539,47 @@ function resolveMarginBoxes(
     box.textContent = text;
     applyMarginBoxStyle(box, resolved.style);
     page.page.append(box);
+  }
+}
+
+const MARGIN_BOX_EDGES = [
+  ["top-left", "top-center", "top-right"],
+  ["bottom-left", "bottom-center", "bottom-right"],
+] as const;
+
+/**
+ * Sizes the top and bottom margin boxes to their content. Every box is first
+ * set to its max-content width, all widths are read in one layout pass, and
+ * the resolved spans are then written back, so a document pays for one
+ * forced layout no matter how many pages carry margin boxes.
+ */
+function layoutMarginBoxWidths(pages: readonly PageParts[]): void {
+  const edges: { page: PageParts; boxes: (HTMLElement | undefined)[] }[] = [];
+  for (const page of pages) {
+    for (const names of MARGIN_BOX_EDGES) {
+      const boxes = names.map(
+        (name) =>
+          page.page.querySelector<HTMLElement>(`:scope > [data-imposia-margin-box="${name}"]`) ??
+          undefined,
+      );
+      if (boxes.every((box) => box === undefined)) continue;
+      for (const box of boxes) box?.style.setProperty("width", "max-content");
+      edges.push({ page, boxes });
+    }
+  }
+  const widths = edges.map(({ boxes }) =>
+    boxes.map((box) => (box === undefined ? undefined : box.getBoundingClientRect().width)),
+  );
+  for (const [index, { page, boxes }] of edges.entries()) {
+    const [start, center, end] = widths[index] ?? [];
+    const spans = distributeMarginBoxWidths(page.geometry.contentWidthCssPx, start, center, end);
+    for (const [slot, box] of boxes.entries()) {
+      const span = spans[slot];
+      if (box === undefined || span === undefined) continue;
+      box.style.setProperty("left", cssPx(page.geometry.margins.leftCssPx + span[0]));
+      box.style.setProperty("right", "auto");
+      box.style.setProperty("width", cssPx(span[1]));
+    }
   }
 }
 
@@ -3887,6 +3929,7 @@ export async function buildGeneration(
         resolveDecorationTokens(page.page, index + 1, pages.length);
         resolveMarginBoxes(page, index + 1, pages.length, accepted.publishing.namedStrings[index]);
       }
+      layoutMarginBoxWidths(pages);
       if (
         overflowWarning === undefined &&
         pages.some((page, index) => fittedBeforeDecoration[index] === true && pageOverflows(page))

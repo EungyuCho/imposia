@@ -53,7 +53,7 @@ export function frameStyle(geometries: readonly PageGeometry[]): string {
     "[data-imposia-page]{box-sizing:border-box;position:relative;display:grid;grid-template-rows:auto minmax(0,1fr) auto;overflow:hidden;background:#fff;color:#111;contain:layout}",
     "[data-imposia-page-header],[data-imposia-page-footer]{min-height:0}",
     "[data-imposia-page-content],[data-imposia-page-flow]{min-height:0}",
-    "[data-imposia-margin-box]{position:absolute;box-sizing:border-box;display:flex;align-items:center;overflow:hidden;pointer-events:none;white-space:nowrap}",
+    "[data-imposia-margin-box]{position:absolute;box-sizing:border-box;display:flex;align-items:center;overflow:hidden;pointer-events:none}",
     '[data-imposia-margin-box^="top-"]{top:0;height:var(--imposia-margin-top)}',
     '[data-imposia-margin-box^="bottom-"]{bottom:0;height:var(--imposia-margin-bottom)}',
     '[data-imposia-margin-box$="-left"]{left:var(--imposia-margin-left);width:calc(var(--imposia-content-width)/3);justify-content:flex-start;text-align:left}',

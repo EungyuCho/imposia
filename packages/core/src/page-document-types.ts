@@ -142,17 +142,7 @@ export interface PublicationExtension {
 }
 
 /** CSS Paged Media `<page-size>` keywords, in portrait orientation. */
-export type PageSizeKeyword =
-  | "A3"
-  | "A4"
-  | "A5"
-  | "B4"
-  | "B5"
-  | "JIS-B4"
-  | "JIS-B5"
-  | "Letter"
-  | "Legal"
-  | "Ledger";
+export type PageSizeKeyword = "A3" | "A4" | "A5" | "B4" | "B5" | "Letter" | "Legal" | "Ledger";
 
 export type PageSize = PageSizeKeyword | { readonly width: string; readonly height: string };
 

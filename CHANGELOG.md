@@ -53,13 +53,14 @@ renamed to `0.6.0.md` when this release ships.
     border, padding, `background-color`), cascaded per property across
     matching `@page` rules. Previously every declaration except `content` was
     dropped with `PAGE_RULE_UNSUPPORTED`;
-  - counter styles in margin boxes, such as `counter(page, lower-roman)`
-    and `counter(pages, upper-alpha)`;
-  - `string(name)` without a position, which defaults to `first`, and the
-    `first-except` position;
+  - `string(name)` without a position, which defaults to `first`;
+  - content-sized top and bottom margin boxes: each box takes its share of
+    the edge from its max-content width, a center box stays centered, and
+    text wraps instead of being clipped at a fixed third of the page. A long
+    footer notice beside a short page number now uses the width it needs;
   - the `:nth(An+B)` page selector, matched against the global page number;
-  - the page-size keywords `A3`, `A5`, `B4`, `B5`, `JIS-B4`, `JIS-B5`,
-    `Legal`, and `Ledger` in authored `size` and in the host `page.size`
+  - the page-size keywords `A3`, `A5`, `B4`, `B5`, `Legal`, and
+    `Ledger` in authored `size` and in the host `page.size`
     option (new exported type `PageSizeKeyword`), plus `size` values that put
     the orientation first, give only an orientation, or give one length for
     a square sheet.
@@ -70,7 +71,7 @@ renamed to `0.6.0.md` when this release ships.
   resolved content is not empty; previously all six boxes were always
   present, empty or not. This is private page DOM, but `finalizePage`
   extensions and host stylesheets that queried it see fewer elements.
-- Core · PageDocument grows from 56.9 KiB to 58.4 KiB gzip for the `@page`
+- Core · PageDocument grows from 56.9 KiB to 58.2 KiB gzip for the `@page`
   additions above, within its 60.0 KiB budget. The page-size constants moved
   to their own module, so the Viewer route no longer carries the `@page`
   parser and grows only by the new frame rules (11.6 KiB to 11.7 KiB).

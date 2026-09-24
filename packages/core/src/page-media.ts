@@ -46,8 +46,6 @@ const PAGE_SIZE_KEYWORDS: ReadonlyMap<
       ["A3", 297 * MM, 420 * MM],
       ["B5", 176 * MM, 250 * MM],
       ["B4", 250 * MM, 353 * MM],
-      ["JIS-B5", 182 * MM, 257 * MM],
-      ["JIS-B4", 257 * MM, 364 * MM],
       ["Letter", LETTER_WIDTH_CSS_PX, LETTER_HEIGHT_CSS_PX],
       ["Legal", 8.5 * 96, 14 * 96],
       ["Ledger", 11 * 96, 17 * 96],
@@ -80,32 +78,11 @@ export const PAGE_MARGIN_BOX_NAMES = Object.freeze([
 
 export type PageMarginBoxName = (typeof PAGE_MARGIN_BOX_NAMES)[number];
 
-export type PageCounterStyle =
-  | "decimal"
-  | "decimal-leading-zero"
-  | "lower-roman"
-  | "upper-roman"
-  | "lower-alpha"
-  | "upper-alpha"
-  | "lower-greek";
-
-const COUNTER_STYLE_ALIASES: ReadonlyMap<string, PageCounterStyle> = new Map([
-  ["decimal", "decimal"],
-  ["decimal-leading-zero", "decimal-leading-zero"],
-  ["lower-roman", "lower-roman"],
-  ["upper-roman", "upper-roman"],
-  ["lower-alpha", "lower-alpha"],
-  ["lower-latin", "lower-alpha"],
-  ["upper-alpha", "upper-alpha"],
-  ["upper-latin", "upper-alpha"],
-  ["lower-greek", "lower-greek"],
-]);
-
-export type NamedStringPosition = "first" | "start" | "last" | "first-except";
+export type NamedStringPosition = "first" | "start" | "last";
 
 export type PageMarginContentPart =
   | Readonly<{ type: "text"; value: string }>
-  | Readonly<{ type: "counter"; name: "page" | "pages"; style: PageCounterStyle }>
+  | Readonly<{ type: "counter"; name: "page" | "pages" }>
   | Readonly<{
       type: "string";
       name: string;
@@ -459,19 +436,17 @@ export function parseMarginBoxContent(value: string): readonly PageMarginContent
       parts.push(Object.freeze({ type: "text", value: text }));
       continue;
     }
-    const counter = /^counter\(\s*(page|pages)\s*(?:,\s*([-a-z]+)\s*)?\)/i.exec(value.slice(index));
+    const counter = /^counter\(\s*(page|pages)\s*\)/i.exec(value.slice(index));
     if (counter !== null) {
       const name = counter[1]?.toLowerCase();
-      const style = COUNTER_STYLE_ALIASES.get(counter[2]?.toLowerCase() ?? "decimal");
-      if ((name !== "page" && name !== "pages") || style === undefined) return undefined;
-      parts.push(Object.freeze({ type: "counter", name, style }));
+      if (name !== "page" && name !== "pages") return undefined;
+      parts.push(Object.freeze({ type: "counter", name }));
       index += counter[0].length;
       continue;
     }
-    const namedString =
-      /^string\(\s*([^\s,)]+)\s*(?:,\s*(first-except|first|start|last)\s*)?\)/i.exec(
-        value.slice(index),
-      );
+    const namedString = /^string\(\s*([^\s,)]+)\s*(?:,\s*(first|start|last)\s*)?\)/i.exec(
+      value.slice(index),
+    );
     if (namedString !== null) {
       const name = namedString[1];
       const position = (namedString[2]?.toLowerCase() ?? "first") as NamedStringPosition;
@@ -983,58 +958,42 @@ export function authoredPageName(element: Element): string | undefined {
   return CSS_IDENTIFIER.test(value) ? value : undefined;
 }
 
-const ROMAN_NUMERALS: readonly (readonly [number, string])[] = [
-  [1000, "m"],
-  [900, "cm"],
-  [500, "d"],
-  [400, "cd"],
-  [100, "c"],
-  [90, "xc"],
-  [50, "l"],
-  [40, "xl"],
-  [10, "x"],
-  [9, "ix"],
-  [5, "v"],
-  [4, "iv"],
-  [1, "i"],
-];
-
-function alphabetic(value: number, alphabet: string): string {
-  const letters = [...alphabet];
-  let remaining = value;
-  let result = "";
-  while (remaining > 0) {
-    remaining -= 1;
-    result = (letters[remaining % letters.length] ?? "") + result;
-    remaining = Math.floor(remaining / letters.length);
-  }
-  return result;
-}
+/** A box's offset from the start of the content edge and its width, in CSS px. */
+export type MarginBoxSpan = readonly [offset: number, width: number];
 
 /**
- * Formats a page counter the way the CSS predefined counter styles do. Values
- * outside a style's range (roman above 3999, alphabetic below 1) fall back to
- * decimal, as the styles' own fallback does.
+ * Splits one page edge between its start, center, and end margin boxes the
+ * way CSS Paged Media resolves `auto` widths: space follows each box's
+ * max-content width, and a center box stays centered by giving both side
+ * boxes the width of the wider one. `undefined` marks an absent box.
  */
-export function formatPageCounter(value: number, style: PageCounterStyle): string {
-  if (style === "decimal-leading-zero") return value < 10 ? `0${value}` : String(value);
-  if (style === "lower-roman" || style === "upper-roman") {
-    if (value < 1 || value > 3999) return String(value);
-    let remaining = value;
-    let result = "";
-    for (const [amount, numeral] of ROMAN_NUMERALS) {
-      while (remaining >= amount) {
-        result += numeral;
-        remaining -= amount;
-      }
-    }
-    return style === "upper-roman" ? result.toUpperCase() : result;
+export function distributeMarginBoxWidths(
+  available: number,
+  start: number | undefined,
+  center: number | undefined,
+  end: number | undefined,
+): readonly [MarginBoxSpan | undefined, MarginBoxSpan | undefined, MarginBoxSpan | undefined] {
+  if (center !== undefined) {
+    const side = Math.max(start ?? 0, end ?? 0);
+    const total = center + 2 * side;
+    const centerWidth = total > 0 ? (available * center) / total : available / 3;
+    const sideWidth = (available - centerWidth) / 2;
+    return [
+      start === undefined ? undefined : [0, sideWidth],
+      [sideWidth, centerWidth],
+      end === undefined ? undefined : [sideWidth + centerWidth, sideWidth],
+    ];
   }
-  if (value < 1) return String(value);
-  if (style === "lower-alpha") return alphabetic(value, "abcdefghijklmnopqrstuvwxyz");
-  if (style === "upper-alpha") return alphabetic(value, "ABCDEFGHIJKLMNOPQRSTUVWXYZ");
-  if (style === "lower-greek") return alphabetic(value, "αβγδεζηθικλμνξοπρστυφχψω");
-  return String(value);
+  if (start !== undefined && end !== undefined) {
+    const total = start + end;
+    const startWidth = total > 0 ? (available * start) / total : available / 2;
+    return [[0, startWidth], undefined, [startWidth, available - startWidth]];
+  }
+  return [
+    start === undefined ? undefined : [0, available],
+    undefined,
+    end === undefined ? undefined : [0, available],
+  ];
 }
 
 export function marginBoxText(
@@ -1048,7 +1007,7 @@ export function marginBoxText(
     .map((part) => {
       if (part.type === "text") return part.value;
       if (part.type === "counter") {
-        return formatPageCounter(part.name === "page" ? pageNumber : totalPages, part.style);
+        return String(part.name === "page" ? pageNumber : totalPages);
       }
       return namedString(part.name, part.position);
     })

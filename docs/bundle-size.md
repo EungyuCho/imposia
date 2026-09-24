@@ -63,17 +63,17 @@ removal would tighten the budgets does not hold.
 
 ### `@page` coverage additions (2026-09-24)
 
-The sixteen margin boxes, margin-box styles, counter styles, `:nth()`, and
-the added page-size keywords were measured against the commit before them on
+The sixteen margin boxes, margin-box styles, content-sized margin-box widths,
+`:nth()`, and the added page-size keywords were measured against the commit before them on
 the same machine. The budgets are unchanged:
 
 | Consumer route | Before (gzip) | After (gzip) | Gzip budget | Headroom |
 | --- | ---: | ---: | ---: | ---: |
-| Core · PageDocument | 56.9 KiB | 58.4 KiB | 60.0 KiB | 1.6 KiB |
-| Core · Publication | 61.1 KiB | 62.6 KiB | 64.0 KiB | 1.4 KiB |
+| Core · PageDocument | 56.9 KiB | 58.2 KiB | 60.0 KiB | 1.8 KiB |
+| Core · Publication | 61.1 KiB | 62.3 KiB | 64.0 KiB | 1.7 KiB |
 | Viewer · PageDocument | 11.6 KiB | 11.7 KiB | 13.0 KiB | 1.3 KiB |
-| Client · PageDocument | 65.5 KiB | 67.0 KiB | 69.0 KiB | 2.0 KiB |
-| React · PageViewer | 67.4 KiB | 68.9 KiB | 71.0 KiB | 2.1 KiB |
+| Client · PageDocument | 65.5 KiB | 66.8 KiB | 69.0 KiB | 2.2 KiB |
+| React · PageViewer | 67.4 KiB | 68.6 KiB | 71.0 KiB | 2.4 KiB |
 
 Headroom on the Core routes is now below the 5% target. The next Core
 addition that does not fit should record a budget decision rather than

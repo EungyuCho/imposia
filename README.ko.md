@@ -346,10 +346,10 @@ canonical iframe 밖에 있으며, 한 번에 하나만 열리고 키보드로 �
 
 ### 페이지 미디어와 퍼블리싱 CSS
 
-안정 지원 범위에는 CSS 용지 크기 키워드(A3–A5, B4, B5, JIS-B4, JIS-B5,
+안정 지원 범위에는 CSS 용지 크기 키워드(A3–A5, B4, B5,
 Letter, Legal, Ledger), 사용자 지정 절대 크기, 세로·가로 방향, 호스트 여백,
 `:nth()`를 포함한 `@page` selector, 열여섯 개 margin box 전체가 포함됩니다.
-margin box에는 글꼴·색·정렬 스타일과 로마 숫자·알파벳 페이지 번호를 쓸 수 있습니다.
+margin box에는 글꼴·색·정렬 스타일을 지정할 수 있습니다.
 
 ```css
 @page {

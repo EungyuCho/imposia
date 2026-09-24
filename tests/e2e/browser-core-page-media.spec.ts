@@ -505,7 +505,7 @@ test("unsupported authored page values recover with deterministic warnings and d
   }
 });
 
-test("sixteen margin boxes, counter styles, :nth(), and margin-box styles render in their slots", async ({
+test("sixteen margin boxes, :nth(), and margin-box styles render in their slots", async ({
   page,
   browserName,
 }) => {
@@ -548,13 +548,13 @@ test("sixteen margin boxes, counter styles, :nth(), and margin-box styles render
               @right-middle { content: "RM"; }
               @right-bottom { content: "RB"; }
               @bottom-center {
-                content: counter(page, lower-roman) " of " counter(pages, upper-roman);
+                content: counter(page) " of " counter(pages);
                 font-size: 9pt;
                 color: rgb(200, 0, 0);
                 text-align: left;
               }
             }
-            @page :nth(2) { @top-center { content: string(chapter, first-except); } }
+            @page :nth(2) { @top-center { content: string(chapter); } }
             h1 { string-set: chapter content(); }
           </style>
           <h1>Opening</h1>
@@ -643,12 +643,100 @@ test("sixteen margin boxes, counter styles, :nth(), and margin-box styles render
       expectCssPx(box(`left-${name}`).height, contentHeight / 3);
       expectCssPx(box(`left-${name}`).width, margin);
     }
-    expect(box("bottom-center").text).toBe("i of III");
+    expect(box("bottom-center").text).toBe("1 of 3");
     expect(box("bottom-center").fontSize).toBe("12px");
     expect(box("bottom-center").color).toBe("rgb(200, 0, 0)");
     expect(box("bottom-center").justifyContent).toBe("flex-start");
     expect(observation.boxes["top-center"]).toBeUndefined();
     expect(observation.topCenters).toEqual([null, "Opening", null]);
+  } finally {
+    expect(errors).toEqual([]);
+    expect(pageErrors).toEqual([]);
+  }
+});
+
+test("top and bottom margin boxes take their width from their content and wrap long text", async ({
+  page,
+  browserName,
+}) => {
+  test.skip(browserName !== "chromium", "Chromium owns structural paged-media assertions.");
+  const { errors, pageErrors } = captureBrowserErrors(page, browserName);
+
+  await page.goto("/examples/book.html");
+  try {
+    const observation = await page.evaluate(async () => {
+      type PageDocument = { iframe: HTMLIFrameElement; warnings: readonly { code: string }[] };
+      type Controller = { ready: Promise<PageDocument>; destroy(): Promise<void> };
+      const modulePath = "/packages/core/dist/index.js";
+      const core = (await import(modulePath)) as {
+        mountPageDocument(container: HTMLElement, source: { html: string }): Controller;
+      };
+      const host = document.createElement("div");
+      document.body.replaceChildren(host);
+      const legal =
+        "Acme Corporation, 1 Example Street, Springfield. Registered in the Example Registry under number 0000000. This statement is confidential.";
+      const controller = core.mountPageDocument(host, {
+        html: `
+          <style>
+            @page {
+              size: A4;
+              margin: 20mm;
+              @bottom-left { content: "${legal}"; font-size: 8pt; }
+              @bottom-right { content: counter(page) " / " counter(pages); font-size: 8pt; }
+              @top-left { content: "L"; }
+              @top-center { content: "Quarterly statement"; }
+              @top-right { content: "Account 1234"; }
+            }
+          </style>
+          <p>Statement body</p>
+        `,
+      });
+      try {
+        const ready = await controller.ready;
+        const frameDocument = ready.iframe.contentDocument;
+        if (frameDocument === null) throw new Error("Missing canonical page document.");
+        const pageElement = frameDocument.querySelector<HTMLElement>("[data-imposia-page]");
+        if (pageElement === null) throw new Error("Missing page.");
+        const origin = pageElement.getBoundingClientRect();
+        const read = (name: string) => {
+          const box = pageElement.querySelector<HTMLElement>(`[data-imposia-margin-box="${name}"]`);
+          if (box === null) throw new Error(`Missing ${name}.`);
+          const rect = box.getBoundingClientRect();
+          return {
+            left: rect.left - origin.left,
+            width: rect.width,
+            clipped:
+              box.scrollWidth > box.clientWidth + 1 || box.scrollHeight > box.clientHeight + 1,
+          };
+        };
+        return {
+          warnings: ready.warnings.map((warning) => warning.code),
+          bottomLeft: read("bottom-left"),
+          bottomRight: read("bottom-right"),
+          topLeft: read("top-left"),
+          topCenter: read("top-center"),
+          topRight: read("top-right"),
+        };
+      } finally {
+        await controller.destroy();
+        host.replaceChildren();
+      }
+    });
+
+    const margin = 20 * CSS_PX_PER_MM;
+    const contentWidth = A4_WIDTH_CSS_PX - 2 * margin;
+    expect(observation.warnings).toEqual([]);
+    expectCssPx(observation.bottomLeft.left, margin);
+    expect(observation.bottomLeft.width).toBeGreaterThan(contentWidth * 0.8);
+    expect(observation.bottomLeft.clipped).toBe(false);
+    expectCssPx(
+      observation.bottomRight.left + observation.bottomRight.width,
+      margin + contentWidth,
+    );
+    expectCssPx(observation.bottomLeft.width + observation.bottomRight.width, contentWidth);
+    // The center box is centered: both side boxes share the wider side's width.
+    expectCssPx(observation.topLeft.width, observation.topRight.width);
+    expectCssPx(observation.topCenter.left + observation.topCenter.width / 2, A4_WIDTH_CSS_PX / 2);
   } finally {
     expect(errors).toEqual([]);
     expect(pageErrors).toEqual([]);
