@@ -156,6 +156,8 @@ test("spread view labels and steps through page pairs", async ({ page, browserNa
     "Viewer presentation is checked in the Chromium reference.",
   );
   const { errors, pageErrors } = captureBrowserErrors(page, browserName);
+  // The viewer shows a spread only in a stage at least 720px wide.
+  await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/examples/demo/");
   try {
     await waitForCommit(page);

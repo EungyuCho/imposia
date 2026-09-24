@@ -434,6 +434,9 @@ function createPageDocumentController(
             if (previous !== undefined) releaseSnapshot(previous);
             committed = true;
             iframe.style.removeProperty("visibility");
+            // Leave no empty style attribute behind: presenters restore the
+            // frame's attributes exactly when they let go of it.
+            if (iframe.getAttribute("style") === "") iframe.removeAttribute("style");
             for (const url of oldBlobUrls) URL.revokeObjectURL(url);
             return document;
           } catch (error: unknown) {
