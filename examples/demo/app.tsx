@@ -738,7 +738,7 @@ function App() {
     const committedRevisionText =
       nextDocument.iframe.contentDocument?.querySelector<HTMLElement>(
         "[data-csr-revision]",
-      )?.innerText;
+      )?.textContent;
     const committedRevision =
       committedRevisionText === undefined ? Number.NaN : Number(committedRevisionText);
     if (Number.isFinite(committedRevision)) {
