@@ -72,6 +72,9 @@ test("preserves CJK paragraphs and legal widow/orphan boundaries deterministical
             const frameDocument = ready.iframe.contentDocument;
             if (frameDocument === null) throw new Error("Missing canonical frame document.");
             const pages = [...frameDocument.querySelectorAll<HTMLElement>("[data-imposia-page]")];
+            // This test measures every fragment, including pages outside the viewport.
+            // Committed pages defer off-screen layout with content-visibility: auto.
+            for (const page of pages) page.style.contentVisibility = "visible";
             const paragraphs = Object.fromEntries(
               Object.keys(sources).map((id) => {
                 const fragments = pages.flatMap((pageElement, pageIndex) =>
