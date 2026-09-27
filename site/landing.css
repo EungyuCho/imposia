@@ -307,6 +307,7 @@
 
 .lp-viewer {
   display: flex;
+  container-type: inline-size;
   min-width: 0;
   flex: 1;
   flex-direction: column;
@@ -411,10 +412,23 @@
   font-weight: 600;
 }
 
-/* 510px fits one A4 spread at the desktop hero width; the static illustration
-   keeps it so the prerendered hero does not jump. */
-.lp-viewer .lp-viewer-stage {
-  height: 510px;
+/* Reserve the same A4 page geometry before the live viewer paginates. The
+   viewer switches from a spread to a single page below a 720px stage width. */
+.lp-viewer .lp-viewer-stage,
+.lp-viewer .lp-viewer-host {
+  aspect-ratio: 1.457;
+}
+
+@container (max-width: 721px) {
+  .lp-viewer .lp-viewer-stage,
+  .lp-viewer .lp-viewer-host {
+    aspect-ratio: 0.736;
+  }
+}
+
+/* A visitor can also select a single page in a wide viewer. */
+.lp-viewer[data-effective-mode="single"] .lp-viewer-host {
+  aspect-ratio: 0.736;
 }
 
 /* The live viewer shows exactly the current page or spread and moves with the

@@ -100,7 +100,11 @@ export default function LiveViewer({ label }: { label: string }) {
   const mode = state?.mode ?? "spread";
 
   return (
-    <section aria-label={label} className="lp-viewer lp-viewer-live">
+    <section
+      aria-label={label}
+      className="lp-viewer lp-viewer-live"
+      data-effective-mode={state?.effectiveMode}
+    >
       <div className="lp-viewer-bar">
         <span aria-hidden="true" className="lp-viewer-dots">
           <span />
