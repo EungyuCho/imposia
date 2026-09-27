@@ -1,0 +1,89 @@
+---
+title: How Imposia turns HTML into pages
+description: Follow a document from HTML and CSS through browser pagination, a safe commit, preview, print, and EPUB export.
+date: 2026-09-27
+category: Engineering
+---
+
+import { GenerationFigure, PipelineFigure } from "../../app/articles/figures";
+
+A page viewer, a print flow, and an ebook export can easily become three different interpretations of the same source. The viewer counts 24 pages, print counts 25, and nobody knows which result to trust. Imposia starts with a different question: **which completed document is authoritative?**
+
+The answer is the latest successfully paginated *page document*. Core owns it in one persistent browser iframe. React and the Viewer present those pages; print uses those committed pages; EPUB uses a semantic snapshot retained with the same generation. Here is how that document comes to exist.
+
+## One frame to read, one frame to prepare
+
+`mountPageDocument()` creates a persistent **canonical iframe**. This is the frame the reader sees. When HTML or CSS changes, Core prepares the replacement in a separate, temporary **staging iframe**. The staging frame is never a second preview or print source.
+
+<GenerationFigure locale="en" />
+
+The current page document stays visible while the new one is measured. If the new work fails, is cancelled, or is superseded by a later update, Core removes its staging frame and leaves the last successful document in place. A successful generation replaces the canonical frame's contents in one synchronous commit.
+
+Both frames are isolated from authored scripts and direct network requests. Images, fonts, and stylesheets enter through the host application's `assetResolver`; Core checks the returned bytes and uses its own temporary Blob URLs. [The asset guide](/en/docs/guides/assets) explains that boundary in detail.
+
+## From source to committed pages
+
+Core accepts a complete HTML, light-DOM, or Publication source from the host application. It does not capture an arbitrary running React tree. The host decides what the document says; Core decides how that source becomes pages.
+
+<PipelineFigure locale="en" />
+
+First, Core applies input limits and sanitizes the source. It resolves admitted assets, copies and sanitizes content in the staging frame, then compiles supported `@page` and publishing CSS against that content. Fonts and images settle before layout measurement. Core retains a separate semantic snapshot for features such as EPUB export.
+
+Next, a measurement probe divides the flow into sized pages. Core records page metadata, page sides, warnings, and the visible text in source order. Some generated content needs more than one layout pass: `target-counter(page)` cannot know a target's page number until pagination has found that page. If putting the number into the document changes the layout, Core measures again until the result stabilizes. A cycle or exhausted pass limit is reported instead of silently accepting a moving result.
+
+Only after the complete candidate passes these steps does Core commit its head, body, and language to the canonical frame in one synchronous step. It then exposes a frozen page document with the new generation number and metadata. The previous generation's resources are released after that commit succeeds.
+
+## Finding page boundaries in a browser
+
+The browser remains the layout engine. Core asks it where boxes and text actually landed, checks whether the current page overflows, and moves or fragments content at an allowed boundary. A simple source can look like this:
+
+```html
+<style>
+  @page { size: A4; margin: 18mm; }
+  h2 { break-before: page; }
+  figure { break-inside: avoid; }
+</style>
+<h1>Field notes</h1>
+<p>Text continues across the available page area…</p>
+<h2>Day two</h2>
+<figure><img src="map.png" alt="Field map"></figure>
+```
+
+An authored break starts another page. A figure marked `break-inside: avoid` stays together when it fits. Longer paragraphs can split at measured line boundaries, with supported widow and orphan rules. Tables and other complex layouts follow documented structural subsets. If a layout falls outside those subsets, Core keeps it atomic or emits a typed warning; it does not claim to paginate every CSS layout exactly. The [compatibility matrix](https://github.com/EungyuCho/imposia/blob/main/docs/compatibility.md) records the boundaries.
+
+## Why the first pagination can be fast
+
+The first render still has to inspect the whole source and create every page. Its speed comes from reducing the **repeated** browser work inside that full pass.
+
+1. **Unplaced content stays out of repeated layout.** Core hides the not-yet-placed source while measuring the current page. The browser need not lay out the entire remainder again after every placement.
+2. **Completed pages are grouped.** In the measurement probe, accepted pages sit in buckets of 64. A forced layout for the next page can reuse clean buckets instead of walking every previous page as a direct child.
+3. **Straightforward runs are placed together.** When break and layout constraints prove a sibling run safe, Core appends it as a chunk, measures once, then finds and verifies the fitting prefix at an overflow boundary. More complex content takes the ordinary per-node path.
+
+These fast paths were present in the measured build. They explain ways Imposia reduces layout work, but the comparison does not isolate the contribution of each optimization or explain another library's implementation. In the repository's [Chromium comparison benchmark](https://github.com/EungyuCho/imposia/blob/main/docs/benchmarks.md) at commit `4177daa`, a 200-page first pagination completed in **131 ms** for Imposia, **849 ms** for Paged.js 0.4.3, and **2,154 ms** for Vivliostyle 2.45.2. That is one fixture, on an Apple M4 with Chromium 149, using the median of seven runs on 2026-09-24. It measures completion of *all* pages, not the first visible frame or every possible document.
+
+## What an edit actually does
+
+When the host calls `controller.update({ html })`, Imposia prepares a **new complete generation**. It does not reuse unchanged page DOM or paginate only the edited page. A later update can abort the candidate already being prepared; Core waits for that work to clean up before starting the next candidate. The old committed pages remain available throughout.
+
+This distinction matters for the common “one-word edit” benchmark. It measures how quickly a new complete document is prepared and committed, not an incremental page-reuse algorithm. The visible benefit is that the reader never sees a half-built replacement.
+
+Pagination also yields cooperatively during input-sized loops, using an 8 ms default budget. That gives the browser opportunities to handle other work during a long build. It does **not** make pagination run in a worker or guarantee a main thread with no long task: browser layout measurement needs the DOM, and the final commit is one synchronous step.
+
+## One generation, several outputs
+
+| Surface | What it uses | What the reader gets |
+| --- | --- | --- |
+| Viewer and React | The persistent canonical iframe | The committed pages, without a second pagination |
+| Reader navigation and search | The committed outline, page identity, and text | Destinations into that same page sequence |
+| Native print | A temporary print host containing the committed pages and styles | The browser print dialog, including its Save as PDF destination |
+| Reflowable EPUB | The retained semantic source for the committed generation | EPUB 3.3 content that reflows in an ebook reader |
+
+EPUB is deliberately **not** a fixed-layout copy of the pages. It leaves out page wrappers and page-only furniture. Print also does not return PDF bytes: `print()` opens the browser's native print flow. These differences preserve each output's real contract without creating another authority for on-screen pagination.
+
+## The boundary is part of the design
+
+Imposia is a browser-only, React-first publishing runtime. Chromium is the reference for structural pagination. Firefox and WebKit support the browser API and lifecycle, but font metrics and page breaks can differ. CSS support is [declared by feature](https://github.com/EungyuCho/imposia/blob/main/docs/compatibility.md), with constrained subsets and warnings where exact fragmentation is not supported.
+
+The system promises a completed, consistent page document **within that declared boundary**. It does not promise arbitrary HTML/CSS parity, a Node renderer, PDF bytes, or fixed page numbers across edits. That boundary is what lets preview, navigation, diagnostics, and print agree on the pages that *were* committed.
+
+If you want to try the pipeline, [build your first page](/en/docs/getting-started) or open the [live Playground](/examples/demo/index.html). For reproducible timings and method details, see the [benchmark protocol](https://github.com/EungyuCho/imposia/blob/main/docs/benchmarks.md).

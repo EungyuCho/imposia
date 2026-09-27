@@ -3,7 +3,6 @@ import type { Locale } from "../../lib/i18n";
 export interface LandingCopy {
   readonly metaTitle: string;
   readonly metaDescription: string;
-  readonly nav: { docs: string; examples: string; api: string; language: string };
   readonly hero: {
     badgeTag: string;
     badge: string;
@@ -65,7 +64,6 @@ export const LANDING_COPY: Record<Locale, LandingCopy> = {
     metaTitle: "Imposia — HTML in. Pages out.",
     metaDescription:
       "Turn HTML and CSS into real pages. Preview them in your app, then print or save as PDF — all in the browser.",
-    nav: { docs: "Docs", examples: "Examples", api: "API", language: "Language" },
     hero: {
       badgeTag: "New",
       badge: "Print-ready pages for React",
@@ -199,7 +197,6 @@ export const LANDING_COPY: Record<Locale, LandingCopy> = {
     metaTitle: "Imposia — HTML을 넣으면 페이지가 나옵니다",
     metaDescription:
       "HTML과 CSS를 실제 페이지로 만듭니다. 앱 안에서 미리 보고, 인쇄하거나 PDF로 저장하세요. 모두 브라우저에서 동작합니다.",
-    nav: { docs: "문서", examples: "예제", api: "API", language: "언어" },
     hero: {
       badgeTag: "New",
       badge: "React를 위한 인쇄용 페이지",
@@ -334,7 +331,6 @@ export const LANDING_COPY: Record<Locale, LandingCopy> = {
     metaTitle: "Imposia — HTML を入れれば、ページが出る",
     metaDescription:
       "HTML と CSS を本物のページにします。アプリ内でプレビューし、印刷または PDF として保存。すべてブラウザーで動きます。",
-    nav: { docs: "ドキュメント", examples: "サンプル", api: "API", language: "言語" },
     hero: {
       badgeTag: "New",
       badge: "React のための印刷可能なページ",
@@ -468,7 +464,6 @@ export const LANDING_COPY: Record<Locale, LandingCopy> = {
     metaTitle: "Imposia — 输入 HTML，输出页面",
     metaDescription:
       "把 HTML 和 CSS 变成真正的页面。在应用内预览，然后打印或保存为 PDF——全部在浏览器中完成。",
-    nav: { docs: "文档", examples: "示例", api: "API", language: "语言" },
     hero: {
       badgeTag: "New",
       badge: "为 React 准备的可打印页面",

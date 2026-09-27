@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Imposia update model</title>
+<style>
+  :root {
+    --bg: #f6f6f4; --ink: #16161a; --muted: #55555c; --line: #d9d9d4;
+    --accent: #4f46e5; --accent-ink: #3730a3; --accent-tint: #eeedfd; --paper: #ffffff;
+    --grid: #ececE8;
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", Roboto, sans-serif;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body { background: var(--bg); color: var(--ink); font-family: var(--font); -webkit-font-smoothing: antialiased; }
+  #artifact { width: 100%; max-width: 780px; margin: 0 auto; padding: 40px 40px 32px; background: var(--bg); }
+  .eyebrow { font: 600 12px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--accent-ink); }
+  h1 { margin-top: 12px; font-size: 28px; line-height: 1.25; font-weight: 700; letter-spacing: -.01em; word-break: keep-all; }
+  .lede { margin-top: 10px; max-width: 56ch; font-size: 15px; line-height: 1.6; color: var(--muted); word-break: keep-all; }
+  .scenario { margin-top: 28px; padding: 22px 22px 20px; background: var(--paper); border: 1px solid var(--line); border-radius: 12px; }
+  .scenario h2 { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 700; word-break: keep-all; }
+  .scenario h2 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); flex: none; }
+  .scenario.discard h2 .dot { background: var(--ink); }
+  .lanes { position: relative; margin-top: 18px; display: grid; gap: 18px; }
+  .success .lanes { margin-top: 38px; }
+  .lane-label { position: relative; z-index: 1; display: table; padding-right: 5px; background: var(--paper); font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 6px; word-break: keep-all; }
+  .lane-label b { color: var(--ink); font-weight: 700; }
+  .track { display: flex; height: 44px; border-radius: 6px; background: repeating-linear-gradient(90deg, transparent 0 7px, var(--grid) 7px 8px); }
+  .seg { display: flex; align-items: center; justify-content: center; padding: 0 8px; font-size: 12px; font-weight: 600; line-height: 1.25; text-align: center; border-radius: 6px; word-break: keep-all; overflow: hidden; }
+  .gap { background: transparent; }
+  .gen1 { background: var(--paper); border: 1.5px solid var(--ink); color: var(--ink); }
+  .gen2 { background: var(--accent); color: #fff; }
+  .work { background: var(--accent-tint); border: 1.5px dashed var(--accent); color: var(--accent-ink); }
+  .gone { color: var(--muted); font-weight: 500; justify-content: flex-start; text-align: left; }
+  .gone span { padding-left: 8px; }
+  .dropped { background: repeating-linear-gradient(135deg, var(--grid) 0 6px, var(--bg) 6px 12px); border: 1.5px dashed #8a8a92; color: var(--ink); }
+  .x { margin-left: 6px; font-weight: 700; }
+  .marker { position: absolute; top: -6px; bottom: -6px; left: 62%; width: 0; border-left: 2px solid var(--accent); }
+  .marker span { position: absolute; top: -24px; left: 0; transform: translateX(-50%); white-space: nowrap; font: 600 11px/1 var(--mono); color: var(--accent-ink); background: var(--paper); padding: 4px 7px; border: 1px solid var(--accent); border-radius: 999px; }
+  .note { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--line); font-size: 13px; line-height: 1.6; color: var(--muted); word-break: keep-all; }
+  .note b { color: var(--ink); }
+  @media (max-width: 520px) {
+    #artifact { padding: 24px 16px 20px; }
+    h1 { font-size: 21px; }
+    .lede { font-size: 14px; }
+    .scenario { padding: 18px 12px 16px; margin-top: 22px; }
+    .track { height: 54px; }
+    .seg { font-size: 11px; padding: 0 5px; }
+    .gone span { padding-left: 5px; }
+    .marker span { font-size: 10px; padding: 3px 6px; }
+  }
+</style>
+</head>
+<body>
+<div id="artifact" role="img" aria-labelledby="artifact-title">
+  <p class="eyebrow" data-t="eyebrow"></p>
+  <h1 id="artifact-title" data-t="title">Readers never see a half-built page</h1>
+  <p class="lede" data-t="lede"></p>
+
+  <section class="scenario success">
+    <h2><span class="dot" aria-hidden="true"></span><span data-t="s1">When the update succeeds</span></h2>
+    <div class="lanes">
+      <div>
+        <p class="lane-label" data-t="reader"></p>
+        <div class="track">
+          <div class="seg gen1" style="flex:0 0 62%" data-t="gen1"></div>
+          <div class="seg gen2" style="flex:1" data-t="gen2"></div>
+        </div>
+      </div>
+      <div>
+        <p class="lane-label" data-t="staging"></p>
+        <div class="track">
+          <div class="seg gap" style="flex:0 0 14%"></div>
+          <div class="seg work" style="flex:0 0 48%" data-t="work"></div>
+          <div class="seg gone" style="flex:1"><span data-t="removed"></span></div>
+        </div>
+      </div>
+      <div class="marker"><span data-t="commit"></span></div>
+    </div>
+  </section>
+
+  <section class="scenario discard">
+    <h2><span class="dot" aria-hidden="true"></span><span data-t="s2">When the update fails</span></h2>
+    <div class="lanes">
+      <div>
+        <p class="lane-label" data-t="reader"></p>
+        <div class="track">
+          <div class="seg gen1" style="flex:1" data-t="gen1stays"></div>
+        </div>
+      </div>
+      <div>
+        <p class="lane-label" data-t="staging"></p>
+        <div class="track">
+          <div class="seg gap" style="flex:0 0 14%"></div>
+          <div class="seg dropped" style="flex:0 0 40%"><span data-t="discarded"></span><span class="x" aria-hidden="true">✕</span></div>
+          <div class="seg gone" style="flex:1"><span data-t="cause"></span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <p class="note" data-t="note"></p>
+</div>
+<script>
+  const copy = {
+    en: {
+      eyebrow: "How Imposia updates",
+      title: "Readers never see a half-built page",
+      lede: "Each update prepares a complete generation off screen. Only a finished generation reaches the reader.",
+      reader: "<b>Reader frame</b> · persistent",
+      staging: "<b>Staging frame</b> · temporary",
+      s1: "When the update succeeds",
+      s2: "When it fails, is cancelled, or a newer update arrives",
+      gen1: "Generation 1 visible",
+      gen2: "Generation 2 visible",
+      gen1stays: "Generation 1 stays visible",
+      work: "Sanitize → paginate → finalize",
+      removed: "Removed",
+      commit: "One synchronous commit",
+      discarded: "Discarded",
+      cause: "Failure, abort, or newer update()",
+      note: "<b>The staging frame is never shown or printed.</b> The previous generation’s resources are released only after a successful commit."
+    },
+    ko: {
+      eyebrow: "Imposia의 갱신 방식",
+      title: "독자는 반쯤 만든 페이지를 보지 않습니다",
+      lede: "갱신할 때마다 화면 밖에서 세대 전체를 새로 준비하고, 완성된 세대만 독자에게 보여 줍니다.",
+      reader: "<b>독자 프레임</b> · 계속 유지",
+      staging: "<b>준비 프레임</b> · 화면 밖 임시 작업 공간",
+      s1: "갱신이 성공하면",
+      s2: "실패·취소되거나 더 새로운 갱신이 오면",
+      gen1: "1세대 표시 중",
+      gen2: "2세대 표시",
+      gen1stays: "1세대가 그대로 보임",
+      work: "정제 → 페이지네이션 → 마무리",
+      removed: "제거",
+      commit: "한 번의 동기 확정",
+      discarded: "폐기",
+      cause: "실패·중단·새 update()",
+      note: "<b>준비 프레임은 화면이나 인쇄에 쓰이지 않습니다.</b> 이전 세대의 자원은 확정이 성공한 뒤에야 해제합니다."
+    }
+  };
+  const lang = new URLSearchParams(location.search).get("lang") === "ko" ? "ko" : "en";
+  document.documentElement.lang = lang;
+  document.title = copy[lang].title;
+  for (const el of document.querySelectorAll("[data-t]")) el.innerHTML = copy[lang][el.dataset.t];
+</script>
+</body>
+</html>
