@@ -107,7 +107,9 @@ Imposia 将一份页面文档放在整个工作流的中心。
 | :--- | ---: | ---: | ---: |
 | 修改一个词后重新渲染（50 页） | **30 ms** | 217 ms | 212 ms |
 | 为 200 页分页 | **131 ms** | 849 ms | 2,154 ms |
-| 完整浏览器包，gzip | **59.4 KiB** | 94.2 KiB | 215.2 KiB |
+| 完整浏览器包，gzip | **68.4 KiB** | 94.2 KiB | 215.2 KiB |
+
+体积于 2026 年 9 月 27 日基于 0.6.0 测得，不包含 React 和 React DOM。Core 完整浏览器文件为 gzip 68.4 KiB。为反映分页正确性修复带来的增长，预算上调了 1–1.5 KiB；这不是体积优化。[测量方法与预算调整依据](https://github.com/EungyuCho/imposia/blob/main/docs/bundle-size.md)。 运行时间仍为 2026 年 9 月 24 日在 Apple M4、Chromium 149 上运行 7 次的中位数。先运行 `pnpm build`，再用 `pnpm bundle:size` 测量体积或用 `pnpm benchmark` 测量时间。
 
 - 三者得到的页数相同。Paged.js 和 Vivliostyle 没有增量更新，编辑时会从头重新渲染；Imposia 通过 `controller.update()` 重新提交。
 - Paged.js 和 Vivliostyle 只通过其文档化的入口调用，从 jsDelivr 加载而未作为依赖加入。方法、版本、哈希与注意事项：[`docs/benchmarks.md`](./docs/benchmarks.md)

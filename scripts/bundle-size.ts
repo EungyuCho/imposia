@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { brotliCompressSync, gzipSync } from "node:zlib";
 import { type BuildOptions, build, type Plugin } from "esbuild";
@@ -34,14 +36,17 @@ const SCENARIOS = Object.freeze([
     // to restore about 5% headroom; see docs/bundle-size.md. The
     // ASA-424/425/426 escape hatches share their code with the runtime
     // fallbacks, so removing them reclaims almost nothing.
-    gzipBudgetBytes: 62 * KIBIBYTE,
+    // 2026-09-27: 63.2 KiB after pagination combination correctness fixes.
+    // Add 1.5 KiB; measured before/after is in docs/bundle-size.md.
+    gzipBudgetBytes: 63.5 * KIBIBYTE,
   }),
   Object.freeze({
     name: "Core · Publication",
     source: 'export { mountPublication } from "@imposia/core";',
     // 63.7 KiB measured 2026-09-24 (60.9 KiB on 2026-09-23); publication adds
     // outline/search over PageDocument. Raised from 64 KiB with the route above.
-    gzipBudgetBytes: 67 * KIBIBYTE,
+    // 2026-09-27: 67.5 KiB; shared Core fixes add about 1 KiB.
+    gzipBudgetBytes: 68 * KIBIBYTE,
   }),
   Object.freeze({
     name: "Viewer · PageDocument",
@@ -55,14 +60,16 @@ const SCENARIOS = Object.freeze([
     source: 'export { mountPageDocument, mountPageViewer } from "@imposia/client";',
     // 68.0 KiB measured 2026-09-24 (65.3 KiB on 2026-09-23; Core pagination +
     // page viewer). Raised from 69 KiB with the Core routes.
-    gzipBudgetBytes: 71 * KIBIBYTE,
+    // 2026-09-27: 71.8 KiB; shared Core fixes add about 1 KiB.
+    gzipBudgetBytes: 72 * KIBIBYTE,
   }),
   Object.freeze({
     name: "React · PageViewer",
     source: 'export { ImposiaPageViewer } from "@imposia/react";',
     // 69.8 KiB measured 2026-09-24 (67.2 KiB on 2026-09-23); React/React DOM
     // stay external. Raised from 71 KiB with the Core routes.
-    gzipBudgetBytes: 73 * KIBIBYTE,
+    // 2026-09-27: 73.6 KiB; shared Core fixes add about 1 KiB.
+    gzipBudgetBytes: 74 * KIBIBYTE,
   }),
 ]) satisfies readonly BundleScenario[];
 
@@ -166,3 +173,25 @@ const measurements = await Promise.all(SCENARIOS.map(measureScenario));
 console.log(renderBundleSizeReport(measurements));
 console.log(`\n${renderEpubImpactReport(await measureEpubImpact())}`);
 assertBundleBudgets(measurements);
+
+if (process.argv.includes("--write-report")) {
+  const browser = readFileSync("packages/core/dist/index.js");
+  writeFileSync(
+    "benchmarks/bundle-size.json",
+    `${JSON.stringify(
+      {
+        capturedAt: new Date().toISOString(),
+        version: JSON.parse(readFileSync("packages/core/package.json", "utf8")).version,
+        method: "esbuild + oxc-minify; gzip level 9; React peers external",
+        routes: measurements,
+        browser: {
+          path: "packages/core/dist/index.js",
+          sha256: createHash("sha256").update(browser).digest("hex"),
+          gzipBytes: gzipSync(browser, { level: 9 }).byteLength,
+        },
+      },
+      null,
+      2,
+    )}\n`,
+  );
+}

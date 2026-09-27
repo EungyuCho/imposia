@@ -20,6 +20,7 @@ import {
 import { type ComponentType, type ReactNode, useEffect, useState } from "react";
 import { Link } from "react-router";
 import baseline from "../../../benchmarks/baseline.json";
+import bundleSnapshot from "../../../benchmarks/bundle-size.json";
 import comparison from "../../../benchmarks/comparison.json";
 import { LOCALE_NAMES, LOCALES, type Locale } from "../../lib/i18n";
 import { LANDING_COPY } from "./copy";
@@ -100,6 +101,7 @@ function comparisonMedian(scenarioId: string, library: LibraryId): number | unde
 
 /** Full browser bundle, gzip, for every library, so the three bars compare like with like. */
 function fullBundleKiB(library: LibraryId): number | undefined {
+  if (library === "imposia") return bundleSnapshot.browser.gzipBytes / 1024;
   return comparison.libraries.find((item) => item.id === library)?.sources[0]?.gzipKiB;
 }
 
@@ -674,6 +676,8 @@ export function Landing({ lang }: { lang: Locale }) {
               {`Imposia ${libraryVersion("imposia")} · Paged.js ${libraryVersion("pagedjs")} · Vivliostyle ${libraryVersion("vivliostyle")} · ${copy.bench.footnote}`}
               <br />
               {copy.bench.charts.caveat}
+              <br />
+              {`${copy.bench.bundleSnapshot}: Imposia ${bundleSnapshot.version} · ${bundleSnapshot.capturedAt.slice(0, 10)} · pnpm bundle:size`}
             </span>
           </p>
         </section>

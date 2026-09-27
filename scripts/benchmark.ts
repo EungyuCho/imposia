@@ -57,6 +57,11 @@ const SCENARIOS: readonly Scenario[] = Object.freeze([
   },
   { id: "mount-1000", description: "Mount a 1,000-page document", unit: "ms" },
   {
+    id: "mount-1000-positioned",
+    description: "Mount a 1,000-page document with relative superscripts",
+    unit: "ms",
+  },
+  {
     id: "mount-1000-blocking",
     description: "Longest main-thread task while mounting the 1,000-page document (0 below 50 ms)",
     unit: "ms",
@@ -214,7 +219,11 @@ function runScenario(page: Page, id: string, coreUrl: string): Promise<Sample> {
                   : id === "document-mount" || id === "document-update" || id === "first-frame"
                     ? 360
                     : 182;
-        const html = article("alpha", sections);
+        const html =
+          id === "mount-1000-positioned"
+            ? "<style>sup {position:relative;top:-0.3em}</style>" +
+              article("alpha", sections).replaceAll("</p>", "<sup>1</sup></p>")
+            : article("alpha", sections);
         const gc = (globalThis as { gc?: () => void }).gc;
         gc?.();
         const heapBefore =

@@ -50,13 +50,17 @@ export type PublishingCssRule =
       selector: string;
       name: string;
       source: StringSource;
+      important: boolean;
+      specificity: SelectorSpecificity;
       order: number;
     }>
   | Readonly<{
       type: "placement";
       selector: string;
-      float: "footnote" | "top" | "bottom" | undefined;
+      float: "footnote" | "top" | "bottom" | "none" | undefined;
       pageReference: boolean | undefined;
+      important: boolean;
+      specificity: SelectorSpecificity;
       order: number;
     }>;
 
@@ -442,6 +446,8 @@ function decodeCssString(value: string): string | undefined {
 function parseStringSet(
   value: string,
 ): Readonly<{ name: string; source: StringSource }> | undefined {
+  if (value.trim().toLowerCase() === "none")
+    return { name: "", source: { type: "literal", value: "" } };
   const match = /^(\S+)\s+([\s\S]+)$/u.exec(value.trim());
   const name = match?.[1];
   const sourceValue = match?.[2]?.trim();
@@ -538,7 +544,36 @@ export function extractPublishingCss(
   const root = parseCss(css);
   const rules: PublishingCssRule[] = [];
   let nextOrder = startOrder;
+  const pseudoProperties = new Set<string>();
   root.walkRules((rule) => {
+    // Project pseudo styles onto their originating note. The generated call
+    // lives at its anchor, which need not match the note's selector at all.
+    const ordinary: string[] = [];
+    for (const selector of splitSelectors(rule.selector)) {
+      const match = /^(.*)::footnote-(call|marker)\s*$/i.exec(selector);
+      if (match === null) {
+        ordinary.push(selector);
+        continue;
+      }
+      const projected = rule.cloneBefore({ selector: match[1]?.trim() || "*" });
+      projected.walkDecls((declaration) => {
+        if (/^(content|counter-)/i.test(declaration.prop)) {
+          unsupportedPublishingDeclaration(
+            warnings,
+            declaration,
+            declarationOrder(declaration, startOrder, nextOrder++),
+          );
+          return;
+        }
+        declaration.prop = `--imposia-footnote-${match[2]?.toLowerCase()}-${declaration.prop.toLowerCase()}`;
+        pseudoProperties.add(declaration.prop);
+      });
+    }
+    if (ordinary.length === 0) {
+      rule.remove();
+      return;
+    }
+    rule.selector = ordinary.join(", ");
     let declarations = rule.nodes.filter((node): node is Declaration => node.type === "decl");
     if (rule.parent?.type !== "root") {
       for (const declaration of declarations) {
@@ -634,67 +669,77 @@ export function extractPublishingCss(
       }
     }
 
-    let authoredFloat: "footnote" | "top" | "bottom" | undefined;
-    let pageReference: boolean | undefined;
     for (const declaration of [...declarations]) {
       const property = declaration.prop.toLowerCase();
-      if (property === "string-set") {
-        const parsed = parseStringSet(declaration.value);
-        if (parsed !== undefined) {
+      const order = declarationOrder(declaration, startOrder, nextOrder++);
+      if (property === "footnote-policy") {
+        declaration.prop = "--imposia-footnote-policy";
+        continue;
+      }
+      const parsedFloat = property === "float" ? placementFloat(declaration.value) : undefined;
+      const publishing =
+        property === "string-set" || property === "float-reference" || parsedFloat !== undefined;
+      if (publishing && rule.parent?.type !== "root") {
+        unsupportedPublishingDeclaration(warnings, declaration, order);
+        continue;
+      }
+      for (const selector of splitSelectors(rule.selector)) {
+        const cascade = {
+          selector,
+          order,
+          important: declaration.important === true,
+          specificity: selectorSpecificity(selector),
+        };
+        if (property === "string-set") {
+          const parsed = parseStringSet(declaration.value);
+          if (parsed !== undefined)
+            rules.push(Object.freeze({ type: "string", ...cascade, ...parsed }));
+        } else if (property === "float" && rule.parent?.type === "root") {
+          const value =
+            parsedFloat ??
+            (/^(none|left|right|inline-start|inline-end|initial|unset)$/i.test(
+              declaration.value.trim(),
+            )
+              ? "none"
+              : undefined);
+          if (value !== undefined)
+            rules.push(
+              Object.freeze({
+                type: "placement",
+                ...cascade,
+                float: value,
+                pageReference: undefined,
+              }),
+            );
+        } else if (
+          property === "float-reference" &&
+          declaration.value.trim().toLowerCase() === "page"
+        ) {
           rules.push(
-            Object.freeze({
-              type: "string",
-              selector: rule.selector,
-              name: parsed.name,
-              source: parsed.source,
-              order: declarationOrder(declaration, startOrder, nextOrder),
-            }),
-          );
-          nextOrder += 1;
-          declaration.remove();
-        } else {
-          unsupportedPublishingDeclaration(
-            warnings,
-            declaration,
-            declarationOrder(declaration, startOrder, nextOrder),
+            Object.freeze({ type: "placement", ...cascade, float: undefined, pageReference: true }),
           );
         }
-        continue;
       }
-      if (property === "float") {
-        const parsed = placementFloat(declaration.value);
-        if (parsed !== undefined) {
-          authoredFloat = parsed;
-          declaration.remove();
-        }
-        continue;
+      if (property === "string-set") {
+        if (parseStringSet(declaration.value) === undefined)
+          unsupportedPublishingDeclaration(warnings, declaration, order);
+        else declaration.remove();
+      } else if (parsedFloat !== undefined) declaration.remove();
+      else if (property === "float-reference") {
+        if (declaration.value.trim().toLowerCase() === "page") declaration.remove();
+        else unsupportedPublishingDeclaration(warnings, declaration, order);
       }
-      if (property === "float-reference" && declaration.value.trim().toLowerCase() === "page") {
-        pageReference = true;
-        declaration.remove();
-      } else if (property === "float-reference") {
-        unsupportedPublishingDeclaration(
-          warnings,
-          declaration,
-          declarationOrder(declaration, startOrder, nextOrder),
-        );
-      }
-    }
-    if (authoredFloat !== undefined || pageReference !== undefined) {
-      rules.push(
-        Object.freeze({
-          type: "placement",
-          selector: rule.selector,
-          float: authoredFloat,
-          pageReference,
-          order: nextOrder,
-        }),
-      );
-      nextOrder += 1;
     }
     if (rule.nodes.length === 0) rule.remove();
   });
-  return Object.freeze({ css: root.toString(), rules: Object.freeze(rules), nextOrder });
+  const registrations = [...pseudoProperties]
+    .map((name) => `@property ${name} {syntax:"*";inherits:false;}`)
+    .join("\n");
+  return Object.freeze({
+    css: `${registrations}\n${root.toString()}`,
+    rules: Object.freeze(rules),
+    nextOrder,
+  });
 }
 
 function matchingElements(root: ParentNode, selector: string): readonly Element[] {
@@ -793,12 +838,31 @@ export function preparePublishingContent(
   }
   const contentWinners = new Map<string, ContentCandidate>();
   const blockedContentSlots = new Set<string>();
-  const stringByElementAndName = new Map<string, StringBinding>();
+  const stringByElement = new Map<string, StringBinding>();
   type PlacementState = {
-    float: "footnote" | "top" | "bottom" | undefined;
+    float: "footnote" | "top" | "bottom" | "none" | undefined;
     pageReference: boolean | undefined;
   };
   const placements = new Map<Element, PlacementState>();
+  type Cascade = Pick<ContentPublishingCssRule, "important" | "specificity" | "order">;
+  const placementWinners = new Map<Element, Partial<Record<keyof PlacementState, Cascade>>>();
+  const stringWinners = new Map<string, Cascade>();
+  const applyPlacement = (
+    element: Element,
+    property: keyof PlacementState,
+    value: PlacementState[keyof PlacementState],
+    cascade: Cascade,
+  ) => {
+    const winners = placementWinners.get(element) ?? {};
+    const current = winners[property];
+    if (current !== undefined && !contentRuleWins(cascade, current)) return;
+    winners[property] = cascade;
+    placementWinners.set(element, winners);
+    placements.set(element, {
+      ...(placements.get(element) ?? { float: undefined, pageReference: undefined }),
+      [property]: value,
+    });
+  };
   for (const rule of [...rules].sort((left, right) => left.order - right.order)) {
     const matches = matchingElements(root, rule.selector);
     if (rule.type === "target" || rule.type === "content") {
@@ -833,16 +897,20 @@ export function preparePublishingContent(
           name: rule.name,
           value: sourceValue(element, rule.source),
         });
-        stringByElementAndName.set(`${order}\u0000${rule.name}`, binding);
+        const slot = String(order);
+        const current = stringWinners.get(slot);
+        if (current === undefined || contentRuleWins(rule, current)) {
+          stringWinners.set(slot, rule);
+          if (rule.name === "") stringByElement.delete(slot);
+          else stringByElement.set(slot, binding);
+        }
       }
       continue;
     }
     for (const element of matches) {
-      const current = placements.get(element) ?? { float: undefined, pageReference: undefined };
-      placements.set(element, {
-        float: rule.float ?? current.float,
-        pageReference: rule.pageReference ?? current.pageReference,
-      });
+      if (rule.float !== undefined) applyPlacement(element, "float", rule.float, rule);
+      if (rule.pageReference !== undefined)
+        applyPlacement(element, "pageReference", rule.pageReference, rule);
     }
   }
 
@@ -866,22 +934,49 @@ export function preparePublishingContent(
   for (const element of elements) {
     const order = sourceOrder.get(element);
     if (order === undefined) continue;
-    let placement = placements.get(element) ?? { float: undefined, pageReference: undefined };
+    let inlineOrder = Number.MAX_SAFE_INTEGER / 2;
     for (const declaration of inlineDeclarations(element)) {
+      const cascade: Cascade = {
+        important: declaration.important === true,
+        specificity: [Number.MAX_SAFE_INTEGER, 0, 0],
+        order: inlineOrder++,
+      };
       const property = declaration.prop.toLowerCase();
       if (property === "float") {
         const parsed = placementFloat(declaration.value);
-        if (parsed !== undefined) placement = { ...placement, float: parsed };
+        const value =
+          parsed ??
+          (/^(none|left|right|inline-start|inline-end|initial|unset)$/i.test(
+            declaration.value.trim(),
+          )
+            ? "none"
+            : undefined);
+        if (value !== undefined) applyPlacement(element, "float", value, cascade);
       } else if (property === "float-reference") {
-        placement = {
-          ...placement,
-          pageReference: declaration.value.trim().toLowerCase() === "page",
-        };
+        applyPlacement(
+          element,
+          "pageReference",
+          declaration.value.trim().toLowerCase() === "page",
+          cascade,
+        );
+      } else if (property === "footnote-policy") {
+        htmlElement(element)?.style.setProperty(
+          "--imposia-footnote-policy",
+          declaration.value,
+          declaration.important ? "important" : "",
+        );
       } else if (property === "string-set") {
         const parsed = parseStringSet(declaration.value);
-        if (parsed !== undefined) {
-          stringByElementAndName.set(
-            `${order}\u0000${parsed.name}`,
+        const slot = parsed === undefined ? "" : String(order);
+        const current = stringWinners.get(slot);
+        if (parsed !== undefined && (current === undefined || contentRuleWins(cascade, current))) {
+          stringWinners.set(slot, cascade);
+          if (parsed.name === "") {
+            stringByElement.delete(slot);
+            continue;
+          }
+          stringByElement.set(
+            String(order),
             Object.freeze({
               sourceKey: String(order),
               sourceOrder: order,
@@ -892,7 +987,6 @@ export function preparePublishingContent(
         }
       }
     }
-    placements.set(element, placement);
   }
 
   const footnotes: FootnoteBinding[] = [];
@@ -900,6 +994,8 @@ export function preparePublishingContent(
   for (const [key, element] of byKey) {
     const order = Number(key);
     const placement = placements.get(element);
+    if (placement?.float !== undefined && placement.float !== "none")
+      htmlElement(element)?.style.setProperty("float", "none", "important");
     if (placement?.float === "footnote") {
       const value = element.getAttribute("data-footnote") ?? key;
       footnotes.push(
@@ -924,12 +1020,11 @@ export function preparePublishingContent(
     }
   }
 
-  const recordCount =
-    targets.length + stringByElementAndName.size + footnotes.length + pageFloats.length;
+  const recordCount = targets.length + stringByElement.size + footnotes.length + pageFloats.length;
   if (recordCount > limits.maxGeneratedRecords) throw generatedLimitError("record");
   return Object.freeze({
     targets: Object.freeze(targets),
-    strings: Object.freeze([...stringByElementAndName.values()]),
+    strings: Object.freeze([...stringByElement.values()]),
     footnotes: Object.freeze(footnotes),
     pageFloats: Object.freeze(pageFloats),
     duplicateIds,
@@ -974,16 +1069,92 @@ export function preparePublishingPass(
     else host.append(marker);
     generated();
   }
-  if (experimental.footnotes !== true) return;
+  if (experimental.footnotes !== true || prepared.footnotes.length === 0) return;
   const anchors = firstElementsByAttribute(root, "data-footnote-anchor");
+  const view = root.ownerDocument.defaultView;
+  const numbers = new Map<string, number>();
+  const notesBySource = new Map(prepared.footnotes.map((binding) => [binding.sourceKey, binding]));
+  const reset = (element: Element): number | undefined => {
+    const value = view?.getComputedStyle(element).counterReset ?? "";
+    const match = /(?:^|\s)footnote(?:\s+(-?\d+))?(?=\s|$)/.exec(value);
+    return match === null ? undefined : Number(match[1] ?? 0);
+  };
+  const count = (parent: Element, inherited: { value: number }): void => {
+    let scope = inherited;
+    for (const child of parent.children) {
+      const initial = reset(child);
+      if (initial !== undefined) scope = { value: initial };
+      const binding = notesBySource.get(child.getAttribute(SOURCE_KEY) ?? "");
+      if (binding !== undefined) numbers.set(binding.key, ++scope.value);
+      count(child, scope);
+    }
+  };
+  count(root, { value: reset(root.ownerDocument.body) ?? 0 });
   for (const binding of prepared.footnotes) {
     const anchor = anchors.get(binding.value);
     if (anchor === undefined) continue;
     const call = root.ownerDocument.createElement("sup");
-    call.setAttribute("data-imposia-footnote-call", String(binding.number));
+    const number = numbers.get(binding.key) ?? binding.number;
+    call.setAttribute("data-imposia-footnote-call", String(number));
     call.setAttribute(FOOTNOTE_CALL_KEY, binding.key);
-    call.textContent = String(binding.number);
+    call.textContent = String(number);
+    const note = hosts.get(binding.sourceKey);
+    if (note !== undefined && view !== null) {
+      const style = view?.getComputedStyle(note);
+      const marker = root.ownerDocument.createElement("span");
+      marker.setAttribute("data-imposia-footnote-marker", String(number));
+      marker.textContent = String(number);
+      for (const [kind, element] of [
+        ["call", call],
+        ["marker", marker],
+      ] as const) {
+        const prefix = `--imposia-footnote-${kind}-`;
+        for (const property of style ?? []) {
+          if (property.startsWith(prefix))
+            element.style.setProperty(
+              property.slice(prefix.length),
+              style?.getPropertyValue(property) ?? "",
+            );
+        }
+      }
+      note.prepend(marker);
+      generated();
+    }
     anchor.append(call);
+    const policy =
+      note === undefined
+        ? ""
+        : view?.getComputedStyle(note).getPropertyValue("--imposia-footnote-policy").trim();
+    if (policy === "line" || policy === "block") {
+      let block: Element = anchor;
+      while (
+        block.parentElement !== null &&
+        block.parentElement !== root &&
+        view?.getComputedStyle(block).display.startsWith("inline")
+      )
+        block = block.parentElement;
+      // Keeping the call block and intervening siblings with a bounded note
+      // lets the normal fragmenter choose a fresh sheet when necessary.
+      if (
+        note !== undefined &&
+        note.parentElement === block.parentElement &&
+        (block.compareDocumentPosition(note) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0
+      ) {
+        for (
+          let sibling: Element | null = block;
+          sibling !== null && sibling !== note;
+          sibling = sibling.nextElementSibling
+        ) {
+          const html = htmlElement(sibling);
+          if (
+            html !== undefined &&
+            /^(auto|avoid|avoid-page)$/.test(view?.getComputedStyle(html).breakAfter ?? "auto")
+          )
+            html.style.breakAfter = "avoid-page";
+        }
+        if (policy === "block") htmlElement(block)?.style.setProperty("break-inside", "avoid");
+      }
+    }
     generated();
   }
 }
@@ -1145,6 +1316,43 @@ function htmlElement(element: Element | undefined): HTMLElement | undefined {
     : undefined;
 }
 
+function publishingAreaCoversFlow(page: PublishingPage, area: HTMLElement): boolean {
+  const bounds = area.getBoundingClientRect();
+  const intersects = (rect: DOMRect) =>
+    rect.width > 0 &&
+    rect.height > 0 &&
+    rect.right > bounds.left + 1 &&
+    rect.left < bounds.right - 1 &&
+    rect.bottom > bounds.top + 1 &&
+    rect.top < bounds.bottom - 1;
+  const walker = page.flow.ownerDocument.createTreeWalker(page.flow, NodeFilter.SHOW_TEXT);
+  const range = page.flow.ownerDocument.createRange();
+  for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
+    if (!(node.textContent ?? "").trim() || node.parentElement?.closest("style,script,template"))
+      continue;
+    range.selectNodeContents(node);
+    if ([...range.getClientRects()].some(intersects)) return true;
+  }
+  return [
+    ...page.flow.querySelectorAll("img,svg,canvas,video,hr,input,button,select,textarea,td,th"),
+  ].some((element) => {
+    if (element.localName === "td" || element.localName === "th") {
+      const style = element.ownerDocument.defaultView?.getComputedStyle(element);
+      if (
+        !style ||
+        ![
+          style.borderTopWidth,
+          style.borderBottomWidth,
+          style.borderLeftWidth,
+          style.borderRightWidth,
+        ].some((value) => Number.parseFloat(value) > 0)
+      )
+        return false;
+    }
+    return intersects(element.getBoundingClientRect());
+  });
+}
+
 function placeFootnotes(
   pages: readonly PublishingPage[],
   prepared: PreparedPublishingContent,
@@ -1163,7 +1371,32 @@ function placeFootnotes(
     const height = note === undefined ? Number.POSITIVE_INFINITY : placementHeight(note);
     const maximum =
       page?.geometry.contentHeightCssPx === undefined ? 0 : page.geometry.contentHeightCssPx / 3;
+    const policy = note?.ownerDocument.defaultView
+      ?.getComputedStyle(note)
+      .getPropertyValue("--imposia-footnote-policy")
+      .trim();
+    const policyMismatch = (policy === "line" || policy === "block") && notePage !== callPage;
+    let overlapsBody = false;
+    if (
+      note !== undefined &&
+      page !== undefined &&
+      experimental.footnotes === true &&
+      calls.length === 1 &&
+      !policyMismatch &&
+      height > 0 &&
+      height + (usedHeight.get(notePage ?? -1) ?? 0) <= maximum
+    ) {
+      const parent = note.parentNode;
+      const next = note.nextSibling;
+      const area = footnoteArea(page);
+      area.append(note);
+      overlapsBody = publishingAreaCoversFlow(page, area);
+      if (parent !== null) parent.insertBefore(note, next);
+      if (area.childElementCount === 0) area.remove();
+    }
     const deferred =
+      overlapsBody ||
+      policyMismatch ||
       experimental.footnotes !== true ||
       note === undefined ||
       calls.length !== 1 ||
@@ -1175,22 +1408,25 @@ function placeFootnotes(
       height + (usedHeight.get(notePage) ?? 0) > maximum;
     if (deferred || page === undefined) {
       for (const call of calls) call.remove();
+      for (const element of elements)
+        element.querySelector("[data-imposia-footnote-marker]")?.remove();
       warnings.push({
         order: binding.sourceOrder,
         warning: coreWarning(
           "FOOTNOTE_DEFERRED",
           "The authored footnote remained in normal flow.",
           `source-${binding.sourceOrder}`,
-          "Footnotes require the opt-in and must fit within one third of the page content height within two pages of the anchor.",
+          overlapsBody
+            ? "The note would cover existing page content; retained the note in source flow."
+            : policyMismatch
+              ? "The authored note policy could not keep the call and note on the same page; retained the note in source flow."
+              : "Footnotes require the opt-in and must fit within one third of the page content height within two pages of the anchor.",
         ),
       });
       continue;
     }
-    const marker = note.ownerDocument.createElement("span");
-    marker.setAttribute("data-imposia-footnote-marker", String(binding.number));
-    marker.textContent = String(binding.number);
-    note.prepend(marker);
-    note.setAttribute("data-imposia-footnote", String(binding.number));
+    const number = calls[0]?.getAttribute("data-imposia-footnote-call") ?? String(binding.number);
+    note.setAttribute("data-imposia-footnote", number);
     footnoteArea(page).append(note);
     usedHeight.set(notePage, (usedHeight.get(notePage) ?? 0) + height);
   }
@@ -1220,7 +1456,7 @@ function placePageFloats(
       page === undefined ||
       height <= 0 ||
       height + (usedHeight.get(usedKey) ?? 0) > maximum;
-    if (fallback) {
+    const warnFallback = () => {
       warnings.push({
         order: binding.sourceOrder,
         warning: coreWarning(
@@ -1230,17 +1466,45 @@ function placePageFloats(
           "Page floats require the opt-in, float-reference: page, and a bounded top or bottom placement.",
         ),
       });
+    };
+    if (fallback) {
+      warnFallback();
       continue;
+    }
+    const originalParent = element.parentNode;
+    const originalNext = element.nextSibling;
+    const originalStyle = element.getAttribute("style");
+    const originalPadding = page.flow.style.paddingTop;
+    const originalPaddingPriority = page.flow.style.getPropertyPriority("padding-top");
+    if (binding.kind === "top") {
+      const padding =
+        Number.parseFloat(
+          page.flow.ownerDocument.defaultView?.getComputedStyle(page.flow).paddingTop ?? "0",
+        ) || 0;
+      page.flow.style.setProperty("padding-top", `${padding + height}px`, "important");
     }
     element.setAttribute("data-imposia-page-float", binding.kind);
     element.style.position = "absolute";
     element.style.left = "var(--imposia-margin-left)";
     element.style.right = "var(--imposia-margin-right)";
-    if (binding.kind === "top") element.style.top = "var(--imposia-margin-top)";
-    else element.style.bottom = "var(--imposia-margin-bottom)";
+    const noteArea = page.page.querySelector<HTMLElement>("[data-imposia-footnote-area]");
+    const noteHeight =
+      binding.kind === "bottom" && noteArea !== null ? placementHeight(noteArea) : 0;
+    const offset = (usedHeight.get(usedKey) ?? 0) + noteHeight;
+    if (binding.kind === "top") element.style.top = `calc(var(--imposia-margin-top) + ${offset}px)`;
+    else element.style.bottom = `calc(var(--imposia-margin-bottom) + ${offset}px)`;
     element.style.maxHeight = `${maximum}px`;
     element.style.overflow = "hidden";
     page.page.append(element);
+    if (publishingAreaCoversFlow(page, element)) {
+      if (originalParent !== null) originalParent.insertBefore(element, originalNext);
+      if (originalStyle === null) element.removeAttribute("style");
+      else element.setAttribute("style", originalStyle);
+      element.removeAttribute("data-imposia-page-float");
+      page.flow.style.setProperty("padding-top", originalPadding, originalPaddingPriority);
+      warnFallback();
+      continue;
+    }
     usedHeight.set(usedKey, (usedHeight.get(usedKey) ?? 0) + height);
   }
 }

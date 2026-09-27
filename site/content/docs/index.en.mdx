@@ -42,16 +42,24 @@ If pagination fails or a newer update arrives first, readers keep seeing the las
 
 ## Size and speed
 
+| Consumer route | Gzip size | Gzip budget |
+| --- | ---: | ---: |
+| Core · PageDocument | 63.2 KiB | 63.5 KiB |
+| Core · Publication | 67.5 KiB | 68 KiB |
+| Viewer · PageDocument | 11.8 KiB | 13 KiB |
+| Client · PageDocument | 71.8 KiB | 72 KiB |
+| React · PageViewer | 73.6 KiB | 74 KiB |
+
+Bundle sizes were measured on September 27, 2026 for 0.6.0; React and React DOM are excluded. The full Core browser artifact is 68.4 KiB gzip. Budgets increased by 1–1.5 KiB to account for pagination correctness fixes, not a size optimization. [Measurement and budget rationale](https://github.com/EungyuCho/imposia/blob/main/docs/bundle-size.md).
+
 | Measure | Result |
 | --- | ---: |
-| Core pagination (`mountPageDocument`), minified and gzipped | 56.7 KiB |
-| React page viewer with Core (`ImposiaPageViewer`), minified and gzipped | 67.2 KiB |
 | Paginate a 99-page article | 127 ms |
 | Change one word in that article and recommit | 127 ms |
 | First rendered frame after a commit | 2.0 ms |
 | Paginate a 100-entry Publication where every entry has its own `<style>` | 97 ms |
 
-Measured on September 24, 2026 with Chromium 149 on an Apple M4. Times are medians of seven runs, and the sizes exclude React and React DOM. To measure on your own machine, run `pnpm build` and then `pnpm benchmark` in the repository.
+Timing results remain the September 24, 2026 baseline: Chromium 149 on Apple M4, medians of seven runs. Run `pnpm build`, then `pnpm bundle:size` for sizes or `pnpm benchmark` for timings.
 
 ## Know the boundary
 

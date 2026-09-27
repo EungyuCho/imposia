@@ -38,6 +38,7 @@ export interface LandingCopy {
     };
     medianOf: string;
     footnote: string;
+    bundleSnapshot: string;
     charts: {
       edit: string;
       paginate: string;
@@ -159,6 +160,7 @@ export const LANDING_COPY: Record<Locale, LandingCopy> = {
         },
       },
       medianOf: "median of",
+      bundleSnapshot: "Current Imposia bundle measurement",
       footnote:
         "harness in scripts/benchmark-compare.ts and scripts/benchmark.ts · pnpm benchmark:compare",
       charts: {
@@ -293,6 +295,7 @@ export const LANDING_COPY: Record<Locale, LandingCopy> = {
         },
       },
       medianOf: "중앙값, 측정 횟수",
+      bundleSnapshot: "현재 Imposia 번들 측정",
       footnote:
         "측정 코드: scripts/benchmark-compare.ts, scripts/benchmark.ts · pnpm benchmark:compare",
       charts: {
@@ -426,6 +429,7 @@ export const LANDING_COPY: Record<Locale, LandingCopy> = {
         },
       },
       medianOf: "中央値・計測回数",
+      bundleSnapshot: "現在の Imposia バンドル測定",
       footnote:
         "計測コード: scripts/benchmark-compare.ts, scripts/benchmark.ts · pnpm benchmark:compare",
       charts: {
@@ -551,6 +555,7 @@ export const LANDING_COPY: Record<Locale, LandingCopy> = {
         },
       },
       medianOf: "中位数，运行次数",
+      bundleSnapshot: "当前 Imposia 包体积测量",
       footnote:
         "测量代码：scripts/benchmark-compare.ts、scripts/benchmark.ts · pnpm benchmark:compare",
       charts: {

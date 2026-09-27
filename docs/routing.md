@@ -15,5 +15,6 @@
 - Primary HTML/CSR pagination-integrity contract and public proof requirements: [ADR 0011](architecture/0011-html-csr-pagination-integrity.md)
 - Ordered Core extension runtime and its security boundaries: [ADR 0005](architecture/0005-core-extension-contract.md)
 - Verification evidence: [verification.md](verification.md)
+- Pagination topic coverage and regression repairs: [pagination-topics.md](pagination-topics.md). It maps the independent browser scenarios, support-boundary adaptations, execution command, repaired failures, and review regressions.
 - Documentation and localization release audit: [documentation-localization-audit.md](documentation-localization-audit.md)
 - Public website: `site/` is a Vite-powered React Router SPA (`ssr: false`) using Fumadocs layouts and localized MDX at `/en`, `/ko`, `/zh-CN`, and `/ja`. Each locale root (`/:lang`) is the product landing page built from `design/landing.pen` (`site/app/landing/`); its benchmark figures are read from `benchmarks/baseline.json` at build time. Public documentation follows the reader journey (`getting-started`, `concepts`, `guides`) and groups package references under `api/react`, `api/core`, and `api/viewer`. Cloudflare Pages redirects the former flat API and publishing URLs to this hierarchy.

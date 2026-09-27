@@ -106,6 +106,29 @@ describe("CSS Paged Media coverage shared with Paged.js and Vivliostyle", () => 
     ]);
   });
 
+  it.each(["0", "0px", "0mm", "+0.0"])(
+    "accepts zero margins (%s) without accepting a zero sheet",
+    (zero) => {
+      const css = `@page { size: 320px 440px; margin: ${zero}; }`;
+      expect(prepareDocument(`<style>${css}</style><p>x</p>`).warnings).toEqual([]);
+      const geometry = resolve(css, 1).geometry;
+      expect(geometry.contentWidthCssPx).toBe(320);
+      expect(geometry.contentHeightCssPx).toBe(440);
+      expect(normalizeHostPageOptions({ margin: zero }).margins).toEqual({
+        topCssPx: 0,
+        rightCssPx: 0,
+        bottomCssPx: 0,
+        leftCssPx: 0,
+      });
+      expect(() => normalizeHostPageOptions({ size: { width: zero, height: "440px" } })).toThrow();
+      expect(
+        prepareDocument(`<style>@page { size:${zero} 440px; }</style><p>x</p>`).warnings.map(
+          (w) => w.code,
+        ),
+      ).toContain("PAGE_RULE_UNSUPPORTED");
+    },
+  );
+
   it("accepts the new keywords as host page sizes", () => {
     expect(normalizeHostPageOptions({ size: "Legal" }).size?.heightCssPx).toBeCloseTo(14 * 96, 6);
     expect(() => normalizeHostPageOptions({ size: "a5" as never })).toThrow(/A5/);

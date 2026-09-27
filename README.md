@@ -112,7 +112,9 @@ Same input, same browser, pinned versions, median of 7 runs (Apple M4, Chromium 
 | :--- | ---: | ---: | ---: |
 | Re-render after a one-word edit (50 pages) | **30 ms** | 217 ms | 212 ms |
 | Paginate 200 pages | **131 ms** | 849 ms | 2,154 ms |
-| Full browser bundle, gzip | **59.4 KiB** | 94.2 KiB | 215.2 KiB |
+| Full browser bundle, gzip | **68.4 KiB** | 94.2 KiB | 215.2 KiB |
+
+Bundle sizes were measured on September 27, 2026 for 0.6.0; React and React DOM are excluded. The full Core browser artifact is 68.4 KiB gzip. Budgets increased by 1–1.5 KiB to account for pagination correctness fixes, not a size optimization. [Measurement and budget rationale](https://github.com/EungyuCho/imposia/blob/main/docs/bundle-size.md). Timing results remain the September 24, 2026 baseline: Chromium 149 on Apple M4, medians of seven runs. Run `pnpm build`, then `pnpm bundle:size` for sizes or `pnpm benchmark` for timings.
 
 - All three produced the same page counts. Paged.js and Vivliostyle have no incremental update, so an edit renders them again from scratch; Imposia recommits through `controller.update()`.
 - Paged.js and Vivliostyle were called only through their documented entry points and loaded from jsDelivr, not added as dependencies. Method, versions, hashes, and caveats: [`docs/benchmarks.md`](./docs/benchmarks.md).
