@@ -1,9 +1,11 @@
 import { doesNotMatch, match } from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { siteUrl } from "../site/lib/site-url";
 import {
   SITE_BLOG_ROUTES,
   SITE_DOC_ROUTES,
+  SITE_INDEXABLE_ROUTES,
   SITE_LOCALE_ROOT_ROUTES,
 } from "../site/prerender-paths";
 
@@ -47,6 +49,29 @@ for (const route of SITE_BLOG_ROUTES) {
   doesNotMatch(html, /hydrate-fallback/, `Expected /${path} to contain prerendered page content.`);
 }
 
+const sitemap = await readFile(join(BUILD_ROOT, "sitemap.xml"), "utf8");
+const listedUrls = [...sitemap.matchAll(/<loc>([^<]+)<\/loc>/g)].map((match) => match[1]);
+const expectedUrls = SITE_INDEXABLE_ROUTES.map(siteUrl);
+if (new Set(listedUrls).size !== listedUrls.length) {
+  throw new Error("Sitemap contains duplicate URLs.");
+}
+if (listedUrls.join("\n") !== expectedUrls.join("\n")) {
+  throw new Error("Sitemap URLs do not match the indexable prerender routes.");
+}
+for (const route of SITE_INDEXABLE_ROUTES) {
+  const html = await readFile(join(BUILD_ROOT, route.slice(1), "index.html"), "utf8");
+  match(
+    html,
+    new RegExp(
+      `<link[^>]+rel="canonical"[^>]+href="${siteUrl(route).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"`,
+    ),
+    `Expected ${route} to declare its final canonical URL.`,
+  );
+}
+
+const robots = await readFile(join(BUILD_ROOT, "robots.txt"), "utf8");
+match(robots, /Sitemap: https:\/\/imposia\.pages\.dev\/sitemap\.xml/);
+
 const redirects = await readFile(join(BUILD_ROOT, "_redirects"), "utf8");
 
 for (const redirect of expectedRedirects) {
@@ -56,6 +81,6 @@ for (const redirect of expectedRedirects) {
 console.log(
   `Verified ${SITE_DOC_ROUTES.length} prerendered documentation routes, ` +
     `${SITE_LOCALE_ROOT_ROUTES.length} landing pages, ` +
-    `${SITE_BLOG_ROUTES.length} blog routes, and ` +
+    `${SITE_BLOG_ROUTES.length} blog routes, ${expectedUrls.length} sitemap URLs, and ` +
     `${expectedRedirects.length} deployment redirects.`,
 );

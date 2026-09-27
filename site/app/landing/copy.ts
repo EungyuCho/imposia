@@ -61,7 +61,7 @@ export interface LandingCopy {
 
 export const LANDING_COPY: Record<Locale, LandingCopy> = {
   en: {
-    metaTitle: "Imposia — HTML in. Pages out.",
+    metaTitle: "Imposia — HTML Pagination, Preview & Print for React",
     metaDescription:
       "Turn HTML and CSS into real pages. Preview them in your app, then print or save as PDF — all in the browser.",
     hero: {
@@ -194,7 +194,7 @@ export const LANDING_COPY: Record<Locale, LandingCopy> = {
     footer: { docs: "Docs", changelog: "Changelog" },
   },
   ko: {
-    metaTitle: "Imposia — HTML을 넣으면 페이지가 나옵니다",
+    metaTitle: "Imposia — React용 HTML 페이지 나누기·미리보기·인쇄",
     metaDescription:
       "HTML과 CSS를 실제 페이지로 만듭니다. 앱 안에서 미리 보고, 인쇄하거나 PDF로 저장하세요. 모두 브라우저에서 동작합니다.",
     hero: {
@@ -328,7 +328,7 @@ export const LANDING_COPY: Record<Locale, LandingCopy> = {
     footer: { docs: "문서", changelog: "변경 내역" },
   },
   ja: {
-    metaTitle: "Imposia — HTML を入れれば、ページが出る",
+    metaTitle: "Imposia — React向けHTMLのページ分割・プレビュー・印刷",
     metaDescription:
       "HTML と CSS を本物のページにします。アプリ内でプレビューし、印刷または PDF として保存。すべてブラウザーで動きます。",
     hero: {
@@ -461,7 +461,7 @@ export const LANDING_COPY: Record<Locale, LandingCopy> = {
     footer: { docs: "ドキュメント", changelog: "変更履歴" },
   },
   "zh-CN": {
-    metaTitle: "Imposia — 输入 HTML，输出页面",
+    metaTitle: "Imposia — React HTML 分页、预览与打印",
     metaDescription:
       "把 HTML 和 CSS 变成真正的页面。在应用内预览，然后打印或保存为 PDF——全部在浏览器中完成。",
     hero: {

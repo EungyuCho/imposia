@@ -39,6 +39,19 @@ test("root redirects to the English landing page", async ({ page, browserName })
   }
 });
 
+test("crawl files expose canonical, authored pages", async ({ request }) => {
+  const robots = await request.get("/robots.txt");
+  expect(robots.ok()).toBe(true);
+  expect(await robots.text()).toContain("Sitemap: https://imposia.pages.dev/sitemap.xml");
+
+  const sitemap = await request.get("/sitemap.xml");
+  expect(sitemap.ok()).toBe(true);
+  const xml = await sitemap.text();
+  expect(xml).toContain("https://imposia.pages.dev/ko/docs/getting-started/");
+  expect(xml).toContain("https://imposia.pages.dev/ko/blog/how-imposia-works/");
+  expect(xml).not.toContain("https://imposia.pages.dev/ja/blog/how-imposia-works/");
+});
+
 test("each locale root renders that locale's landing page", async ({ page, browserName }) => {
   test.skip(browserName !== "chromium", "Locale routing is Chromium-reference only.");
   const captured = captureBrowserErrors(page, browserName);
@@ -335,7 +348,11 @@ test("localized articles disclose English fallback and keep canonical language h
     );
     await expect(page.locator('link[rel="canonical"]')).toHaveAttribute(
       "href",
-      "https://imposia.pages.dev/ko/blog/how-imposia-works",
+      "https://imposia.pages.dev/ko/blog/how-imposia-works/",
+    );
+    await expect(page.locator('link[rel="alternate"][hreflang="en"]')).toHaveAttribute(
+      "href",
+      "https://imposia.pages.dev/en/blog/how-imposia-works/",
     );
 
     for (const locale of ["ja", "zh-CN"]) {
@@ -351,8 +368,9 @@ test("localized articles disclose English fallback and keep canonical language h
       await expect(page.locator(".blog-fallback")).toBeVisible();
       await expect(page.locator('link[rel="canonical"]')).toHaveAttribute(
         "href",
-        "https://imposia.pages.dev/en/blog/how-imposia-works",
+        "https://imposia.pages.dev/en/blog/how-imposia-works/",
       );
+      await expect(page.locator('link[rel="alternate"]')).toHaveCount(0);
       await expect(page.locator(".blog-language-badge")).toHaveCount(0);
     }
   } finally {

@@ -4,6 +4,7 @@ import type { MetaFunction } from "react-router";
 import { Link, Navigate, useParams } from "react-router";
 import { isSupportedLocale } from "../../lib/i18n";
 import { baseOptions } from "../../lib/layout.shared";
+import { localizedSearchLinks } from "../../lib/seo";
 import { source } from "../../lib/source";
 import { getMDXComponents } from "../../mdx-components";
 
@@ -47,11 +48,12 @@ export const meta: MetaFunction = ({ params }) => {
   const lang = params.lang;
   if (!lang || !isSupportedLocale(lang)) return [];
   const page = source.getPage(pathToSlugs(params["*"]), lang);
-  if (!page) return [];
+  if (!page) return [{ name: "robots", content: "noindex" }];
 
   return [
     { title: `${page.data.title} · Imposia` },
     { content: page.data.description, name: "description" },
+    ...localizedSearchLinks(lang, `docs${params["*"] ? `/${params["*"]}` : ""}`),
   ];
 };
 

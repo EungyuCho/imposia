@@ -2,6 +2,7 @@ import type { LinksFunction, MetaFunction } from "react-router";
 import { Navigate, useParams } from "react-router";
 import landingHref from "../../landing.css?url";
 import { isSupportedLocale } from "../../lib/i18n";
+import { localizedSearchLinks } from "../../lib/seo";
 import { LANDING_COPY } from "../landing/copy";
 import { Landing } from "../landing/landing";
 
@@ -23,7 +24,11 @@ export const meta: MetaFunction = ({ params }) => {
   const lang = params.lang;
   if (!lang || !isSupportedLocale(lang)) return [];
   const copy = LANDING_COPY[lang];
-  return [{ title: copy.metaTitle }, { content: copy.metaDescription, name: "description" }];
+  return [
+    { title: copy.metaTitle },
+    { content: copy.metaDescription, name: "description" },
+    ...localizedSearchLinks(lang),
+  ];
 };
 
 export default function LandingRoute() {
