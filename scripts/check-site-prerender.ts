@@ -1,7 +1,11 @@
 import { doesNotMatch, match } from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { SITE_DOC_ROUTES, SITE_LOCALE_ROOT_ROUTES } from "../site/prerender-paths";
+import {
+  SITE_BLOG_ROUTES,
+  SITE_DOC_ROUTES,
+  SITE_LOCALE_ROOT_ROUTES,
+} from "../site/prerender-paths";
 
 const BUILD_ROOT = join("site", "build", "client");
 const expectedRedirects = [
@@ -34,6 +38,15 @@ for (const route of SITE_LOCALE_ROOT_ROUTES) {
   doesNotMatch(html, /hydrate-fallback/, `Expected /${path} to contain prerendered page content.`);
 }
 
+for (const route of SITE_BLOG_ROUTES) {
+  const path = route.slice(1);
+  const html = await readFile(join(BUILD_ROOT, path, "index.html"), "utf8");
+  const locale = path.split("/", 1)[0];
+  match(html, new RegExp(`<html lang="${locale}"`), `Expected /${path} to declare ${locale}.`);
+  match(html, /id="imposia-blog"/, `Expected /${path} to contain the blog shell.`);
+  doesNotMatch(html, /hydrate-fallback/, `Expected /${path} to contain prerendered page content.`);
+}
+
 const redirects = await readFile(join(BUILD_ROOT, "_redirects"), "utf8");
 
 for (const redirect of expectedRedirects) {
@@ -42,6 +55,7 @@ for (const redirect of expectedRedirects) {
 
 console.log(
   `Verified ${SITE_DOC_ROUTES.length} prerendered documentation routes, ` +
-    `${SITE_LOCALE_ROOT_ROUTES.length} landing pages, and ` +
+    `${SITE_LOCALE_ROOT_ROUTES.length} landing pages, ` +
+    `${SITE_BLOG_ROUTES.length} blog routes, and ` +
     `${expectedRedirects.length} deployment redirects.`,
 );

@@ -281,3 +281,114 @@ test("localized landing and documentation pages do not overflow a 320px viewport
     assertNoBrowserErrors(captured);
   }
 });
+
+test("Blog navigation opens the article index and the complete first article", async ({
+  page,
+  browserName,
+}) => {
+  test.skip(browserName !== "chromium", "Article navigation is Chromium-reference only.");
+  const captured = captureBrowserErrors(page, browserName);
+
+  try {
+    await page.goto("/en");
+    await page.locator("#imposia-landing").getByRole("link", { name: "Blog" }).click();
+    await expect(page).toHaveURL(/\/en\/blog\/?$/);
+    await expect(page.getByRole("heading", { level: 1, name: "Inside Imposia" })).toBeVisible();
+    await page.getByRole("link", { name: "Read article" }).click();
+    await expect(page).toHaveURL(/\/en\/blog\/how-imposia-works\/?$/);
+    await expect(
+      page.getByRole("heading", { level: 1, name: "How Imposia turns HTML into pages" }),
+    ).toBeVisible();
+    await expect(page.locator(".blog-content h2")).toHaveCount(7);
+    await expect(page.locator(".blog-figure")).toHaveCount(1);
+    const illustration = page.locator(".blog-illustration img");
+    await expect(illustration).toHaveCount(1);
+    await expect
+      .poll(() => illustration.evaluate((img: HTMLImageElement) => img.naturalWidth))
+      .toBeGreaterThan(0);
+    await expect(page.locator(".blog-toc a").first()).toBeVisible();
+
+    await page.goto("/en/docs");
+    const blogLink = page.locator("#nd-subnav").getByRole("link", { name: "Blog", exact: true });
+    await expect(blogLink).toHaveAttribute("href", "/en/blog");
+    await blogLink.click();
+    await expect(page).toHaveURL(/\/en\/blog\/?$/);
+  } finally {
+    assertNoBrowserErrors(captured);
+  }
+});
+
+test("localized articles disclose English fallback and keep canonical language honest", async ({
+  page,
+  browserName,
+}) => {
+  test.skip(browserName !== "chromium", "Article locale routing is Chromium-reference only.");
+  const captured = captureBrowserErrors(page, browserName);
+
+  try {
+    await page.goto("/ko/blog/how-imposia-works");
+    await expect(page.locator(".blog-post")).toHaveAttribute("lang", "ko");
+    await expect(page.locator(".blog-fallback")).toHaveCount(0);
+    await expect(page.locator(".blog-illustration img")).toHaveAttribute(
+      "src",
+      "/images/articles/how-imposia-works-ko-desktop.png",
+    );
+    await expect(page.locator('link[rel="canonical"]')).toHaveAttribute(
+      "href",
+      "https://imposia.pages.dev/ko/blog/how-imposia-works",
+    );
+
+    for (const locale of ["ja", "zh-CN"]) {
+      await page.goto(`/${locale}/blog`);
+      await expect(page.locator(".blog-feature-copy h2")).toHaveAttribute("lang", "en");
+      await expect(page.locator(".blog-feature-copy > p:not(.blog-eyebrow)")).toHaveAttribute(
+        "lang",
+        "en",
+      );
+      await page.goto(`/${locale}/blog/how-imposia-works`);
+      await expect(page.locator("html")).toHaveAttribute("lang", locale);
+      await expect(page.locator(".blog-post")).toHaveAttribute("lang", "en");
+      await expect(page.locator(".blog-fallback")).toBeVisible();
+      await expect(page.locator('link[rel="canonical"]')).toHaveAttribute(
+        "href",
+        "https://imposia.pages.dev/en/blog/how-imposia-works",
+      );
+      await expect(page.locator(".blog-language-badge")).toHaveCount(0);
+    }
+  } finally {
+    assertNoBrowserErrors(captured);
+  }
+});
+
+test("article pages retain readable navigation without horizontal overflow at 320px", async ({
+  page,
+  browserName,
+}) => {
+  test.skip(browserName !== "chromium", "Article layout is Chromium-reference only.");
+  const captured = captureBrowserErrors(page, browserName);
+  await page.setViewportSize({ width: 320, height: 700 });
+
+  try {
+    for (const path of ["/ko/blog", "/ko/blog/how-imposia-works", "/ja/blog/how-imposia-works"]) {
+      await page.goto(path);
+      await expect(
+        page
+          .locator(".blog-nav")
+          .getByRole("link", { name: "블로그" })
+          .or(page.locator(".blog-nav").getByRole("link", { name: "ブログ" })),
+      ).toBeVisible();
+      const geometry = await page.evaluate(() => ({
+        viewportWidth: document.documentElement.clientWidth,
+        documentWidth: document.documentElement.scrollWidth,
+      }));
+      expect(geometry.documentWidth, path).toBe(geometry.viewportWidth);
+    }
+    await page.goto("/ko/blog/how-imposia-works");
+    const mobileContents = page.locator(".blog-mobile-toc");
+    await expect(mobileContents.getByText("이 글의 목차")).toBeVisible();
+    await mobileContents.locator("summary").click();
+    await expect(mobileContents.getByRole("link").first()).toBeVisible();
+  } finally {
+    assertNoBrowserErrors(captured);
+  }
+});

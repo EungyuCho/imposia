@@ -23,6 +23,7 @@ import baseline from "../../../benchmarks/baseline.json";
 import bundleSnapshot from "../../../benchmarks/bundle-size.json";
 import comparison from "../../../benchmarks/comparison.json";
 import { LOCALE_NAMES, LOCALES, type Locale } from "../../lib/i18n";
+import { NAV_LABELS } from "../../lib/navigation";
 import { LANDING_COPY } from "./copy";
 
 const GITHUB_URL = "https://github.com/EungyuCho/imposia";
@@ -453,6 +454,7 @@ function LanguageMenu({ lang, label }: { lang: Locale; label: string }) {
 
 export function Landing({ lang }: { lang: Locale }) {
   const copy = LANDING_COPY[lang];
+  const nav = NAV_LABELS[lang];
   const docs = `/${lang}/docs`;
   const stats = [
     {
@@ -516,13 +518,16 @@ export function Landing({ lang }: { lang: Locale }) {
             <span>Imposia</span>
           </Link>
           <Link className="lp-nav-link" to={docs}>
-            {copy.nav.docs}
+            {nav.docs}
+          </Link>
+          <Link className="lp-nav-link" to={`/${lang}/blog`}>
+            {nav.blog}
           </Link>
           <a className="lp-nav-link lp-nav-optional" href={DEMO_PATH}>
-            {copy.nav.examples}
+            {nav.examples}
           </a>
           <Link className="lp-nav-link lp-nav-optional" to={`${docs}/api`}>
-            {copy.nav.api}
+            {nav.api}
           </Link>
           <a
             className="lp-nav-link lp-nav-optional"
@@ -533,7 +538,7 @@ export function Landing({ lang }: { lang: Locale }) {
             GitHub
           </a>
         </nav>
-        <LanguageMenu label={copy.nav.language} lang={lang} />
+        <LanguageMenu label={nav.language} lang={lang} />
       </header>
 
       <main>

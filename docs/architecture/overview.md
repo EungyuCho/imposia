@@ -739,15 +739,17 @@ the compiled `dist/page-document-generation.js`). The convention:
 `site/` is a React Router 8 **SPA** (`ssr: false`) with prerendering, deployed to
 Cloudflare Pages from `site/build/client`.
 
-Three routes only: `/` redirects to `/en`; `/:lang` is the marketing landing on
-a Fumadocs `HomeLayout`; `/:lang/docs/*` is the docs on `DocsLayout`/`DocsPage`.
-Content is Fumadocs-MDX over `site/content/docs`, with locale-suffixed filenames
+`/` redirects to `/en`; `/:lang` is the marketing landing on a Fumadocs
+`HomeLayout`; `/:lang/docs/*` is the docs on `DocsLayout`/`DocsPage`;
+`/:lang/blog` and `/:lang/blog/:slug` serve the separate article collection.
+Documentation content is Fumadocs-MDX over `site/content/docs`, with locale-suffixed filenames
 (`getting-started.ko.mdx`) across `en`, `ko`, `zh-CN`, `ja` — 9 logical pages ×
 4 locales = 36 MDX files. `hideLocale: "never"`, so the locale is always in the
 URL.
 
-Prerendering covers 10 paths × 4 locales = 40 static HTML routes, verified after
-every build. The runnable demo is served by a Vite middleware in dev and copied
+Prerendering covers the landing pages, documentation pages, and article index and
+detail pages in all four locales; article slugs are discovered from English MDX
+filenames. The generated routes are verified after every build. The runnable demo is served by a Vite middleware in dev and copied
 into the build output in production, so the site always ships exactly the demo
 in `examples/demo/`.
 
