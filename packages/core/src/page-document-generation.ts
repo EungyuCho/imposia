@@ -2626,12 +2626,16 @@ class RecursiveFragmenter {
     const before = htmlElement(previous);
     const after = htmlElement(clone);
     if (before !== undefined && after !== undefined) {
-      for (const [property, value] of ends) {
-        before.style.setProperty(property, "0px", "important");
-        after.style.setProperty(property, value, "important");
-      }
-      for (const property of ["padding-top", "border-top-width", "margin-top"])
-        after.style.setProperty(property, "0px", "important");
+      // CSSOM mutation drops unsupported authored declarations (e.g. widows
+      // in Firefox), which the fallback paginator still needs to preserve.
+      before.setAttribute(
+        "style",
+        `${before.getAttribute("style") ?? ""};${ends.map(([property]) => `${property}:0px!important`).join(";")}`,
+      );
+      after.setAttribute(
+        "style",
+        `${after.getAttribute("style") ?? ""};${ends.map(([property, value]) => `${property}:${value}!important`).join(";")};padding-top:0px!important;border-top-width:0px!important;margin-top:0px!important`,
+      );
     }
     return clone;
   }

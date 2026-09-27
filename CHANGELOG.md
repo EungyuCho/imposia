@@ -194,7 +194,7 @@ layout changes that can alter page counts or warnings without a code change.
 - Documentation sidebar group labels use a darker text color for readable contrast.
 - Fixed repeated fragment edges, footnote/page-float collisions, publishing CSS precedence, list continuation, page names, and avoid-break handling. Positioned visual overflow no longer creates extra pages.
 - Added 183 independently authored pagination scenarios and two multi-generation update checks; unsupported inputs retain explicit diagnostics.
-- Updated measured gzip sizes and budgets: Core pagination 63.2/63.5 KiB, Publication 67.4/68 KiB, Viewer 11.8/13 KiB, Client 71.8/72 KiB, React 73.6/74 KiB (size/budget).
+- Updated measured gzip sizes and budgets: Core pagination 63.2/63.5 KiB, Publication 67.5/68 KiB, Viewer 11.8/13 KiB, Client 71.8/72 KiB, React 73.6/74 KiB (size/budget).
 - Fixed the first-commit iframe flash and preserved consumer iframe visibility on updates; improved documentation label contrast.
 
 - A `dir="rtl"` on the source `<html>` or `<body>` was dropped, so

@@ -33,11 +33,11 @@ peers external; budgets are upper limits, not the measured sizes.
 
 | Consumer route | Minified | Gzip | Gzip budget |
 | --- | ---: | ---: | ---: |
-| Core · PageDocument | 209.1 KiB | 63.2 KiB | 63.5 KiB |
-| Core · Publication | 224.6 KiB | 67.4 KiB | 68 KiB |
+| Core · PageDocument | 209.2 KiB | 63.2 KiB | 63.5 KiB |
+| Core · Publication | 224.7 KiB | 67.5 KiB | 68 KiB |
 | Viewer · PageDocument | 40.0 KiB | 11.8 KiB | 13 KiB |
-| Client · PageDocument | 241.1 KiB | 71.8 KiB | 72 KiB |
-| React · PageViewer | 247.9 KiB | 73.6 KiB | 74 KiB |
+| Client · PageDocument | 241.2 KiB | 71.8 KiB | 72 KiB |
+| React · PageViewer | 248.0 KiB | 73.6 KiB | 74 KiB |
 
 The full built Core browser artifact is **68.3 KiB gzip**. The landing page
 uses that measurement for its full-bundle comparison. Consumer routes above
@@ -97,7 +97,7 @@ against the commit before them on the same machine:
 | Core · Publication | 61.1 KiB | 63.7 KiB | 64.0 KiB | 67.0 KiB | 3.3 KiB |
 | Viewer · PageDocument | 11.6 KiB | 11.8 KiB | 13.0 KiB | 13.0 KiB | 1.2 KiB |
 | Client · PageDocument | 65.5 KiB | 68.0 KiB | 69.0 KiB | 71.0 KiB | 3.0 KiB |
-| React · PageViewer | 67.4 KiB | 69.8 KiB | 71.0 KiB | 73.0 KiB | 3.2 KiB |
+| React · PageViewer | 67.5 KiB | 69.8 KiB | 71.0 KiB | 73.0 KiB | 3.2 KiB |
 
 Decision: raise the four Core-bearing budgets to restore roughly 5%
 headroom. The 2.5 KiB of growth buys document features that removed silent
@@ -216,7 +216,7 @@ and importance/specificity handling. No runtime dependency was added.
 | Consumer route | Before (gzip) | After (gzip) | Old budget | New budget |
 | --- | ---: | ---: | ---: | ---: |
 | Core · PageDocument | 61.9 KiB | 63.2 KiB | 62 KiB | 63.5 KiB |
-| Core · Publication | 66.2 KiB | 67.4 KiB | 67 KiB | 68 KiB |
+| Core · Publication | 66.2 KiB | 67.5 KiB | 67 KiB | 68 KiB |
 | Viewer · PageDocument | 11.8 KiB | 11.8 KiB | 13 KiB | 13 KiB |
 | Client · PageDocument | 70.6 KiB | 71.8 KiB | 71 KiB | 72 KiB |
 | React · PageViewer | 72.4 KiB | 73.6 KiB | 73 KiB | 74 KiB |

@@ -45,7 +45,7 @@ const SCENARIOS = Object.freeze([
     source: 'export { mountPublication } from "@imposia/core";',
     // 63.7 KiB measured 2026-09-24 (60.9 KiB on 2026-09-23); publication adds
     // outline/search over PageDocument. Raised from 64 KiB with the route above.
-    // 2026-09-27: 67.4 KiB; shared Core fixes add about 1 KiB.
+    // 2026-09-27: 67.5 KiB; shared Core fixes add about 1 KiB.
     gzipBudgetBytes: 68 * KIBIBYTE,
   }),
   Object.freeze({
