@@ -5,7 +5,12 @@ description: 查看每个已发布的 Imposia 包版本的变化。
 
 本页汇总 Imposia 的每个已发布版本。`@imposia/core`、`@imposia/viewer`、`@imposia/client` 和 `@imposia/react` 使用相同的版本号；完整记录见仓库中的 [CHANGELOG.md](https://github.com/EungyuCho/imposia/blob/main/CHANGELOG.md)。
 
-## 0.6.0 — 2026年9月24日
+## 0.6.0 — 2026年9月27日
+
+- 修复分页边界重复的边框和间距、脚注与页面浮动重叠、出版 CSS 优先级、列表续排、页面名称及避免分页的处理。定位产生的视觉溢出不再导致多余页面。
+- 新增 183 个独立编写的分页场景和 2 个连续更新检查；不支持的输入仍保留明确诊断。
+- 更新 gzip 实测值/预算：Core 分页 63.2/63.5 KiB、Publication 67.4/68 KiB、Viewer 11.8/13 KiB、Client 71.8/72 KiB、React 73.6/74 KiB。
+- 修复首次提交前 iframe 闪烁和更新时用户 visibility 设置丢失，并改善文档标签对比度。
 
 业务文档按编写时的样子分页，长文档保持快速，打印结果与预览更一致。本版本有四项不兼容变更，请阅读[迁移说明](https://github.com/EungyuCho/imposia/blob/main/docs/migrations/0.6.0.md)。
 

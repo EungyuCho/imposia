@@ -7,18 +7,7 @@ versioning for its published package interfaces. What that means before `1.0`
 
 ## Unreleased
 
-### Fixed
-
-- The canonical frame stays invisible until the first generation commits.
-  Until then it is an empty 300×150 box, and it showed at the host's top-left
-  corner for as long as the first pagination took. React viewer hosts also
-  keep it invisible until the Viewer adopts and sizes it, which removes the
-  last frame of that flash.
-- Subsequent document updates preserve consumer-set iframe visibility and other
-  inline styles after the first successful commit.
-- Documentation sidebar group labels use a darker text color for readable contrast.
-
-## 0.6.0 — 2026-09-24
+## 0.6.0 — 2026-09-27
 
 Minor release for document layout, long documents, and the print pipeline.
 Business documents paginate the way they are written: all sixteen `@page`
@@ -194,6 +183,19 @@ layout changes that can alter page counts or warnings without a code change.
   after a commit now pays the index build (about 64 ms at that size).
 
 ### Fixed
+
+- The canonical frame stays invisible until the first generation commits.
+  Until then it is an empty 300×150 box, and it showed at the host's top-left
+  corner for as long as the first pagination took. React viewer hosts also
+  keep it invisible until the Viewer adopts and sizes it, which removes the
+  last frame of that flash.
+- Subsequent document updates preserve consumer-set iframe visibility and other
+  inline styles after the first successful commit.
+- Documentation sidebar group labels use a darker text color for readable contrast.
+- Fixed repeated fragment edges, footnote/page-float collisions, publishing CSS precedence, list continuation, page names, and avoid-break handling. Positioned visual overflow no longer creates extra pages.
+- Added 183 independently authored pagination scenarios and two multi-generation update checks; unsupported inputs retain explicit diagnostics.
+- Updated measured gzip sizes and budgets: Core pagination 63.2/63.5 KiB, Publication 67.4/68 KiB, Viewer 11.8/13 KiB, Client 71.8/72 KiB, React 73.6/74 KiB (size/budget).
+- Fixed the first-commit iframe flash and preserved consumer iframe visibility on updates; improved documentation label contrast.
 
 - A `dir="rtl"` on the source `<html>` or `<body>` was dropped, so
   right-to-left text rendered left to right with no warning. The declared

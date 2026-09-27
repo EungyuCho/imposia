@@ -171,6 +171,8 @@ interface BreakConstraint {
   readonly sourceIdentity: string | undefined;
   before: PageBreak;
   after: PageBreak;
+  beforeAvoid: boolean;
+  afterAvoid: boolean;
   readonly insideAvoid: boolean;
   readonly widows: number;
   readonly orphans: number;
@@ -1324,7 +1326,7 @@ function elementSourceIdentity(element: Element): string | undefined {
  * enough: any hit disables the interior skip, so false positives only cost
  * the optimization, never correctness.
  */
-const SKIP_SENSITIVE_DECLARATION_TOKEN = /break-(?:before|after)|hyphens/iu;
+const SKIP_SENSITIVE_DECLARATION_TOKEN = /break-(?:before|after)|hyphens|position/iu;
 
 /**
  * Decides once per generation whether atomic-subtree interiors may skip
@@ -1366,6 +1368,7 @@ function subtreeHasNestedUnbreakableText(element: Element): boolean {
 }
 
 interface CapturedBreakConstraints {
+  readonly fixedFurniture: readonly HTMLElement[];
   readonly constraints: ReadonlyMap<Element, BreakConstraint>;
   readonly hyphenationFallbackTargets: ReadonlySet<Element>;
   readonly atomicSubtreeSkips: number;
@@ -1378,9 +1381,13 @@ async function captureBreakConstraints(
 ): Promise<CapturedBreakConstraints> {
   const constraints = new Map<Element, BreakConstraint>();
   const hyphenationFallbackTargets = new Set<Element>();
+  const fixedFurniture: HTMLElement[] = [];
+  const hidden = new Set<Element>();
+  const contained = new Set<Element>();
   let atomicSubtreeSkips = 0;
   const view = root.ownerDocument.defaultView;
-  if (view === null) return { constraints, hyphenationFallbackTargets, atomicSubtreeSkips };
+  if (view === null)
+    return { constraints, hyphenationFallbackTargets, atomicSubtreeSkips, fixedFurniture };
 
   // Source identities memoized down the document-order sweep: an element with
   // its own marker derives the identity from itself; every other element
@@ -1438,6 +1445,8 @@ async function captureBreakConstraints(
         sourceIdentity,
         before: "auto",
         after: "auto",
+        beforeAvoid: false,
+        afterAvoid: false,
         insideAvoid: false,
         widows: 2,
         orphans: 2,
@@ -1456,6 +1465,51 @@ async function captureBreakConstraints(
       continue;
     }
     const style = view.getComputedStyle(element);
+    const parent = element.parentElement;
+    if (style.display === "none" || (parent !== null && hidden.has(parent))) hidden.add(element);
+    const insideContainingBlock = parent !== null && contained.has(parent);
+    if (
+      insideContainingBlock ||
+      style.transform !== "none" ||
+      style.filter !== "none" ||
+      style.perspective !== "none" ||
+      /^(size|inline-size)$/.test(style.containerType) ||
+      /^(auto|hidden)$/.test(style.contentVisibility) ||
+      /(?:layout|paint|strict|content)/.test(style.contain) ||
+      /(?:transform|filter|perspective)/.test(style.willChange)
+    )
+      contained.add(element);
+    const fixed = htmlElement(element);
+    if (
+      style.position === "fixed" &&
+      !insideContainingBlock &&
+      fixed !== undefined &&
+      !hidden.has(element) &&
+      !fixedFurniture.some((ancestor) => ancestor.contains(element))
+    ) {
+      // Snapshot the resolved styles before removing the source ancestry. This
+      // also preserves ID/ancestor selectors after continuation IDs are removed.
+      for (const member of [fixed, ...fixed.querySelectorAll<HTMLElement>("*")]) {
+        if (member.namespaceURI !== "http://www.w3.org/1999/xhtml") continue;
+        const computed = view.getComputedStyle(member);
+        const typed = (
+          member as HTMLElement & {
+            computedStyleMap?: () => {
+              get: (property: string) => { toString(): string } | undefined;
+            };
+          }
+        ).computedStyleMap?.();
+        const declarations = [...computed].map(
+          (property) =>
+            [
+              property,
+              typed?.get(property)?.toString() ?? computed.getPropertyValue(property),
+            ] as const,
+        );
+        for (const [property, value] of declarations) member.style.setProperty(property, value);
+      }
+      fixedFurniture.push(fixed);
+    }
     const layout = fragmentationLayout(element, style, view);
     const contributesToFlow =
       style.display !== "none" && style.position !== "absolute" && style.position !== "fixed";
@@ -1514,6 +1568,8 @@ async function captureBreakConstraints(
       sourceIdentity,
       before: supportsBreak ? pageBreak(style.breakBefore) : "auto",
       after: supportsBreak ? pageBreak(style.breakAfter) : "auto",
+      beforeAvoid: supportsBreak && /^(avoid|avoid-page)$/.test(style.breakBefore),
+      afterAvoid: supportsBreak && /^(avoid|avoid-page)$/.test(style.breakAfter),
       insideAvoid: style.breakInside.trim().toLowerCase() === "avoid",
       widows: computedWidows || inlineWidows || 2,
       orphans: computedOrphans || inlineOrphans || 2,
@@ -1526,13 +1582,23 @@ async function captureBreakConstraints(
       hasDirectText,
       overflowXVisible: style.overflowX === "visible",
       horizontalWriting: style.writingMode === "horizontal-tb",
-      authoredName: authoredPageName(element),
+      authoredName:
+        authoredPageName(element) ??
+        (element.parentElement === null
+          ? undefined
+          : constraints.get(element.parentElement)?.authoredName),
       hasForcedDescendant: false,
       hasUnbreakableDescendant,
       hasDirectLineBreak,
     });
   }
 
+  const flowChildren = new Map<Element, Node[]>();
+  for (const parent of [root, ...elements])
+    flowChildren.set(
+      parent,
+      [...parent.childNodes].filter((node) => nodeContributesToFlow(node, constraints)),
+    );
   for (const element of [...elements].reverse()) {
     const scheduled = checkpoint();
     if (scheduled !== undefined) await scheduled;
@@ -1544,13 +1610,35 @@ async function captureBreakConstraints(
       parentConstraint.hasForcedDescendant ||=
         constraint.before !== "auto" ||
         constraint.after !== "auto" ||
-        constraint.hasForcedDescendant;
+        constraint.hasForcedDescendant ||
+        (constraint.contributesToFlow && constraint.authoredName !== parentConstraint.authoredName);
+      const siblings = flowChildren.get(parent ?? root) ?? [];
+      if (!parentConstraint.atomic && constraint.contributesToFlow) {
+        if (siblings[0] === element && parentConstraint.before === "auto") {
+          parentConstraint.before = constraint.before;
+          parentConstraint.beforeAvoid ||= constraint.beforeAvoid;
+        }
+        if (siblings.at(-1) === element && parentConstraint.after === "auto") {
+          parentConstraint.after = constraint.after;
+          parentConstraint.afterAvoid ||= constraint.afterAvoid;
+        }
+      }
       parentConstraint.hasUnbreakableDescendant ||=
         constraint.hasDirectText || constraint.hasUnbreakableDescendant;
       parentConstraint.hasDirectLineBreak ||= element.localName.toLowerCase() === "br";
     }
   }
-  return { constraints, hyphenationFallbackTargets, atomicSubtreeSkips };
+  for (const parent of [root, ...elements]) {
+    let previous: BreakConstraint | undefined;
+    for (const child of parent.childNodes) {
+      if (!nodeContributesToFlow(child, constraints)) continue;
+      const current =
+        child.nodeType === Node.ELEMENT_NODE ? constraints.get(child as Element) : undefined;
+      if (previous !== undefined && current?.beforeAvoid) previous.afterAvoid = true;
+      previous = current;
+    }
+  }
+  return { constraints, hyphenationFallbackTargets, atomicSubtreeSkips, fixedFurniture };
 }
 
 function nodeContributesToFlow(
@@ -1654,11 +1742,38 @@ function usableContentHeight(page: PageParts): number {
 }
 
 function pageOverflows(page: PageParts): boolean {
-  const flowBounds = page.flow.getBoundingClientRect();
-  return (
-    Math.max(page.flow.scrollHeight, flowBounds.height) >
-    usableContentHeight(page) + OVERFLOW_TOLERANCE_CSS_PX
-  );
+  const limit = usableContentHeight(page) + OVERFLOW_TOLERANCE_CSS_PX;
+  // Normal-flow box height excludes positioned ink. The usual overflowing
+  // paragraph path needs no descendant scan or style mutation.
+  if (page.flow.getBoundingClientRect().height > limit) return true;
+  const exceeds = () =>
+    Math.max(page.flow.scrollHeight, page.flow.getBoundingClientRect().height) >
+    usableContentHeight(page) + OVERFLOW_TOLERANCE_CSS_PX;
+  if (!exceeds()) return false;
+  // Scroll overflow includes positioned ink. Only normal-flow geometry may
+  // push content onto another sheet; restore authored offsets after measuring.
+  const restored: [HTMLElement, string | null][] = [];
+  const view = page.flow.ownerDocument.defaultView;
+  try {
+    for (const element of page.flow.querySelectorAll<HTMLElement>("*")) {
+      if (element.namespaceURI !== "http://www.w3.org/1999/xhtml") continue;
+      const position = view?.getComputedStyle(element).position;
+      if (position === "absolute" || position === "fixed") {
+        restored.push([element, element.getAttribute("style")]);
+        element.style.setProperty("display", "none", "important");
+      } else if (position === "relative" || position === "sticky") {
+        restored.push([element, element.getAttribute("style")]);
+        for (const side of ["top", "right", "bottom", "left"])
+          element.style.setProperty(side, "auto", "important");
+      }
+    }
+    return exceeds();
+  } finally {
+    for (const [element, style] of restored) {
+      if (style === null) element.removeAttribute("style");
+      else element.setAttribute("style", style);
+    }
+  }
 }
 
 function collectWarningSourceLocations(
@@ -2381,6 +2496,8 @@ interface PlacementRun {
 }
 
 class RecursiveFragmenter {
+  readonly #sliceEnds = new Map<Element, readonly (readonly [string, string])[]>();
+  readonly #fragmentedLists = new Set<Element>();
   readonly #constraints: ReadonlyMap<Element, BreakConstraint>;
   readonly #hyphenationFallbackTargets: ReadonlySet<Element>;
   readonly #checkpoint: PaginationCheckpoint;
@@ -2490,7 +2607,62 @@ class RecursiveFragmenter {
     this.#generatedFragment();
     const clone = element.cloneNode(deep) as ElementType;
     stripContinuationIds(clone);
+    if (this.#fragmentedLists.has(element)) this.#fragmentedLists.add(clone);
+    if (clone.localName === "li") (clone as unknown as HTMLElement).style.listStyleType = "none";
     return clone;
+  }
+
+  #cloneBoxFragment(element: Element, previous: Element): Element {
+    const clone = this.#cloneFragment(element, false);
+    const style = element.ownerDocument.defaultView?.getComputedStyle(element);
+    if (style?.writingMode !== "horizontal-tb" || style.boxDecorationBreak === "clone")
+      return clone;
+    const ends =
+      this.#sliceEnds.get(element) ??
+      ["padding-bottom", "border-bottom-width", "margin-bottom"].map(
+        (property) => [property, style.getPropertyValue(property)] as const,
+      );
+    this.#sliceEnds.set(element, ends);
+    const before = htmlElement(previous);
+    const after = htmlElement(clone);
+    if (before !== undefined && after !== undefined) {
+      for (const [property, value] of ends) {
+        before.style.setProperty(property, "0px", "important");
+        after.style.setProperty(property, value, "important");
+      }
+      for (const property of ["padding-top", "border-top-width", "margin-top"])
+        after.style.setProperty(property, "0px", "important");
+    }
+    return clone;
+  }
+
+  normalizeListContinuations(): void {
+    for (const list of this.#fragmentedLists) {
+      const first = [...list.children].find(
+        (child) => child.localName === "li" && child.hasAttribute("value"),
+      );
+      if (first !== undefined) list.setAttribute("start", first.getAttribute("value") ?? "1");
+    }
+  }
+
+  repeatFixedFurniture(elements: readonly HTMLElement[], pages: readonly PageParts[]): void {
+    if (elements.length === 0) return;
+    let first = true;
+    for (const page of pages) {
+      if (page.blank && !this.#decorateBlankPages) continue;
+      this.#generatedFragment();
+      const layer = page.page.ownerDocument.createElement("div");
+      layer.setAttribute("data-imposia-fixed-area", "");
+      layer.style.cssText =
+        "position:absolute;top:var(--imposia-margin-top);right:var(--imposia-margin-right);bottom:var(--imposia-margin-bottom);left:var(--imposia-margin-left);pointer-events:none";
+      for (const element of elements) {
+        const copy = first ? element : this.#cloneFragment(element, true);
+        copy.style.setProperty("position", "absolute", "important");
+        layer.append(copy);
+      }
+      page.page.append(layer);
+      first = false;
+    }
   }
 
   #hasPageContent(page: PageParts): boolean {
@@ -2742,6 +2914,8 @@ class RecursiveFragmenter {
   #chunkEligibleElement(constraint: BreakConstraint): boolean {
     return (
       constraint.before === "auto" &&
+      !constraint.beforeAvoid &&
+      !constraint.afterAvoid &&
       constraint.layout === "normal" &&
       !constraint.hasForcedDescendant &&
       !constraint.hasDirectLineBreak &&
@@ -2950,6 +3124,40 @@ class RecursiveFragmenter {
    * fast-pathing eligible runs as chunked appends. `mode` selects the small
    * differences between the root flow loop and the shell child loop.
    */
+  #initialFragmentBottom(element: Element, page: PageParts): number {
+    const bounds = element.getBoundingClientRect();
+    const constraint = this.#constraints.get(element);
+    if (
+      constraint === undefined ||
+      constraint.atomic ||
+      constraint.layout !== "normal" ||
+      bounds.height <= usableContentHeight(page)
+    )
+      return bounds.bottom;
+    const lines: DOMRect[] = [];
+    const range = element.ownerDocument.createRange();
+    for (const child of element.childNodes) {
+      if (!nodeContributesToFlow(child, this.#constraints)) continue;
+      if (child.nodeType === Node.ELEMENT_NODE) {
+        const member = child as Element;
+        if (member.localName === "br") continue;
+        const display = member.ownerDocument.defaultView?.getComputedStyle(member).display ?? "";
+        if (!isInlineDisplay(display)) {
+          if (lines.length === 0) return this.#initialFragmentBottom(member, page);
+          break;
+        }
+      } else if (child.nodeType !== Node.TEXT_NODE) continue;
+      range.selectNodeContents(child);
+      for (const rect of range.getClientRects()) {
+        if (rect.height <= 0 || rect.width <= 0) continue;
+        if (!lines.some((line) => Math.abs(line.top - rect.top) <= OVERFLOW_TOLERANCE_CSS_PX))
+          lines.push(rect);
+        if (lines.length >= constraint.orphans) return rect.bottom;
+      }
+    }
+    return lines.at(-1)?.bottom ?? bounds.bottom;
+  }
+
   async placeFlowChildren(
     nodes: readonly Node[],
     initialCursor: FragmentCursor,
@@ -2961,6 +3169,7 @@ class RecursiveFragmenter {
     let placedChild = false;
     let index = 0;
     let observedPage = cursor.page;
+    let avoidGroupEnd = -1;
     while (index < nodes.length) {
       if (cursor.page !== observedPage) {
         // A completed page is the best available capacity observation for
@@ -2970,6 +3179,79 @@ class RecursiveFragmenter {
           this.#chunkCapacityEstimate = Math.min(observation, PLACEMENT_CHUNK_MAXIMUM);
         }
         observedPage = cursor.page;
+      }
+      // Measure a connected keep-with-next group before committing its first node.
+      const group: Node[] = [];
+      let keepNext = index >= avoidGroupEnd;
+      for (let end = index; end < nodes.length && keepNext; end += 1) {
+        const member = nodes[end];
+        if (member === undefined) break;
+        const rule =
+          member.nodeType === Node.ELEMENT_NODE
+            ? this.#constraints.get(member as Element)
+            : undefined;
+        if (
+          group.length > 0 &&
+          rule !== undefined &&
+          (rule.before !== "auto" ||
+            rule.authoredName !== this.#constraints.get(group[0] as Element)?.authoredName)
+        )
+          break;
+        group.push(member);
+        avoidGroupEnd = end + 1;
+        if (nodeContributesToFlow(member, this.#constraints))
+          keepNext = rule?.afterAvoid === true && rule.after === "auto";
+      }
+      if (group.filter((node) => nodeContributesToFlow(node, this.#constraints)).length > 1) {
+        cursor.container.append(...group);
+        const overflow = this.#cursorOverflows(cursor);
+        const rects = group
+          .filter((node): node is Element => node.nodeType === Node.ELEMENT_NODE)
+          .map((node) => node.getBoundingClientRect());
+        const height =
+          rects.reduce((bottom, rect) => Math.max(bottom, rect.bottom), -Infinity) -
+          rects.reduce((top, rect) => Math.min(top, rect.top), Infinity);
+        let requiredHeight = height;
+        let requiredBottom = rects.reduce(
+          (bottom, rect) => Math.max(bottom, rect.bottom),
+          -Infinity,
+        );
+        const last = group
+          .filter((member) => nodeContributesToFlow(member, this.#constraints))
+          .at(-1);
+        if (last?.nodeType === Node.ELEMENT_NODE) {
+          const bounds = (last as Element).getBoundingClientRect();
+          const initialBottom = this.#initialFragmentBottom(last as Element, cursor.page);
+          requiredHeight -= bounds.bottom - initialBottom;
+          requiredBottom -= bounds.bottom - initialBottom;
+        }
+        const boundaryOverflows =
+          overflow &&
+          requiredBottom >
+            cursor.page.content.getBoundingClientRect().top +
+              usableContentHeight(cursor.page) +
+              OVERFLOW_TOLERANCE_CSS_PX;
+        for (const member of group) member.parentNode?.removeChild(member);
+        if (
+          boundaryOverflows &&
+          requiredHeight <= usableContentHeight(cursor.page) &&
+          this.#hasPageContent(cursor.page)
+        ) {
+          cursor = continueParent(cursor.page.name);
+        } else if (boundaryOverflows && requiredHeight > usableContentHeight(cursor.page)) {
+          const first = group.find((member) => member.nodeType === Node.ELEMENT_NODE);
+          const constraint =
+            first === undefined ? undefined : this.#constraints.get(first as Element);
+          if (constraint !== undefined)
+            this.#warnOnce(
+              "AVOID_RELAXED",
+              constraint,
+              "Adjacent break avoidance could not fit on a fresh page.",
+              "break-after",
+              "avoid",
+              "The group was fragmented in source order.",
+            );
+        }
       }
       const run = this.#collectPlacementRun(nodes, index, cursor, pendingBreakAfter);
       if (run !== undefined) {
@@ -2993,7 +3275,7 @@ class RecursiveFragmenter {
       if (contributesToFlow) {
         const requestedName =
           node.nodeType === Node.ELEMENT_NODE
-            ? authoredPageName(node as Element)
+            ? this.#constraints.get(node as Element)?.authoredName
             : mode === "root"
               ? undefined
               : cursor.page.name;
@@ -3232,7 +3514,7 @@ class RecursiveFragmenter {
       const shellIsEmpty = ![...shell.childNodes].some((child) => !isNonFlowNode(child));
       if (shellIsEmpty) shell.remove();
       parentAtFragment = continueParent(name);
-      if (!shellIsEmpty) shell = this.#cloneFragment(element, false);
+      if (!shellIsEmpty) shell = this.#cloneBoxFragment(element, shell);
       shellRowTracks = [];
       applyShellTracks();
       parentAtFragment.container.append(shell);
@@ -3299,6 +3581,38 @@ class RecursiveFragmenter {
       return parentCursor;
     }
 
+    if (element.localName === "ol") {
+      const list = element as HTMLOListElement;
+      const view = element.ownerDocument.defaultView;
+      const items = [...list.children].filter(
+        (child): child is HTMLLIElement =>
+          child.localName === "li" && view?.getComputedStyle(child).display === "list-item",
+      );
+      const customCounter = [list, ...items].some((item) => {
+        const style = view?.getComputedStyle(item);
+        return /(?:^|\s)list-item(?=\s|$)/.test(
+          `${style?.counterReset} ${style?.counterSet} ${style?.counterIncrement}`,
+        );
+      });
+      if (customCounter)
+        this.#warnOnce(
+          "UNSUPPORTED_FRAGMENTATION_CONTEXT",
+          constraint,
+          "Authored list-item counters may restart across list fragments.",
+          "counter-reset",
+          "list-item",
+          "Preserved authored counter rules on each fragment; continuation numbering is browser-defined.",
+        );
+      if (!customCounter) {
+        let ordinal = list.hasAttribute("start") ? list.start : list.reversed ? items.length : 1;
+        for (const item of items) {
+          if (item.hasAttribute("value")) ordinal = item.value;
+          item.value = ordinal;
+          ordinal += list.reversed ? -1 : 1;
+        }
+        this.#fragmentedLists.add(list);
+      }
+    }
     element.replaceChildren();
     let parentAtFragment = parentCursor;
     let shell = element;
@@ -3307,7 +3621,7 @@ class RecursiveFragmenter {
       const shellIsEmpty = ![...shell.childNodes].some((child) => !isNonFlowNode(child));
       if (shellIsEmpty) shell.remove();
       parentAtFragment = continueParent(name);
-      if (!shellIsEmpty) shell = this.#cloneFragment(element, false);
+      if (!shellIsEmpty) shell = this.#cloneBoxFragment(element, shell);
       parentAtFragment.container.append(shell);
       shellCursor = this.#shellCursor(parentAtFragment, shell, constraint);
       return shellCursor;
@@ -3332,7 +3646,7 @@ class RecursiveFragmenter {
     let shellCursor = this.#shellCursor(parentAtFragment, shell, constraint);
     const continueShell: ContinueFragment = (name) => {
       parentAtFragment = continueParent(name);
-      shell = this.#cloneFragment(element, false);
+      shell = this.#cloneBoxFragment(element, shell);
       parentAtFragment.container.append(shell);
       shellCursor = this.#shellCursor(parentAtFragment, shell, constraint);
       return shellCursor;
@@ -3423,7 +3737,7 @@ class RecursiveFragmenter {
     let shellCursor = this.#shellCursor(parentAtFragment, shell, constraint);
     const continueShell: ContinueFragment = (name) => {
       parentAtFragment = continueParent(name);
-      shell = this.#cloneFragment(element, false);
+      shell = this.#cloneBoxFragment(element, shell);
       parentAtFragment.container.append(shell);
       shellCursor = this.#shellCursor(parentAtFragment, shell, constraint);
       return shellCursor;
@@ -4031,13 +4345,6 @@ export async function buildGeneration(
       const paginate = async (generatedValues: ReadonlyMap<string, string>, passNumber: number) => {
         probe.replaceChildren();
         const passSource = sourceFlow.cloneNode(true) as HTMLElement;
-        preparePublishingPass(
-          passSource,
-          publishing,
-          generatedValues,
-          settings.experimental,
-          settings.limits,
-        );
         hoistFlowStyles(passSource);
         // The unplaced source is never measured in place, but while it was
         // laid out every placement relaid out all of it: a 1,000-page mount
@@ -4049,6 +4356,14 @@ export async function buildGeneration(
         passSource.setAttribute(UNPLACED_SOURCE_ATTRIBUTE, "");
         passSource.style.setProperty("content-visibility", "hidden");
         probe.append(passSource);
+        preparePublishingPass(
+          passSource,
+          publishing,
+          generatedValues,
+          settings.experimental,
+          settings.limits,
+        );
+
         await settlePaginationAssets(
           frameDocument,
           Object.freeze({
@@ -4088,6 +4403,7 @@ export async function buildGeneration(
           atomicInteriorSkipEligible,
         );
         const breakConstraints = captured.constraints;
+        for (const element of captured.fixedFurniture) element.remove();
         const allocatePage = (name: string | undefined): PageParts => {
           throwIfAborted(signal);
           if (passPages.length >= settings.limits.maxPages) {
@@ -4140,6 +4456,8 @@ export async function buildGeneration(
           "root",
         );
         await yieldBetweenStages();
+        fragmenter.normalizeListContinuations();
+        fragmenter.repeatFixedFurniture(captured.fixedFurniture, passPages);
         const finalized = finalizePublishingPass(passPages, publishing, settings.experimental);
         await yieldBetweenStages();
         return {

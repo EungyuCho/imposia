@@ -8,10 +8,19 @@ it is not an implementation, API, architecture, test, fixture, naming, or
 behavioral reference. Implementation code, fixtures, and independently authored
 tests must be written from the requirements and the standards below.
 
-Contributors must not inspect, copy, translate, port, or adapt third-party
-paged-layout implementation source, tests, fixtures, bundles, comments, names,
-or architecture. A public capability label is not evidence of how Imposia should
-implement that capability.
+High-level public test inventories (category labels and descriptions of the
+scenario being tested) may also identify coverage gaps. This permits independent
+tests of the same general situation, not reuse of assertion code, fixture
+markup/CSS, prose, assets, reference images, or implementation-specific expected
+results. Derive expectations from the Web standards and Imposia's documented
+contract; record a mismatch as a compatibility gap instead of copying another
+engine's output. The independently authored pagination topic suite follows this
+boundary (see [pagination-topics.md](pagination-topics.md)).
+
+Except for that high-level inventory, contributors must not inspect, copy,
+translate, port, or adapt third-party paged-layout implementation source, tests,
+fixtures, bundles, comments, names, or architecture. A public capability label
+is not evidence of how Imposia should implement that capability.
 
 ## Public contracts used
 
@@ -105,6 +114,9 @@ Every contribution must satisfy all items before review:
 - [ ] I used any competitor public documentation only as a high-level capability
       inventory, never as an implementation, API, architecture, test, fixture,
       naming, or behavior reference.
+- [ ] If I used public test category labels or scenario descriptions to identify
+      gaps, I authored the input, assertion code, and expected results independently
+      under the inventory boundary above.
 - [ ] I did not inspect, copy, translate, port, or adapt implementation source,
       tests, fixtures, bundles, comments, naming, or architecture from a
       third-party paged-layout implementation.

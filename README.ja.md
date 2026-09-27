@@ -111,7 +111,9 @@ Imposia はワークフローの中心に 1 つのページ文書を置きます
 | :--- | ---: | ---: | ---: |
 | 単語 1 つの編集後の再描画（50 ページ） | **30 ms** | 217 ms | 212 ms |
 | 200 ページのページ分割 | **131 ms** | 849 ms | 2,154 ms |
-| ブラウザー用バンドル全体、gzip | **59.4 KiB** | 94.2 KiB | 215.2 KiB |
+| ブラウザー用バンドル全体、gzip | **68.3 KiB** | 94.2 KiB | 215.2 KiB |
+
+サイズは 2026 年 9 月 27 日に 0.6.0 で測定し、React と React DOM は含みません。Core 全体のブラウザーファイルは gzip 68.3 KiB です。ページ分割の正確性修正による増加分を反映し、予算を 1〜1.5 KiB 引き上げました。サイズ最適化による削減ではありません。[測定方法と予算変更の根拠](https://github.com/EungyuCho/imposia/blob/main/docs/bundle-size.md)。 実行時間は 2026 年 9 月 24 日の Apple M4・Chromium 149 での 7 回の中央値です。`pnpm build` の後、サイズは `pnpm bundle:size`、時間は `pnpm benchmark` で再測定できます。
 
 - 3 つとも同じページ数になりました。Paged.js と Vivliostyle には差分更新がないため編集のたびに最初から描画し直し、Imposia は `controller.update()` で再確定します。
 - Paged.js と Vivliostyle は文書化された入口だけを呼び出し、依存関係に追加せず jsDelivr から読み込みました。方法・バージョン・ハッシュ・注意点: [`docs/benchmarks.md`](./docs/benchmarks.md)

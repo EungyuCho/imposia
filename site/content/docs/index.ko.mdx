@@ -42,16 +42,24 @@ Imposia는 이 질문 자체를 없앱니다. 이미 사용하던 HTML과 CSS를
 
 ## 크기와 속도
 
+| 사용 경로 | gzip 크기 | gzip 예산 |
+| --- | ---: | ---: |
+| Core · PageDocument | 63.2 KiB | 63.5 KiB |
+| Core · Publication | 67.4 KiB | 68 KiB |
+| Viewer · PageDocument | 11.8 KiB | 13 KiB |
+| Client · PageDocument | 71.8 KiB | 72 KiB |
+| React · PageViewer | 73.6 KiB | 74 KiB |
+
+번들 크기는 2026년 9월 27일 0.6.0에서 측정했으며 React와 React DOM은 제외합니다. Core 전체 브라우저 파일은 gzip 68.3 KiB입니다. 페이지네이션 정확성 수정에 따른 증가분을 반영해 예산을 1~1.5 KiB 높였습니다. 크기 최적화 결과는 아닙니다. [측정 방법과 예산 변경 근거](https://github.com/EungyuCho/imposia/blob/main/docs/bundle-size.md).
+
 | 항목 | 결과 |
 | --- | ---: |
-| Core 페이지네이션(`mountPageDocument`), 압축(minify·gzip) 후 | 56.7 KiB |
-| Core를 포함한 React 페이지 뷰어(`ImposiaPageViewer`), 압축(minify·gzip) 후 | 67.2 KiB |
 | 99페이지 문서 페이지네이션 | 127 ms |
 | 그 문서에서 단어 하나를 바꾸고 다시 확정 | 127 ms |
 | 확정 직후 첫 화면 렌더링 | 2.0 ms |
 | 항목마다 `<style>`이 있는 100개 항목 Publication 페이지네이션 | 97 ms |
 
-2026년 9월 24일 Apple M4의 Chromium 149에서 측정했습니다. 시간은 7회 측정의 중앙값이고, 크기에는 React와 React DOM이 포함되지 않습니다. 직접 측정하려면 저장소에서 `pnpm build`를 실행한 뒤 `pnpm benchmark`를 실행하세요.
+실행 시간은 2026년 9월 24일 Apple M4·Chromium 149에서 7회 측정한 중앙값입니다. 크기는 `pnpm build` 후 `pnpm bundle:size`, 시간은 `pnpm benchmark`로 다시 측정할 수 있습니다.
 
 ## 경계를 확인하세요
 

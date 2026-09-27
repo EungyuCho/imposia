@@ -35,6 +35,12 @@ allowlist.
 
 ## Focused publishing checks
 
+The independently authored [pagination topic suite](pagination-topics.md) adds
+183 separately reported Chromium scenarios (110 topics, 29 boundary/review
+variants and 44 combinations), plus two multi-generation update cases. All semantic assertions run normally; the thirteen initial failures
+were repaired and the expected-failure registry was removed. Recovery assertions
+remain explicit support-boundary checks, not claims of full CSS compatibility.
+
 | Scenario | Exact invocation | Binary observable | Captured artifact |
 | --- | --- | --- | --- |
 | Minified browser consumer routes and gzip budgets | `CI=true pnpm bundle:size` | Exit `0`; six source-level ESM routes report minified and gzip bytes, and every gzip result remains within its named budget | [bundle-size.md](bundle-size.md) and repository terminal output |
@@ -79,3 +85,8 @@ The package READMEs and root README contain compile-shaped examples for:
 These examples intentionally avoid claiming complete CSS parity, fixed-layout
 EPUB, or PDF-byte export. The [compatibility matrix](compatibility.md) is the
 source of truth when an example needs a status or boundary.
+
+The [pagination combination matrix](pagination-topics.md#combination-coverage)
+adds 44 static cases and two multi-generation update cases to the Chromium
+reference gate. These assert cross-feature geometry and publishing state, not
+upstream line coverage or visual equivalence.

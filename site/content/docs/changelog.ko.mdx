@@ -5,7 +5,12 @@ description: 공개된 Imposia 패키지 버전별 변경 사항을 확인합니
 
 이 페이지는 버전이 매겨진 Imposia 릴리스를 요약합니다. `@imposia/core`, `@imposia/viewer`, `@imposia/client`, `@imposia/react`는 같은 버전 번호를 사용하며, 전체 기록은 저장소의 [CHANGELOG.md](https://github.com/EungyuCho/imposia/blob/main/CHANGELOG.md)에 있습니다.
 
-## 0.6.0 — 2026년 9월 24일
+## 0.6.0 — 2026년 9월 27일
+
+- 분할 경계의 반복 테두리·여백, 각주·page float 겹침, 출판 CSS 우선순위, 목록 이어쓰기, 페이지 이름과 나눔 회피 처리를 수정했습니다. 위치 이동으로 생긴 시각적 넘침 때문에 불필요한 페이지가 생성되지 않습니다.
+- 독립적으로 작성한 페이지네이션 시나리오 183개와 연속 갱신 검사 2개를 추가했습니다. 지원 범위 밖의 입력은 명시적인 진단을 유지합니다.
+- gzip 실측/예산을 갱신했습니다: Core 페이지네이션 63.2/63.5 KiB, Publication 67.4/68 KiB, Viewer 11.8/13 KiB, Client 71.8/72 KiB, React 73.6/74 KiB.
+- 최초 확정 전 iframe 깜박임과 갱신 시 사용자 visibility 설정 손실을 수정하고 문서 라벨 대비를 개선했습니다.
 
 업무 문서를 작성한 모양 그대로 페이지로 나누고, 긴 문서도 빠르게 처리하며, 인쇄 결과가 미리보기와 더 가까워졌습니다. 호환되지 않는 변경이 네 가지 있으니 [마이그레이션 노트](https://github.com/EungyuCho/imposia/blob/main/docs/migrations/0.6.0.md)를 확인하세요.
 

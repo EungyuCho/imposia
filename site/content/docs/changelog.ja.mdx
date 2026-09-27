@@ -5,7 +5,12 @@ description: 公開された各バージョンの Imposia パッケージの変�
 
 このページは、バージョン付きで公開された各 Imposia リリースを要約します。`@imposia/core`、`@imposia/viewer`、`@imposia/client`、`@imposia/react` は同じバージョン番号を使います。完全な記録はリポジトリの [CHANGELOG.md](https://github.com/EungyuCho/imposia/blob/main/CHANGELOG.md) です。
 
-## 0.6.0 — 2026年9月24日
+## 0.6.0 — 2026年9月27日
+
+- 分割境界の余白・罫線の繰り返し、脚注とページフロートの重なり、出版 CSS の優先順位、リストの継続、ページ名、改ページ回避を修正しました。位置指定による描画のはみ出しで余分なページは生成されません。
+- 独立に作成したページ分割シナリオ 183 件と連続更新検査 2 件を追加しました。未対応の入力には明示的な診断を維持します。
+- gzip 実測値/予算を更新しました：Core ページ分割 63.2/63.5 KiB、Publication 67.4/68 KiB、Viewer 11.8/13 KiB、Client 71.8/72 KiB、React 73.6/74 KiB。
+- 初回確定前の iframe のちらつきと更新時の visibility 設定の消失を修正し、ドキュメントラベルのコントラストを改善しました。
 
 ビジネス文書を書いたとおりにページ分割し、長い文書も速く処理し、印刷結果がプレビューにより近くなりました。互換性のない変更が 4 つあります。[移行ノート](https://github.com/EungyuCho/imposia/blob/main/docs/migrations/0.6.0.md)を確認してください。
 

@@ -23,10 +23,32 @@ module replaced by API-compatible throwing stubs. A successful budget section
 ends with:
 
 ```text
-All 6 consumer routes are within their gzip budgets.
+All 5 consumer routes are within their gzip budgets.
 ```
 
-## Current baseline
+## Current measurement: 2026-09-27
+
+Measured from the 0.6.0 release candidate. Sizes are consumer routes with React
+peers external; budgets are upper limits, not the measured sizes.
+
+| Consumer route | Minified | Gzip | Gzip budget |
+| --- | ---: | ---: | ---: |
+| Core · PageDocument | 209.1 KiB | 63.2 KiB | 63.5 KiB |
+| Core · Publication | 224.6 KiB | 67.4 KiB | 68 KiB |
+| Viewer · PageDocument | 40.0 KiB | 11.8 KiB | 13 KiB |
+| Client · PageDocument | 241.1 KiB | 71.8 KiB | 72 KiB |
+| React · PageViewer | 247.9 KiB | 73.6 KiB | 74 KiB |
+
+The full built Core browser artifact is **68.3 KiB gzip**. The landing page
+uses that measurement for its full-bundle comparison. Consumer routes above
+use tree shaking and are not interchangeable with that full artifact.
+
+`node --import tsx scripts/bundle-size.ts --write-report` refreshes
+[`benchmarks/bundle-size.json`](../benchmarks/bundle-size.json) after rebuilding
+Core. Normal checks are read-only and do not rewrite the dated report. Historical
+timing comparisons remain identified by their original commit and measurement date.
+
+## Historical baseline: 2026-09-23
 
 Recorded on 2026-09-23 on the 0.6.0 development line (Apple M1 Max, Node.js 22),
 after the PDF.js viewer removal and the postcss parser-subpath import:
@@ -163,12 +185,12 @@ React imperative handles. That boundary cost is not justified by the current
 5.0 KiB gzip saving. [ADR 0010](architecture/0010-core-epub-bundle-boundary.md)
 records the decision and the conditions for revisiting it.
 
-ADR 0010 revisit-trigger status after the 2026-08-20 re-base: none of the
+Historical ADR 0010 revisit-trigger status after the 2026-08-20 re-base: none of the
 three triggers is met. (1) The EPUB implementation measures 5.0 KiB gzip,
 under the 10 KiB trigger. (2) The `Core · PageDocument` route is within its
 re-based budget — note the re-base makes this trigger strictly tighter, and
 EPUB is now the largest removable contributor of the smaller route, so a
-future overage should evaluate this trigger against the 60 KiB budget. (3) No
+the then-current budget was 60 KiB. The current route budget is 63.5 KiB; see the measured correctness-cost decision below. (3) No
 second exporter needs the trusted semantic projection interface.
 
 ## Verification notes
@@ -183,3 +205,22 @@ second exporter needs the trusted semantic projection interface.
   assets are currently private Core state.
 - **Not measured:** network transfer with HTTP content encoding, application
   code splitting, browser parse time, and CSS.
+
+### Pagination combination correctness (2026-09-27)
+
+The independently authored combination tests exposed repeated slice edges,
+body/note/float collisions, and publishing declarations ignoring the CSS cascade.
+The fixes add collision measurement with source-flow recovery, edge slicing,
+and importance/specificity handling. No runtime dependency was added.
+
+| Consumer route | Before (gzip) | After (gzip) | Old budget | New budget |
+| --- | ---: | ---: | ---: | ---: |
+| Core · PageDocument | 61.9 KiB | 63.2 KiB | 62 KiB | 63.5 KiB |
+| Core · Publication | 66.2 KiB | 67.4 KiB | 67 KiB | 68 KiB |
+| Viewer · PageDocument | 11.8 KiB | 11.8 KiB | 13 KiB | 13 KiB |
+| Client · PageDocument | 70.6 KiB | 71.8 KiB | 71 KiB | 72 KiB |
+| React · PageViewer | 72.4 KiB | 73.6 KiB | 73 KiB | 74 KiB |
+
+Decision: account for the measured correctness cost with a 1–1.5 KiB increase on
+Core-bearing routes, retaining tight headroom. This is an explicit budget
+increase, not a size optimization. The unchanged Viewer budget remains 13 KiB.

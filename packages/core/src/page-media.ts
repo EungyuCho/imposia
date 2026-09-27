@@ -192,12 +192,13 @@ const ABSOLUTE_LENGTH = /^\+?(?:\d+(?:\.\d+)?|\.\d+)(px|mm|cm|in|pt|pc)$/i;
 
 function absoluteLengthCssPx(value: string): number | undefined {
   const normalized = value.trim().toLowerCase();
+  if (/^\+?0(?:\.0+)?$/.test(normalized)) return 0;
   const match = ABSOLUTE_LENGTH.exec(normalized);
   if (match === null) return undefined;
   const unit = match[1];
   if (unit === undefined) return undefined;
   const amount = Number.parseFloat(normalized);
-  if (!Number.isFinite(amount) || amount <= 0) return undefined;
+  if (!Number.isFinite(amount) || amount < 0) return undefined;
   const factor =
     unit === "px"
       ? 1
@@ -211,7 +212,7 @@ function absoluteLengthCssPx(value: string): number | undefined {
               ? 96 / 72
               : 16;
   const result = amount * factor;
-  return Number.isFinite(result) && result > 0 ? result : undefined;
+  return Number.isFinite(result) && result >= 0 ? result : undefined;
 }
 
 function pageRuleWarning(
@@ -270,8 +271,9 @@ function parsedPageSize(value: string): ParsedPageSize | undefined {
   const second = tokens[1];
   const firstLength = absoluteLengthCssPx(first);
   if (firstLength !== undefined) {
+    if (firstLength <= 0) return undefined;
     const secondLength = second === undefined ? firstLength : absoluteLengthCssPx(second);
-    if (secondLength === undefined) return undefined;
+    if (secondLength === undefined || secondLength <= 0) return undefined;
     return { size: { widthCssPx: firstLength, heightCssPx: secondLength }, orientation: undefined };
   }
   const firstOrientation = pageOrientationKeyword(first);
@@ -702,7 +704,12 @@ function hostSize(value: unknown): Readonly<{ widthCssPx: number; heightCssPx: n
     typeof record?.width === "string" ? absoluteLengthCssPx(record.width) : undefined;
   const heightCssPx =
     typeof record?.height === "string" ? absoluteLengthCssPx(record.height) : undefined;
-  if (widthCssPx === undefined || heightCssPx === undefined) {
+  if (
+    widthCssPx === undefined ||
+    heightCssPx === undefined ||
+    widthCssPx <= 0 ||
+    heightCssPx <= 0
+  ) {
     throw invalidPageGeometry(
       `Page size must be ${[...PAGE_SIZE_KEYWORDS.keys()].join(", ")}, or two positive absolute lengths.`,
     );
@@ -715,7 +722,7 @@ function hostMarginEdges(value: unknown): PageMargins {
     const parsed = parsedMargins(value);
     if (parsed === undefined || value.trim().split(/\s+/).length !== 1) {
       throw invalidPageGeometry(
-        "Page margin must be one positive absolute length or four named edges.",
+        "Page margin must be one non-negative absolute length or four named edges.",
       );
     }
     return parsed;
@@ -723,7 +730,7 @@ function hostMarginEdges(value: unknown): PageMargins {
   const record = recordValue(value);
   if (record === undefined) {
     throw invalidPageGeometry(
-      "Page margin must be one positive absolute length or four named edges.",
+      "Page margin must be one non-negative absolute length or four named edges.",
     );
   }
   const values: PageMarginEdges = {
@@ -742,7 +749,7 @@ function hostMarginEdges(value: unknown): PageMargins {
     bottomCssPx === undefined ||
     leftCssPx === undefined
   ) {
-    throw invalidPageGeometry("Every page margin edge must be a positive absolute length.");
+    throw invalidPageGeometry("Every page margin edge must be a non-negative absolute length.");
   }
   return Object.freeze({ topCssPx, rightCssPx, bottomCssPx, leftCssPx });
 }
