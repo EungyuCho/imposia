@@ -607,6 +607,7 @@ test("keeps failed initial generations atomic and rejects print without current"
           ready: Promise<unknown>;
           current: unknown;
           print(): Promise<void>;
+          update(source: { html: string }): Promise<{ iframe: HTMLIFrameElement }>;
           destroy(): Promise<void>;
         };
       };
@@ -663,9 +664,19 @@ test("keeps failed initial generations atomic and rejects print without current"
         initialCurrent: initialController.current === undefined,
         printError,
       };
+      const initialFrame = initialHost.querySelector("iframe");
+      const visibilityAfterFailure =
+        initialFrame === null ? null : getComputedStyle(initialFrame).visibility;
+      const recovered = await initialController.update({ html: "<p>First successful commit</p>" });
+      const recovery = {
+        visibilityAfterFailure,
+        visibilityAfterRecovery: getComputedStyle(recovered.iframe).visibility,
+        styleAfterRecovery: recovered.iframe.getAttribute("style"),
+        sameFrameAfterRecovery: recovered.iframe === initialFrame,
+      };
       await progressController.destroy();
       await initialController.destroy();
-      return result;
+      return { ...result, ...recovery };
     });
 
     expect(observation.progressError).toBe("progress callback failed");
@@ -675,13 +686,17 @@ test("keeps failed initial generations atomic and rejects print without current"
     expect(observation.initialError).toBe("TypeError");
     expect(observation.initialCurrent).toBe(true);
     expect(observation.printError).toBe("TypeError");
+    expect(observation.visibilityAfterFailure).toBe("hidden");
+    expect(observation.visibilityAfterRecovery).toBe("visible");
+    expect(observation.styleAfterRecovery).toBeNull();
+    expect(observation.sameFrameAfterRecovery).toBe(true);
   } finally {
     expect(errors).toEqual([]);
     expect(pageErrors).toEqual([]);
   }
 });
 
-test("keeps the canonical frame invisible until the first generation commits", async ({
+test("reveals the first commit and preserves consumer visibility on updates", async ({
   page,
   browserName,
 }) => {
@@ -693,7 +708,13 @@ test("keeps the canonical frame invisible until the first generation commits", a
         mountPageDocument(
           host: HTMLElement,
           source: { html: string },
-        ): { ready: Promise<{ iframe: HTMLIFrameElement }>; destroy(): Promise<void> };
+        ): {
+          ready: Promise<{ iframe: HTMLIFrameElement }>;
+          update(source: {
+            html: string;
+          }): Promise<{ iframe: HTMLIFrameElement; generation: number }>;
+          destroy(): Promise<void>;
+        };
       };
       const host = document.body.appendChild(document.createElement("div"));
       const controller = core.mountPageDocument(host, {
@@ -705,12 +726,36 @@ test("keeps the canonical frame invisible until the first generation commits", a
       const before = frame === null ? null : getComputedStyle(frame).visibility;
       const ready = await controller.ready;
       const after = getComputedStyle(ready.iframe).visibility;
+      const initialStyle = ready.iframe.getAttribute("style");
+      ready.iframe.style.visibility = "hidden";
+      ready.iframe.style.width = "640px";
+      const consumerStyle = ready.iframe.getAttribute("style");
+      const updated = await controller.update({ html: "<p>Updated content</p>" });
+      const afterUpdate = getComputedStyle(updated.iframe).visibility;
+      const stylePreserved = updated.iframe.getAttribute("style") === consumerStyle;
+      const sameFrame = updated.iframe === ready.iframe;
       await controller.destroy();
       host.remove();
-      return { before, after };
+      return {
+        before,
+        after,
+        initialStyle,
+        afterUpdate,
+        stylePreserved,
+        sameFrame,
+        generation: updated.generation,
+      };
     });
     // An empty frame would show as a blank box until pagination finishes.
-    expect(observation).toEqual({ before: "hidden", after: "visible" });
+    expect(observation).toEqual({
+      before: "hidden",
+      after: "visible",
+      initialStyle: null,
+      afterUpdate: "hidden",
+      stylePreserved: true,
+      sameFrame: true,
+      generation: 2,
+    });
   } finally {
     expect(errors).toEqual([]);
     expect(pageErrors).toEqual([]);

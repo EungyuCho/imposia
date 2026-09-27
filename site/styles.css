@@ -163,7 +163,7 @@ body.imposia-root {
 
 /* Sidebar group titles read as the landing's small mono labels. */
 #nd-sidebar p:not(:has(a)) {
-  color: var(--imposia-ink-3);
+  color: var(--imposia-ink-2);
   font: 600 11px / 1.2 var(--imposia-mono);
   letter-spacing: 0.06em;
   text-transform: uppercase;

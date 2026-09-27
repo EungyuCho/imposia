@@ -433,10 +433,13 @@ function createPageDocumentController(
             current = document;
             if (previous !== undefined) releaseSnapshot(previous);
             committed = true;
-            iframe.style.removeProperty("visibility");
-            // Leave no empty style attribute behind: presenters restore the
-            // frame's attributes exactly when they let go of it.
-            if (iframe.getAttribute("style") === "") iframe.removeAttribute("style");
+            // Only release Core's initial hiding; subsequent commits preserve
+            // visibility set by the consumer or presenter.
+            if (previous === undefined) {
+              iframe.style.removeProperty("visibility");
+              // Presenters restore the frame's attributes exactly on release.
+              if (iframe.getAttribute("style") === "") iframe.removeAttribute("style");
+            }
             for (const url of oldBlobUrls) URL.revokeObjectURL(url);
             return document;
           } catch (error: unknown) {

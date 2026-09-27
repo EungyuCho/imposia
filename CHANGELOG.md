@@ -14,6 +14,9 @@ versioning for its published package interfaces. What that means before `1.0`
   corner for as long as the first pagination took. React viewer hosts also
   keep it invisible until the Viewer adopts and sizes it, which removes the
   last frame of that flash.
+- Subsequent document updates preserve consumer-set iframe visibility and other
+  inline styles after the first successful commit.
+- Documentation sidebar group labels use a darker text color for readable contrast.
 
 ## 0.6.0 — 2026-09-24
 
