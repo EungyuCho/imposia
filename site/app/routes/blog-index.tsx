@@ -60,12 +60,12 @@ export default function BlogIndexRoute() {
             </div>
             <div className="blog-feature-copy">
               <p className="blog-eyebrow">
-                {copy.latest} · {featured.category}
+                {copy.latest} · <span lang={featured.locale}>{featured.category}</span>
               </p>
-              <h2>
+              <h2 lang={featured.locale}>
                 <Link to={`/${lang}/blog/${featured.slug}`}>{featured.title}</Link>
               </h2>
-              <p>{featured.description}</p>
+              <p lang={featured.locale}>{featured.description}</p>
               <div className="blog-feature-bottom">
                 <time dateTime={featured.date}>{publicationDate(featured.date, lang)}</time>
                 <Link className="blog-read-link" to={`/${lang}/blog/${featured.slug}`}>
@@ -81,11 +81,13 @@ export default function BlogIndexRoute() {
             {remaining.map((article) => (
               <li key={article.slug}>
                 <div>
-                  <span className="blog-eyebrow">{article.category}</span>
-                  <h2>
+                  <span className="blog-eyebrow" lang={article.locale}>
+                    {article.category}
+                  </span>
+                  <h2 lang={article.locale}>
                     <Link to={`/${lang}/blog/${article.slug}`}>{article.title}</Link>
                   </h2>
-                  <p>{article.description}</p>
+                  <p lang={article.locale}>{article.description}</p>
                 </div>
                 <div className="blog-list-meta">
                   <time dateTime={article.date}>{publicationDate(article.date, lang)}</time>

@@ -339,6 +339,12 @@ test("localized articles disclose English fallback and keep canonical language h
     );
 
     for (const locale of ["ja", "zh-CN"]) {
+      await page.goto(`/${locale}/blog`);
+      await expect(page.locator(".blog-feature-copy h2")).toHaveAttribute("lang", "en");
+      await expect(page.locator(".blog-feature-copy > p:not(.blog-eyebrow)")).toHaveAttribute(
+        "lang",
+        "en",
+      );
       await page.goto(`/${locale}/blog/how-imposia-works`);
       await expect(page.locator("html")).toHaveAttribute("lang", locale);
       await expect(page.locator(".blog-post")).toHaveAttribute("lang", "en");
