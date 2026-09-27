@@ -5,7 +5,7 @@ import blogHref from "../../blog.css?url";
 import { ARTICLE_COPY } from "../../lib/article-copy";
 import { listArticles } from "../../lib/article-index";
 import { isSupportedLocale, type Locale } from "../../lib/i18n";
-import { SITE_ORIGIN } from "../../lib/site-url";
+import { localizedSearchLinks } from "../../lib/seo";
 import { ArticleShell } from "../articles/shell";
 
 export const links: LinksFunction = () => [{ href: blogHref, rel: "stylesheet" }];
@@ -17,7 +17,7 @@ export const meta: MetaFunction = ({ params }) => {
   return [
     { title: `${copy.indexTitle} · Imposia` },
     { name: "description", content: copy.indexDescription },
-    { tagName: "link", rel: "canonical", href: `${SITE_ORIGIN}/${lang}/blog` },
+    ...localizedSearchLinks(lang, "blog"),
   ];
 };
 

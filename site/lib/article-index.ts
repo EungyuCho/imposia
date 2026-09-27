@@ -47,6 +47,11 @@ export function getArticleSummary(slug: string, locale: Locale): ArticleSummary 
   return localized?.get(locale) ?? localized?.get("en");
 }
 
+export function getArticleLocales(slug: string): readonly Locale[] {
+  const localized = summaries.get(slug);
+  return LOCALES.filter((locale) => localized?.has(locale));
+}
+
 export function listArticles(locale: Locale): readonly ArticleSummary[] {
   return [...summaries.keys()]
     .map((slug) => getArticleSummary(slug, locale))

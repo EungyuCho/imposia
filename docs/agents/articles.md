@@ -29,6 +29,8 @@ route registry needs manual editing when a post is added. If a translation is
 missing, that locale's URL displays the English article with a visible notice,
 an English `lang` attribute on the article, and a canonical URL pointing at
 the English article. The index also labels the article as English.
+Only authored translations appear in `sitemap.xml` and article `hreflang` links;
+fallback URLs keep the English canonical URL.
 
 Technical claims should cite the relevant product contract or reproducible
 benchmark. A benchmark number needs its fixture, browser, hardware, date, and

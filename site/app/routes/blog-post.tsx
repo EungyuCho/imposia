@@ -3,9 +3,10 @@ import type { LinksFunction, MetaFunction } from "react-router";
 import { Link, Navigate, useParams } from "react-router";
 import blogHref from "../../blog.css?url";
 import { ARTICLE_COPY } from "../../lib/article-copy";
+import { getArticleLocales } from "../../lib/article-index";
 import { getArticle } from "../../lib/articles";
 import { isSupportedLocale, type Locale } from "../../lib/i18n";
-import { SITE_ORIGIN } from "../../lib/site-url";
+import { localizedSearchLinks } from "../../lib/seo";
 import { getMDXComponents } from "../../mdx-components";
 import { ArticleShell } from "../articles/shell";
 
@@ -16,15 +17,12 @@ export const meta: MetaFunction = ({ params }) => {
   const slug = params.slug;
   if (!lang || !isSupportedLocale(lang) || !slug) return [];
   const article = getArticle(slug, lang);
-  if (!article) return [{ title: "Article not found · Imposia" }];
+  if (!article)
+    return [{ title: "Article not found · Imposia" }, { name: "robots", content: "noindex" }];
   return [
     { title: `${article.title} · Imposia` },
     { name: "description", content: article.description },
-    {
-      tagName: "link",
-      rel: "canonical",
-      href: `${SITE_ORIGIN}/${article.locale}/blog/${slug}`,
-    },
+    ...localizedSearchLinks(lang, `blog/${slug}`, getArticleLocales(slug), article.locale),
   ];
 };
 

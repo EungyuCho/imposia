@@ -43,6 +43,21 @@ export const SITE_BLOG_ROUTES = LOCALES.flatMap((locale) => [
   ...[...articleSlugs].sort().map((slug) => `/${locale}/blog/${slug}`),
 ]);
 
+/** Fallback article URLs are useful to readers, but duplicate the English source. */
+export const SITE_INDEXABLE_BLOG_ROUTES = LOCALES.flatMap((locale) => [
+  `/${locale}/blog`,
+  ...articleFiles
+    .filter((file) => file.endsWith(`.${locale}.mdx`))
+    .map((file) => `/${locale}/blog/${file.slice(0, -`.${locale}.mdx`.length)}`)
+    .sort(),
+]);
+
+export const SITE_INDEXABLE_ROUTES = [
+  ...SITE_LOCALE_ROOT_ROUTES,
+  ...SITE_DOC_ROUTES,
+  ...SITE_INDEXABLE_BLOG_ROUTES,
+];
+
 export const SITE_PRERENDER_ROUTES = [
   ...SITE_LOCALE_ROOT_ROUTES,
   ...SITE_DOC_ROUTES,
