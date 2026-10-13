@@ -201,12 +201,15 @@ test("restoring the bottom decoration never leaves the last piece past the body"
   const result = await page.evaluate(async () => {
     const core = (await import("/packages/core/dist/index.js")) as typeof import("@imposia/core");
     const outcomes: { words: number; over: number; kept: boolean; lost: boolean }[] = [];
+    // Comments and whitespace after the last block must neither fail the page nor hide it.
+    const suffixes = ["", "<!-- note -->", "\n   \n", " <!-- note -->\n  "];
     for (let words = 700; words < 1000; words += 6) {
+      const suffix = suffixes[outcomes.length % suffixes.length] ?? "";
       const text = Array.from({ length: words }, (_, index) => `w${index}`).join(" ");
       const html = `<style>@page { size: 148mm 210mm; margin: 12mm; }
         table { border-collapse: separate; border-spacing: 0; width: 100%; table-layout: fixed; }
         td { padding: 10px 6px 70px; border: 0; font: 14px/20px monospace; vertical-align: top; }</style>
-        <table><tr><td>short</td><td><p style="margin: 0">${text}</p></td></tr></table>`;
+        <table><tr><td>short</td><td><p style="margin: 0">${text}</p>${suffix}</td></tr></table>`;
       const host = document.body.appendChild(document.createElement("div"));
       const doc = await core.mountPageDocument(host, { html }).ready;
       const frame = doc.iframe.contentDocument as Document;

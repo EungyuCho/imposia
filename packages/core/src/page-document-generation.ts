@@ -4321,18 +4321,25 @@ class RecursiveFragmenter {
           fragments.push({ page: cursor.page, cells: cellShells });
         }
       };
-      // Where the content of a cell piece ends on the page, ignoring its own padding and
-      // border; undefined for a piece without content.
-      const contentEnd = (piece: Element): number | undefined => {
-        const last = piece.lastChild;
-        if (last === null) return undefined;
-        if (last.nodeType === Node.TEXT_NODE) {
-          const range = piece.ownerDocument.createRange();
-          range.selectNodeContents(last);
-          const rects = range.getClientRects();
-          return rects.length === 0 ? undefined : rects[rects.length - 1]?.bottom;
+      // The last node of a cell piece that is drawn, with where it ends on the page, ignoring
+      // the piece's own padding and border. Comments, whitespace, and boxes that take no
+      // space are skipped; undefined for a piece without content.
+      const lastContent = (piece: Element): { node: Node; end: number } | undefined => {
+        for (let node = piece.lastChild; node !== null; node = node.previousSibling) {
+          if (node.nodeType === Node.TEXT_NODE) {
+            if ((node.textContent ?? "").trim() === "") continue;
+            const range = piece.ownerDocument.createRange();
+            range.selectNodeContents(node);
+            const rects = range.getClientRects();
+            const end = rects[rects.length - 1]?.bottom;
+            if (end !== undefined) return { node, end };
+          } else if (node.nodeType === Node.ELEMENT_NODE) {
+            const rect = (node as Element).getBoundingClientRect();
+            if ((node as Element).getClientRects().length === 0) continue;
+            return { node, end: rect.bottom };
+          }
         }
-        return (last as Element).getBoundingClientRect().bottom;
+        return undefined;
       };
       // The bottom decoration belongs to the last piece of the row, for every cell: a short
       // cell's empty continuation included. It is put back only once every cell has been
@@ -4355,7 +4362,7 @@ class RecursiveFragmenter {
           let overflowing = -1;
           let lowest = Number.NEGATIVE_INFINITY;
           for (const [index, piece] of (fragments[lastDepth]?.cells ?? []).entries()) {
-            const end = contentEnd(piece);
+            const end = lastContent(piece)?.end;
             if (end === undefined) continue;
             const edges = sliceEdges[index];
             let required = end;
@@ -4373,8 +4380,8 @@ class RecursiveFragmenter {
           const edges = sliceEdges[overflowing];
           const piece = fragments[lastDepth]?.cells[overflowing];
           if (edges === undefined || piece === undefined) return;
-          const tail = piece.lastChild;
-          if (tail === null) return;
+          const tail = lastContent(piece)?.node;
+          if (tail === undefined) return;
           piece.removeChild(tail);
           let reached = lastDepth;
           const continuePiece: ContinueFragment = () => {
