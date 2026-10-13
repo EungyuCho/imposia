@@ -15,6 +15,8 @@ type RowObservation = Readonly<{
   tableWidths: readonly number[];
   pinnedCellWidths: readonly string[];
   noteCellWidths: readonly number[];
+  firstRowCellWidths: readonly number[];
+  splitRowCellWidths: readonly (readonly number[])[];
 }>;
 
 async function observe(page: Page, body: string): Promise<RowObservation> {
@@ -69,6 +71,12 @@ async function observe(page: Page, body: string): Promise<RowObservation> {
         pinnedCellWidths: [...frame.querySelectorAll<HTMLElement>("td")].map(
           (cell) => cell.style.width,
         ),
+        firstRowCellWidths: [...(frame.querySelector("tbody tr")?.children ?? [])].map(
+          (cell) => cell.getBoundingClientRect().width,
+        ),
+        splitRowCellWidths: [...frame.querySelectorAll("tr")]
+          .filter((row) => row.querySelector('td[data-cell="notes"]') !== null)
+          .map((row) => [...row.children].map((cell) => cell.getBoundingClientRect().width)),
         noteCellWidths: [...frame.querySelectorAll<HTMLElement>('td[data-cell="notes"]')].map(
           (cell) => cell.getBoundingClientRect().width,
         ),
@@ -362,7 +370,7 @@ test("does not pin cell widths when a fixed layout keeps its columns", async ({
   }
 });
 
-test("restores widths a first row gave its columns on the continuation fragment", async ({
+test("restores the widths a first row gave a fixed-layout table on every continuation", async ({
   page,
   browserName,
 }) => {
@@ -372,7 +380,7 @@ test("restores widths a first row gave its columns on the continuation fragment"
   try {
     const observation = await observe(
       page,
-      `<table style="width: 100%">
+      `<table style="table-layout: fixed; width: 100%">
         <tbody>
           <tr><td style="width: 30%">Name</td><td style="width: 70%">Opening</td></tr>
           <tr style="break-inside: avoid"><td>X</td><td data-cell="notes">${notes.map((token) => `<p>${token} continued remark text</p>`).join("")}</td></tr>
@@ -381,11 +389,18 @@ test("restores widths a first row gave its columns on the continuation fragment"
     );
     expect(flatten(observation, "notes")).toEqual(notes);
     expect(observation.overflowingPages).toEqual([]);
-    const widths = observation.noteCellWidths;
-    expect(widths.length).toBeGreaterThan(1);
-    for (const value of widths) expect(Math.abs(value - (widths[0] ?? 0))).toBeLessThan(0.1);
-    const tables = observation.tableWidths;
-    for (const value of tables) expect(Math.abs(value - (tables[0] ?? 0))).toBeLessThan(0.1);
+    const original = observation.firstRowCellWidths;
+    expect(original).toHaveLength(2);
+    // The first row is the only source of the 30/70 split: every fragment of the
+    // split row, not just the later ones, must still show it.
+    expect((original[0] ?? 0) / ((original[0] ?? 0) + (original[1] ?? 1))).toBeCloseTo(0.3, 1);
+    expect(observation.splitRowCellWidths.length).toBeGreaterThan(1);
+    for (const row of observation.splitRowCellWidths) {
+      expect(row).toHaveLength(original.length);
+      for (const [index, value] of row.entries()) {
+        expect(Math.abs(value - (original[index] ?? 0))).toBeLessThan(0.1);
+      }
+    }
   } finally {
     expect(errors).toEqual([]);
     expect(pageErrors).toEqual([]);
