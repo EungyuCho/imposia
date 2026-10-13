@@ -7,6 +7,35 @@ versioning for its published package interfaces. What that means before `1.0`
 
 ## Unreleased
 
+## 0.8.1 — 2026-10-13
+
+Patch release with typesetting and export fixes. There are no API changes, no
+new options, and no migration note.
+
+### Fixed
+
+- The page body keeps the sheet width minus the side margins: a table wider than
+  the body no longer widens the body or changes the width of other tables, and
+  column widths are measured under that constraint.
+- A table cell broken over pages follows `box-decoration-break`: `slice` keeps
+  the top decoration on the first piece and the bottom one on the last, `clone`
+  keeps it on every piece. Authored styles are left as written.
+- `exportPageDocumentHtml()` renders every page before it measures anchored
+  elements, so positions no longer depend on the preview's scroll position, and
+  it freezes every anchored element (inline or stylesheet `position-anchor`) at
+  its page coordinate. The exported copy forces `content-visibility: visible` on
+  each page, so long tables are fully painted under `screen` and `print`
+  media. The preview's own styles are restored afterwards.
+- Anchored elements are frozen against their containing block with their own
+  `transform` set aside, and the frozen insets and anchor reset are written as
+  inline `!important` so they also beat stylesheet declarations.
+- Cell pieces are sized without the bottom decoration they give up at a cut. The
+  bottom decoration is put back once per row, on its last piece and for every
+  cell (an emptied continuation included); if that overflows the page, the cell
+  reaching lowest cuts its last block and the decoration is settled again.
+  Styles are read before a cell is emptied, so `td:empty` rules cannot change
+  them, and comments or whitespace after the last block are skipped.
+
 ## 0.8.0 — 2026-10-13
 
 Minor release that lets rowspan tables cross pages and makes the HTML export

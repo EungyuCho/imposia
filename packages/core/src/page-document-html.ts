@@ -210,6 +210,114 @@ function adjustCellBorders(source: Document, clone: Element, targetDevicePixelRa
   }
 }
 
+/**
+ * Runs `read` with every page of the live document rendered, then puts each page's inline
+ * `content-visibility` back exactly as it was. Pages skipped by the preview have no layout, so
+ * anything measured inside them would depend on the current scroll position. The read is
+ * synchronous, so no update can interleave with the temporary styles.
+ */
+function withPagesRendered<T>(source: Document, read: () => T): T {
+  const pages = [...source.querySelectorAll<HTMLElement>("[data-imposia-page]")];
+  const previous = pages.map(
+    (page) =>
+      [
+        page.style.getPropertyValue("content-visibility"),
+        page.style.getPropertyPriority("content-visibility"),
+      ] as const,
+  );
+  try {
+    for (const page of pages) page.style.setProperty("content-visibility", "visible", "important");
+    return read();
+  } finally {
+    for (const [index, page] of pages.entries()) {
+      const [value, priority] = previous[index] ?? ["", ""];
+      if (value === "") page.style.removeProperty("content-visibility");
+      else page.style.setProperty("content-visibility", value, priority);
+    }
+  }
+}
+
+const OWN_TRANSFORMS = ["transform", "translate", "rotate", "scale"] as const;
+
+/**
+ * The element's layout box without its own transform. The copy keeps the transform, so a
+ * rectangle that already includes it would apply the offset twice.
+ */
+function untransformedRect(element: HTMLElement): DOMRect {
+  const previous = OWN_TRANSFORMS.map(
+    (name) =>
+      [element.style.getPropertyValue(name), element.style.getPropertyPriority(name)] as const,
+  );
+  try {
+    for (const name of OWN_TRANSFORMS) element.style.setProperty(name, "none", "important");
+    return element.getBoundingClientRect();
+  } finally {
+    for (const [index, name] of OWN_TRANSFORMS.entries()) {
+      const [value, priority] = previous[index] ?? ["", ""];
+      if (value === "") element.style.removeProperty(name);
+      else element.style.setProperty(name, value, priority);
+    }
+  }
+}
+
+/**
+ * Anchor positioning is resolved by the browser and does not survive serialization, so each
+ * anchored element is frozen at the page coordinate measured on the fully rendered original.
+ * Elements anchored through inline styles or stylesheets are both covered.
+ */
+function freezeAnchoredElements(source: Document, clone: HTMLElement): void {
+  const view = source.defaultView;
+  const measured = withPagesRendered(source, () => {
+    const result: { index: number; left: number; top: number }[] = [];
+    const elements = [...source.querySelectorAll<HTMLElement>("[data-imposia-page] *")];
+    for (const [index, element] of elements.entries()) {
+      const style = view?.getComputedStyle(element);
+      const anchored =
+        element.style.getPropertyValue("position-anchor") !== "" ||
+        style?.getPropertyValue("position-anchor").trim().startsWith("--") === true;
+      if (!anchored) continue;
+      const page = element.closest<HTMLElement>("[data-imposia-page]");
+      if (page === null) continue;
+      // Left and top are offsets from the containing block, which is the nearest positioned
+      // ancestor and not necessarily the page.
+      const offsetParent = element.offsetParent;
+      const container =
+        offsetParent !== null && page.contains(offsetParent) ? (offsetParent as HTMLElement) : page;
+      const rect = untransformedRect(element);
+      const containerRect = container.getBoundingClientRect();
+      const scaleX = containerRect.width / container.offsetWidth || 1;
+      const scaleY = containerRect.height / container.offsetHeight || 1;
+      result.push({
+        index,
+        left:
+          (rect.left - containerRect.left) / scaleX -
+          container.clientLeft -
+          (Number.parseFloat(style?.marginLeft ?? "") || 0),
+        top:
+          (rect.top - containerRect.top) / scaleY -
+          container.clientTop -
+          (Number.parseFloat(style?.marginTop ?? "") || 0),
+      });
+    }
+    return result;
+  });
+  const copies = [...clone.querySelectorAll<HTMLElement>("[data-imposia-page] *")];
+  for (const { index, left, top } of measured) {
+    const copy = copies[index];
+    if (copy === undefined) continue;
+    // `!important` also beats stylesheet declarations, including ones marked `!important`.
+    const frozen: [string, string][] = [
+      ["left", `${left}px`],
+      ["top", `${top}px`],
+      ["right", "auto"],
+      ["bottom", "auto"],
+      ["position-anchor", "auto"],
+      ["position-area", "none"],
+    ];
+    for (const [name, value] of frozen) copy.style.setProperty(name, value, "important");
+  }
+}
+
 const URL_ATTRIBUTES = new Set(["src", "href", "xlink:href", "srcset", "poster", "style"]);
 
 async function blobDataUrl(blob: Blob): Promise<string> {
@@ -271,19 +379,11 @@ export async function exportPageDocumentHtml(
     clone.querySelector("head")?.append(title);
   }
 
-  // Anchor positioning is resolved by the browser and does not survive serialization,
-  // so freeze each anchored element at its measured page coordinate.
-  const originals = [...source.querySelectorAll<HTMLElement>('[style*="position-anchor"]')];
-  const copies = [...clone.querySelectorAll<HTMLElement>('[style*="position-anchor"]')];
-  for (const [index, original] of originals.entries()) {
-    const copy = copies[index];
-    const page = original.closest<HTMLElement>("[data-imposia-page]");
-    if (copy === undefined || page === null) continue;
-    const rect = original.getBoundingClientRect();
-    const pageRect = page.getBoundingClientRect();
-    copy.style.left = `${(rect.left - pageRect.left) / (pageRect.width / page.offsetWidth || 1)}px`;
-    copy.style.top = `${(rect.top - pageRect.top) / (pageRect.height / page.offsetHeight || 1)}px`;
-    copy.style.removeProperty("position-anchor");
+  freezeAnchoredElements(source, clone);
+  // The preview skips rendering of off-screen pages; a consumer that renders the copy under
+  // either media type must paint every page.
+  for (const page of clone.querySelectorAll<HTMLElement>("[data-imposia-page]")) {
+    page.style.setProperty("content-visibility", "visible", "important");
   }
 
   if (targetRatio !== undefined) adjustCellBorders(source, clone, targetRatio);

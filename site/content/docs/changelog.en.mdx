@@ -5,6 +5,11 @@ description: See what changed in each published Imposia package version.
 
 This page summarizes each versioned Imposia release. `@imposia/core`, `@imposia/viewer`, `@imposia/client`, and `@imposia/react` use the same version number; the complete record is the repository's [CHANGELOG.md](https://github.com/EungyuCho/imposia/blob/main/CHANGELOG.md).
 
+## 0.8.1 — October 13, 2026
+
+- Fixed the page body width: a table wider than the body no longer widens the body or changes the width of other tables. Cells broken over pages follow `box-decoration-break`, using the space a cut decoration frees, and the bottom decoration is settled on the last piece of the row.
+- `exportPageDocumentHtml` renders every page before measuring anchors, freezes anchored elements against their containing block, and paints every page under `screen` and `print`. No API changes.
+
 ## 0.8.0 — October 13, 2026
 
 - Added `tableRowspan: "split"` (default `"preserve"`): rowspan tables break between rows at a page boundary, merged cells keep their content once and continue as empty cells placed by logical column, and plain containers around a splittable table fragment in place. Table and column widths are carried to every page in this mode.

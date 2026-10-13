@@ -2707,6 +2707,9 @@ class RecursiveFragmenter {
   readonly #sliceEnds = new Map<Element, readonly (readonly [string, string])[]>();
   readonly #fragmentedLists = new Set<Element>();
   readonly #constraints: ReadonlyMap<Element, BreakConstraint>;
+  // Fragments cloned from an element share its break constraint, so that one that is placed
+  // again (the last block of a cell piece moved on) is cut like the element it came from.
+  readonly #clonedConstraints = new WeakMap<Element, BreakConstraint>();
   readonly #hyphenationFallbackTargets: ReadonlySet<Element>;
   readonly #checkpoint: PaginationCheckpoint;
   readonly #signal: AbortSignal;
@@ -2813,10 +2816,16 @@ class RecursiveFragmenter {
     }
   }
 
+  #constraintOf(element: Element): BreakConstraint | undefined {
+    return this.#constraints.get(element) ?? this.#clonedConstraints.get(element);
+  }
+
   #cloneFragment<ElementType extends Element>(element: ElementType, deep: boolean): ElementType {
     this.#generatedFragment();
     const clone = element.cloneNode(deep) as ElementType;
     stripContinuationIds(clone);
+    const constraint = this.#constraintOf(element);
+    if (constraint !== undefined) this.#clonedConstraints.set(clone, constraint);
     if (this.#fragmentedLists.has(element)) this.#fragmentedLists.add(clone);
     if (clone.localName === "li") (clone as unknown as HTMLElement).style.listStyleType = "none";
     return clone;
@@ -3530,7 +3539,7 @@ class RecursiveFragmenter {
     }
 
     const element = node as Element;
-    const constraint = this.#constraints.get(element);
+    const constraint = this.#constraintOf(element);
     if (constraint === undefined) {
       initialCursor.container.append(element);
       this.#markPageContent(initialCursor.page);
@@ -4207,6 +4216,43 @@ class RecursiveFragmenter {
           html.style.setProperty("width", cssPx(widths[index] ?? 0));
         }
       };
+      // `box-decoration-break: slice` (the initial value) draws a cell's box as if it were
+      // never broken: the top padding and border belong to the first piece, the bottom ones
+      // to the last, and nothing is repeated at a cut. `clone` keeps them on every piece,
+      // which is what a plain clone of the shell already does. Only the generated styling
+      // changes; the authored declarations stay as written. Collapsed borders belong to the
+      // table, so only padding is cut there. Read while the cell still has its authored
+      // content: emptying it first would let rules such as `td:empty` change the values.
+      const collapsedBorders =
+        tableShell.ownerDocument.defaultView?.getComputedStyle(tableShell).borderCollapse ===
+        "collapse";
+      const sliceEdges = cells.map((cell) => {
+        const style = cell.ownerDocument.defaultView?.getComputedStyle(cell);
+        const mode =
+          style?.getPropertyValue("box-decoration-break") ||
+          style?.getPropertyValue("-webkit-box-decoration-break");
+        if (style === undefined || mode === "clone" || style.writingMode !== "horizontal-tb") {
+          return undefined;
+        }
+        const properties = collapsedBorders
+          ? ["padding-top", "padding-bottom"]
+          : ["padding-top", "border-top-width", "padding-bottom", "border-bottom-width"];
+        return new Map(properties.map((property) => [property, style.getPropertyValue(property)]));
+      });
+      const setEdges = (
+        cell: Element,
+        edges: Map<string, string>,
+        side: "top" | "bottom",
+        zero: boolean,
+      ): void => {
+        const html = htmlElement(cell);
+        if (html === undefined) return;
+        for (const [property, value] of edges) {
+          if (property.includes(side)) {
+            html.style.setProperty(property, zero ? "0px" : value, "important");
+          }
+        }
+      };
       preserveWidths(cells);
       const contents = cells.map((cell) => [...cell.childNodes]);
       for (const cell of cells) cell.replaceChildren();
@@ -4230,6 +4276,14 @@ class RecursiveFragmenter {
       const fragments: { page: PageParts; cells: Element[] }[] = [
         { page: tableCursor.page, cells },
       ];
+      for (const [index, edges] of sliceEdges.entries()) {
+        const cell = cells[index];
+        if (edges === undefined || cell === undefined) continue;
+        // The first piece keeps its top decoration even where it is empty for now, so that
+        // an author rule such as `td:empty` cannot take it away.
+        setEdges(cell, edges, "top", false);
+        setEdges(cell, edges, "bottom", true);
+      }
       const fragmentCursor = (depth: number, index: number): FragmentCursor => {
         const fragment = fragments[depth];
         const cell = fragment?.cells[index];
@@ -4246,13 +4300,115 @@ class RecursiveFragmenter {
       };
       const ensureFragment = (depth: number): void => {
         while (fragments.length <= depth) {
+          const previous = fragments[fragments.length - 1];
           const cursor = continueTable(parentAtFragment.page.name, groupTemplate);
           const rowShell = this.#cloneFragment(row, false);
           const cellShells = cells.map((cell) => this.#cloneFragment(cell, false));
           rowShell.append(...cellShells);
           cursor.container.append(rowShell);
           preserveWidths(cellShells);
+          for (const [index, edges] of sliceEdges.entries()) {
+            const shell = cellShells[index];
+            const before = previous?.cells[index];
+            if (edges === undefined || shell === undefined || before === undefined) continue;
+            // A piece is assumed to continue until its content ends there: the space is
+            // measured without the bottom decoration, and `finishPiece` puts it back on the
+            // piece that turns out to be the last.
+            setEdges(before, edges, "bottom", true);
+            setEdges(shell, edges, "top", true);
+            setEdges(shell, edges, "bottom", true);
+          }
           fragments.push({ page: cursor.page, cells: cellShells });
+        }
+      };
+      // The last node of a cell piece that is drawn, with where it ends on the page, ignoring
+      // the piece's own padding and border. Comments, whitespace, and boxes that take no
+      // space are skipped; undefined for a piece without content.
+      const lastContent = (piece: Element): { node: Node; end: number } | undefined => {
+        for (let node = piece.lastChild; node !== null; node = node.previousSibling) {
+          if (node.nodeType === Node.TEXT_NODE) {
+            if ((node.textContent ?? "").trim() === "") continue;
+            const range = piece.ownerDocument.createRange();
+            range.selectNodeContents(node);
+            const rects = range.getClientRects();
+            const end = rects[rects.length - 1]?.bottom;
+            if (end !== undefined) return { node, end };
+          } else if (node.nodeType === Node.ELEMENT_NODE) {
+            const rect = (node as Element).getBoundingClientRect();
+            if ((node as Element).getClientRects().length === 0) continue;
+            return { node, end: rect.bottom };
+          }
+        }
+        return undefined;
+      };
+      // The bottom decoration belongs to the last piece of the row, for every cell: a short
+      // cell's empty continuation included. It is put back only once every cell has been
+      // placed. If the last piece then no longer fits, the overflowing cell's last block moves
+      // on through the same fragmenter and the decoration is settled again on the new last
+      // piece, so the row is never left overflowing just to draw a border.
+      const finishRow = async (): Promise<void> => {
+        for (let attempt = 0; attempt < 64; attempt += 1) {
+          this.check();
+          const lastDepth = fragments.length - 1;
+          for (const [index, edges] of sliceEdges.entries()) {
+            const piece = fragments[lastDepth]?.cells[index];
+            if (edges !== undefined && piece !== undefined) setEdges(piece, edges, "bottom", false);
+          }
+          if (!this.#cursorOverflows(fragmentCursor(lastDepth, 0))) return;
+          // The overflow is a property of the page, and cells share the height of their row,
+          // so box heights cannot tell which cell caused it. The cell whose content ends
+          // lowest, together with the decoration it gets back, is the one to cut; a cell
+          // without content has nothing to cut and is skipped.
+          let overflowing = -1;
+          let lowest = Number.NEGATIVE_INFINITY;
+          for (const [index, piece] of (fragments[lastDepth]?.cells ?? []).entries()) {
+            const end = lastContent(piece)?.end;
+            if (end === undefined) continue;
+            const edges = sliceEdges[index];
+            let required = end;
+            if (edges !== undefined) {
+              for (const [property, value] of edges) {
+                if (property.includes("bottom")) required += Number.parseFloat(value) || 0;
+              }
+            }
+            if (required > lowest) {
+              lowest = required;
+              overflowing = index;
+            }
+          }
+          if (overflowing < 0) return;
+          const edges = sliceEdges[overflowing];
+          const piece = fragments[lastDepth]?.cells[overflowing];
+          if (edges === undefined || piece === undefined) return;
+          const tail = lastContent(piece)?.node;
+          if (tail === undefined) return;
+          piece.removeChild(tail);
+          let reached = lastDepth;
+          const continuePiece: ContinueFragment = () => {
+            const continuing = fragments[reached]?.cells[overflowing];
+            if (continuing !== undefined) setEdges(continuing, edges, "bottom", true);
+            reached += 1;
+            ensureFragment(reached);
+            // The new piece is the last one until more of the tail has to follow it.
+            const candidate = fragments[reached]?.cells[overflowing];
+            if (candidate !== undefined) setEdges(candidate, edges, "bottom", false);
+            return fragmentCursor(reached, overflowing);
+          };
+          // Placed with the decoration in place, so the tail splits where it still fits.
+          await this.placeFlowChildren(
+            [tail],
+            fragmentCursor(lastDepth, overflowing),
+            continuePiece,
+            "shell",
+          );
+          if (reached === lastDepth) return;
+          // The former last piece continues now, for every cell.
+          for (const [index, cellEdges] of sliceEdges.entries()) {
+            const former = fragments[lastDepth]?.cells[index];
+            if (cellEdges !== undefined && former !== undefined) {
+              setEdges(former, cellEdges, "bottom", true);
+            }
+          }
         }
       };
       for (const index of cells.keys()) {
@@ -4269,6 +4425,7 @@ class RecursiveFragmenter {
           "shell",
         );
       }
+      await finishRow();
       for (const fragment of fragments.slice(0, -1)) this.#markPageContent(fragment.page);
       return true;
     };
