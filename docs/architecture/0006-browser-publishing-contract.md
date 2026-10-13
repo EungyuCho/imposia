@@ -24,7 +24,7 @@ would make browser differences indistinguishable from defects.
    create a second iframe or rerun layout.
 3. Core normalizes page presets/custom dimensions/orientation/margins, applies
    host page options with explicit precedence, and supports the documented
-   `@page` selectors and six margin boxes. Breaks, widows/orphans, tables,
+   `@page` selectors and all sixteen margin boxes. Breaks, widows/orphans, tables,
    flex/grid, multicol, target references, named strings, footnotes, and page
    floats use the exact Stable/Experimental/Constrained/Unsupported boundaries
    in [`docs/compatibility.md`](../compatibility.md).
@@ -76,8 +76,31 @@ architecture, API, test, fixture, naming, or behavior reference.
 
 ## Verification evidence
 
-- Core page media and print: [page-media-green.md](../../.omo/evidence/browser-publishing-coverage/page-media-green.md)
-- Recursive/constrained fragmentation: [fragmentation-green.md](../../.omo/evidence/browser-publishing-coverage/fragmentation-green.md)
-- Generated publishing content: [publishing-content-green.md](../../.omo/evidence/browser-publishing-coverage/publishing-content-green.md)
-- Browser EPUB archive: [epub-export-green.md](../../.omo/evidence/browser-publishing-coverage/epub-export-green.md)
-- React lifecycle and handle contract: [docs-react-handle-rerun.md](../../.omo/evidence/browser-publishing-coverage/docs-react-handle-rerun.md) and [react-imperative-handle-green.md](../../.omo/evidence/react-imperative-handle-green.md)
+- Core page media and print: `../../.omo/evidence/browser-publishing-coverage/page-media-green.md`
+- Recursive/constrained fragmentation: `../../.omo/evidence/browser-publishing-coverage/fragmentation-green.md`
+- Generated publishing content: `../../.omo/evidence/browser-publishing-coverage/publishing-content-green.md`
+- Browser EPUB archive: `../../.omo/evidence/browser-publishing-coverage/epub-export-green.md`
+- React lifecycle and handle contract: `../../.omo/evidence/browser-publishing-coverage/docs-react-handle-rerun.md` and `../../.omo/evidence/react-imperative-handle-green.md`
+
+## Addendum: committed HTML and preview preparation (0.7.0–0.8.1)
+
+`exportPageDocumentHtml(document, options?)` is an additional browser output
+surface for a specifically selected committed page document. Unlike EPUB, it
+keeps the composed page layout and furniture; unlike controller print/EPUB
+methods, it does not wait for pending work. Its synchronous capture rejects an
+unavailable generation, then survives subsequent update or destruction. Assets
+come only from retained Core bytes. The 0.8.1 all-page rendering and
+containing-block anchor fixes do not create a second pagination authority.
+Receiving pixel-ratio correction is opt-in and does not establish renderer parity.
+
+Ordered element callbacks and strict blocked-resource policy remain in the
+staging/sanitizer/resolver boundary. React's single-document preparation policy
+and retry methods choose when that existing controller starts; they do not
+change the commit contract or introduce another renderer. Table row/rowspan
+fragmentation and decoration boundaries are in ADR 0014 and the compatibility
+matrix. The public task guides document concrete integrations in all locales.
+
+Historical `.omo` evidence names above refer to local implementation-wave
+artifacts, not published downloads. See [current verification](../verification.md)
+for immutable release CI and artifact checks; rerun the named suites when the
+corresponding contract changes.

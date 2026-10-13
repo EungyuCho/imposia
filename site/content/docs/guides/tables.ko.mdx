@@ -1,0 +1,70 @@
+---
+title: 표를 페이지에 나누기
+description: Imposia 0.8.1에서 병합된 행을 나누고, 열 너비와 긴 셀의 장식을 유지합니다.
+---
+
+Imposia 0.8.1은 페이지 본문의 설정된 너비를 유지하며 두 가지 방식으로 표를 나눕니다. 병합된 행 묶음을 행 사이에서 나누거나, 하나의 긴 행 안에서 셀 내용을 나눌 수 있습니다. 문서에 필요한 방식을 선택하세요.
+
+아래 Core 예제에는 Core 직접 의존성이 필요합니다. React를 이미 사용하고 있다면 같은 함수를 `@imposia/react`에서도 가져올 수 있습니다.
+
+```bash
+pnpm add @imposia/core@0.8.1
+```
+
+## 행이 병합된 표를 나눕니다
+
+브라우저 페이지에 `<div id="preview"></div>`를 만든 뒤 표를 마운트합니다.
+
+```ts title="app/table-preview.ts"
+import { mountPageDocument } from "@imposia/core";
+
+const rows = Array.from({ length: 40 }, (_, index) =>
+  `<tr>${index === 0 ? '<td rowspan="40">Merged group</td>' : ''}<td>Row ${index + 1}</td></tr>`,
+).join("");
+const html = `<div><table><thead><tr><th>Group</th><th>Item</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+const controller = mountPageDocument(document.getElementById("preview")!, { html }, {
+  tableRowspan: "split",
+  page: { size: "A5", margin: "12mm" },
+  css: ["table { width: 100%; border-collapse: collapse; } td, th { border: 1px solid; padding: 2px 4px; } td { height: 24px; }"],
+});
+const committed = await controller.ready;
+console.log(committed.pageCount, committed.warnings);
+```
+
+`tableRowspan`은 세 번째 인자인 `PageDocumentOptions`에 넣습니다. React에서는 `documentOptions`로 전달하세요.
+
+```tsx
+<ImposiaPageViewer source={{ html }} documentOptions={{ tableRowspan: "split" }} />
+```
+
+기본값인 `"preserve"`는 rowspan으로 연결된 행을 한 묶음으로 유지합니다. 0.8.0부터 제공하는 `"split"`을 선택하면 현재 페이지에 들어가는 행은 남기고 나머지를 다음 페이지로 보냅니다. 병합된 셀의 내용은 첫 조각에 한 번만 표시됩니다. 이후 조각에는 같은 논리적 열에 빈 이어지는 셀이 들어갑니다. `thead`와 `tfoot`는 반복되고, caption은 첫 조각에만 남습니다.
+
+나눌 수 있는 일반 `div`나 `ol > li`로 감싼 표도 그 자리에서 분할돼 페이지의 남은 공간을 활용합니다. 병합된 셀이나 바깥 컨테이너에 `break-inside: avoid`가 있으면 해당 묶음을 유지합니다. 이 옵션은 병합된 셀의 내용 자체를 나누지는 않습니다.
+
+## 페이지가 바뀌어도 열 너비를 유지합니다
+
+`"split"` 모드에서는 행을 옮기기 전에 표와 열을 측정하고, 신뢰할 수 있는 너비를 모든 조각에 적용합니다. collapsed와 separate 테두리를 모두 지원합니다. 단순한 원본 `colgroup`의 클래스와 배경은 유지하며, 복잡한 그룹이나 정확히 측정할 수 없는 열은 원본대로 둡니다.
+
+기본 `"preserve"` 모드에서 일반 표의 이어지는 조각에 열 너비를 고정하려면 `createTableColgroupExtension()`을 선택적으로 사용합니다. 페이지보다 넓게 작성한 표는 여전히 넓습니다. 0.8.1은 이 표가 본문이나 옆의 다른 표까지 넓히지 않도록 하며, 넓은 표를 자동 축소하지는 않습니다.
+
+## 긴 셀을 나눕니다
+
+하나의 행이 새 페이지보다 길면 `tableRowspan: "split"` 없이도 셀 내용을 나눌 수 있습니다. 짧은 셀에 더 남은 텍스트가 없더라도 모든 열에 이어지는 셀이 만들어집니다. 텍스트는 원래 순서로 한 번씩만 표시됩니다.
+
+0.8.1부터 기본값 `box-decoration-break: slice`는 위쪽 padding과 테두리를 첫 조각에, 아래쪽 장식을 행의 마지막 조각에 남깁니다. 빈 이어지는 셀에도 같은 규칙을 적용하며, 잘린 장식이 비운 공간을 내용에 사용합니다. 모든 조각에 장식을 반복하려면 `clone`을 지정하세요.
+
+```css
+/* Repeat padding and borders on every piece of a tall cell. */
+td {
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+```
+
+접두사 표기만 인식하는 WebKit 빌드도 지원하려면 두 선언을 함께 사용하세요. `slice` 조각 사이에 배경 이미지를 연속으로 그리는 동작과 세로쓰기 분할은 이 계약에 포함되지 않습니다.
+
+## 들어가지 않는 레이아웃을 처리합니다
+
+`committed.warnings`를 확인하세요. `"preserve"` 모드에서 너무 긴 rowspan 묶음이나, `"split"` 모드에서도 새 페이지에 첫 행이 들어가지 않는 경우에는 묶음을 유지하면서 `UNSUPPORTED_LAYOUT`과 `PAGE_OVERFLOW`를 보고할 수 있습니다. 너무 큰 caption·머리행·꼬리행, 지원하지 않는 span 구조나 안전하지 않은 스타일은 문서화된 폴백을 따릅니다. 모든 표가 분할된다고 가정해 경고를 숨기지 마세요.
+
+전체 지원 경계는 [Core API](/ko/docs/api/core)를, 다른 렌더러에 확정된 표 페이지를 전달하려면 [독립 HTML 내보내기](/ko/docs/guides/html-export)를 참고하세요.

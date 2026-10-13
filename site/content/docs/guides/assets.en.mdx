@@ -70,7 +70,7 @@ Always resolve `url` against `baseUrl` yourself, and always forward `signal` to 
 
 ### The answer
 
-Return `{ status: "resolved", bytes, mimeType }` to admit the resource, or `{ status: "blocked", reason }` to refuse it. A refusal is a normal outcome, not an error: the document still commits, and Imposia emits a `RESOURCE_BLOCKED` warning naming what was refused.
+Return `{ status: "resolved", bytes, mimeType }` to admit the resource, or `{ status: "blocked", reason }` to refuse it. With the default `blockedResourcePolicy: "warn"`, a refusal emits `RESOURCE_BLOCKED` and the document can commit. With `"error"`, the same refusal rejects preparation before commit and retains the previous successful document.
 
 ## What gets rejected after you return it
 
@@ -109,7 +109,7 @@ Fonts are checked against their container signature as well as their MIME type. 
 </Accordion>
 
 <Accordion title="Do I need a resolver at all?">
-Only if your content references external resources. Inline SVG, CSS colors, and system fonts need nothing. Without a resolver, any authored `<img src>` is simply blocked, and the document still commits.
+Only content that references external resources needs a resolver. Inline SVG, CSS colors, and system fonts need none. Without a resolver, an authored `<img src>` is blocked: `"warn"` can commit with `RESOURCE_BLOCKED`, while `"error"` rejects preparation.
 </Accordion>
 
 </Accordions>

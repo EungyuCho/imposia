@@ -224,3 +224,18 @@ Client re-exports Core's `ElementResolver`, `ElementResolution`,
 `keyboard`. Use them from `@imposia/client` with the same Core and Viewer
 contracts documented in the bundled package READMEs. `@imposia/react` also
 re-exports this surface.
+
+## Tables and standalone HTML in 0.8.1
+
+Client re-exports `PageDocumentOptions.tableRowspan` and
+`HtmlExportOptions.targetDevicePixelRatio` with the same Core contracts. Use
+`mountPageDocument(host, { html }, { tableRowspan: "split" })` for merged-row
+tables; the default `"preserve"` keeps rowspan clusters whole. Single tall rows
+can split their contents independently, with `slice` or `clone` decoration.
+
+`exportPageDocumentHtml(pageDocument)` serializes that selected commit without
+waiting for a pending update. In 0.8.1, anchors are measured on fully rendered
+pages and frozen in their containing block; all exported pages paint under
+screen and print media. The result includes inline assets and page layout,
+whereas EPUB keeps semantic content. See the [table guide](https://imposia.pages.dev/en/docs/guides/tables)
+and [HTML export guide](https://imposia.pages.dev/en/docs/guides/html-export).

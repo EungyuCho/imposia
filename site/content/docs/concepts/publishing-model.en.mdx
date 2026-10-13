@@ -28,7 +28,10 @@ Preview and native print are the two everyday outputs, and both address the cano
 | --- | --- | --- |
 | Preview | Canonical iframe | The completed paginated pages shown by the Viewer |
 | Print | Isolated top-document snapshot of canonical pages through `Window.print()` | The browser's native print flow; Imposia does not return PDF bytes |
+| HTML | Explicitly selected committed page document | Standalone HTML with the composed pages and inline assets; it does not wait for a pending update |
 | EPUB | Latest committed semantic source | A reflowable EPUB 3.3 `Blob`, not a fixed-layout copy of the page DOM |
+
+HTML export is a browser API re-exported by Core, Client, and React. It keeps the page layout, whereas EPUB keeps the semantic source. See [Export standalone HTML](/en/docs/guides/html-export) for generation selection, the 0.8.1 anchor fixes, and renderer pixel-ratio options.
 
 `PageDocument.exportEpub()` does not rerun extensions or serialize the fixed page layout. That distinction matters: the EPUB is a semantic projection for reflowable readers, not a PDF-like snapshot of the preview.
 

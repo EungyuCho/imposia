@@ -105,7 +105,30 @@ export function Preview({ html }: { html: string }) {
 }
 ```
 
-`state.status` 取值为 `idle`、`loading`、`ready` 或 `error`。首次成功之后，`loading` 的含义变了：上一批页面仍留在屏幕上，同时下一份文档正在准备，因此加载指示应放在预览*旁边*，而不是替换预览。`state.status` 为 `error` 时，屏幕上显示的仍是最后一次成功的文档。
+`state.status` 为 `idle`、`loading`、`ready`、`aborted` 或 `error`。首次成功后的 `loading` 保留旧页面并准备新源内容，因此将加载指示放在预览旁边。`error` 或 `aborted` 也可保留最后成功的 `state.document`。取消是终止状态且不调用 `onError`，应停止加载指示。`state.source` 仅在 `ready` 存在，标识生成该提交的源内容。
+
+## 选择开始准备的时机
+
+默认值为 `preparation: "immediate"`。用 `"idle"` 在浏览器空闲时开始首次准备，用 `"manual"` 等待 `prepare()` 或 `retry()`。开始后源内容变化正常更新，改变策略不会暂停已启动的控制器。此方法属于单文档 API，`useImposiaPublication` 不提供它们。选项中的 signal 已取消时，重试需新的 signal 和 `documentOptionsRevision`。详见 [React API](/zh-CN/docs/api/react)。
+
+```tsx title="app/manual-preview.tsx"
+import { useImposiaDocument } from "@imposia/react";
+
+export function Preview({ html }: { html: string }) {
+  const { hostRef, state, prepare, retry } = useImposiaDocument({
+    source: { html },
+    preparation: "manual",
+  });
+  return (
+    <>
+      <button type="button" onClick={prepare} disabled={state.status !== "idle"}>准备页面</button>
+      {state.status === "error" && <button type="button" onClick={retry}>重试</button>}
+      {state.status === "aborted" && <p role="status">文档准备已取消。</p>}
+      <div ref={hostRef} />
+    </>
+  );
+}
+```
 
 ## 可选：导出 EPUB
 

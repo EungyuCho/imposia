@@ -1,0 +1,70 @@
+---
+title: Paginate tables
+description: Split merged rows, keep column widths, and control tall-cell decoration in Imposia 0.8.1.
+---
+
+Imposia 0.8.1 keeps the page body at its configured width and supports two different table breaks: between rows in a merged-row cluster, and inside the content of a single tall row. Choose the one your document needs.
+
+The Core examples below require a direct Core dependency. In an existing React integration, these functions are also re-exported by `@imposia/react`.
+
+```bash
+pnpm add @imposia/core@0.8.1
+```
+
+## Split a merged-row table
+
+Create a `<div id="preview"></div>` in your browser page, then mount the table:
+
+```ts title="app/table-preview.ts"
+import { mountPageDocument } from "@imposia/core";
+
+const rows = Array.from({ length: 40 }, (_, index) =>
+  `<tr>${index === 0 ? '<td rowspan="40">Merged group</td>' : ''}<td>Row ${index + 1}</td></tr>`,
+).join("");
+const html = `<div><table><thead><tr><th>Group</th><th>Item</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+const controller = mountPageDocument(document.getElementById("preview")!, { html }, {
+  tableRowspan: "split",
+  page: { size: "A5", margin: "12mm" },
+  css: ["table { width: 100%; border-collapse: collapse; } td, th { border: 1px solid; padding: 2px 4px; } td { height: 24px; }"],
+});
+const committed = await controller.ready;
+console.log(committed.pageCount, committed.warnings);
+```
+
+`tableRowspan` belongs to the third argument, `PageDocumentOptions`. In React, put it in `documentOptions`:
+
+```tsx
+<ImposiaPageViewer source={{ html }} documentOptions={{ tableRowspan: "split" }} />
+```
+
+The default, `"preserve"`, keeps connected rowspan rows together. With `"split"` (available since 0.8.0), rows that fit remain on the current page; the rest continue on the next page. A merged cell's content appears once, in its first piece. Later pieces contain empty continuation cells in the same logical columns. `thead` and `tfoot` repeat, and the caption stays on the first piece.
+
+A plain breakable wrapper such as a `div` or `ol > li` can split in place, so the table uses the room left on the page. A merged cell or enclosing container with `break-inside: avoid` keeps its cluster together. This option does not split the content inside a merged cell.
+
+## Keep widths across pages
+
+In `"split"` mode Core measures the table and columns before removing any rows, then carries reliable widths to every piece. Both collapsed and separate borders are supported. A plain authored `colgroup` retains its classes and backgrounds; complex groups or columns that cannot be measured reliably are left as authored.
+
+With the default `"preserve"` mode, `createTableColgroupExtension()` remains the opt-in path for freezing widths on ordinary table continuations. A table authored wider than the page still remains wide: 0.8.1 prevents it from widening the page body or neighboring tables, rather than shrinking that table automatically.
+
+## Break a tall cell
+
+A single row taller than a fresh page can fragment its cell contents without `tableRowspan: "split"`. Every column gets a continuation cell, even after a short cell has no text left. Text stays in source order and appears once.
+
+Since 0.8.1, `box-decoration-break: slice` (the default) keeps top padding and borders on the first piece and bottom decoration on the last piece of the row, including empty continuations. The space freed at a cut is available for content. `clone` keeps decoration on every piece:
+
+```css
+/* Repeat padding and borders on every piece of a tall cell. */
+td {
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+```
+
+Use both declarations for the WebKit builds that only recognize the prefixed spelling. Continuous background-image painting across `slice` pieces and vertical-writing fragmentation are outside this contract.
+
+## Handle layouts that cannot fit
+
+Inspect `committed.warnings`. An oversized rowspan cluster in `"preserve"` mode, or a first row that cannot fit on a fresh page in `"split"` mode, can remain whole with `UNSUPPORTED_LAYOUT` and `PAGE_OVERFLOW`. Oversized captions, headers, footers, unsupported span structures, and unsafe styling retain the documented fallback. Do not hide these warnings by assuming that every table can split.
+
+See the [Core API](/en/docs/api/core) for the full support boundary, and [Export standalone HTML](/en/docs/guides/html-export) when another renderer consumes the committed table pages.

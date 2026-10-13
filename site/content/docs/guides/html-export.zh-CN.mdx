@@ -1,0 +1,88 @@
+---
+title: 导出独立 HTML
+description: 保存带内联资源的已提交页面，保持锚点位置并按需校正目标渲染器的像素比。
+---
+
+需要将已分页的文档保存为独立 HTML 字符串时，使用 `exportPageDocumentHtml()`。Core、Client 和 React 包均提供此函数。API 在浏览器运行，应用可保存结果或传给独立渲染器。
+
+下方 Core 示例需要直接安装 Core。已有 React 集成时，也可从 `@imposia/react` 导入相同函数。
+
+```bash
+pnpm add @imposia/core@0.8.1
+```
+
+## 选择输出
+
+| 目的 | API | 结果 |
+| --- | --- | --- |
+| 浏览器打印或另存为 PDF | `controller.print()` 或 React 句柄的 `print()` | 原生打印对话框 |
+| 在 HTML 中保留已提交的页面布局 | `exportPageDocumentHtml(committed)` | 包含已解析二进制资源的独立 HTML 字符串 |
+| 在电子书阅读器中重排语义内容 | `committed.exportEpub({ metadata })` | 可重排 EPUB 3.3 `Blob` |
+
+HTML 包含已排好的页面、样式和页面装饰，但排除 Viewer 的显示样式和控件。EPUB 还会排除页面包装和装饰。这些 API 都不返回 PDF 字节。
+
+## 导出并下载已提交的文档
+
+运行前在浏览器页面中创建 `<div id="preview"></div>`：
+
+```ts title="app/export-html.ts"
+import { exportPageDocumentHtml, mountPageDocument } from "@imposia/core";
+
+const controller = mountPageDocument(document.getElementById("preview")!, {
+  html: "<article><h1>Invoice</h1><p>Committed pages</p></article>",
+});
+const committed = await controller.ready;
+const markup = await exportPageDocumentHtml(committed, { title: "Invoice" });
+
+const url = URL.createObjectURL(new Blob([markup], { type: "text/html;charset=utf-8" }));
+const link = document.createElement("a");
+link.href = url;
+link.download = "invoice.html";
+document.body.append(link);
+link.click();
+link.remove();
+setTimeout(() => URL.revokeObjectURL(url), 1000);
+```
+
+输出包含 doctype 和 UTF-8 声明。Core 已解析的资源以 data URL 内联。导出不会重新获取缺失资源，也不会恢复被拦截的资源。若缺少资源就必须阻止发布，在准备阶段使用 `blockedResourcePolicy: "error"`。
+
+React 中可读取句柄上的已提交文档，并使用重新导出的函数：
+
+```tsx
+import { exportPageDocumentHtml } from "@imposia/react";
+
+// viewer is a ref to an ImposiaPageViewerHandle.
+const committed = viewer.current?.current;
+if (committed !== undefined) {
+  const markup = await exportPageDocumentHtml(committed);
+}
+```
+
+## 明确选择导出的代次
+
+HTML 导出序列化传入的文档，**不会等待**进行中的更新。若需要新源内容，先等待 `controller.update(nextSource)`，再导出该更新返回的文档。`controller.ready` 仅代表首次提交。
+
+旧代次文档、已销毁控制器或不可用的已提交文档会以 `DOCUMENT_UNAVAILABLE` 拒绝。有效导出取得快照后，后续更新或销毁不会使此次导出失效。
+
+## 0.8.1 修复的行为
+
+导出在所有源页面都渲染后测量锚点，因此预览的滚动位置不会改变导出位置。内联和样式表中的锚点都被固定为相对包含块的位置，同时考虑元素自身的 transform。导出的每一页在屏幕和打印媒体下均使用 `content-visibility: visible !important`。测量后恢复预览的内联样式值和延迟渲染策略。
+
+这些修复不需要新选项，但不保证浏览器、字体引擎和 PDF 渲染器之间的输出完全相同。请在实际使用的渲染器中验证 HTML。
+
+## 匹配目标渲染器的像素比
+
+0.8.0 新增可选 `targetDevicePixelRatio`，仅在已知目标渲染器实际比例时设置：
+
+```ts
+const markup = await exportPageDocumentHtml(committed, {
+  title: "Invoice",
+  targetDevicePixelRatio: 0.5, // Only if this is the receiving renderer's actual ratio.
+});
+```
+
+较低比例可能将 `1px` 单元格边框向上取整为一个设备像素，从而减少文字宽度。导出副本加宽相应边框，并用 padding 补偿。粗细混合的 collapsed 边界和不支持的边框结构保持原样。此校正只影响副本，不能解决字体差异或不支持的 CSS。
+
+普通导出可省略此选项。值必须为正的有限数字；0、负数、`NaN` 和无穷大会以 `TypeError` 拒绝。不要用预览的 `window.devicePixelRatio` 代替其他渲染器的比例。
+
+合并行与长单元格见 [跨页排版表格](/zh-CN/docs/guides/tables)，完整契约见 [Core API](/zh-CN/docs/api/core)。

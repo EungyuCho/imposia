@@ -1,0 +1,70 @@
+---
+title: 跨页排版表格
+description: 在 Imposia 0.8.1 中拆分合并行，保持列宽并控制长单元格的装饰。
+---
+
+Imposia 0.8.1 将正文保持在设定宽度，并提供两种表格拆分方式：在合并行组的行间拆分，或拆分单个过高行中的单元格内容。根据文档选择合适的方式。
+
+下方 Core 示例需要直接安装 Core。已有 React 集成时，也可从 `@imposia/react` 导入相同函数。
+
+```bash
+pnpm add @imposia/core@0.8.1
+```
+
+## 拆分带合并行的表格
+
+在浏览器页面中创建 `<div id="preview"></div>`，然后挂载表格：
+
+```ts title="app/table-preview.ts"
+import { mountPageDocument } from "@imposia/core";
+
+const rows = Array.from({ length: 40 }, (_, index) =>
+  `<tr>${index === 0 ? '<td rowspan="40">Merged group</td>' : ''}<td>Row ${index + 1}</td></tr>`,
+).join("");
+const html = `<div><table><thead><tr><th>Group</th><th>Item</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+const controller = mountPageDocument(document.getElementById("preview")!, { html }, {
+  tableRowspan: "split",
+  page: { size: "A5", margin: "12mm" },
+  css: ["table { width: 100%; border-collapse: collapse; } td, th { border: 1px solid; padding: 2px 4px; } td { height: 24px; }"],
+});
+const committed = await controller.ready;
+console.log(committed.pageCount, committed.warnings);
+```
+
+`tableRowspan` 属于第三个参数 `PageDocumentOptions`。在 React 中通过 `documentOptions` 传入：
+
+```tsx
+<ImposiaPageViewer source={{ html }} documentOptions={{ tableRowspan: "split" }} />
+```
+
+默认值 `"preserve"` 将 rowspan 连接的行作为整体处理。0.8.0 起提供的 `"split"` 将能放下的行留在当前页，其余移到下一页。合并单元格的内容只在第一段出现一次；后续片段在相同逻辑列放置空的续接单元格。`thead` 和 `tfoot` 会重复，caption 仅保留在第一段。
+
+可拆分的普通 `div` 或 `ol > li` 包装也能就地拆分，让表格利用本页剩余空间。合并单元格或外层容器指定 `break-inside: avoid` 时，仍保持该行组完整。此选项不会拆分合并单元格内部的内容。
+
+## 在各页保持列宽
+
+`"split"` 模式在移走行之前测量表格和列，并把可靠的宽度带到每个片段。支持 collapsed 和 separate 两种边框。简单的原始 `colgroup` 保留类名和背景；复杂分组或无法可靠测量的列保持原样。
+
+默认 `"preserve"` 模式下，要固定普通表格续接片段的列宽，可选择使用 `createTableColgroupExtension()`。作者指定超出页面宽度的表格仍然很宽：0.8.1 防止它撑宽正文和其他表格，不会自动缩小该表格。
+
+## 拆分过长的单元格
+
+单个行比新页面还高时，无需 `tableRowspan: "split"` 也能拆分单元格内容。短单元格没有剩余文字后，每列仍有续接单元格。文字按源顺序保留且只出现一次。
+
+从 0.8.1 起，默认 `box-decoration-break: slice` 将上方 padding 和边框留在第一段，将下方装饰留在整行的最后一段，包括空的续接单元格。切掉装饰释放的空间用于内容。`clone` 在每个片段保留装饰：
+
+```css
+/* Repeat padding and borders on every piece of a tall cell. */
+td {
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+```
+
+为支持只识别带前缀属性的 WebKit 构建，请同时使用两种声明。`slice` 片段间连续绘制背景图片，以及纵向书写的分页，不属于此契约。
+
+## 处理无法放下的布局
+
+检查 `committed.warnings`。在 `"preserve"` 模式下过大的 rowspan 行组，或在 `"split"` 模式下连新页面都放不下的首行，可能保持整体并报告 `UNSUPPORTED_LAYOUT` 和 `PAGE_OVERFLOW`。过大的 caption、页眉行、页脚行，不支持的 span 结构或无法安全重现的样式采用文档规定的回退。不要假定所有表格都能拆分而隐藏警告。
+
+完整支持边界见 [Core API](/zh-CN/docs/api/core)；向其他渲染器传递已提交的表格页面，见 [导出独立 HTML](/zh-CN/docs/guides/html-export)。

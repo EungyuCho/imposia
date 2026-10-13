@@ -24,6 +24,7 @@ const viewer = useRef<ImposiaPageViewerHandle>(null);
 | Prop | 类型 | 必填 | 用途 |
 | --- | --- | --- | --- |
 | `source` | `PageSource` | 是 | 要分页的 HTML 或 light DOM。 |
+| `preparation` | `"immediate" \| "idle" \| "manual"` | 否 | 首次准备时机，默认 `"immediate"`。 |
 | `sourceRevision` | `string \| number` | 否 | 源的标识或内容比较没有变化时强制更新。 |
 | `documentOptions` | `PageDocumentOptions` | 否 | Core 分页选项。 |
 | `documentOptionsRevision` | `string \| number` | 否 | 以新的文档选项重建 Core。 |

@@ -1,0 +1,88 @@
+---
+title: 独立した HTML を書き出す
+description: 確定ページをアセットと保存し、アンカー位置と出力先のピクセル比を扱います。
+---
+
+ページ分割済みの文書を独立した HTML 文字列として保存するには、`exportPageDocumentHtml()` を使います。Core、Client、React パッケージから利用できます。この API はブラウザーで実行し、アプリは結果を保存するか別のレンダラーへ渡せます。
+
+以下の Core 例には Core の直接依存が必要です。React を利用中なら、同じ関数を `@imposia/react` からも取得できます。
+
+```bash
+pnpm add @imposia/core@0.8.1
+```
+
+## 出力を選ぶ
+
+| 目的 | API | 結果 |
+| --- | --- | --- |
+| ブラウザーで印刷または PDF 保存 | `controller.print()` または React ハンドルの `print()` | 標準の印刷ダイアログ |
+| 確定したページレイアウトを HTML に保持 | `exportPageDocumentHtml(committed)` | 解決済みバイナリアセットを含む独立した HTML 文字列 |
+| 電子書籍リーダーで意味構造を再配置 | `committed.exportEpub({ metadata })` | リフロー型 EPUB 3.3 `Blob` |
+
+HTML には確定したページ、スタイル、ページ装飾が含まれます。Viewer の表示用スタイルと操作部品は除外します。EPUB はページのラッパーと装飾も除外します。どの API も PDF バイト列を返しません。
+
+## 確定文書を書き出してダウンロードする
+
+ブラウザーのページに `<div id="preview"></div>` を作成してから実行します。
+
+```ts title="app/export-html.ts"
+import { exportPageDocumentHtml, mountPageDocument } from "@imposia/core";
+
+const controller = mountPageDocument(document.getElementById("preview")!, {
+  html: "<article><h1>Invoice</h1><p>Committed pages</p></article>",
+});
+const committed = await controller.ready;
+const markup = await exportPageDocumentHtml(committed, { title: "Invoice" });
+
+const url = URL.createObjectURL(new Blob([markup], { type: "text/html;charset=utf-8" }));
+const link = document.createElement("a");
+link.href = url;
+link.download = "invoice.html";
+document.body.append(link);
+link.click();
+link.remove();
+setTimeout(() => URL.revokeObjectURL(url), 1000);
+```
+
+出力には doctype と UTF-8 宣言が含まれます。Core が解決済みのリソースは data URL として埋め込まれます。書き出し時に欠けたリソースを取得したり、拒否されたリソースを復元したりはしません。リソース不足で確定を止めたい場合は、準備時に `blockedResourcePolicy: "error"` を使ってください。
+
+React ではハンドルの確定文書と、再エクスポートされた関数を使います。
+
+```tsx
+import { exportPageDocumentHtml } from "@imposia/react";
+
+// viewer is a ref to an ImposiaPageViewerHandle.
+const committed = viewer.current?.current;
+if (committed !== undefined) {
+  const markup = await exportPageDocumentHtml(committed);
+}
+```
+
+## 書き出す世代を選ぶ
+
+HTML 書き出しは渡された文書を直列化し、進行中の更新を**待ちません**。新しいソースが必要なら `controller.update(nextSource)` を待ち、その更新が返す文書を書き出してください。`controller.ready` は最初の確定だけを表します。
+
+古い世代、破棄済みのコントローラー、利用できない確定文書は `DOCUMENT_UNAVAILABLE` で拒否されます。有効な書き出しがスナップショットを取得した後なら、更新や破棄が起きても書き出しを完了できます。
+
+## 0.8.1 の修正
+
+書き出しは元のすべてのページを描画した状態でアンカー要素を測定するため、プレビューのスクロール位置で出力位置が変わりません。インラインとスタイルシートのアンカーを、要素自身の transform を考慮した包含ブロック相対の位置に固定します。出力の全ページは画面・印刷メディアの両方で `content-visibility: visible !important` を使います。測定後、プレビューのインラインスタイル値と遅延描画の方針を復元します。
+
+新しい設定は不要です。ブラウザー、フォントエンジン、PDF レンダラー間の同一出力は保証しません。実際の出力先で HTML を確認してください。
+
+## 出力先のピクセル比を指定する
+
+0.8.0 で追加した任意の `targetDevicePixelRatio` は、出力先の実際の比率が分かる場合だけ指定します。
+
+```ts
+const markup = await exportPageDocumentHtml(committed, {
+  title: "Invoice",
+  targetDevicePixelRatio: 0.5, // Only if this is the receiving renderer's actual ratio.
+});
+```
+
+低い比率では `1px` のセル罫線をデバイスピクセルに切り上げ、文字領域を狭くすることがあります。書き出した複製の該当罫線を広げ、padding で補正します。太さが混在する collapsed 境界や未対応の罫線構造は元のままです。複製だけを調整し、異なるフォントや未対応 CSS までは解決しません。
+
+通常の書き出しでは省略してください。正の有限数が必要で、0、負数、`NaN`、無限大は `TypeError` になります。別レンダラーの比率の代わりにプレビューの `window.devicePixelRatio` を使わないでください。
+
+結合行と長いセルは [表をページに分割する](/ja/docs/guides/tables)、完全な契約は [Core API](/ja/docs/api/core)を参照してください。

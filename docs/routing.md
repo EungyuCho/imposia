@@ -19,3 +19,10 @@
 - Documentation and localization release audit: [documentation-localization-audit.md](documentation-localization-audit.md)
 - Public website: `site/` is a Vite-powered React Router SPA (`ssr: false`) using Fumadocs layouts and localized MDX at `/en`, `/ko`, `/zh-CN`, and `/ja`. Each locale root (`/:lang`) is the product landing page built from `design/landing.pen` (`site/app/landing/`); its benchmark figures are read from `benchmarks/baseline.json` at build time. Public documentation follows the reader journey (`getting-started`, `concepts`, `guides`) and groups package references under `api/react`, `api/core`, and `api/viewer`. Cloudflare Pages redirects the former flat API and publishing URLs to this hierarchy.
 - Public articles: [agents/articles.md](agents/articles.md). It documents the separate MDX collection, locale fallback and canonical URLs, automatic prerender discovery, and the authoring and visual asset workflow for `/:lang/blog`.
+
+- Current table integration guide: `site/content/docs/guides/tables.*.mdx` covers
+  rowspan options, width carry, tall-cell decoration, and fallback in all locales.
+- Standalone HTML integration guide: `site/content/docs/guides/html-export.*.mdx`
+  covers generation selection, inline assets, anchor rendering, and target pixel
+  ratios in all locales. Core's snapshot contract is also in the product and
+  architecture documentation above.

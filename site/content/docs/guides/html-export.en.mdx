@@ -1,0 +1,88 @@
+---
+title: Export standalone HTML
+description: Save committed pages with inline assets, stable anchors, and optional renderer pixel-ratio correction.
+---
+
+Use `exportPageDocumentHtml()` when you need the already paginated pages as a standalone HTML string. It is available from Core, Client, and the React package. The API runs in the browser; your application can save its result or send it to a separate renderer.
+
+The Core examples below require a direct Core dependency. In an existing React integration, these functions are also re-exported by `@imposia/react`.
+
+```bash
+pnpm add @imposia/core@0.8.1
+```
+
+## Choose the output
+
+| Need | API | Result |
+| --- | --- | --- |
+| Browser print or Save as PDF | `controller.print()` or the React handle's `print()` | Native print dialog |
+| Keep the committed page layout in HTML | `exportPageDocumentHtml(committed)` | Standalone HTML string with resolved binary assets inlined |
+| Reflow the semantic content in an ebook reader | `committed.exportEpub({ metadata })` | Reflowable EPUB 3.3 `Blob` |
+
+HTML export includes the composed pages, their styles, and their page furniture. It excludes Viewer presentation styles and controls. EPUB instead omits page wrappers and furniture. None of these APIs returns PDF bytes.
+
+## Export and download a committed document
+
+Create a `<div id="preview"></div>` in the browser page before running this example:
+
+```ts title="app/export-html.ts"
+import { exportPageDocumentHtml, mountPageDocument } from "@imposia/core";
+
+const controller = mountPageDocument(document.getElementById("preview")!, {
+  html: "<article><h1>Invoice</h1><p>Committed pages</p></article>",
+});
+const committed = await controller.ready;
+const markup = await exportPageDocumentHtml(committed, { title: "Invoice" });
+
+const url = URL.createObjectURL(new Blob([markup], { type: "text/html;charset=utf-8" }));
+const link = document.createElement("a");
+link.href = url;
+link.download = "invoice.html";
+document.body.append(link);
+link.click();
+link.remove();
+setTimeout(() => URL.revokeObjectURL(url), 1000);
+```
+
+The output has a doctype and UTF-8 declaration. Resources already resolved by Core are embedded as data URLs. Export does not fetch missing resources or make a blocked resource available; use `blockedResourcePolicy: "error"` during preparation when a missing resource must prevent publication.
+
+With React, read the committed document from the handle and use the re-exported function:
+
+```tsx
+import { exportPageDocumentHtml } from "@imposia/react";
+
+// viewer is a ref to an ImposiaPageViewerHandle.
+const committed = viewer.current?.current;
+if (committed !== undefined) {
+  const markup = await exportPageDocumentHtml(committed);
+}
+```
+
+## Select the generation deliberately
+
+HTML export serializes the document you pass. It does **not** wait for a pending update. If you need the new source, await `controller.update(nextSource)` and export the document returned by that update. `controller.ready` represents only the first commit.
+
+A stale document, a destroyed controller, or an unavailable commit rejects with `DOCUMENT_UNAVAILABLE`. Once a valid export has captured its snapshot, later updates or destruction do not invalidate that export.
+
+## What 0.8.1 fixes
+
+Export measures anchored elements while every source page is rendered, so scrolling the preview does not change their exported positions. Inline and stylesheet anchors are frozen against the element's containing block, accounting for its own transform. Every exported page uses `content-visibility: visible !important` under both screen and print media. The preview's inline style values and lazy-rendering policy are restored after measurement.
+
+These fixes need no new option. They do not establish identical output across browsers, font engines, or PDF renderers. Validate the resulting HTML in the renderer you actually use.
+
+## Match a receiving renderer's pixel ratio
+
+The optional `targetDevicePixelRatio` was added in 0.8.0. Set it only when you know the ratio used by the receiving renderer:
+
+```ts
+const markup = await exportPageDocumentHtml(committed, {
+  title: "Invoice",
+  targetDevicePixelRatio: 0.5, // Only if this is the receiving renderer's actual ratio.
+});
+```
+
+A lower ratio can round a `1px` cell border up to a device pixel and reduce the available text width. The export copy widens the affected border and compensates its padding. Mixed collapsed-border edges and unsupported border structures remain authored. The correction affects only the exported copy, and does not solve different fonts or unsupported CSS.
+
+Omit the option for ordinary export. It must be a positive finite number; zero, negative values, `NaN`, and infinity reject with `TypeError`. Do not substitute the preview's `window.devicePixelRatio` for a different renderer's ratio.
+
+See [Paginate tables](/en/docs/guides/tables) for merged rows and tall cells, or the [Core API](/en/docs/api/core) for the complete export contract.

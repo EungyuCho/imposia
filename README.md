@@ -36,6 +36,8 @@ dialog for PDF saving; it does not return PDF bytes.
 - Repaginate after changes while the previous complete pages stay visible.
 - Preview, print, and save the committed pages as PDF through the browser.
 - Use the React Viewer or the framework-neutral Core API.
+- Split merged table rows across pages with the opt-in [`tableRowspan: "split"`](https://imposia.pages.dev/en/docs/guides/tables).
+- [Export the committed pages as standalone HTML](https://imposia.pages.dev/en/docs/guides/html-export) with inline assets.
 
 ## Contributing
 

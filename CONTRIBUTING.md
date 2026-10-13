@@ -56,3 +56,33 @@ workspace alias leaks into the bundle (ASA-446).
 
 Distribution remains under [Apache-2.0](./LICENSE). See
 [`THIRD_PARTY_NOTICES.md`](./THIRD_PARTY_NOTICES.md) for shipped dependencies.
+
+## Documentation and site deployment
+
+Public guides live in `site/content/docs` with English, Korean, Japanese, and
+Simplified Chinese editions. Keep option names, examples, support boundaries,
+and error behavior aligned. A new guide also needs each locale's guide metadata
+and an entry in `site/prerender-paths.ts`, which drives prerendering and sitemap
+checks. Package READMEs and shared contracts remain English-only.
+
+For a documentation change, build the current packages/demo with the site and
+run the site checks:
+
+```bash
+pnpm build
+pnpm test:site
+```
+
+Review affected pages on desktop and at a narrow width, then merge through the
+normal required CI. `imposia.pages.dev` uses Cloudflare Pages direct upload, not
+Git-provider autodeployment. Deploy a build of the merged main commit using the
+existing authenticated Wrangler session:
+
+```bash
+npx wrangler pages deploy site/build/client --project-name imposia --branch main
+```
+
+`--branch main` selects the existing production branch; a separate branch name
+creates a preview deployment. A package release does not deploy the site.
+Confirm the deployment URL, published guide routes, language links, and sitemap
+after upload. Site/documentation-only changes do not require a new npm version.

@@ -192,3 +192,34 @@ candidate.
   candidate and page transition goes through the pagination checkpoint, so a long
   cluster yields to the scheduler and can be cancelled part-way through.
 
+
+## Addendum: cell decorations and page width (0.8.1)
+
+The page grid has an explicit `minmax(0, 1fr)` column; content/header/footer
+children have `min-width: 0`. An oversized authored table no longer expands the
+page body or changes the measured width of adjacent tables. The oversized table
+itself is not automatically scaled.
+
+Before cells are emptied, the fragmenter records `box-decoration-break` (or its
+WebKit-prefixed form), padding, and separate-border widths. This avoids changes
+from content-dependent selectors such as `td:empty`. In horizontal `slice`
+mode, top decoration stays on the first piece and bottom decoration on the last
+piece of the row, including an empty continuation of a shorter cell. `clone`
+keeps decoration on every piece; collapsed borders remain table-owned.
+
+Pieces are measured without the bottom decoration they give up at a cut. After
+all cells have been placed, the bottom decoration is restored once per row. If
+it then overflows, the fragmenter moves the last drawn block of the cell whose
+content end plus bottom decoration reaches lowest, then settles decoration on
+the new last piece. Comments, blank text, and nodes without layout do not become
+the block to move. Cloned blocks retain their break constraints, so moving a
+continuation still uses normal line fragmentation. The retry loop is bounded and
+uses the normal abort/checkpoint mechanism.
+
+Regression evidence is in
+[`browser-core-body-width.spec.ts`](../../tests/e2e/browser-core-body-width.spec.ts):
+wide/normal tables, both long/short cell orders in `slice` and `clone`, restored
+bottom decoration, `td:empty`, and comment/whitespace suffixes. Both standard and
+prefixed declarations are supplied so each engine tests the intended mode.
+Continuous background-image painting across `slice` pieces and vertical-writing
+fragmentation remain outside the contract.

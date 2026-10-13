@@ -28,7 +28,10 @@ const pageDocument = await controller.ready;
 
 | `PageDocumentOptions` field | Type / purpose |
 | --- | --- |
-| `iframeTitle`, `blockedResourcePolicy`, `elements`, `fontLoading` | [0.7.0](#preview-preparation-and-html-export-070) |
+| `iframeTitle` | `string`; canonical iframe accessible name, default `"Document preview"`. |
+| `blockedResourcePolicy` | `"warn"` (default) or `"error"`; reject blocked resources before commit in strict mode. |
+| `elements` | `readonly ElementResolver[]`; ordered text/HTML/image preparation rules. |
+| `fontLoading` | `PageFontLoadingOptions`; default `"all"`, optional conservative `"unicode-range"` filtering. |
 | `tableRowspan` | `"preserve"` (default) or `"split"`; see [Table row splitting](#table-row-splitting-and-export-pixel-ratio). |
 | `css` | `readonly string[]`; additional authored CSS. |
 | `assetResolver` | Async resolver for font, image, media, and stylesheet requests. |
@@ -77,7 +80,7 @@ Every `limits` field is optional; the default applies when a field is omitted. A
 A non-`undefined` return value from `finalizePage` rejects the whole generation. The hook communicates by mutating the live page element, never by returning a replacement.
 </Callout>
 
-Use `createTableColgroupExtension()` as an opt-in extension when split tables need measured pixel column widths frozen in continuation fragments. Core always carries authored `<colgroup>` elements. Tall-row splitting also pins measured cell widths when needed; the extension remains opt-in for other table continuations.
+In `tableRowspan: "split"` mode, Core carries reliably measured table and column widths across pages automatically. With the default `"preserve"` mode, use `createTableColgroupExtension()` as an opt-in preset for ordinary table continuations. Authored `colgroup` elements are retained. Tall-row splitting also pins measured cell widths when needed.
 
 ### `PageDocumentController`
 
@@ -196,6 +199,12 @@ const html = await exportPageDocumentHtml(committed, { targetDevicePixelRatio: 0
 ```
 
 The value must be a positive, finite number; anything else rejects with a `TypeError`. Omit it for the unchanged export. The caller supplies the ratio, since it depends on the renderer. Scope: cell borders only, not table, block, or SVG borders; a side with no border, or without enough padding to give up, is left as authored. Font sizes and page scale are never changed. In a `border-collapse: collapse` table the laid-out width of a shared edge is the widest one declared on it, so an edge is corrected only when every cell facing it (and the table's own border, at the outer edge) declares the same width; mixed edges, borders on rows, row groups, or columns, and tables whose cell grid cannot be built are exported as authored.
+
+### Table and export behavior in 0.8.1
+
+The page grid keeps the configured body width even next to an oversized table. Single tall rows honor `box-decoration-break`: `slice` keeps top decoration on the first piece and bottom decoration on the last piece of the row; `clone` repeats it. WebKit builds that require the prefix should receive both `-webkit-box-decoration-break` and `box-decoration-break`. HTML export measures all pages before freezing inline or stylesheet anchors in their containing block, accounts for the element's own transform, and forces every exported page visible under screen and print media. No new option is needed. The preview's inline style values and lazy-rendering policy are restored after measurement.
+
+Practical examples: [Paginate tables](/en/docs/guides/tables) and [Export standalone HTML](/en/docs/guides/html-export).
 
 ## Core publication
 

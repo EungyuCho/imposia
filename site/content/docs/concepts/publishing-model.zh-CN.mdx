@@ -28,7 +28,10 @@ staging iframe 从不用于预览、展示或打印。
 | --- | --- | --- |
 | 预览 | Canonical iframe | Viewer 展示的已完成分页页面 |
 | 打印 | 通过 `Window.print()` 打印 canonical 页面在顶层文档中的隔离快照 | 浏览器原生打印流程；Imposia 不返回 PDF 字节 |
+| HTML | 明确选定的已提交页面文档 | 包含页面布局和内联资源的独立 HTML，不等待进行中的更新 |
 | EPUB | 最后提交的源内容 | 可重排 EPUB 3.3 `Blob`，不是页面 DOM 的固定版式副本 |
+
+HTML 导出是 Core、Client 和 React 提供的浏览器 API。HTML 保留页面布局，EPUB 保留语义源内容。代次选择、0.8.1 锚点修复与目标像素比见[导出独立 HTML](/zh-CN/docs/guides/html-export)。
 
 `PageDocument.exportEpub()` 不会重新运行扩展，也不会序列化固定页面布局：EPUB 是面向可重排阅读器的语义投影，不是类似 PDF 的预览快照。
 

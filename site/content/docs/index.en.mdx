@@ -9,6 +9,8 @@ Imposia removes that question. It turns the HTML and CSS you already have into o
 
 [Why Imposia exists →](/en/docs/concepts/why-imposia)
 
+These guides target **Imposia 0.8.1**. Keep directly installed `@imposia/*` packages on the same version. See the [changelog](/en/docs/changelog), [table guide](/en/docs/guides/tables), and [HTML export guide](/en/docs/guides/html-export) for the recent changes.
+
 <Cards>
   <Card title="Build your first page" href="/en/docs/getting-started">
     Install the React package and render HTML as A4 pages in about ten minutes.
@@ -38,19 +40,20 @@ If pagination fails or a newer update arrives first, readers keep seeing the las
 | --- | --- | --- |
 | Preview | The React Viewer | The completed pages, presented from the canonical iframe |
 | Print or PDF | `print()` | The browser's native print dialog, where the reader picks a printer or **Save as PDF** |
+| HTML | `exportPageDocumentHtml(committed)` | A standalone string of the committed pages with resolved binary assets inlined; see [HTML export](/en/docs/guides/html-export) |
 | EPUB | `exportEpub()` | Optional. A reflowable EPUB 3.3 `Blob` built from the committed semantic source |
 
 ## Size and speed
 
 | Consumer route | Gzip size | Gzip budget |
 | --- | ---: | ---: |
-| Core · PageDocument | 63.2 KiB | 63.5 KiB |
-| Core · Publication | 67.5 KiB | 68 KiB |
-| Viewer · PageDocument | 11.8 KiB | 13 KiB |
-| Client · PageDocument | 71.8 KiB | 72 KiB |
-| React · PageViewer | 73.6 KiB | 74 KiB |
+| Core · PageDocument | 67.5 KiB | 68.5 KiB |
+| Core · Publication | 71.8 KiB | 73.0 KiB |
+| Viewer · PageDocument | 11.9 KiB | 13.0 KiB |
+| Client · PageDocument | 76.3 KiB | 78.0 KiB |
+| React · PageViewer | 78.5 KiB | 80.0 KiB |
 
-Bundle sizes were measured on September 27, 2026 for 0.6.0; React and React DOM are excluded. The full Core browser artifact is 68.4 KiB gzip. Budgets increased by 1–1.5 KiB to account for pagination correctness fixes, not a size optimization. [Measurement and budget rationale](https://github.com/EungyuCho/imposia/blob/main/docs/bundle-size.md).
+Bundle sizes are the October 13, 2026 snapshot for **0.8.1**, with React and React DOM excluded. The full Core browser artifact is **74.7 KiB gzip**. Budgets are limits, not measured sizes. [Measurement and budget rationale](https://github.com/EungyuCho/imposia/blob/main/docs/bundle-size.md).
 
 | Measure | Result |
 | --- | ---: |

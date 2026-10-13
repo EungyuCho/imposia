@@ -24,6 +24,7 @@ const viewer = useRef<ImposiaPageViewerHandle>(null);
 | Prop | Type | Required | Purpose |
 | --- | --- | --- | --- |
 | `source` | `PageSource` | Yes | HTML or light DOM to paginate. |
+| `preparation` | `"immediate" \| "idle" \| "manual"` | No | Schedules the first preparation; default `"immediate"`. |
 | `sourceRevision` | `string \| number` | No | Forces an update when source identity/content comparison is otherwise unchanged. |
 | `documentOptions` | `PageDocumentOptions` | No | Core pagination options. |
 | `documentOptionsRevision` | `string \| number` | No | Remounts Core with new document options. |

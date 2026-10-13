@@ -307,3 +307,32 @@ return <>
 ```
 
 Viewer `fit`, `zoomable`, and `keyboard` changes remount the presentation binding while preserving the current page, uncontrolled mode/zoom, and Core iframe. The deferred preparation API is for a single document; `useImposiaPublication` does not expose these methods.
+
+## Tables and standalone HTML in 0.8.1
+
+Set `documentOptions={{ tableRowspan: "split" }}` to split merged-row tables
+between rows. Keep it in `documentOptions`, rather than `source` or
+`viewerOptions`; changing it after mount requires `documentOptionsRevision`.
+The default is `"preserve"`. Tall single rows split their content independently;
+0.8.1 keeps `slice` decoration on the first/last row pieces and `clone`
+decoration on every piece.
+
+React re-exports the standalone Core function; there is no `exportHtml()` handle
+method:
+
+```tsx
+import { exportPageDocumentHtml } from "@imposia/react";
+
+const committed = viewer.current?.current;
+if (committed !== undefined) {
+  const markup = await exportPageDocumentHtml(committed, { title: "Invoice" });
+}
+```
+
+This exports the selected committed generation, without waiting for a pending
+update. Before the first commit, `current` is `undefined`; old generations reject
+with `DOCUMENT_UNAVAILABLE`. In 0.8.1, off-screen pages render for anchor
+measurement and every exported page paints under screen and print. The optional
+`targetDevicePixelRatio` corrects cell-border rounding for a known receiving
+renderer; it is not the preview's zoom. See the [HTML export guide](https://imposia.pages.dev/en/docs/guides/html-export)
+and the [preparation/retry example](https://imposia.pages.dev/en/docs/getting-started).
