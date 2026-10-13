@@ -156,3 +156,33 @@ the earlier atomic long-cell test in
   differs, `AVOID_RELAXED` for avoid), eight auto/avoid x width x colgroup
   combinations whose table and notes widths stay within 0.1 px, and a stable
   fixed layout that gets no inline widths.
+
+## Addendum: `tableRowspan: "split"` and carried widths
+
+A rowspan cluster is still atomic by default (`"preserve"`). With
+`PageDocumentOptions.tableRowspan: "split"` the cluster is cut between rows, so
+rows that fit stay on the current fragment and the rest continue on the next
+one. The authored cell grid (start row, logical column, `rowspan`, `colspan`) is
+recorded before any `rowspan` attribute is rewritten, and every candidate cut is
+measured on the live rows; only the final continuation shell and empty
+continuation cells are cloned, so identifiers, the fragment limit, cancellation,
+and warning tracking apply to them as to any other fragment. The largest number
+of leading rows that fits is found by bisection, with a cancellation check per
+candidate.
+
+- A merged cell that declares `break-inside: avoid` keeps its cluster whole;
+  `break-inside: avoid` on a row does not. Container-level avoidance is kept.
+- If not even the first row fits a fresh fragment, the remaining rows are kept
+  together with `UNSUPPORTED_LAYOUT` and `PAGE_OVERFLOW`; no rows are dropped and
+  no pages are created in a loop. Splitting inside a merged cell's content is
+  out of scope.
+- A plain container (including `ol > li`) around a splittable table fragments in
+  place, only in this mode and only when every box up to the table is an
+  ordinary breakable block.
+- Widths are measured while the table still holds all rows, from the row with the
+  most all-`colspan="1"` cells whose widths are positive and sum to the table
+  width within 2px, ignoring nested tables. A missing `colgroup` is created, a
+  plain one has its widths updated, any other is left alone, and the table width
+  is carried on the table so continuations keep it. `"preserve"` keeps the
+  opt-in freezing described above.
+

@@ -7,6 +7,19 @@ versioning for its published package interfaces. What that means before `1.0`
 
 ## Unreleased
 
+### Added
+
+- `PageDocumentOptions.tableRowspan` (`"preserve"` default, `"split"`): cuts a
+  rowspan cluster between rows at a page boundary. Merged cells keep their
+  content once in the first piece, later pieces are empty cells of the remaining
+  height placed by logical column, and a plain container (`div`, `ol > li`)
+  around a splittable table is fragmented in place. In this mode the table and
+  its columns are measured before rows are taken out and the widths are carried
+  to every page. An invalid value throws a `TypeError`.
+- `HtmlExportOptions.targetDevicePixelRatio`: widens `td`/`th` borders that a
+  renderer with that pixel ratio would round up, and takes the room back from the
+  cell padding, in the exported copy only.
+
 ## 0.7.0 — 2026-10-13
 
 ### Added

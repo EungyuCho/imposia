@@ -29,6 +29,7 @@ const pageDocument = await controller.ready;
 | `PageDocumentOptions` のフィールド | 型と役割 |
 | --- | --- |
 | `iframeTitle`, `blockedResourcePolicy`, `elements`, `fontLoading` | [0.7.0](#プレビューの準備と-html-エクスポート-070) |
+| `tableRowspan` | `"preserve"`（既定）または `"split"`。[表の行分割](#表の行分割とエクスポートのピクセル比)を参照。 |
 | `css` | `readonly string[]`。追加のソース CSS です。 |
 | `assetResolver` | フォント、画像、メディア、スタイルシート要求のための非同期リゾルバーです。 |
 | `page` | `{ size?, orientation?, margin? }`。size は `A3`、`A4`、`A5`、`B4`、`B5`、`Letter`、`Legal`、`Ledger`、または任意の幅・高さを受け取ります。 |
@@ -172,6 +173,29 @@ const html = await exportPageDocumentHtml(committed, { title: "請求書" });
 ```
 
 `exportPageDocumentHtml(document, options?: HtmlExportOptions): Promise<string>` はその確定世代を doctype・UTF-8 宣言付きで直列化し、解決済みバイナリアセットをデータ URL として埋め込みます。`options.title` はタイトルを上書きします。Viewer の表示スタイルは除去し、確定ページのレイアウトは保持します。EPUB は別のリフロー可能な意味的エクスポートです。古い・破棄済み・利用できない世代は `DOCUMENT_UNAVAILABLE` で拒否します。進行中の更新は待ちません。開始後の更新や破棄でもスナップショットを保持します。結果は独立した HTML 文字列であり、PDF バイトや別のブラウザーで同一のレイアウトを保証するものではありません。
+
+## 表の行分割とエクスポートのピクセル比
+
+`tableRowspan` は、行を結合したセル（`rowspan`）を持つ表がページをまたぐときの動作を決めます。既定値 `"preserve"` は従来どおり rowspan でつながった行のまとまりを分けません。`"split"` はまとまりを行と行の間だけで分割します。行の内部は切らず、現在のページに入る行を先に配置し、残りは繰り返されるヘッダーとともに次のページに続きます。ほかの値を指定すると、文書の作成時に `TypeError` が発生します。
+
+```ts
+const controller = mountPageDocument(host, { html }, { tableRowspan: "split" });
+```
+
+- 結合セルの内容は最初の断片に一度だけ残り、`rowspan` はその断片に含まれる行数に調整されます。続く断片は残りの高さの空セルです。`rowspan="40"` のセルを 29 行目で分けると、内容を持つ `rowspan="29"` と空の `rowspan="11"` になります。内容は繰り返されません。
+- 続きのセルは元の表の論理的な列位置に置かれるため、開始行が異なる結合セルや `colspan` のセルがあっても列は保たれます。元の開始行・列・`rowspan`・`colspan` は、属性を書き換える前に記録します。
+- `tr` の `break-inside: avoid` は分割を妨げません。結合セル自身、または外側の要素が `break-inside: avoid` を指定している場合は、まとまりをそのまま保ちます。強制改ページとヘッダー・フッターの繰り返しは従来どおりです。
+- このモードでは、分割できる表を囲む `div` や `ol > li` などの通常のコンテナを丸ごと次のページへ移さず、その場で分割して、表を現在のページの残りの領域から始めます。アトミックな要素と flex・grid・段組みのコンテナの配置は変わりません。
+- フォールバック: 新しいページでもまとまりの最初の行が入らない場合や、1 行がページより高い場合は、残りの行を保持し、削除も無限のページ生成もせず、`UNSUPPORTED_LAYOUT` と `PAGE_OVERFLOW` を報告します。結合セル内部の内容を分割する機能はサポートしません。
+- 幅: `"split"` は行を取り除く前に表と列の幅を測り、すべてのページに引き継ぎます。すべてのセルの `colspan` が 1 の行のうちセル数が最も多い行を使い、各幅が正で合計が表の幅と 2px 以内のときだけ採用します。対象は表自身の行で、入れ子の表の行は含みません。`colgroup` がなければ作成し、単純な `col` だけの `colgroup` は幅のみを更新してクラス・背景・その他の属性を保ち、それ以外の `colgroup` は記述のまま残します。列を確実に測れない表には推定した幅を強制しません。`"preserve"` は幅を測定も変更もしません。
+
+`exportPageDocumentHtml` は `targetDevicePixelRatio` も受け取ります。HTML をレイアウトするレンダラー（たとえば PDF エンジン）のデバイスピクセル比です。比が低いレンダラーは `1px` の罫線を 1 デバイスピクセルに切り上げるため、罫線が太くなってセルが狭まり、プレビューでは収まっていた行が折り返されることがあります。指定すると、すべての `td`・`th` の各辺の罫線を対象のデバイスピクセルに合わせ（最小で 1 ピクセル）、増えた分だけセルの padding が同じ余白を譲ります（`border-collapse: collapse` では各辺で半分）。左右にはさらに `1/64px` を確保します。値はエクスポートした複製にのみ `!important` のインラインスタイルとして適用され、プレビューの DOM は変更されません。
+
+```ts
+const html = await exportPageDocumentHtml(committed, { targetDevicePixelRatio: 0.5 });
+```
+
+値は正の有限数でなければならず、そうでなければ `TypeError` で拒否されます。省略すると従来どおりのエクスポートです。比はレンダラーによって異なるため、呼び出し側が指定します。適用範囲はセルの罫線のみで、表・ブロック・SVG の罫線は対象外です。罫線がない辺や、譲れる padding が足りない辺は記述のままにします。フォントサイズやページの倍率は変更しません。
 
 ## Core の Publication
 

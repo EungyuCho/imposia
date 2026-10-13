@@ -298,6 +298,12 @@ export interface PageFontLoadingOptions {
 }
 
 export interface PageDocumentOptions {
+  /**
+   * How tables whose cells span rows (`rowspan`) cross a page. `"preserve"` (default) keeps a
+   * row cluster whole; `"split"` breaks the cluster between rows and continues the merged
+   * cells on the next page.
+   */
+  tableRowspan?: "preserve" | "split";
   iframeTitle?: string;
   blockedResourcePolicy?: "warn" | "error";
   elements?: readonly ElementResolver[];

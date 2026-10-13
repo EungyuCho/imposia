@@ -29,6 +29,7 @@ const pageDocument = await controller.ready;
 | `PageDocumentOptions` field | Type / purpose |
 | --- | --- |
 | `iframeTitle`, `blockedResourcePolicy`, `elements`, `fontLoading` | [0.7.0](#preview-preparation-and-html-export-070) |
+| `tableRowspan` | `"preserve"` (default) or `"split"`; see [Table row splitting](#table-row-splitting-and-export-pixel-ratio). |
 | `css` | `readonly string[]`; additional authored CSS. |
 | `assetResolver` | Async resolver for font, image, media, and stylesheet requests. |
 | `page` | `{ size?, orientation?, margin? }`; size accepts `A3`, `A4`, `A5`, `B4`, `B5`, `Letter`, `Legal`, `Ledger`, or custom width/height. |
@@ -172,6 +173,29 @@ const html = await exportPageDocumentHtml(committed, { title: "Invoice" });
 ```
 
 `exportPageDocumentHtml(document, options?: HtmlExportOptions): Promise<string>` serializes that committed page generation with a doctype, UTF-8 declaration, and resolved binary assets inlined as data URLs. `options.title` overrides the title. It excludes Viewer presentation styles and preserves the composed page layout; EPUB remains the reflowable semantic export. A stale, destroyed, or unavailable generation rejects with `DOCUMENT_UNAVAILABLE`. It does not wait for pending updates. Once export starts, its snapshot survives a subsequent update or destruction. Output is a standalone HTML string, not PDF bytes or a guarantee of identical layout in another browser.
+
+## Table row splitting and export pixel ratio
+
+`tableRowspan` controls how a table whose cells span rows (`rowspan`) crosses a page. The default, `"preserve"`, keeps each rowspan cluster whole, as before. `"split"` cuts the cluster between rows, never inside a row: the rows that fit stay on the current page, and the rest continue on the next page under the repeated header. Any other value throws a `TypeError` when the document is created.
+
+```ts
+const controller = mountPageDocument(host, { html }, { tableRowspan: "split" });
+```
+
+- A merged cell keeps its content once, in the first piece, with `rowspan` set to the rows that piece holds. Each later piece is an empty cell of the remaining height, so a `rowspan="40"` cell cut after 29 rows becomes `rowspan="29"` with the content, then an empty `rowspan="11"`. Content is never repeated.
+- Continuation cells are placed by the original table's logical columns, so merged cells that start on different rows, or sit beside `colspan` cells, keep their columns. The original start row, column, `rowspan`, and `colspan` are recorded before any attribute is rewritten.
+- `break-inside: avoid` on a `tr` does not stop the split. A merged cell that declares `break-inside: avoid` keeps its cluster whole, and so does an enclosing element with `break-inside: avoid`. Forced page breaks and header/footer repetition behave as before.
+- In this mode a plain container such as a `div`, or an `ol > li`, that wraps a splittable table is fragmented in place and the table starts in the space left on the page, instead of the whole container moving to the next page. Atomic elements, flex, grid, and multi-column wrappers keep their existing placement.
+- Fallback: if not even the first row of a cluster fits on a fresh page, or a single row is taller than a page, the remaining rows are kept together, nothing is removed or repeated forever, and the document reports `UNSUPPORTED_LAYOUT` and `PAGE_OVERFLOW`. Splitting the content inside a merged cell is not supported.
+- Widths: before the rows are taken out, `"split"` measures the table and its columns and carries them to every page. The row with the most cells, all with `colspan` 1, is used when each width is positive and together they match the table width within 2px, and only the table's own rows count, never a nested table's. A missing `colgroup` is created; a plain `colgroup` of single `col` elements has only its widths updated, keeping classes, backgrounds, and other attributes. Any other `colgroup` is left as authored, and a table whose columns cannot be measured reliably is not given guessed widths. `"preserve"` does not measure or change widths.
+
+`exportPageDocumentHtml` also accepts `targetDevicePixelRatio`, the device pixel ratio of the renderer that will lay the HTML out, for example a PDF engine. A renderer with a lower ratio rounds a `1px` border up to a whole device pixel; the thicker border narrows the cell and can wrap text that fit in the preview. With the option, each side of every `td` and `th` border is rounded to the target's pixels (at least one), and the cell's padding gives up the same room (half per side under `border-collapse: collapse`), plus `1/64px` on the left and right. The values are written as `!important` inline styles on the exported copy only; the preview is not modified.
+
+```ts
+const html = await exportPageDocumentHtml(committed, { targetDevicePixelRatio: 0.5 });
+```
+
+The value must be a positive, finite number; anything else rejects with a `TypeError`. Omit it for the unchanged export. The caller supplies the ratio, since it depends on the renderer. Scope: cell borders only, not table, block, or SVG borders; a side with no border, or without enough padding to give up, is left as authored. Font sizes and page scale are never changed.
 
 ## Core publication
 
