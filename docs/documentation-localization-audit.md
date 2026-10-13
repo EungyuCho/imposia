@@ -3,9 +3,10 @@
 This audit began with the documentation a consumer could rely on for the 0.1.0
 browser release. It checks current public identifiers and lifecycle claims
 against the package source, then records which surfaces are localized. The
-verification section includes a 0.1.3 release-gate addendum.
+verification section retains historical gates; the current review is the
+0.8.1 addendum below.
 
-## Language evidence matrix
+## Historical language evidence matrix (0.1.x)
 
 | Language | Localized consumer files | Discrepancies corrected |
 | --- | --- | --- |
@@ -14,8 +15,9 @@ verification section includes a 0.1.3 release-gate addendum.
 | Japanese | `README.ja.md`; `site/components/marketing-copy.ts` (`ja`); `site/content/docs/*.ja.mdx` | Matched the English heading and example structure; corrected controller replacement, staging, runtime theme, extension cleanup, and release guidance; rewrote the Publication/Reader section as natural Japanese developer prose. |
 | Simplified Chinese | `README.zh-CN.md`; `site/components/marketing-copy.ts` (`zh-CN`); `site/content/docs/*.zh-CN.mdx` | Matched the English heading and example structure; corrected `documentOptionsRevision`, persistent canonical iframe, staging, runtime theme, extension cleanup, and release guidance; rewrote the Publication/Reader section as natural Simplified Chinese developer prose. |
 
-All four root READMEs now contain the same 17 level-two/level-three sections and
-16 fenced examples in the same order. Localized prose may adapt sentence order,
+The initial audit recorded 17 sections and 16 examples in each root README.
+The current compact guides use six sections and one installation example in
+each locale; detailed contracts live in the site and package guides. Localized prose may adapt sentence order,
 but package names, public type names, method names, option names, warning terms,
 and code behavior remain aligned. The supported localized term is
 `canonical iframe`; successful source updates replace its contents, not the
@@ -135,3 +137,49 @@ is explicitly conservative for generated text and locale-dependent transforms.
 The shared contract/ADR and package references remain English-only. Earlier
 section counts and verification totals above describe their recorded release,
 not the current corpus. Fresh release verification is recorded separately.
+
+## 0.8.1 documentation review — 2026-10-14
+
+Scope: published `v0.6.0..v0.8.1`, with `v0.8.1` at
+`cd540913e4176dfd30de5528b4518132ae429e99`. This is a documentation/site update;
+package versions remain 0.8.1. The existing main/site layout is authoritative,
+with shared Markdown contracts and localized MDX. `CONTEXT.md` and
+`docs/routing.md` remain the domain entry points.
+
+| Contract | Source/test evidence | Refreshed surfaces |
+| --- | --- | --- |
+| Single-document preparation and five terminal/loading states | `use-imposia-document.ts`, preparation unit tests, preview browser specs | Getting started and React prop table in all four locales; product/architecture context |
+| Warn/strict resources and ordered element preparation | Core types, assets-policy and preview browser specs | Asset guide, Core option table, compatibility and product contracts |
+| Rowspan cuts, logical columns, widths and breakable wrappers | Table grid/generation and rowspan split browser suite | New table guide in all locales, Core/Client/React READMEs, compatibility and ADR 0014 |
+| Wide body and cell decoration recovery | Body-width browser suite, including actual prefixed WebKit clone mode | Table guide, Core reference, package guides and ADR addendum |
+| Committed HTML, anchors, all-page rendering and receiving pixel ratio | HTML export implementation, anchor/ratio suites | New HTML guide in all locales, output tables, Core reference and architecture output surface |
+| Current bundle measurements | `benchmarks/bundle-size.json` version 0.8.1 | Localized docs overview uses current sizes/budgets; timing baseline retains its own date |
+| Site operation | Existing Pages project with no Git provider | Contribution guide records direct upload and independent package/site deployment |
+
+Shared package READMEs, contracts, ADRs, and verification records remain
+English-only. All new consumer guides have English, Korean, Japanese, and
+Simplified Chinese versions with the same example API identifiers. Guide
+metadata, prerender routes, and sitemap include both new topics. The root
+READMEs remain compact and link directly to the matching localized guides.
+Historical verification numbers above retain their original scope; current
+published verification is recorded in `docs/verification.md`.
+
+Verification of this documentation refresh:
+
+- `PASS`: `pnpm build` / final `pnpm site:build`, `pnpm site:typecheck`, scoped
+  Biome, and `git diff --check`.
+- `PASS`: 12 complete table/export/manual-preparation examples typecheck with
+  strict TypeScript against the built package declarations. The new guides'
+  code blocks match across all four locales.
+- `PASS`: 52 prerendered documentation routes, 62 canonical sitemap URLs,
+  44 authored localized link targets, and rendered heading anchors.
+- `PASS`: all 15 existing Chromium site scenarios.
+- `PASS`: new guides rendered in all four languages at 320px without page-wide
+  horizontal overflow; Korean desktop (1440px) and narrow screenshots reviewed.
+  Keyboard Enter navigation, preserved-topic language switch, and mobile
+  sidebar navigation/close state were exercised.
+
+Historical local `.omo` evidence paths are retained as provenance labels rather
+than broken download links. Current package evidence links to immutable CI.
+This refresh checks documentation rendering in Chromium; it does not claim
+new cross-engine pagination or PDF-server validation.

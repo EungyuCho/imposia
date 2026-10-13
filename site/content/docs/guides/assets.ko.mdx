@@ -70,7 +70,7 @@ export const assetResolver: AssetResolver = async ({ url, kind, baseUrl, signal 
 
 ### 응답
 
-리소스를 허용하려면 `{ status: "resolved", bytes, mimeType }`을, 거부하려면 `{ status: "blocked", reason }`을 반환하세요. 거부는 오류가 아니라 정상적인 결과입니다. 문서는 그대로 확정되고, Imposia는 무엇이 거부됐는지 알리는 `RESOURCE_BLOCKED` 경고를 남깁니다.
+리소스를 허용하려면 `{ status: "resolved", bytes, mimeType }`을, 거부하려면 `{ status: "blocked", reason }`을 반환하세요. 기본 `blockedResourcePolicy: "warn"`에서는 `RESOURCE_BLOCKED` 경고를 남기고 문서를 확정할 수 있습니다. `"error"`에서는 같은 거부가 확정 전에 준비를 실패시키며, 마지막으로 성공한 문서를 유지합니다.
 
 ## 반환한 뒤에도 거부되는 경우
 
@@ -109,7 +109,7 @@ source에 `baseUrl`을 지정하고, 리졸버 안에서 `new URL(url, baseUrl)`
 </Accordion>
 
 <Accordion title="리졸버가 꼭 필요한가요?">
-콘텐츠가 외부 리소스를 참조할 때만 필요합니다. 인라인 SVG, CSS 색상, 시스템 글꼴에는 아무것도 필요 없습니다. 리졸버가 없으면 작성된 `<img src>`는 그저 차단되고, 문서는 그대로 확정됩니다.
+외부 리소스를 참조하는 내용에만 리졸버가 필요합니다. 인라인 SVG, CSS 색상, 시스템 글꼴에는 필요하지 않습니다. 리졸버 없이 작성한 `<img src>`는 차단됩니다. `"warn"`이면 `RESOURCE_BLOCKED` 경고와 함께 확정할 수 있고, `"error"`이면 준비가 실패합니다.
 </Accordion>
 
 </Accordions>

@@ -128,6 +128,8 @@ term's whole point (`CONTEXT.md`).
         │
   [2] extension transform / transformEntry     ← re-sanitized + re-limited after EACH
         │
+  [2a] ordered elements resolution             ← copied snapshots; text/HTML/image replacements, signal + deadline
+        │
   [3] prepareDocument (string domain)          ← DOMParser; script/handler/URL policy, break-contract normalization
         │                                        extracts <template data-page-header/footer>
   [4] asset resolution                          ← the ONLY gate for external bytes
@@ -167,6 +169,11 @@ term's whole point (`CONTEXT.md`).
 Everything from [1] to [10] happens against the staging document. The canonical
 frame is touched exactly once, at the commit line.
 
+Strict `blockedResourcePolicy: "error"` rejects emitted `RESOURCE_BLOCKED`
+diagnostics before commit; the default `"warn"` can commit with diagnostics.
+Unicode-range font loading conservatively filters asset requests before the
+normal resource checks. See the Core API for callback and failure shapes.
+
 ### 3.3 Convergence
 
 Pagination is not single-pass because generated content depends on layout and
@@ -199,8 +206,10 @@ tier is not documentation about code, it is a description of these predicates.
 Fragmentation strategies in use: shell cloning for normal blocks; grapheme
 binary-search for text with rendered-line widow/orphan legality; `<br>`-line
 groups; row-cluster table splitting with repeated caption/colgroup/thead/tfoot;
-row-group grid splitting with track reassignment. Overflow tolerance is 0.5 CSS
-px.
+row-group grid splitting with track reassignment. Tables can also split an
+oversized single row's cell contents, or opt into between-row rowspan splitting
+with `tableRowspan: "split"`; see ADR 0014 and its 0.8.0/0.8.1 addenda. Overflow
+tolerance is 0.5 CSS px.
 
 ### 3.5 Cooperative time-slicing
 
@@ -387,7 +396,12 @@ rendering:
   caught up to the committed generation, so handle methods called from inside
   `onReady` observe a consistent viewer.
 
-Loading and error states are non-destructive: the previously committed document
+Single-document preparation is `immediate` (default), `idle`, or `manual`.
+`prepare()` starts it, and `retry()` starts or retries the current source.
+`aborted` is terminal without `onError`; ready-only `state.source` identifies the
+source of the commit. These methods do not exist on `useImposiaPublication`.
+
+Loading, aborted, and error states are non-destructive: the previously committed document
 stays in `state.document` during a reload, mirroring Core's retain-while-staging
 contract at the React layer.
 
@@ -397,6 +411,11 @@ contract at the React layer.
 adopts Core's iframe as described above; `PageViewerMode` is `"continuous"`,
 `"single"`, or `"spread"`. The PDF.js viewer (`mountViewer`) was removed in the
 0.6 line, so the Viewer package has no PDF rendering dependency.
+
+Independent Viewer policies are `fit` (`width` or `none`), `zoomable`, and
+`keyboard`; an initial zoom still applies with zoom interaction disabled. Viewer
+preserves Core's `iframeTitle`. React remounts only the presentation binding when
+these policies change, preserving the current page and uncontrolled mode/zoom.
 
 Reader features are projections, never independent sources of truth: the TOC is
 a projection of `PublicationDocument.outline`; search is a UI shell over
@@ -502,6 +521,26 @@ Publication markers, the outline. ADR 0010 fixes that boundary and sets three
 explicit revisit triggers (EPUB > 10 KiB gzip; Core route over budget with EPUB
 as the largest removable contributor; a second exporter needing the same trusted
 projection). Measured cost at the time of the decision: **5.4 KiB gzip**.
+
+---
+
+### 8.3 Committed-page HTML export
+
+`exportPageDocumentHtml(document, options?)` captures the explicitly selected
+current page document, not the latest pending update. Stale, destroyed, or
+unavailable generations reject with `DOCUMENT_UNAVAILABLE`. Every live-DOM read
+occurs before the first await; subsequent update/destruction cannot invalidate
+the captured export. Resolved binary assets are then inlined as data URLs in an
+inert clone with doctype and UTF-8 metadata, excluding Viewer presentation CSS.
+
+In 0.8.1, all source pages are rendered for synchronous anchor measurement.
+Anchors from inline and stylesheet rules are frozen relative to their containing
+block, with their own transforms excluded from measurement and retained in the
+copy. Inline values and preview lazy rendering are restored. The copy makes all
+pages visible under screen and print. `targetDevicePixelRatio` optionally
+compensates supported cell-border rounding and padding in that copy; it does not
+establish identical layout in another renderer. This is a browser API returning
+HTML, not a PDF-byte or Node rendering API.
 
 ---
 
@@ -743,8 +782,8 @@ Cloudflare Pages from `site/build/client`.
 `HomeLayout`; `/:lang/docs/*` is the docs on `DocsLayout`/`DocsPage`;
 `/:lang/blog` and `/:lang/blog/:slug` serve the separate article collection.
 Documentation content is Fumadocs-MDX over `site/content/docs`, with locale-suffixed filenames
-(`getting-started.ko.mdx`) across `en`, `ko`, `zh-CN`, `ja` — 9 logical pages ×
-4 locales = 36 MDX files. `hideLocale: "never"`, so the locale is always in the
+(`getting-started.ko.mdx`) across `en`, `ko`, `zh-CN`, `ja` — 13 logical pages ×
+4 locales = 52 MDX files. `hideLocale: "never"`, so the locale is always in the
 URL.
 
 Prerendering covers the landing pages, documentation pages, and article index and
@@ -757,8 +796,8 @@ Public docs follow the reader journey — `getting-started`, `concepts`, `guides
 — with package references grouped under `api/react`, `api/core`, `api/viewer`.
 Legacy flat URLs are redirected both by Cloudflare `_redirects` and client-side.
 
-Localized READMEs mirror the English structure exactly (same 17 headings in the
-same order, same 16 code examples); only prose is localized. Package READMEs,
+Localized READMEs mirror the compact English structure (six sections and one
+installation example); only prose and guide labels are localized. Package READMEs,
 ADRs, contracts, and the CHANGELOG are intentionally English-only.
 
 ---
@@ -789,7 +828,7 @@ ADRs, contracts, and the CHANGELOG are intentionally English-only.
 
 ## 16. Maturity
 
-`0.4.1` (2026-07-27). The project describes itself as "a feature-complete early
+The latest published package family is `0.8.1` (2026-10-13 UTC). The project remains "a feature-complete early
 `0.x` release, not a mature replacement for every CSS typesetting or PDF
 generation workflow" — the evidence is fixture-scoped and broad adoption is not
 yet proven.
@@ -800,7 +839,11 @@ security fixes, repositioning integrity as the primary contract) → `0.2.0`
 table-colgroup preset, isolated top-document print) → `0.4.0` (cooperative
 pagination) → `0.4.1` (multi-page print fix, responsive Viewer panels) →
 `0.5.0` (browser-native parsing, fragmenter performance batch, bundled
-dependency security patch, generation-stamp fix), published 2026-08-21.
+dependency security patch, generation-stamp fix) → `0.6.0` (pagination integrity,
+print/adapter changes) → `0.7.0` (resource policy, element preparation, standalone
+HTML, Viewer policies and React preparation) → `0.8.0` (rowspan splitting and
+export pixel-ratio correction) → `0.8.1` (table body width, cell decorations and
+HTML anchor/lazy-rendering fixes). See CHANGELOG.md for dates and migration notes.
 
 Milestones are named by outcome and are **decoupled from package version
 numbers** — a milestone may span several releases, and a release may carry
@@ -856,7 +899,7 @@ these are code defects.
    the artifact-backed half of the verification story is not reproducible from a
    fresh clone.
 2. **Resolved (ASA-445):** `SECURITY.md`'s supported-versions table listed
-   "Latest `0.1.x` release" and now reads `0.5.x`. The `0.4.2`
+   "Latest `0.1.x` release"; the current supported line is `0.8.x`. The `0.4.2`
    security-backport question was decided on ASA-443 (2026-08-21): **no
    backport** — both advisories' vulnerable paths measured unreachable in the
    published `0.4.1` browser artifact; evidence in the 0.5.0 migration note's
@@ -882,7 +925,7 @@ these are code defects.
    removed; the OIDC `Release` workflow is documented as the only publish
    path, and the per-package `pack --dry-run` inspection it superseded is kept
    as pre-release inspection.
-10. **Still open (ASA-448):** `pnpm build` regenerates the committed minified
-    demo bundles, so the release gate's `git diff --exit-code` couples to that
-    churn and any unrelated Core change rewrites a few hundred lines of
-    generated `.js`.
+10. **Resolved (ASA-448):** generated demo bundles are untracked. `pnpm build`
+    regenerates them for local verification and deployment without changing
+    tracked JavaScript; CONTRIBUTING.md documents the requirement to build them
+    before serving examples.

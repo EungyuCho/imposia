@@ -24,6 +24,7 @@ const viewer = useRef<ImposiaPageViewerHandle>(null);
 | prop | 型 | 必須 | 役割 |
 | --- | --- | --- | --- |
 | `source` | `PageSource` | はい | ページ分割する HTML または light DOM です。 |
+| `preparation` | `"immediate" \| "idle" \| "manual"` | いいえ | 最初の準備時期。既定は `"immediate"`。 |
 | `sourceRevision` | `string \| number` | いいえ | ソースの同一性・内容の比較では変化を検出できないときに、更新を強制します。 |
 | `documentOptions` | `PageDocumentOptions` | いいえ | Core のページ分割オプションです。 |
 | `documentOptionsRevision` | `string \| number` | いいえ | 新しい文書オプションで Core を再マウントします。 |

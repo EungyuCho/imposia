@@ -35,6 +35,8 @@ pnpm add @imposia/react react react-dom
 - 内容变化后，在保留已完成页面的同时准备新页面。
 - 预览已确定的页面，并通过浏览器打印或保存为 PDF。
 - 使用 React Viewer 或不依赖框架的 Core API。
+- 选择 [`tableRowspan: "split"`](https://imposia.pages.dev/zh-CN/docs/guides/tables)，将合并表格行跨页拆分。
+- [将已提交页面连同资源导出为独立 HTML](https://imposia.pages.dev/zh-CN/docs/guides/html-export)。
 
 ## 参与贡献
 

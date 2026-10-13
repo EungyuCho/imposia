@@ -2,7 +2,8 @@
 
 This list records the launch boundary proven by Imposia `0.4.0`, published on
 2026-07-24, and re-exercised by the `0.4.1` patch on 2026-07-27 and the
-`0.5.0` release on 2026-08-21. These are gates that are re-run per release,
+`0.5.0` release on 2026-08-21. The 0.8.1 Linux/macOS release gates and
+published artifact checks are recorded in [verification.md](verification.md). These are gates that are re-run per release,
 not properties the tree holds permanently — the list says what must pass, not
 what currently passes. Repository rules, the protected release environment, private
 vulnerability reporting, dependency alerts, code scanning, secret scanning,

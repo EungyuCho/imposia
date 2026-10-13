@@ -38,7 +38,9 @@ browser surface without moving rendering or export authority to a server or CLI.
   effects. Its imperative handle exposes the current `PageDocument`, Viewer
   spread controls, `print()`, and `exportEpub()`. `useImposiaDocument()` exposes
   the host ref, lifecycle state, current document, and controller for custom
-  React presentation.
+  React presentation. Its single-document preparation policy is `immediate`,
+  `idle`, or `manual`, with `prepare()` and `retry()`. Cancellation is terminal
+  (`aborted`) without `onError`; `state.source` exists only in `ready`.
 - `@imposia/viewer` presents a canonical Core page document. The page Viewer
   retains Core's iframe and never clones pages or reruns layout. Its optional built-in control rail can be omitted for headless
   presentation while the same controller exposes page navigation, continuous,
@@ -142,6 +144,23 @@ HTML and CSS assets, asks the resolver for bytes, inserts only Core-owned Blob
 URLs into the isolated frame, and revokes them on replacement, failure, or
 destroy. Resolver output, input markup, CSS, and extension output are treated as
 untrusted and remain subject to limits and warnings.
+
+The default `blockedResourcePolicy: "warn"` admits a commit with blocked-resource
+warnings. Opt-in `"error"` rejects the generation before commit and retains the
+previous document. Ordered `elements` callbacks prepare copied text, HTML, or
+image content before pagination; replacements remain inside sanitizer, asset,
+abort, and deadline boundaries. `fontLoading: { mode: "unicode-range" }` is a
+conservative request filter, not a font-family or glyph-coverage guarantee.
+
+`exportPageDocumentHtml(document, options?)` preserves the selected committed
+page layout as a standalone HTML string with inline resolved assets. It is a
+browser function re-exported by Core, Client, and React, not a handle method.
+It does not wait for pending work; stale or unavailable commits reject with
+`DOCUMENT_UNAVAILABLE`. Once captured, an export snapshot survives later update
+or destruction. In 0.8.1, off-screen pages render for anchor measurement, anchored
+elements freeze in their containing block, and every exported page paints under
+screen and print. Optional pixel-ratio correction handles supported cell-border
+rounding in the copy; different renderer/font behavior remains a consumer check.
 
 `PageDocument.exportEpub({ metadata, signal?, limits? })` returns a browser
 `Blob` with MIME type `application/epub+zip`. The export is reflowable EPUB 3.3

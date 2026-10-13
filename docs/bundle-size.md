@@ -58,8 +58,8 @@ peers external; budgets are upper limits, not the measured sizes.
 | Client · PageDocument | 241.2 KiB | 71.8 KiB | 72 KiB |
 | React · PageViewer | 248.0 KiB | 73.6 KiB | 74 KiB |
 
-The full built Core browser artifact is **68.4 KiB gzip**. The landing page
-uses that measurement for its full-bundle comparison. Consumer routes above
+The full built Core browser artifact is **68.4 KiB gzip**. This is a historical snapshot; the current landing page uses the 0.8.1
+measurement above. Consumer routes above
 use tree shaking and are not interchangeable with that full artifact.
 
 `node --import tsx scripts/bundle-size.ts --write-report` refreshes

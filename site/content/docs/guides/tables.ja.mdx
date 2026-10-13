@@ -1,0 +1,70 @@
+---
+title: 表をページに分割する
+description: Imposia 0.8.1 で結合行を分割し、列幅と長いセルの装飾を保ちます。
+---
+
+Imposia 0.8.1 は本文を設定された幅に保ち、表を 2 通りの方法で分割します。結合された行のまとまりを行間で分割する方法と、1 つの長い行のセル内容を分割する方法です。
+
+以下の Core 例には Core の直接依存が必要です。React を利用中なら、同じ関数を `@imposia/react` からも取得できます。
+
+```bash
+pnpm add @imposia/core@0.8.1
+```
+
+## 結合行を持つ表を分割する
+
+ブラウザーのページに `<div id="preview"></div>` を作成し、表をマウントします。
+
+```ts title="app/table-preview.ts"
+import { mountPageDocument } from "@imposia/core";
+
+const rows = Array.from({ length: 40 }, (_, index) =>
+  `<tr>${index === 0 ? '<td rowspan="40">Merged group</td>' : ''}<td>Row ${index + 1}</td></tr>`,
+).join("");
+const html = `<div><table><thead><tr><th>Group</th><th>Item</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+const controller = mountPageDocument(document.getElementById("preview")!, { html }, {
+  tableRowspan: "split",
+  page: { size: "A5", margin: "12mm" },
+  css: ["table { width: 100%; border-collapse: collapse; } td, th { border: 1px solid; padding: 2px 4px; } td { height: 24px; }"],
+});
+const committed = await controller.ready;
+console.log(committed.pageCount, committed.warnings);
+```
+
+`tableRowspan` は第 3 引数の `PageDocumentOptions` に渡します。React では `documentOptions` に指定します。
+
+```tsx
+<ImposiaPageViewer source={{ html }} documentOptions={{ tableRowspan: "split" }} />
+```
+
+既定の `"preserve"` は rowspan でつながる行を一体として扱います。0.8.0 からの `"split"` では、収まる行を現在のページに残し、残りを次のページへ送ります。結合セルの内容は最初の断片に 1 回だけ現れます。以降の断片には、同じ論理列に空の継続セルを配置します。`thead` と `tfoot` は繰り返され、caption は最初の断片に残ります。
+
+分割可能な通常の `div` や `ol > li` で囲まれた表もその場で分割でき、ページに残った領域を使えます。結合セルまたは外側のコンテナーに `break-inside: avoid` があれば、そのまとまりを維持します。この設定は結合セルの内容自体を分割しません。
+
+## ページ間で列幅を保つ
+
+`"split"` では行を取り除く前に表と列を測定し、信頼できる幅をすべての断片へ引き継ぎます。collapsed と separate の両方の罫線に対応します。単純な元の `colgroup` のクラスと背景は維持し、複雑なグループや正確に測れない列は元の指定のまま残します。
+
+既定の `"preserve"` で通常の表の継続断片に列幅を固定するには、`createTableColgroupExtension()` を選択的に使います。ページより広く指定した表は広いままです。0.8.1 はその表が本文や他の表を押し広げないようにしますが、表を自動縮小しません。
+
+## 長いセルを分割する
+
+新しいページより高い単一行は、`tableRowspan: "split"` がなくてもセル内容を分割できます。短いセルのテキストが終わった後も、すべての列に継続セルがあります。テキストは元の順序で 1 回ずつ保持されます。
+
+0.8.1 以降、既定の `box-decoration-break: slice` は上の padding と罫線を最初の断片に、下の装飾を行の最後の断片に残します。空の継続セルにも適用され、切り落とした装飾の領域を内容に使います。`clone` はすべての断片で装飾を繰り返します。
+
+```css
+/* Repeat padding and borders on every piece of a tall cell. */
+td {
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+```
+
+接頭辞付きのプロパティだけを認識する WebKit ビルドに対応するには、両方を指定してください。`slice` 断片間の連続した背景画像描画や縦書きの分割は対象外です。
+
+## 収まらないレイアウトを扱う
+
+`committed.warnings` を確認してください。`"preserve"` で大きすぎる rowspan のまとまりや、`"split"` でも新しいページに最初の行が収まらない場合は、一体のまま `UNSUPPORTED_LAYOUT` と `PAGE_OVERFLOW` を報告することがあります。大きすぎる caption・ヘッダー・フッター、未対応の span 構造や安全に再現できないスタイルは、文書化されたフォールバックを使います。
+
+対応範囲は [Core API](/ja/docs/api/core)、確定した表のページを別のレンダラーへ渡す方法は [独立した HTML の書き出し](/ja/docs/guides/html-export)を参照してください。

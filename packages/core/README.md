@@ -34,7 +34,7 @@ console.log(pageDocument.pageCount, pageDocument.pages, pageDocument.warnings);
 
 `PageMetadata` includes normalized sheet/content geometry, page side and name,
 blank state, context, and ordered body text. Supported authored `@page` selectors
-and six margin boxes, breaks, constrained tables/flex/grid/multi-column layout,
+and all sixteen margin boxes, breaks, constrained tables/flex/grid/multi-column layout,
 local references, and named strings are described in the [compatibility matrix](../../docs/compatibility.md).
 Structural pagination is a Chromium-reference behavior; this package does not
 claim complete CSS parity across engines.
@@ -77,30 +77,45 @@ canonical page. It returns `undefined` for stale, global, or unresolvable
 warnings and never exposes the retained element or adds a marker to canonical
 DOM. Viewer uses these read-only bounds for its external Inspector outline.
 
-The constrained table path fragments semantic tables only between complete row
-clusters. Continuations repeat `thead`, `tfoot`, and `colgroup`, while `caption`
-stays on the first fragment. Positive bounded `rowspan` cells keep their
-connected rows together, and `colspan` stays within its row. An oversized row
-cluster or oversized caption/header/footer remains atomic and reports a located
-`UNSUPPORTED_LAYOUT` together with `PAGE_OVERFLOW`. Open-ended or cross-group
-spans, generated table items, internal forced breaks, non-table display, and
-table-subtree styling that depends on authored ID selectors remain atomic with
-`UNSUPPORTED_LAYOUT`.
+The constrained table path repeats `thead`, `tfoot`, and `colgroup`, while
+`caption` stays on the first fragment. By default, positive bounded `rowspan`
+cells keep their connected rows together. Set `tableRowspan: "split"` to cut a
+cluster between rows: merged content appears once, and empty continuation cells
+retain the logical column. Core carries reliably measured table and column
+widths in this mode; `createTableColgroupExtension()` remains opt-in for ordinary
+continuations in the default `"preserve"` mode.
+
+A single row taller than a fresh page can split its cell contents without that
+option. In 0.8.1, `box-decoration-break: slice` keeps top decoration on the first
+piece and bottom decoration on the last piece of the row, including empty
+continuation cells; `clone` keeps it on every piece. Use the prefixed declaration
+alongside the standard declaration for WebKit builds that require it. The page
+body keeps its configured width even next to an oversized table.
+
+Oversized rowspan clusters in `"preserve"` mode, or a first row that cannot fit
+in `"split"` mode, retain the documented atomic fallback. Oversized captions,
+headers, footers, open-ended/cross-group spans, unsafe generated items, and
+unsupported table styling can remain whole; a loss of content or an ignored
+break is reported with `UNSUPPORTED_LAYOUT` and overflow with `PAGE_OVERFLOW`.
+See the [table guide](https://imposia.pages.dev/en/docs/guides/tables) and
+[compatibility matrix](../../docs/compatibility.md) for the complete boundary.
 
 The constrained Flex path fragments column/no-wrap containers between in-flow
 `static` or `relative` children whose integer `order` values do not change DOM
 order. Supported nested column Flex cards use the same boundary. Forced page
 breaks and fitting `break-inside: avoid` cards are preserved; impossible
 avoidance produces `AVOID_RELAXED`. Wrapping, reverse directions, authored
-reordering, and generated `::before`/`::after` Flex items remain atomic with
-`UNSUPPORTED_LAYOUT`.
+reordering, and generated `::before`/`::after` Flex items remain atomic. Such a box warns with
+`UNSUPPORTED_LAYOUT` only when it overflows, spills out of its box, or ignores an
+internal forced break.
 
 The constrained Grid path supports block Grid containers with explicit unnamed
 columns, row auto-flow, and source-ordered `static` items that use only automatic
 placement. Pagination keeps each complete auto-placement row together, applies
 the resolved column and source-row track sizes to every continuation, applies
 item page breaks at the row boundary, and preserves fitting `break-inside: avoid`
-items. Spanning, explicit placement, reordered items, dense/column flow,
+items. Column spans with `grid-column: span N` and full-row `grid-column: 1 / -1`
+follow sparse auto-placement. Row spans, other explicit placement, reordered items, dense/column flow,
 template areas, named/subgrid/masonry tracks, generated Grid items, and nested
 forced breaks remain atomic with `UNSUPPORTED_LAYOUT`.
 
@@ -426,3 +441,36 @@ const html = await exportPageDocumentHtml(committed, { title: "Invoice" });
 ```
 
 `exportPageDocumentHtml(document, options?: HtmlExportOptions): Promise<string>` serializes that committed page generation with a doctype, UTF-8 declaration, and resolved binary assets inlined as data URLs. `options.title` overrides the title. It excludes Viewer presentation styles and preserves the composed page layout; EPUB remains the reflowable semantic export. A stale, destroyed, or unavailable generation rejects with `DOCUMENT_UNAVAILABLE`. It does not wait for pending updates. Once export starts, its snapshot survives a subsequent update or destruction. Output is a standalone HTML string, not PDF bytes or a guarantee of identical layout in another browser.
+
+## Tables and HTML export in 0.8.1
+
+`tableRowspan` is a `PageDocumentOptions` field, passed in the third argument:
+
+```ts
+const controller = mountPageDocument(host, { html }, { tableRowspan: "split" });
+const committed = await controller.ready;
+const markup = await exportPageDocumentHtml(committed, {
+  title: "Invoice",
+  targetDevicePixelRatio: 0.5, // Only for a renderer whose actual ratio is 0.5.
+});
+```
+
+The default is `"preserve"`; other values reject with `TypeError`. Splitting
+keeps each merged cell's content once and can fragment an ordinary breakable
+wrapper in place. A merged cell or enclosing container with `break-inside: avoid`
+keeps its cluster together. It does not split inside a merged cell.
+
+`HtmlExportOptions.targetDevicePixelRatio` must be a positive finite number.
+Omit it unless the receiving renderer's ratio is known. It compensates cell
+borders that would round up, taking the additional room from padding in the
+exported copy. Mixed collapsed edges and unsupported border structures remain
+authored; this is not a cross-renderer font or CSS fidelity guarantee.
+
+Since 0.8.1, export measures anchors with all source pages rendered, freezes
+inline and stylesheet anchors in their containing block while accounting for
+their own transform, and sets every exported page to
+`content-visibility: visible !important` for screen and print. Preview inline
+style values and lazy rendering are restored after measurement. No new option
+is needed for those fixes. Await `controller.update(nextSource)` and export its
+returned document when the new source must be included; `ready` is the first
+commit only. See the [HTML export guide](https://imposia.pages.dev/en/docs/guides/html-export).

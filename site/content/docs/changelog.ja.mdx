@@ -10,6 +10,8 @@ description: 公開された各バージョンの Imposia パッケージの変�
 - ページ本文の幅を修正しました。本文より広い表が本文や他の表の幅を変えません。ページをまたぐセルは `box-decoration-break` に従い、切り取られた装飾が空ける領域を使い、下側の装飾は行の最後の断片で確定します。
 - `exportPageDocumentHtml` はアンカーを測る前にすべてのページを描画し、アンカー要素を containing block 基準で固定し、`screen` と `print` ですべてのページを描画します。API の変更はありません。
 
+[0.8.1](https://github.com/EungyuCho/imposia/releases/tag/v0.8.1) · [0.8.0](https://github.com/EungyuCho/imposia/releases/tag/v0.8.0)
+
 ## 0.8.0 — 2026年10月13日
 
 - `tableRowspan: "split"`（既定値は `"preserve"`）を追加しました。rowspan の表がページ境界で行の間で分割され、結合セルの内容は一度だけ残り、続きのセルは論理的な列位置に置かれた空セルになります。分割できる表を囲む通常のコンテナはその場で分割され、このモードでは表と列の幅がすべてのページに引き継がれます。

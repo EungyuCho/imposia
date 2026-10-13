@@ -9,6 +9,8 @@ Imposia はこの問いをなくします。手元の HTML と CSS をブラウ�
 
 [Imposia が生まれた理由 →](/ja/docs/concepts/why-imposia)
 
+このガイドは **Imposia 0.8.1** を対象にしています。直接インストールする `@imposia/*` は同じ版に揃えてください。最近の変更は[変更履歴](/ja/docs/changelog)、[表の分割](/ja/docs/guides/tables)、[HTML の書き出し](/ja/docs/guides/html-export)を参照してください。
+
 <Cards>
   <Card title="最初のページを作る" href="/ja/docs/getting-started">
     React パッケージをインストールし、10 分ほどで HTML を A4 ページとして表示します。
@@ -38,19 +40,20 @@ Imposia はこの問いをなくします。手元の HTML と CSS をブラウ�
 | --- | --- | --- |
 | プレビュー | React Viewer | canonical iframe から表示される完成済みページ |
 | 印刷または PDF | `print()` | ブラウザー標準の印刷ダイアログ。読者はここでプリンターまたは**PDF に保存**を選びます |
+| HTML | `exportPageDocumentHtml(committed)` | 確定したページと解決済みアセットを含む独立した文字列。[HTML の書き出し](/ja/docs/guides/html-export)を参照 |
 | EPUB | `exportEpub()` | 任意の機能。ページと同時に確定した意味構造を保つソースから作るリフロー型 EPUB 3.3 `Blob` |
 
 ## サイズと速度
 
 | 利用経路 | gzip サイズ | gzip 予算 |
 | --- | ---: | ---: |
-| Core · PageDocument | 63.2 KiB | 63.5 KiB |
-| Core · Publication | 67.5 KiB | 68 KiB |
-| Viewer · PageDocument | 11.8 KiB | 13 KiB |
-| Client · PageDocument | 71.8 KiB | 72 KiB |
-| React · PageViewer | 73.6 KiB | 74 KiB |
+| Core · PageDocument | 67.5 KiB | 68.5 KiB |
+| Core · Publication | 71.8 KiB | 73.0 KiB |
+| Viewer · PageDocument | 11.9 KiB | 13.0 KiB |
+| Client · PageDocument | 76.3 KiB | 78.0 KiB |
+| React · PageViewer | 78.5 KiB | 80.0 KiB |
 
-サイズは 2026 年 9 月 27 日に 0.6.0 で測定し、React と React DOM は含みません。Core 全体のブラウザーファイルは gzip 68.4 KiB です。ページ分割の正確性修正による増加分を反映し、予算を 1〜1.5 KiB 引き上げました。サイズ最適化による削減ではありません。[測定方法と予算変更の根拠](https://github.com/EungyuCho/imposia/blob/main/docs/bundle-size.md)。
+サイズは React と React DOM を除外した **0.8.1** の 2026 年 10 月 13 日の測定値です。Core 全体のブラウザーファイルは **gzip 74.7 KiB** です。予算は測定値ではなく上限です。[測定方法と予算の根拠](https://github.com/EungyuCho/imposia/blob/main/docs/bundle-size.md)。
 
 | 項目 | 結果 |
 | --- | ---: |

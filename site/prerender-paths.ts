@@ -7,6 +7,8 @@ export const SITE_DOC_PATHS = [
   "docs/concepts/why-imposia",
   "docs/concepts/publishing-model",
   "docs/guides/assets",
+  "docs/guides/tables",
+  "docs/guides/html-export",
   "docs/guides/react-publishing",
   "docs/api",
   "docs/api/react",

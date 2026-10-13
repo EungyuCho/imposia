@@ -28,7 +28,10 @@ const pageDocument = await controller.ready;
 
 | `PageDocumentOptions` 字段 | 类型 / 用途 |
 | --- | --- |
-| `iframeTitle`, `blockedResourcePolicy`, `elements`, `fontLoading` | [0.7.0](#预览准备与-html-导出-070) |
+| `iframeTitle` | `string`，canonical iframe 的无障碍名称，默认 `"Document preview"`。 |
+| `blockedResourcePolicy` | 默认 `"warn"` 或 `"error"`；严格模式下资源被拦截会在提交前失败。 |
+| `elements` | `readonly ElementResolver[]`，按顺序准备文本、HTML 和图片。 |
+| `fontLoading` | `PageFontLoadingOptions`，默认 `"all"`，可选保守的 `"unicode-range"` 过滤。 |
 | `tableRowspan` | `"preserve"`（默认）或 `"split"`，见[表格行拆分](#表格行拆分与导出像素比)。 |
 | `css` | `readonly string[]`；附加的作者 CSS。 |
 | `assetResolver` | 处理字体、图片、媒体和样式表请求的异步解析器。 |
@@ -77,7 +80,7 @@ const pageDocument = await controller.ready;
 `finalizePage` 返回任何非 `undefined` 的值都会让整个世代被拒绝。该钩子通过修改活动页面元素来传达结果，绝不通过返回替代值。
 </Callout>
 
-拆分表格需要在续排片段中冻结实测像素列宽时，将 `createTableColgroupExtension()` 作为可选扩展启用。Core 始终保留作者的 `<colgroup>` 元素。拆分高行时，还会按需固定实测单元格宽度；其他表格续排仍可选择启用此扩展。
+`tableRowspan: "split"` 模式自动把可靠测量的表格和列宽带到每一页。默认 `"preserve"` 模式中，可选择 `createTableColgroupExtension()` 为普通续接表格固定列宽。原始 `colgroup` 保留，过高行拆分时也按需固定实测单元格宽度。
 
 ### `PageDocumentController`
 
@@ -196,6 +199,12 @@ const html = await exportPageDocumentHtml(committed, { targetDevicePixelRatio: 0
 ```
 
 取值必须是正的有限数，否则以 `TypeError` 拒绝。省略则与原有导出一致。像素比取决于渲染器，因此由调用方指定。适用范围仅限单元格边框，不包括表格、块级元素或 SVG 的边框；没有边框，或没有足够 padding 可让出的边保持原样。不会更改字号或页面缩放。在 `border-collapse: collapse` 的表格中，相邻边框实际排版的粗细是该边上声明的最大值，因此只有当面对该边的所有单元格（外侧边还包括表格自身的边框）声明了相同粗细时才会校正；粗细混合的边、设在行、行组或列上的边框，以及无法构建单元格网格的表格，都按原样导出。
+
+### 0.8.1 的表格与导出行为
+
+即使旁边有过宽表格，页面正文仍保持设定宽度。单个过高行遵循 `box-decoration-break`：`slice` 在第一段保留上方装饰，在整行最后一段保留下方装饰，`clone` 每段重复。需要前缀的 WebKit 构建应同时声明两种属性。HTML 导出先测量所有页面，再按包含块位置固定内联和样式表锚点，并考虑元素自身的 transform；每个导出页在屏幕和打印媒体均可见。不需要新选项，测量后恢复预览的内联样式值和延迟渲染策略。
+
+实用示例见[跨页排版表格](/zh-CN/docs/guides/tables)和[导出独立 HTML](/zh-CN/docs/guides/html-export)。
 
 ## Core Publication
 

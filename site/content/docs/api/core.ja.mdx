@@ -28,7 +28,10 @@ const pageDocument = await controller.ready;
 
 | `PageDocumentOptions` のフィールド | 型と役割 |
 | --- | --- |
-| `iframeTitle`, `blockedResourcePolicy`, `elements`, `fontLoading` | [0.7.0](#プレビューの準備と-html-エクスポート-070) |
+| `iframeTitle` | `string`。canonical iframe のアクセシブルな名前。既定は `"Document preview"`。 |
+| `blockedResourcePolicy` | 既定の `"warn"` または `"error"`。厳格モードでは遮断したリソースがあれば確定前に失敗します。 |
+| `elements` | `readonly ElementResolver[]`。テキスト・HTML・画像を順序どおり準備します。 |
+| `fontLoading` | `PageFontLoadingOptions`。既定は `"all"`、任意で保守的な `"unicode-range"` フィルター。 |
 | `tableRowspan` | `"preserve"`（既定）または `"split"`。[表の行分割](#表の行分割とエクスポートのピクセル比)を参照。 |
 | `css` | `readonly string[]`。追加のソース CSS です。 |
 | `assetResolver` | フォント、画像、メディア、スタイルシート要求のための非同期リゾルバーです。 |
@@ -77,7 +80,7 @@ const pageDocument = await controller.ready;
 `finalizePage` が `undefined` 以外の値を返すと、その世代全体が reject されます。このフックは実体のあるページ要素を書き換えることで結果を伝えます。置き換えを返す仕組みではありません。
 </Callout>
 
-分割されたテーブルの継続片に、計測済みのピクセル列幅を固定したい場合は、明示的に有効化する拡張機能として `createTableColgroupExtension()` を使ってください。Core はソースの `<colgroup>` 要素を常に引き継ぎます。高い行の分割では、必要に応じて計測済みのセル幅も固定します。それ以外の継続片にはこの拡張を選択して使えます。
+`tableRowspan: "split"` では Core が信頼できる表・列の測定幅を各ページへ自動で引き継ぎます。既定の `"preserve"` で通常の継続表に幅を固定するには `createTableColgroupExtension()` を選択的に使います。元の `colgroup` は保持し、長い行の分割でも必要に応じて測定したセル幅を固定します。
 
 ### `PageDocumentController`
 
@@ -196,6 +199,12 @@ const html = await exportPageDocumentHtml(committed, { targetDevicePixelRatio: 0
 ```
 
 値は正の有限数でなければならず、そうでなければ `TypeError` で拒否されます。省略すると従来どおりのエクスポートです。比はレンダラーによって異なるため、呼び出し側が指定します。適用範囲はセルの罫線のみで、表・ブロック・SVG の罫線は対象外です。罫線がない辺や、譲れる padding が足りない辺は記述のままにします。フォントサイズやページの倍率は変更しません。`border-collapse: collapse` の表では、隣り合う辺の実際の太さはその辺に宣言された最大値になるため、辺に面するすべてのセル（外側の辺では表自身の罫線を含む）が同じ太さを宣言している場合にのみ補正します。太さが混在する辺、行・行グループ・列に指定した罫線、セルの格子を作れない表は記述のままエクスポートします。
+
+### 0.8.1 の表と書き出しの動作
+
+幅の広すぎる表があっても本文は設定された幅を保ちます。長い単一行は `box-decoration-break` に従い、`slice` は上の装飾を最初、下の装飾を行の最後の断片に残し、`clone` は各断片で繰り返します。接頭辞が必要な WebKit ビルドには両方のプロパティを指定してください。HTML 書き出しは全ページを測定してから、インライン・スタイルシートのアンカーを要素自身の transform を考慮した包含ブロック相対の位置に固定し、画面・印刷で全出力ページを描画します。新しい設定は不要で、測定後にプレビューのインラインスタイル値と遅延描画を復元します。
+
+例は[表をページに分割する](/ja/docs/guides/tables)と[独立した HTML の書き出し](/ja/docs/guides/html-export)にあります。
 
 ## Core の Publication
 

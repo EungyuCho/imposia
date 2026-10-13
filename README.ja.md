@@ -36,6 +36,8 @@ pnpm add @imposia/react react react-dom
 - 内容の変更後、完成済みのページを保ちながら次のページを準備します。
 - 確定したページをプレビューし、ブラウザーから印刷または PDF 保存します。
 - React Viewer またはフレームワークに依存しない Core API を使えます。
+- [`tableRowspan: "split"`](https://imposia.pages.dev/ja/docs/guides/tables) を選び、結合された表の行をページ間で分割します。
+- [確定ページをアセットとともに独立した HTML に書き出します](https://imposia.pages.dev/ja/docs/guides/html-export)。
 
 ## コントリビュート
 

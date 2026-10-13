@@ -105,7 +105,30 @@ export function Preview({ html }: { html: string }) {
 }
 ```
 
-`state.status` is `idle`, `loading`, `ready`, or `error`. The important detail is what `loading` means after a first success: the previous pages stay on screen while the next version is prepared, so a spinner should sit *beside* the preview rather than replace it. When `state.status` is `error`, the last document that succeeded is still the one being displayed.
+`state.status` is `idle`, `loading`, `ready`, `aborted`, or `error`. After a first success, `loading` keeps the previous pages visible while preparing the next source, so put a spinner beside the preview. `error` and `aborted` can also retain the last successful `state.document`. Cancellation is terminal and does not call `onError`; stop the loading indicator. `state.source` is present only in `ready` and identifies the source used for that commit.
+
+## Choose when preparation starts
+
+`preparation: "immediate"` is the default. Choose `"idle"` to schedule the first preparation during browser idle time, or `"manual"` to wait for `prepare()` or `retry()`. After preparation starts, source changes update normally. Changing the policy does not pause an active controller. These methods belong to the single-document API; `useImposiaPublication` does not expose them. A retry with an already-aborted options signal needs a fresh signal and `documentOptionsRevision`; see the [React API](/en/docs/api/react).
+
+```tsx title="app/manual-preview.tsx"
+import { useImposiaDocument } from "@imposia/react";
+
+export function Preview({ html }: { html: string }) {
+  const { hostRef, state, prepare, retry } = useImposiaDocument({
+    source: { html },
+    preparation: "manual",
+  });
+  return (
+    <>
+      <button type="button" onClick={prepare} disabled={state.status !== "idle"}>Prepare pages</button>
+      {state.status === "error" && <button type="button" onClick={retry}>Retry</button>}
+      {state.status === "aborted" && <p role="status">Preparation cancelled.</p>}
+      <div ref={hostRef} />
+    </>
+  );
+}
+```
 
 ## Optional: export an EPUB
 

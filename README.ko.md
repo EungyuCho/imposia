@@ -36,6 +36,8 @@ pnpm add @imposia/react react react-dom
 - 내용이 바뀌면 완성된 기존 페이지를 유지하며 새 페이지를 준비합니다.
 - 확정된 페이지를 미리보고 브라우저에서 인쇄하거나 PDF로 저장합니다.
 - React Viewer 또는 프레임워크 중립적인 Core API를 사용합니다.
+- [`tableRowspan: "split"`](https://imposia.pages.dev/ko/docs/guides/tables)을 선택해 병합된 표 행을 페이지에 나눕니다.
+- [확정된 페이지를 에셋과 함께 독립 HTML로 내보냅니다](https://imposia.pages.dev/ko/docs/guides/html-export).
 
 ## 기여하기
 

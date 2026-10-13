@@ -9,6 +9,8 @@ Imposia 消除的正是这个问题。它把你现有的 HTML 和 CSS 在浏览�
 
 [为什么需要 Imposia →](/zh-CN/docs/concepts/why-imposia)
 
+这些指南以 **Imposia 0.8.1** 为基准。直接安装的 `@imposia/*` 包应保持相同版本。近期变化见[更新日志](/zh-CN/docs/changelog)、[表格分页](/zh-CN/docs/guides/tables)和[HTML 导出](/zh-CN/docs/guides/html-export)。
+
 <Cards>
   <Card title="构建第一个页面" href="/zh-CN/docs/getting-started">
     安装 React 包，大约十分钟内把 HTML 渲染成 A4 页面。
@@ -38,19 +40,20 @@ Imposia 消除的正是这个问题。它把你现有的 HTML 和 CSS 在浏览�
 | --- | --- | --- |
 | 预览 | React Viewer | 已完成的页面，直接由 canonical iframe 展示 |
 | 打印或 PDF | `print()` | 浏览器原生打印对话框，读者在其中选择打印机或**另存为 PDF** |
+| HTML | `exportPageDocumentHtml(committed)` | 包含已提交页面和已解析资源的独立字符串；见 [HTML 导出](/zh-CN/docs/guides/html-export) |
 | EPUB | `exportEpub()` | 可选。由已提交的源内容生成的可重排 EPUB 3.3 `Blob` |
 
 ## 体积与速度
 
 | 使用路径 | gzip 体积 | gzip 预算 |
 | --- | ---: | ---: |
-| Core · PageDocument | 63.2 KiB | 63.5 KiB |
-| Core · Publication | 67.5 KiB | 68 KiB |
-| Viewer · PageDocument | 11.8 KiB | 13 KiB |
-| Client · PageDocument | 71.8 KiB | 72 KiB |
-| React · PageViewer | 73.6 KiB | 74 KiB |
+| Core · PageDocument | 67.5 KiB | 68.5 KiB |
+| Core · Publication | 71.8 KiB | 73.0 KiB |
+| Viewer · PageDocument | 11.9 KiB | 13.0 KiB |
+| Client · PageDocument | 76.3 KiB | 78.0 KiB |
+| React · PageViewer | 78.5 KiB | 80.0 KiB |
 
-体积于 2026 年 9 月 27 日基于 0.6.0 测得，不包含 React 和 React DOM。Core 完整浏览器文件为 gzip 68.4 KiB。为反映分页正确性修复带来的增长，预算上调了 1–1.5 KiB；这不是体积优化。[测量方法与预算调整依据](https://github.com/EungyuCho/imposia/blob/main/docs/bundle-size.md)。
+体积为 **0.8.1** 在 2026 年 10 月 13 日的快照，不包含 React 和 React DOM。Core 完整浏览器文件为 **gzip 74.7 KiB**。预算是上限，不是实测体积。[测量方法与预算依据](https://github.com/EungyuCho/imposia/blob/main/docs/bundle-size.md)。
 
 | 项目 | 结果 |
 | --- | ---: |

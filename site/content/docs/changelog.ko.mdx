@@ -10,6 +10,8 @@ description: 공개된 Imposia 패키지 버전별 변경 사항을 확인합니
 - 페이지 본문 너비를 고쳤습니다. 본문보다 넓은 표가 본문이나 다른 표의 너비를 바꾸지 않습니다. 페이지를 넘기는 셀은 `box-decoration-break`를 따르고, 잘린 장식이 비우는 공간을 사용하며, 아래 장식은 행의 마지막 조각에서 확정됩니다.
 - `exportPageDocumentHtml`이 앵커를 재기 전에 모든 페이지를 렌더링하고, 앵커 요소를 containing block 기준으로 고정하며, `screen`과 `print`에서 모든 페이지를 그립니다. API 변경은 없습니다.
 
+[0.8.1](https://github.com/EungyuCho/imposia/releases/tag/v0.8.1) · [0.8.0](https://github.com/EungyuCho/imposia/releases/tag/v0.8.0)
+
 ## 0.8.0 — 2026년 10월 13일
 
 - `tableRowspan: "split"`(기본값 `"preserve"`)을 추가했습니다. rowspan 표가 페이지 경계에서 행 사이로 나뉘고, 병합 셀의 내용은 한 번만 유지되며 이어지는 셀은 논리 열 위치에 놓인 빈 셀이 됩니다. 분할 가능한 표를 감싼 일반 컨테이너는 제자리에서 나뉘고, 이 모드에서는 표와 열 너비가 모든 페이지에 전달됩니다.

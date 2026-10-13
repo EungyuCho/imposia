@@ -70,7 +70,7 @@ export const assetResolver: AssetResolver = async ({ url, kind, baseUrl, signal 
 
 ### 应答
 
-返回 `{ status: "resolved", bytes, mimeType }` 放行资源，或返回 `{ status: "blocked", reason }` 拒绝它。拒绝是正常结果，不是错误：文档照常提交，Imposia 会发出 `RESOURCE_BLOCKED` 警告并指明被拒的资源。
+返回 `{ status: "resolved", bytes, mimeType }` 放行，或 `{ status: "blocked", reason }` 拒绝资源。默认 `blockedResourcePolicy: "warn"` 发出 `RESOURCE_BLOCKED`，文档仍可提交。`"error"` 则在提交前使准备失败，并保留上次成功的文档。
 
 ## 返回之后仍会被拒的情况
 
@@ -109,7 +109,7 @@ export const assetResolver: AssetResolver = async ({ url, kind, baseUrl, signal 
 </Accordion>
 
 <Accordion title="我到底需不需要解析器？">
-只有内容引用外部资源时才需要。内联 SVG、CSS 颜色和系统字体什么都不需要。没有解析器时，作者书写的任何 `<img src>` 都会被直接拦下，文档照常提交。
+仅引用外部资源的内容需要解析器。内联 SVG、CSS 颜色和系统字体不需要。未提供解析器时，作者的 `<img src>` 被拦截：`"warn"` 可带 `RESOURCE_BLOCKED` 提交，`"error"` 拒绝准备。
 </Accordion>
 
 </Accordions>

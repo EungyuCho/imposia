@@ -70,7 +70,7 @@ export const assetResolver: AssetResolver = async ({ url, kind, baseUrl, signal 
 
 ### 応答
 
-リソースを受け入れるには `{ status: "resolved", bytes, mimeType }` を、拒否するには `{ status: "blocked", reason }` を返します。拒否はエラーではなく正常な結果の 1 つです。文書はそのまま確定し、Imposia は拒否した対象を示す `RESOURCE_BLOCKED` 警告を発します。
+受け入れるには `{ status: "resolved", bytes, mimeType }` を、拒否するには `{ status: "blocked", reason }` を返します。既定の `blockedResourcePolicy: "warn"` は `RESOURCE_BLOCKED` を警告し、文書を確定できます。`"error"` は同じ拒否で確定前に準備を失敗させ、前の成功した文書を保持します。
 
 ## 返した後に拒否されるもの
 
@@ -109,7 +109,7 @@ export const assetResolver: AssetResolver = async ({ url, kind, baseUrl, signal 
 </Accordion>
 
 <Accordion title="そもそもリゾルバーは必要か">
-コンテンツが外部リソースを参照する場合だけ必要です。インライン SVG、CSS の色、システムフォントには何も要りません。リゾルバーがなければ、ソースの `<img src>` は単にブロックされ、文書はそのまま確定します。
+外部リソースを参照する内容にだけリゾルバーが必要です。インライン SVG、CSS の色、システムフォントには不要です。リゾルバーなしの `<img src>` は遮断され、`"warn"` は `RESOURCE_BLOCKED` とともに確定できますが、`"error"` は準備を拒否します。
 </Accordion>
 
 </Accordions>

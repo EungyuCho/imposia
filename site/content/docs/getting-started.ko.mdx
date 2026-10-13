@@ -105,7 +105,30 @@ export function Preview({ html }: { html: string }) {
 }
 ```
 
-`state.status`는 `idle`, `loading`, `ready`, `error` 중 하나입니다. 첫 성공 이후의 `loading`은 이전 페이지가 화면에 남은 채 다음 버전을 준비하고 있다는 뜻입니다. 따라서 스피너는 미리보기를 대체하지 말고 *옆에* 두세요. `state.status`가 `error`일 때도 화면에는 마지막으로 성공한 문서가 그대로 표시되고 있습니다.
+`state.status`는 `idle`, `loading`, `ready`, `aborted`, `error` 중 하나입니다. 첫 성공 이후 `loading`에서는 이전 페이지를 표시한 채 다음 원본을 준비하므로 스피너를 미리보기 옆에 두세요. `error`나 `aborted`에서도 마지막으로 성공한 `state.document`가 남을 수 있습니다. 취소는 종료 상태이며 `onError`를 호출하지 않으므로 로딩 표시를 끝내야 합니다. `state.source`는 `ready`에서만 존재하며 해당 확정 문서를 만든 원본을 나타냅니다.
+
+## 준비를 시작할 시점을 선택합니다
+
+기본값은 `preparation: "immediate"`입니다. 브라우저가 한가할 때 첫 준비를 시작하려면 `"idle"`, `prepare()`나 `retry()` 호출까지 기다리려면 `"manual"`을 선택하세요. 시작 이후에는 원본 변경을 정상적으로 갱신하며, 정책을 바꿔도 진행 중인 컨트롤러를 멈추지는 않습니다. 이 메서드는 단일 문서 API에만 있으며 `useImposiaPublication`에는 없습니다. 옵션의 signal이 이미 취소된 경우에는 새 signal과 `documentOptionsRevision`을 지정해야 재시도할 수 있습니다. [React API](/ko/docs/api/react) 참고.
+
+```tsx title="app/manual-preview.tsx"
+import { useImposiaDocument } from "@imposia/react";
+
+export function Preview({ html }: { html: string }) {
+  const { hostRef, state, prepare, retry } = useImposiaDocument({
+    source: { html },
+    preparation: "manual",
+  });
+  return (
+    <>
+      <button type="button" onClick={prepare} disabled={state.status !== "idle"}>페이지 준비</button>
+      {state.status === "error" && <button type="button" onClick={retry}>다시 시도</button>}
+      {state.status === "aborted" && <p role="status">문서 준비가 취소됐습니다.</p>}
+      <div ref={hostRef} />
+    </>
+  );
+}
+```
 
 ## 선택 사항: EPUB 내보내기
 
