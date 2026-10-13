@@ -237,6 +237,29 @@ function withPagesRendered<T>(source: Document, read: () => T): T {
   }
 }
 
+const OWN_TRANSFORMS = ["transform", "translate", "rotate", "scale"] as const;
+
+/**
+ * The element's layout box without its own transform. The copy keeps the transform, so a
+ * rectangle that already includes it would apply the offset twice.
+ */
+function untransformedRect(element: HTMLElement): DOMRect {
+  const previous = OWN_TRANSFORMS.map(
+    (name) =>
+      [element.style.getPropertyValue(name), element.style.getPropertyPriority(name)] as const,
+  );
+  try {
+    for (const name of OWN_TRANSFORMS) element.style.setProperty(name, "none", "important");
+    return element.getBoundingClientRect();
+  } finally {
+    for (const [index, name] of OWN_TRANSFORMS.entries()) {
+      const [value, priority] = previous[index] ?? ["", ""];
+      if (value === "") element.style.removeProperty(name);
+      else element.style.setProperty(name, value, priority);
+    }
+  }
+}
+
 /**
  * Anchor positioning is resolved by the browser and does not survive serialization, so each
  * anchored element is frozen at the page coordinate measured on the fully rendered original.
@@ -260,7 +283,7 @@ function freezeAnchoredElements(source: Document, clone: HTMLElement): void {
       const offsetParent = element.offsetParent;
       const container =
         offsetParent !== null && page.contains(offsetParent) ? (offsetParent as HTMLElement) : page;
-      const rect = element.getBoundingClientRect();
+      const rect = untransformedRect(element);
       const containerRect = container.getBoundingClientRect();
       const scaleX = containerRect.width / container.offsetWidth || 1;
       const scaleY = containerRect.height / container.offsetHeight || 1;

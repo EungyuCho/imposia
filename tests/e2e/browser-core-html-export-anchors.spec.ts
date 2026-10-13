@@ -13,11 +13,12 @@ const ROWS = Array.from(
 const HTML = `<style>@page { size: 148mm 210mm; margin: 12mm; }
   table { border-collapse: collapse; width: 100%; } td { border: 1px solid #000; }
   [data-anchor] { anchor-name: --a; }
-  [data-stamp] { position: absolute; position-anchor: --a; position-area: bottom span-right; }
   [data-late] { position: absolute; }</style>
   <p data-anchor>First</p><table>${ROWS}</table>
   <p data-last style="anchor-name: --last">Last page anchor</p>
   <div data-stamp-last style="position: absolute; position-anchor: --last; position-area: bottom right">stamp</div>`;
+
+const CASES = ["important", "plain", "moved"];
 
 test.describe("exportPageDocumentHtml anchors and lazy rendering", () => {
   test.beforeEach(async ({ browserName }) => {
@@ -124,40 +125,48 @@ test.describe("exportPageDocumentHtml anchors and lazy rendering", () => {
       [data-anchor] { anchor-name: --a; margin: 0; width: 80px; height: 30px; }
       .wrap { position: relative; left: 50px; top: 100px; width: 300px; height: 200px; border: 5px solid #ccc; }
       .stamp { position: absolute; width: 40px; height: 20px; position-anchor: --a !important; position-area: bottom right !important; }
-      .plain { position: absolute; width: 40px; height: 20px; position-anchor: --a; position-area: bottom span-right; margin: 7px 0 0 3px; }</style>
+      .plain { position: absolute; width: 40px; height: 20px; position-anchor: --a; position-area: bottom span-right; margin: 7px 0 0 3px; }
+      .moved { position: absolute; width: 40px; height: 20px; position-anchor: --a; position-area: bottom right; transform: rotate(20deg) translate(15px, 5px); }</style>
       <p data-anchor>Anchor</p>
-      <div class="wrap"><div class="stamp" data-case="important"></div><div class="plain" data-case="plain"></div></div>`;
-    const prepared = await page.evaluate(async (markup) => {
-      const core = (await import("/packages/core/dist/index.js")) as typeof import("@imposia/core");
-      const host = document.body.appendChild(document.createElement("div"));
-      const doc = await core.mountPageDocument(host, { html: markup }).ready;
-      const frame = doc.iframe.contentDocument as Document;
-      const offsets = Object.fromEntries(
-        ["important", "plain"].map((name) => {
-          const element = frame.querySelector(`[data-case="${name}"]`) as HTMLElement;
-          const pageRect = (
-            element.closest("[data-imposia-page]") as HTMLElement
-          ).getBoundingClientRect();
-          const rect = element.getBoundingClientRect();
-          return [name, [rect.left - pageRect.left, rect.top - pageRect.top]];
-        }),
-      );
-      return { offsets, exported: await core.exportPageDocumentHtml(doc) };
-    }, html);
-    await page.setContent(prepared.exported);
-    const rendered = await page.evaluate(() =>
-      Object.fromEntries(
-        ["important", "plain"].map((name) => {
-          const element = document.querySelector(`[data-case="${name}"]`) as HTMLElement;
-          const pageRect = (
-            element.closest("[data-imposia-page]") as HTMLElement
-          ).getBoundingClientRect();
-          const rect = element.getBoundingClientRect();
-          return [name, [rect.left - pageRect.left, rect.top - pageRect.top]];
-        }),
-      ),
+      <div class="wrap"><div class="stamp" data-case="important"></div><div class="plain" data-case="plain"></div><div class="moved" data-case="moved"></div></div>`;
+    const prepared = await page.evaluate(
+      async ({ markup, cases }) => {
+        const core = (await import(
+          "/packages/core/dist/index.js"
+        )) as typeof import("@imposia/core");
+        const host = document.body.appendChild(document.createElement("div"));
+        const doc = await core.mountPageDocument(host, { html: markup }).ready;
+        const frame = doc.iframe.contentDocument as Document;
+        const offsets = Object.fromEntries(
+          cases.map((name) => {
+            const element = frame.querySelector(`[data-case="${name}"]`) as HTMLElement;
+            const pageRect = (
+              element.closest("[data-imposia-page]") as HTMLElement
+            ).getBoundingClientRect();
+            const rect = element.getBoundingClientRect();
+            return [name, [rect.left - pageRect.left, rect.top - pageRect.top]];
+          }),
+        );
+        return { offsets, exported: await core.exportPageDocumentHtml(doc) };
+      },
+      { markup: html, cases: CASES },
     );
-    for (const name of ["important", "plain"]) {
+    await page.setContent(prepared.exported);
+    const rendered = await page.evaluate(
+      (cases) =>
+        Object.fromEntries(
+          cases.map((name) => {
+            const element = document.querySelector(`[data-case="${name}"]`) as HTMLElement;
+            const pageRect = (
+              element.closest("[data-imposia-page]") as HTMLElement
+            ).getBoundingClientRect();
+            const rect = element.getBoundingClientRect();
+            return [name, [rect.left - pageRect.left, rect.top - pageRect.top]];
+          }),
+        ),
+      CASES,
+    );
+    for (const name of CASES) {
       expect(rendered[name]?.[0]).toBeCloseTo(prepared.offsets[name]?.[0] ?? Number.NaN, 0);
       expect(rendered[name]?.[1]).toBeCloseTo(prepared.offsets[name]?.[1] ?? Number.NaN, 0);
     }
