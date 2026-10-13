@@ -4244,14 +4244,60 @@ class RecursiveFragmenter {
             : { overflowRoot: tableCursor.overflowRoot }),
         };
       };
+      // `box-decoration-break: slice` (the initial value) draws a cell's box as if it were
+      // never broken: the top padding and border belong to the first piece, the bottom ones
+      // to the last, and nothing is repeated at a cut. `clone` keeps them on every piece,
+      // which is what a plain clone of the shell already does. Only the generated styling
+      // changes; the authored declarations stay as written. Collapsed borders belong to the
+      // table, so only padding is cut there.
+      const collapsedBorders =
+        tableShell.ownerDocument.defaultView?.getComputedStyle(tableShell).borderCollapse ===
+        "collapse";
+      const sliceEdges = cells.map((cell) => {
+        const style = cell.ownerDocument.defaultView?.getComputedStyle(cell);
+        const mode =
+          style?.getPropertyValue("box-decoration-break") ||
+          style?.getPropertyValue("-webkit-box-decoration-break");
+        if (style === undefined || mode === "clone" || style.writingMode !== "horizontal-tb") {
+          return undefined;
+        }
+        const properties = collapsedBorders
+          ? ["padding-top", "padding-bottom"]
+          : ["padding-top", "border-top-width", "padding-bottom", "border-bottom-width"];
+        return new Map(properties.map((property) => [property, style.getPropertyValue(property)]));
+      });
+      const setEdges = (
+        cell: Element,
+        edges: Map<string, string>,
+        side: "top" | "bottom",
+        zero: boolean,
+      ): void => {
+        const html = htmlElement(cell);
+        if (html === undefined) return;
+        for (const [property, value] of edges) {
+          if (property.includes(side)) {
+            html.style.setProperty(property, zero ? "0px" : value, "important");
+          }
+        }
+      };
       const ensureFragment = (depth: number): void => {
         while (fragments.length <= depth) {
+          const previous = fragments[fragments.length - 1];
           const cursor = continueTable(parentAtFragment.page.name, groupTemplate);
           const rowShell = this.#cloneFragment(row, false);
           const cellShells = cells.map((cell) => this.#cloneFragment(cell, false));
           rowShell.append(...cellShells);
           cursor.container.append(rowShell);
           preserveWidths(cellShells);
+          for (const [index, edges] of sliceEdges.entries()) {
+            const shell = cellShells[index];
+            const before = previous?.cells[index];
+            if (edges === undefined || shell === undefined || before === undefined) continue;
+            setEdges(before, edges, "bottom", true);
+            setEdges(shell, edges, "top", true);
+            // The last piece keeps the bottom decoration, whatever an earlier clone carried.
+            setEdges(shell, edges, "bottom", false);
+          }
           fragments.push({ page: cursor.page, cells: cellShells });
         }
       };
