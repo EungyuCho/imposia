@@ -1,5 +1,5 @@
 {
-  "capturedAt": "2026-10-13T08:15:11.615Z",
+  "capturedAt": "2026-10-13T08:34:04.603Z",
   "version": "0.8.0",
   "method": "esbuild + oxc-minify; gzip level 9; React peers external",
   "routes": [
@@ -36,7 +36,7 @@
   ],
   "browser": {
     "path": "packages/core/dist/index.js",
-    "sha256": "04faabdc625f981a02ae13cd9f690dce1d585c17039439fdba19b8ccc1ee844b",
-    "gzipBytes": 75443
+    "sha256": "127c475b9cad7008cd731c42ec66fee13bf98c05f97c2ce5fe10191a7475b286",
+    "gzipBytes": 75478
   }
 }

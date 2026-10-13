@@ -34,20 +34,29 @@ function borderWidth(view: Window, element: Element, side: Side): number {
   return Number.isFinite(width) ? width : 0;
 }
 
-/** Rows in rendering order: header group, then body rows, then footer group. */
-function renderedRows(table: Element): Element[] {
-  const head: Element[] = [];
-  const body: Element[] = [];
-  const foot: Element[] = [];
+/**
+ * Row groups in rendering order: header groups, then body groups (loose `tr` children form
+ * one implicit group), then footer groups. A cell can only span rows of its own group.
+ */
+function rowGroups(table: Element): Element[][] {
+  const head: Element[][] = [];
+  const body: Element[][] = [];
+  const foot: Element[][] = [];
+  let implicit: Element[] | undefined;
   for (const child of table.children) {
     const name = child.localName.toLowerCase();
-    const rows =
-      name === "tr"
-        ? [child]
-        : [...child.children].filter((row) => row.localName.toLowerCase() === "tr");
-    if (name === "thead") head.push(...rows);
-    else if (name === "tfoot") foot.push(...rows);
-    else if (name === "tbody" || name === "tr") body.push(...rows);
+    if (name === "tr") {
+      if (implicit === undefined) {
+        implicit = [];
+        body.push(implicit);
+      }
+      implicit.push(child);
+      continue;
+    }
+    const rows = [...child.children].filter((row) => row.localName.toLowerCase() === "tr");
+    if (name === "thead") head.push(rows);
+    else if (name === "tfoot") foot.push(rows);
+    else if (name === "tbody") body.push(rows);
   }
   return [...head, ...body, ...foot];
 }
@@ -64,9 +73,16 @@ function uniformCollapsedEdges(
   view: Window,
   table: Element,
 ): ReadonlyMap<Element, ReadonlySet<Side>> | undefined {
-  const rows = renderedRows(table);
-  const grid = buildTableGrid(rows);
-  if (grid === undefined) return undefined;
+  // One grid per row group, so a span can never reach into the next group; row indexes are
+  // offset to stay unique across the table.
+  const rows: Element[] = [];
+  const grid: TableGridCell[] = [];
+  for (const group of rowGroups(table)) {
+    const groupGrid = buildTableGrid(group);
+    if (groupGrid === undefined) return undefined;
+    for (const cell of groupGrid) grid.push({ ...cell, start: cell.start + rows.length });
+    rows.push(...group);
+  }
   let area = 0;
   for (const cell of grid) area += cell.rowspan;
   if (area > 200_000) return undefined;

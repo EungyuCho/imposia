@@ -208,4 +208,39 @@ test.describe("HTML export targetDevicePixelRatio", () => {
     expect(style).toContain("border-width: 2px !important");
     expect(style).toContain("padding: 4.5px 4.48438px !important");
   });
+
+  test("confines a rowspan to its row group when finding the cells that share an edge", async ({
+    page,
+  }) => {
+    await page.goto("/examples/book.html");
+    const styles = await page.evaluate(async () => {
+      const core = (await import("/packages/core/dist/index.js")) as typeof import("@imposia/core");
+      const host = document.body.appendChild(document.createElement("div"));
+      // The header cell asks for two rows, but a span cannot leave its row group, so the 3px
+      // body cell below is its neighbor across the group edge, not a cell it overlaps.
+      const controller = core.mountPageDocument(host, {
+        html: `<table style="border-collapse: collapse">
+            <thead><tr><th id="head" rowspan="2" style="border: 1px solid #000; padding: 4px">h</th></tr></thead>
+            <tbody><tr><td id="body" style="border: 3px solid #000; padding: 4px">b</td></tr></tbody>
+          </table>`,
+      });
+      try {
+        const doc = await controller.ready;
+        const html = await core.exportPageDocumentHtml(doc, { targetDevicePixelRatio: 0.5 });
+        const parsed = new DOMParser().parseFromString(html, "text/html");
+        const read = (id: string) => parsed.getElementById(id)?.getAttribute("style") ?? "";
+        return { head: read("head"), body: read("body") };
+      } finally {
+        await controller.destroy();
+        host.remove();
+      }
+    });
+    // The 1px header and 3px body cells share the group edge, so that edge stays as authored
+    // on both cells while their other sides are corrected. If the span reached into the body
+    // group, the header would look like it sits on the table edge and be corrected anyway.
+    expect(styles.head).toContain("border-top-width");
+    expect(styles.head).not.toContain("border-bottom-width");
+    expect(styles.head).not.toContain("border-width: 2px !important");
+    expect(styles.body).not.toContain("border-top-width");
+  });
 });
