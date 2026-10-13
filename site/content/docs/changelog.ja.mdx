@@ -5,6 +5,11 @@ description: 公開された各バージョンの Imposia パッケージの変�
 
 このページは、バージョン付きで公開された各 Imposia リリースを要約します。`@imposia/core`、`@imposia/viewer`、`@imposia/client`、`@imposia/react` は同じバージョン番号を使います。完全な記録はリポジトリの [CHANGELOG.md](https://github.com/EungyuCho/imposia/blob/main/CHANGELOG.md) です。
 
+## 0.8.0 — 2026年10月13日
+
+- `tableRowspan: "split"`（既定値は `"preserve"`）を追加しました。rowspan の表がページ境界で行の間で分割され、結合セルの内容は一度だけ残り、続きのセルは論理的な列位置に置かれた空セルになります。分割できる表を囲む通常のコンテナはその場で分割され、このモードでは表と列の幅がすべてのページに引き継がれます。
+- `exportPageDocumentHtml` に `targetDevicePixelRatio` を追加しました。比が低いレンダラーが切り上げるセルの罫線を、エクスポートした複製でのみ補正します。どちらのオプションも任意で、互換性を壊す変更はありません。
+
 ## 0.7.0 — 2026年10月13日
 
 - 厳格な `blockedResourcePolicy: "error"`、順序付き `elements` リゾルバー、`assetFromDataUrl()` を追加しました。準備に失敗しても前のコミットを保持します。

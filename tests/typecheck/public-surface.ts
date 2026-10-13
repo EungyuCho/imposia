@@ -332,6 +332,16 @@ const previewExport: typeof import("../../packages/core/src/index.js").exportPag
   undefined as unknown as typeof import("../../packages/react/src/index.js").exportPageDocumentHtml;
 const previewAsset: typeof import("../../packages/core/src/index.js").assetFromDataUrl =
   undefined as unknown as typeof import("../../packages/client/src/index.js").assetFromDataUrl;
+// 0.8.0: rowspan splitting and the export pixel ratio.
+const rowspanOptions: import("../../packages/client/src/index.js").PageDocumentOptions = {
+  tableRowspan: "split",
+};
+const exportOptions: import("../../packages/client/src/index.js").HtmlExportOptions = {
+  title: "Invoice",
+  targetDevicePixelRatio: 0.5,
+};
+void rowspanOptions;
+void exportOptions;
 void previewReactProps;
 void previewExport;
 void previewAsset;

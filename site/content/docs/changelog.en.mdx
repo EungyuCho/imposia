@@ -5,6 +5,11 @@ description: See what changed in each published Imposia package version.
 
 This page summarizes each versioned Imposia release. `@imposia/core`, `@imposia/viewer`, `@imposia/client`, and `@imposia/react` use the same version number; the complete record is the repository's [CHANGELOG.md](https://github.com/EungyuCho/imposia/blob/main/CHANGELOG.md).
 
+## 0.8.0 — October 13, 2026
+
+- Added `tableRowspan: "split"` (default `"preserve"`): rowspan tables break between rows at a page boundary, merged cells keep their content once and continue as empty cells placed by logical column, and plain containers around a splittable table fragment in place. Table and column widths are carried to every page in this mode.
+- Added `targetDevicePixelRatio` to `exportPageDocumentHtml`, which corrects cell borders a lower-ratio renderer would round up, in the exported copy only. Both options are opt-in; there are no breaking changes.
+
 ## 0.7.0 — October 13, 2026
 
 - Added strict `blockedResourcePolicy: "error"`, ordered `elements` resolvers, and `assetFromDataUrl()`. Failed preparation preserves the previous commit.

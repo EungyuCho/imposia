@@ -29,6 +29,7 @@ const pageDocument = await controller.ready;
 | `PageDocumentOptions` 字段 | 类型 / 用途 |
 | --- | --- |
 | `iframeTitle`, `blockedResourcePolicy`, `elements`, `fontLoading` | [0.7.0](#预览准备与-html-导出-070) |
+| `tableRowspan` | `"preserve"`（默认）或 `"split"`，见[表格行拆分](#表格行拆分与导出像素比)。 |
 | `css` | `readonly string[]`；附加的作者 CSS。 |
 | `assetResolver` | 处理字体、图片、媒体和样式表请求的异步解析器。 |
 | `page` | `{ size?, orientation?, margin? }`；size 接受 `A3`、`A4`、`A5`、`B4`、`B5`、`Letter`、`Legal`、`Ledger` 或自定义宽高。 |
@@ -172,6 +173,29 @@ const html = await exportPageDocumentHtml(committed, { title: "发票" });
 ```
 
 `exportPageDocumentHtml(document, options?: HtmlExportOptions): Promise<string>` 序列化该已提交代，包含 doctype、UTF-8 声明和以数据 URL 内嵌的已解析二进制资源。`options.title` 可覆盖标题。它去除 Viewer 展示样式并保留已排版页面布局；EPUB 仍是独立的语义可重排导出。已替换、已销毁或不可用的代会以 `DOCUMENT_UNAVAILABLE` 拒绝。它不等待进行中的更新。导出开始后，即使发生更新或销毁，快照仍然有效。结果是独立 HTML 字符串，不是 PDF 字节，也不保证在其他浏览器中布局完全一致。
+
+## 表格行拆分与导出像素比
+
+`tableRowspan` 决定含有跨行单元格（`rowspan`）的表格如何跨页。默认值 `"preserve"` 与以往一致，保持由 rowspan 连接的行组完整。`"split"` 只在行与行之间拆分行组，不会切开某一行：当前页放得下的行先放置，其余各行连同重复的表头继续排在下一页。传入其他值会在创建文档时抛出 `TypeError`。
+
+```ts
+const controller = mountPageDocument(host, { html }, { tableRowspan: "split" });
+```
+
+- 合并单元格的内容只保留在第一个片段中，其 `rowspan` 调整为该片段包含的行数；后续片段是剩余高度的空单元格。把 `rowspan="40"` 的单元格在第 29 行后拆开，会得到带内容的 `rowspan="29"` 和空的 `rowspan="11"`。内容不会重复。
+- 延续的单元格按原表格的逻辑列位置放置，因此起始行不同的合并单元格，或与 `colspan` 单元格并存时，列位置保持不变。原始的起始行、列、`rowspan` 和 `colspan` 会在改写任何属性之前记录。
+- `tr` 上的 `break-inside: avoid` 不会阻止拆分。合并单元格自身声明了 `break-inside: avoid`，或外层元素声明了 `break-inside: avoid`，则保持行组完整。强制分页以及表头、表尾的重复行为不变。
+- 在该模式下，包裹可拆分表格的 `div` 或 `ol > li` 等普通容器会就地分页，而不是整体移到下一页，表格从当前页的剩余空间开始。原子元素以及 flex、grid、多栏容器的排布保持不变。
+- 回退：如果在新页上行组的第一行仍然放不下，或某一行比一页还高，则保留其余各行，不会删除内容，也不会无限新建页面，并报告 `UNSUPPORTED_LAYOUT` 与 `PAGE_OVERFLOW`。不支持拆分合并单元格内部的内容。
+- 宽度：取出各行之前，`"split"` 会测量表格和各列的宽度，并传递到每一页。使用所有单元格 `colspan` 均为 1 的行中单元格最多的一行，仅当各宽度均为正且总和与表格宽度相差不到 2px 时才采用；只统计表格自身的行，不包含嵌套表格的行。缺少 `colgroup` 时会创建；仅由单个 `col` 组成的简单 `colgroup` 只更新宽度，保留类名、背景及其他属性；其他形式的 `colgroup` 保持原样。无法可靠测量列的表格不会被强加估算的宽度。`"preserve"` 不测量也不修改宽度。
+
+`exportPageDocumentHtml` 还接受 `targetDevicePixelRatio`，即用于排版该 HTML 的渲染器（例如 PDF 引擎）的设备像素比。像素比较低的渲染器会把 `1px` 边框向上取整为一个设备像素，边框变粗后单元格内容区变窄，预览中放得下的文字可能被换行。指定该选项后，每个 `td`、`th` 各边的边框会按目标设备像素取整（至少一个像素），单元格的 padding 让出相同的空间（`border-collapse: collapse` 时每边一半），左右两侧另外多留 `1/64px`。这些值仅以 `!important` 内联样式写入导出的副本，不会修改预览 DOM。
+
+```ts
+const html = await exportPageDocumentHtml(committed, { targetDevicePixelRatio: 0.5 });
+```
+
+取值必须是正的有限数，否则以 `TypeError` 拒绝。省略则与原有导出一致。像素比取决于渲染器，因此由调用方指定。适用范围仅限单元格边框，不包括表格、块级元素或 SVG 的边框；没有边框，或没有足够 padding 可让出的边保持原样。不会更改字号或页面缩放。在 `border-collapse: collapse` 的表格中，相邻边框实际排版的粗细是该边上声明的最大值，因此只有当面对该边的所有单元格（外侧边还包括表格自身的边框）声明了相同粗细时才会校正；粗细混合的边、设在行、行组或列上的边框，以及无法构建单元格网格的表格，都按原样导出。
 
 ## Core Publication
 

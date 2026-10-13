@@ -61,6 +61,7 @@ import {
   type PageComposeSettings,
 } from "./page-document-scheduler.js";
 import { createPageSemanticSnapshot, type PageSemanticSnapshot } from "./page-document-semantic.js";
+import { buildTableGrid, tableRowCells } from "./page-document-table-grid.js";
 import type {
   AssetResolver,
   EffectivePageLimits,
@@ -109,6 +110,7 @@ import { createWarningCollector, type DocumentWarning, type WarningCollector } f
 export const ENTRY_PAGE_NUMBERING: unique symbol = Symbol("imposia.entryPageNumbering");
 
 export interface PageGenerationSettings {
+  tableRowspan: "preserve" | "split";
   iframeTitle: string;
   blockedResourcePolicy: "warn" | "error";
   elements: readonly ElementResolver[];
@@ -320,6 +322,10 @@ export function snapshotSettings(options: PageDocumentOptions): PageGenerationSe
   if (blockedResourcePolicy !== "warn" && blockedResourcePolicy !== "error") {
     throw new TypeError('blockedResourcePolicy must be "warn" or "error".');
   }
+  const tableRowspan = options.tableRowspan ?? "preserve";
+  if (tableRowspan !== "preserve" && tableRowspan !== "split") {
+    throw new TypeError('tableRowspan must be "preserve" or "split".');
+  }
   const iframeTitle = options.iframeTitle ?? "Document preview";
   if (typeof iframeTitle !== "string" || iframeTitle.trim() === "") {
     throw new TypeError("iframeTitle must be a non-empty string.");
@@ -336,6 +342,7 @@ export function snapshotSettings(options: PageDocumentOptions): PageGenerationSe
     }
   }
   return {
+    tableRowspan,
     iframeTitle,
     blockedResourcePolicy,
     elements: Object.freeze((options.elements ?? []).map((rule) => Object.freeze({ ...rule }))),
@@ -1004,6 +1011,145 @@ function tableRowClusters(group: Element): readonly (readonly Element[])[] | und
     start = end + 1;
   }
   return clusters;
+}
+
+/**
+ * One cell of a rowspan cluster, positioned by the logical column grid of the original
+ * table. `start` and `rowspan` are relative to the rows currently being placed, and they are
+ * recorded from the authored spans: the DOM's `rowspan` attribute is rewritten as the cluster
+ * is split and is never read back as the original merge range.
+ */
+interface RowspanCell {
+  readonly element: Element;
+  readonly origin: Element;
+  readonly column: number;
+  readonly colspan: number;
+  readonly start: number;
+  readonly rowspan: number;
+  readonly continuation: boolean;
+}
+
+/** Authored cell grid of a row cluster; undefined when a span is not a positive integer. */
+function rowspanCells(rows: readonly Element[]): readonly RowspanCell[] | undefined {
+  const grid = buildTableGrid(rows);
+  if (grid === undefined) return undefined;
+  return grid.map((cell) => ({
+    ...cell,
+    origin: cell.element,
+    continuation: false,
+  }));
+}
+
+function writeRowspan(cell: Element, rowspan: number): void {
+  if (rowspan > 1) cell.setAttribute("rowspan", String(rowspan));
+  else cell.removeAttribute("rowspan");
+}
+
+/** Writes the spans the first `rowCount` rows of a cluster carry when it is cut after them. */
+function writeClusterSpans(cells: readonly RowspanCell[], rowCount: number): void {
+  for (const cell of cells) {
+    writeRowspan(
+      cell.element,
+      cell.start < rowCount ? Math.min(cell.rowspan, rowCount - cell.start) : cell.rowspan,
+    );
+  }
+}
+
+interface MeasuredColumns {
+  readonly tableWidth: number;
+  readonly widths: readonly number[];
+}
+
+/**
+ * Column widths of a table that still holds all of its rows, or undefined when they cannot be
+ * read reliably. Only the table's own rows count (never rows of a nested table). The widths
+ * come from the row with the most cells among rows whose cells all have `colspan` 1, and are
+ * trusted only when each is positive and together they add up to the table width (2px).
+ */
+function measureTableColumns(table: Element): MeasuredColumns | undefined {
+  const ownRows: Element[] = [];
+  for (const child of table.children) {
+    const name = child.localName.toLowerCase();
+    if (name === "tr") ownRows.push(child);
+    else if (name === "thead" || name === "tbody" || name === "tfoot") {
+      ownRows.push(...[...child.children].filter((row) => row.localName.toLowerCase() === "tr"));
+    }
+  }
+  let best: Element[] = [];
+  for (const row of ownRows) {
+    const cells = tableRowCells(row);
+    if (cells.length > best.length && cells.every((cell) => tableCellSpan(cell, "colspan") === 1)) {
+      best = cells;
+    }
+  }
+  if (best.length === 0) return undefined;
+  const widths = best.map((cell) => cell.getBoundingClientRect().width);
+  const tableWidth = table.getBoundingClientRect().width;
+  // Separate borders (the default) put border spacing between and around the columns and
+  // add the table's own padding and borders; collapsed borders add nothing here.
+  const style = table.ownerDocument.defaultView?.getComputedStyle(table);
+  const px = (value: string | undefined): number => Number.parseFloat(value ?? "") || 0;
+  const separate = style !== undefined && style.borderCollapse === "separate";
+  const spacing = separate ? px(style.borderSpacing.split(/\s+/u)[0]) : 0;
+  const frame = separate
+    ? px(style.paddingLeft) +
+      px(style.paddingRight) +
+      px(style.borderLeftWidth) +
+      px(style.borderRightWidth)
+    : 0;
+  const total =
+    widths.reduce((sum, width) => sum + width, 0) + spacing * (widths.length + 1) + frame;
+  if (
+    !Number.isFinite(tableWidth) ||
+    tableWidth <= 0 ||
+    widths.some((width) => !Number.isFinite(width) || width <= 0) ||
+    Math.abs(total - tableWidth) >= 2
+  ) {
+    return undefined;
+  }
+  return { tableWidth, widths };
+}
+
+/**
+ * Records measured widths so every fragment of the table keeps them. A missing colgroup is
+ * created; one plain `<colgroup>` of single `<col>` elements matching the column count only
+ * has its widths updated (class, background, and other attributes stay). Any other colgroup
+ * shape is left alone. The table width is carried on the table itself.
+ */
+function pinMeasuredColumns(table: Element, measured: MeasuredColumns): void {
+  const html = htmlElement(table);
+  if (html === undefined) return;
+  const colgroups = [...table.children].filter((child) => child.localName === "colgroup");
+  const columns = measured.widths.length;
+  if (colgroups.length === 0) {
+    const colgroup = table.ownerDocument.createElement("colgroup");
+    for (const width of measured.widths) {
+      const col = table.ownerDocument.createElement("col");
+      (col as HTMLElement).style.setProperty("width", cssPx(width));
+      colgroup.append(col);
+    }
+    const anchor = [...table.children].find((child) => child.localName !== "caption");
+    if (anchor === undefined) table.append(colgroup);
+    else table.insertBefore(colgroup, anchor);
+  } else if (colgroups.length === 1) {
+    const colgroup = colgroups[0] as Element;
+    const cols = [...colgroup.children];
+    const plain =
+      !colgroup.hasAttribute("span") &&
+      cols.length === columns &&
+      cols.every(
+        (col) =>
+          col.localName === "col" &&
+          (!col.hasAttribute("span") || col.getAttribute("span")?.trim() === "1"),
+      );
+    if (plain) {
+      for (const [index, col] of cols.entries()) {
+        (col as HTMLElement).style.setProperty("width", cssPx(measured.widths[index] ?? 0));
+      }
+    }
+  }
+  html.style.setProperty("box-sizing", "border-box");
+  html.style.setProperty("width", cssPx(measured.tableWidth));
 }
 
 function tableUsesIdSelector(element: Element): boolean {
@@ -2545,6 +2691,7 @@ interface RecursiveFragmenterOptions {
   readonly deadlineAt: number;
   readonly limits: EffectivePageLimits;
   readonly decorateBlankPages: boolean;
+  readonly tableRowspan: "preserve" | "split";
   readonly pageMedia: PaginationPageMedia;
   readonly reportOverflow: () => void;
   readonly warnings: PageWarning[];
@@ -2566,6 +2713,7 @@ class RecursiveFragmenter {
   readonly #deadlineAt: number;
   readonly #limits: EffectivePageLimits;
   readonly #decorateBlankPages: boolean;
+  readonly #tableRowspan: "preserve" | "split";
   readonly #pageMedia: PaginationPageMedia;
   readonly #reportOverflow: () => void;
   readonly #warnings: PageWarning[];
@@ -2588,6 +2736,7 @@ class RecursiveFragmenter {
     this.#deadlineAt = options.deadlineAt;
     this.#limits = options.limits;
     this.#decorateBlankPages = options.decorateBlankPages;
+    this.#tableRowspan = options.tableRowspan;
     this.#pageMedia = options.pageMedia;
     this.#reportOverflow = options.reportOverflow;
     this.#warnings = options.warnings;
@@ -3403,7 +3552,8 @@ class RecursiveFragmenter {
         !constraint.insideAvoid &&
         (constraint.layout === "table" ||
           constraint.layout === "safe-grid" ||
-          (constraint.layout === "normal" && !fitsOnFreshPage));
+          (constraint.layout === "normal" &&
+            (!fitsOnFreshPage || this.#containsSplittableTable(element))));
       if (!fragmentsInPlace) {
         element.remove();
         cursor = continueParent(cursor.page.name);
@@ -3503,6 +3653,44 @@ class RecursiveFragmenter {
       );
     }
     return await this.#fragmentElement(element, cursor, continueParent, constraint);
+  }
+
+  /**
+   * `tableRowspan: "split"` only: a plain container that wraps a table the engine can cut
+   * between rows is fragmented in place instead of moving whole to the next page just
+   * because it would fit there. Every box between the container and the table must be an
+   * ordinary breakable block, so atomic elements, `break-inside: avoid`, and flex, grid, or
+   * multi-column wrappers keep their existing placement.
+   */
+  #containsSplittableTable(container: Element): boolean {
+    if (this.#tableRowspan !== "split") return false;
+    for (const table of container.querySelectorAll("table")) {
+      const tableConstraint = this.#constraints.get(table);
+      if (
+        tableConstraint === undefined ||
+        tableConstraint.layout !== "table" ||
+        tableConstraint.atomic ||
+        tableConstraint.insideAvoid
+      ) {
+        continue;
+      }
+      let ordinary = true;
+      for (let box = table.parentElement; box !== null; box = box.parentElement) {
+        const boxConstraint = this.#constraints.get(box);
+        if (
+          boxConstraint === undefined ||
+          boxConstraint.layout !== "normal" ||
+          boxConstraint.atomic ||
+          boxConstraint.insideAvoid
+        ) {
+          ordinary = false;
+          break;
+        }
+        if (box === container) break;
+      }
+      if (ordinary) return true;
+    }
+    return false;
   }
 
   async #placeText(
@@ -3881,6 +4069,12 @@ class RecursiveFragmenter {
     continueParent: ContinueFragment,
   ): Promise<FragmentCursor> {
     this.#beginRecord();
+    // Widths are read while the table still holds every row: after the rows are taken out, the
+    // first fragment is only as wide as its header and would misreport the later pages.
+    if (this.#tableRowspan === "split") {
+      const measured = measureTableColumns(element);
+      if (measured !== undefined) pinMeasuredColumns(element, measured);
+    }
     const structuralChildren = [...element.children];
     const captions = structuralChildren.filter((child) => child.localName === "caption");
     const colgroups = structuralChildren.filter((child) => child.localName === "colgroup");
@@ -4079,6 +4273,136 @@ class RecursiveFragmenter {
       return true;
     };
 
+    /**
+     * Cuts a rowspan cluster between rows (`tableRowspan: "split"`). The rows that fit stay on
+     * the current fragment with their merged cells shortened to the rows kept; the remaining
+     * rows move to a new fragment where each merged cell continues as an empty cell of the
+     * remaining height, placed by its logical column. Returns `placed: false`, leaving every
+     * row in the current fragment with its authored spans, when not even the first row fits and
+     * the fragment is not fresh, so the caller can move to the next fragment.
+     */
+    const splitRowspanCluster = async (
+      clusterRows: readonly Element[],
+      clusterCells: readonly RowspanCell[],
+      groupTemplate: Element,
+      fresh: boolean,
+    ): Promise<{ placed: boolean; overflowed: boolean; lastRows: number }> => {
+      let rows = clusterRows;
+      let cells = clusterCells;
+      let onFreshFragment = fresh;
+      const restore = (): void => {
+        tableCursor.container.append(...rows);
+        writeClusterSpans(cells, rows.length);
+      };
+      while (true) {
+        const turn = this.#checkpoint();
+        if (turn !== undefined) await turn;
+        this.check();
+        const count = rows.length;
+        // Largest number of leading rows that fits; measured on the live rows, since
+        // candidates are discarded. Only final fragments are cloned (and so counted).
+        const fits = async (rowCount: number): Promise<boolean> => {
+          // Each candidate hands control back through the pagination scheduler, so a long
+          // cluster neither blocks the page nor outlives a cancellation.
+          const scheduled = this.#checkpoint();
+          if (scheduled !== undefined) await scheduled;
+          this.check();
+          for (const row of rows.slice(rowCount)) row.remove();
+          tableCursor.container.append(...rows.slice(0, rowCount));
+          writeClusterSpans(cells, rowCount);
+          return !this.#cursorOverflows(tableCursor);
+        };
+        let low = 1;
+        let high = count - 1;
+        let kept = 0;
+        while (low <= high) {
+          const middle = Math.floor((low + high) / 2);
+          if (await fits(middle)) {
+            kept = middle;
+            low = middle + 1;
+          } else {
+            high = middle - 1;
+          }
+        }
+        if (kept === 0) {
+          restore();
+          if (!onFreshFragment) return { placed: false, overflowed: false, lastRows: count };
+          const clusterConstraint = this.#constraints.get(rows[0] as Element);
+          if (clusterConstraint !== undefined) {
+            this.#warnOnce(
+              "UNSUPPORTED_LAYOUT",
+              clusterConstraint,
+              "The first row of a rowspan cluster does not fit a fresh page, so the remaining rows were kept together.",
+              "display",
+              "table-row",
+              "Kept the remaining rows atomic.",
+            );
+          }
+          this.#reportOverflow();
+          return { placed: true, overflowed: true, lastRows: count };
+        }
+        await fits(kept);
+        this.#markPageContent(tableCursor.page, kept);
+        const tailRows = rows.slice(kept);
+        for (const row of tailRows) row.remove();
+        continueTable(parentAtFragment.page.name, groupTemplate);
+        const tailCells: RowspanCell[] = [];
+        const continuations: RowspanCell[] = [];
+        for (const cell of cells) {
+          if (cell.start >= kept) {
+            tailCells.push({ ...cell, start: cell.start - kept });
+          } else if (cell.start + cell.rowspan > kept) {
+            const element = this.#cloneFragment(cell.origin, false);
+            const remaining = cell.start + cell.rowspan - kept;
+            writeRowspan(element, remaining);
+            const continuation = {
+              ...cell,
+              element,
+              start: 0,
+              rowspan: remaining,
+              continuation: true,
+            };
+            tailCells.push(continuation);
+            continuations.push(continuation);
+          }
+        }
+        const firstTail = tailRows[0] as Element;
+        const ownCells = tailCells.filter(
+          (cell) => !cell.continuation && cell.start === 0 && cell.element.parentElement !== null,
+        );
+        for (const continuation of [...continuations].sort((a, b) => a.column - b.column)) {
+          const next = ownCells
+            .filter((cell) => cell.column > continuation.column)
+            .sort((a, b) => a.column - b.column)[0];
+          if (next === undefined) firstTail.append(continuation.element);
+          else firstTail.insertBefore(continuation.element, next.element);
+          ownCells.push(continuation);
+        }
+        tableCursor.container.append(...tailRows);
+        rows = tailRows;
+        cells = tailCells;
+        onFreshFragment = true;
+        if (!this.#cursorOverflows(tableCursor)) {
+          return { placed: true, overflowed: false, lastRows: rows.length };
+        }
+        if (rows.length === 1) {
+          const clusterConstraint = this.#constraints.get(rows[0] as Element);
+          if (clusterConstraint !== undefined) {
+            this.#warnOnce(
+              "UNSUPPORTED_LAYOUT",
+              clusterConstraint,
+              "A row of a split rowspan cluster is too tall to fit a page without splitting its cells.",
+              "display",
+              "table-row",
+              "Kept the row atomic.",
+            );
+          }
+          this.#reportOverflow();
+          return { placed: true, overflowed: true, lastRows: 1 };
+        }
+      }
+    };
+
     let pendingBreakAfter: PageBreak = "auto";
     for (const { group, template, clusters } of groups) {
       const scheduled = this.#checkpoint();
@@ -4109,8 +4433,26 @@ class RecursiveFragmenter {
           tableCursor = continueTable(parentAtFragment.page.name, template);
         }
 
+        // Authored spans are captured before anything rewrites a `rowspan` attribute.
+        const spanCells =
+          this.#tableRowspan === "split" && cluster.length > 1 ? rowspanCells(cluster) : undefined;
+        const splittable =
+          spanCells !== undefined &&
+          !spanCells.some(
+            (cell) => cell.rowspan > 1 && this.#constraints.get(cell.element)?.insideAvoid === true,
+          );
         tableCursor.container.append(...cluster);
         let overflowed = false;
+        let lastRows = cluster.length;
+        let splitHandled = false;
+        if (splittable && this.#cursorOverflows(tableCursor)) {
+          const split = await splitRowspanCluster(cluster, spanCells, template, false);
+          if (split.placed) {
+            splitHandled = true;
+            overflowed = split.overflowed;
+            lastRows = split.lastRows;
+          }
+        }
         const pageTallRow = cluster.length === 1 ? cluster[0] : undefined;
         // Measured before any move: a fresh fragment may lose the widths this row's
         // siblings gave its columns.
@@ -4120,7 +4462,9 @@ class RecursiveFragmenter {
                 .filter((child) => /^(td|th)$/i.test(child.localName))
                 .map((child) => child.getBoundingClientRect().width)
             : undefined;
-        if (
+        if (splitHandled) {
+          // Cut between rows at the fragment boundary (tableRowspan: "split").
+        } else if (
           overflowingRowWidths !== undefined &&
           pageTallRow !== undefined &&
           ![pageTallRow, ...pageTallRow.children].some(
@@ -4165,7 +4509,14 @@ class RecursiveFragmenter {
           }
           tableCursor.container.append(...cluster);
           const tallRow = cluster.length === 1 ? cluster[0] : undefined;
-          if (
+          let freshSplit: Awaited<ReturnType<typeof splitRowspanCluster>> | undefined;
+          if (splittable && !furnitureOverflowed && this.#cursorOverflows(tableCursor)) {
+            freshSplit = await splitRowspanCluster(cluster, spanCells, template, true);
+          }
+          if (freshSplit?.placed === true) {
+            overflowed = freshSplit.overflowed;
+            lastRows = freshSplit.lastRows;
+          } else if (
             this.#cursorOverflows(tableCursor) &&
             !furnitureOverflowed &&
             tallRow !== undefined &&
@@ -4190,8 +4541,8 @@ class RecursiveFragmenter {
             overflowed = true;
           }
         }
-        this.#markPageContent(tableCursor.page, cluster.length);
-        rowsOnFragment += cluster.length;
+        this.#markPageContent(tableCursor.page, lastRows);
+        rowsOnFragment += lastRows;
         pendingBreakAfter = overflowed
           ? "page"
           : tableClusterBreak(cluster, "after", this.#constraints);
@@ -4555,6 +4906,7 @@ export async function buildGeneration(
           deadlineAt,
           limits: settings.limits,
           decorateBlankPages: settings.decorateBlankPages,
+          tableRowspan: settings.tableRowspan,
           pageMedia,
           reportOverflow,
           warnings: passFragmentationWarnings,

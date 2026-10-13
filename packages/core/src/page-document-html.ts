@@ -1,11 +1,213 @@
 import { ImposiaError } from "./errors.js";
 import { committedFrameGeneration } from "./page-document-frame.js";
 import { pageSemanticSnapshot } from "./page-document-semantic.js";
+import { buildTableGrid, type TableGridCell } from "./page-document-table-grid.js";
 import type { PageDocument } from "./page-document-types.js";
 
 export interface HtmlExportOptions {
   /** Title of the exported document; omit to keep the document's own title. */
   title?: string;
+  /**
+   * Device pixel ratio of the renderer that will lay the exported HTML out, for example a
+   * PDF engine. Cell borders that this renderer would round up to a whole device pixel are
+   * widened in the exported copy only, and the cell's padding gives up the same room, so the
+   * content width and the line breaks stay as in the preview. Omit it to export unchanged.
+   * In a collapsed-border table only edges whose cells all declare the same width are
+   * corrected; mixed edges, borders on rows or columns, and tables whose cell grid cannot be
+   * built are exported as authored.
+   */
+  targetDevicePixelRatio?: number;
+}
+
+const SIDES = ["top", "right", "bottom", "left"] as const;
+
+function cssLength(value: number): string {
+  return `${Number(value.toFixed(6))}px`;
+}
+
+type Side = (typeof SIDES)[number];
+
+function borderWidth(view: Window, element: Element, side: Side): number {
+  const width = Number.parseFloat(
+    view.getComputedStyle(element).getPropertyValue(`border-${side}-width`),
+  );
+  return Number.isFinite(width) ? width : 0;
+}
+
+/**
+ * Row groups in rendering order: header groups, then body groups (loose `tr` children form
+ * one implicit group), then footer groups. A cell can only span rows of its own group.
+ */
+function rowGroups(table: Element): Element[][] {
+  const head: Element[][] = [];
+  const body: Element[][] = [];
+  const foot: Element[][] = [];
+  let implicit: Element[] | undefined;
+  for (const child of table.children) {
+    const name = child.localName.toLowerCase();
+    if (name === "tr") {
+      if (implicit === undefined) {
+        implicit = [];
+        body.push(implicit);
+      }
+      implicit.push(child);
+      continue;
+    }
+    const rows = [...child.children].filter((row) => row.localName.toLowerCase() === "tr");
+    if (name === "thead") head.push(rows);
+    else if (name === "tfoot") foot.push(rows);
+    else if (name === "tbody") body.push(rows);
+  }
+  return [...head, ...body, ...foot];
+}
+
+/**
+ * Sides of each cell of a `border-collapse: collapse` table whose border can be corrected.
+ * Collapsed borders are shared, and the width that is laid out is the widest one declared on
+ * that edge, not the cell's own. A side is only safe to correct when every cell facing it
+ * (and the table's own border, at the outer edge) declares the same width; mixed edges,
+ * borders on rows, row groups, or columns, and tables whose grid cannot be built are left
+ * as authored.
+ */
+function uniformCollapsedEdges(
+  view: Window,
+  table: Element,
+): ReadonlyMap<Element, ReadonlySet<Side>> | undefined {
+  // One grid per row group, so a span can never reach into the next group; row indexes are
+  // offset to stay unique across the table.
+  const rows: Element[] = [];
+  const grid: TableGridCell[] = [];
+  for (const group of rowGroups(table)) {
+    const groupGrid = buildTableGrid(group);
+    if (groupGrid === undefined) return undefined;
+    for (const cell of groupGrid) grid.push({ ...cell, start: cell.start + rows.length });
+    rows.push(...group);
+  }
+  let area = 0;
+  for (const cell of grid) area += cell.rowspan;
+  if (area > 200_000) return undefined;
+  const furniture = [
+    ...rows,
+    ...[...table.children].filter((child) =>
+      /^(thead|tbody|tfoot|colgroup)$/i.test(child.localName),
+    ),
+    ...[...table.querySelectorAll(":scope > colgroup > col")],
+  ];
+  for (const element of furniture) {
+    if (SIDES.some((side) => borderWidth(view, element, side) > 0)) return undefined;
+  }
+  const byRow: TableGridCell[][] = rows.map(() => []);
+  for (const cell of grid) {
+    for (let row = cell.start; row < cell.start + cell.rowspan; row += 1) byRow[row]?.push(cell);
+  }
+  for (const cells of byRow) cells.sort((a, b) => a.column - b.column);
+  const covering = (row: number, column: number): TableGridCell | undefined =>
+    byRow[row]?.find((cell) => cell.column <= column && column < cell.column + cell.colspan);
+  const overlapping = (row: number, from: number, to: number): TableGridCell[] =>
+    (byRow[row] ?? []).filter((cell) => cell.column < to && cell.column + cell.colspan > from);
+
+  const tableEdge: Record<Side, number> = {
+    top: borderWidth(view, table, "top"),
+    right: borderWidth(view, table, "right"),
+    bottom: borderWidth(view, table, "bottom"),
+    left: borderWidth(view, table, "left"),
+  };
+  const widths = new Map<Element, Record<Side, number>>();
+  for (const cell of grid) {
+    widths.set(cell.element, {
+      top: borderWidth(view, cell.element, "top"),
+      right: borderWidth(view, cell.element, "right"),
+      bottom: borderWidth(view, cell.element, "bottom"),
+      left: borderWidth(view, cell.element, "left"),
+    });
+  }
+  const facing = (cell: TableGridCell, side: Side): number[] => {
+    const found: number[] = [];
+    const rowEnd = cell.start + cell.rowspan;
+    const columnEnd = cell.column + cell.colspan;
+    if (side === "left" || side === "right") {
+      const column = side === "left" ? cell.column - 1 : columnEnd;
+      for (let row = cell.start; row < rowEnd; row += 1) {
+        const neighbor = column < 0 ? undefined : covering(row, column);
+        if (neighbor === undefined) {
+          if (tableEdge[side] > 0) found.push(tableEdge[side]);
+        } else {
+          found.push(widths.get(neighbor.element)?.[side === "left" ? "right" : "left"] ?? 0);
+        }
+      }
+    } else {
+      const row = side === "top" ? cell.start - 1 : rowEnd;
+      const neighbors = row < 0 ? [] : overlapping(row, cell.column, columnEnd);
+      if (neighbors.length === 0) {
+        if (tableEdge[side] > 0) found.push(tableEdge[side]);
+      }
+      for (const neighbor of neighbors) {
+        found.push(widths.get(neighbor.element)?.[side === "top" ? "bottom" : "top"] ?? 0);
+      }
+    }
+    return found;
+  };
+
+  const eligible = new Map<Element, Set<Side>>();
+  for (const cell of grid) {
+    const own = widths.get(cell.element);
+    const sides = new Set<Side>();
+    for (const side of SIDES) {
+      const width = own?.[side] ?? 0;
+      if (width > 0 && facing(cell, side).every((other) => Math.abs(other - width) < 0.01)) {
+        sides.add(side);
+      }
+    }
+    eligible.set(cell.element, sides);
+  }
+  return eligible;
+}
+
+/**
+ * Writes the border and padding of every side of a table cell that the target pixel ratio
+ * would thicken into `!important` inline styles on the copy. Values are read from the
+ * committed document, so the preview itself is never modified.
+ */
+function adjustCellBorders(source: Document, clone: Element, targetDevicePixelRatio: number): void {
+  const view = source.defaultView;
+  if (view === null) return;
+  const originals = [...source.querySelectorAll("td, th")];
+  const copies = [...clone.querySelectorAll<HTMLElement>("td, th")];
+  const collapsedEdges = new Map<Element, ReadonlyMap<Element, ReadonlySet<Side>> | undefined>();
+  for (const [index, original] of originals.entries()) {
+    const copy = copies[index];
+    if (copy === undefined) continue;
+    const style = view.getComputedStyle(original);
+    const collapsed = style.borderCollapse === "collapse";
+    let allowed: ReadonlySet<Side> | undefined;
+    if (collapsed) {
+      const table = original.closest("table");
+      if (table === null) continue;
+      if (!collapsedEdges.has(table)) collapsedEdges.set(table, uniformCollapsedEdges(view, table));
+      allowed = collapsedEdges.get(table)?.get(original);
+      if (allowed === undefined) continue;
+    }
+    for (const side of SIDES) {
+      if (allowed !== undefined && !allowed.has(side)) continue;
+      const border = Number.parseFloat(style.getPropertyValue(`border-${side}-width`));
+      const padding = Number.parseFloat(style.getPropertyValue(`padding-${side}`));
+      if (!Number.isFinite(border) || border <= 0 || !Number.isFinite(padding)) continue;
+      const targetBorder =
+        Math.max(1, Math.floor(border * targetDevicePixelRatio + 0.000001)) /
+        targetDevicePixelRatio;
+      const adjustment = (targetBorder - border) / (collapsed ? 2 : 1);
+      if (!Number.isFinite(adjustment) || adjustment === 0) continue;
+      // Without enough padding to give up, the side is left as authored rather than
+      // squeezing the content below zero.
+      if (padding < adjustment) continue;
+      // Left and right edges get a little extra room, so that fractional
+      // coordinates rounding in the target renderer cannot wrap a line that just fits.
+      const inlineGuard = side === "left" || side === "right" ? 1 / 64 : 0;
+      const targetPadding = Math.max(0, padding - adjustment - inlineGuard);
+      copy.style.setProperty(`border-${side}-width`, cssLength(targetBorder), "important");
+      copy.style.setProperty(`padding-${side}`, cssLength(targetPadding), "important");
+    }
+  }
 }
 
 const URL_ATTRIBUTES = new Set(["src", "href", "xlink:href", "srcset", "poster", "style"]);
@@ -28,6 +230,13 @@ export async function exportPageDocumentHtml(
   document: PageDocument,
   options: HtmlExportOptions = {},
 ): Promise<string> {
+  const targetRatio = options.targetDevicePixelRatio;
+  if (
+    targetRatio !== undefined &&
+    (typeof targetRatio !== "number" || !Number.isFinite(targetRatio) || targetRatio <= 0)
+  ) {
+    throw new TypeError("targetDevicePixelRatio must be a positive finite number.");
+  }
   const snapshot = pageSemanticSnapshot(document);
   const source = document.iframe.contentDocument;
   if (
@@ -76,6 +285,8 @@ export async function exportPageDocumentHtml(
     copy.style.top = `${(rect.top - pageRect.top) / (pageRect.height / page.offsetHeight || 1)}px`;
     copy.style.removeProperty("position-anchor");
   }
+
+  if (targetRatio !== undefined) adjustCellBorders(source, clone, targetRatio);
 
   const attributes: Attr[] = [];
   for (const element of clone.querySelectorAll("*")) {
