@@ -280,6 +280,40 @@ test.describe("preview API", () => {
     expect(result.dynamic).toEqual(["ga.woff2", "na.woff2", "da.woff2"]);
   });
 
+  test("fit width scales the page and zoom scales it further", async ({ page }) => {
+    const result = await page.evaluate(async () => {
+      const importMap = document.createElement("script");
+      importMap.type = "importmap";
+      importMap.textContent = JSON.stringify({
+        imports: { "@imposia/core": "/packages/core/dist/index.js" },
+      });
+      document.head.append(importMap);
+      const core = (await import("/packages/core/dist/index.js")) as typeof import("@imposia/core");
+      const viewerModule = (await import("/packages/viewer/dist/index.js")) as {
+        mountPageViewer: typeof import("@imposia/viewer").mountPageViewer;
+      };
+      const host = document.body.appendChild(document.createElement("div"));
+      host.style.width = "1600px";
+      const controller = core.mountPageDocument(host, { html: "<p>one</p>" });
+      const doc = await controller.ready;
+      const viewer = viewerModule.mountPageViewer(host, doc, { fit: "width", controls: false });
+      const scale = () => {
+        const match = /scale\(([\d.]+)\)/.exec(doc.iframe.style.transform);
+        return match === null ? 1 : Number(match[1]);
+      };
+      const before = scale();
+      viewer.setZoom(2);
+      const after = scale();
+      const zoom = viewer.state.zoom;
+      viewer.destroy();
+      await controller.destroy();
+      return { before, after, zoom };
+    });
+    expect(result.zoom).toBe(2);
+    expect(result.before).toBeGreaterThan(1);
+    expect(result.after / result.before).toBeCloseTo(2, 1);
+  });
+
   test("viewer keeps iframe title and honors fit/zoomable/keyboard", async ({ page }) => {
     const result = await page.evaluate(async () => {
       const importMap = document.createElement("script");

@@ -228,8 +228,10 @@ export function mountPageViewer(
     if (options.fit === "none") return 1;
     const availableWidth = elements.stage.clientWidth;
     if (availableWidth <= 0) return 1;
-    const scale = Math.max(0.01, availableWidth / (geometry.width * mutableState.zoom));
-    return options.fit === "width" ? scale : Math.min(1, scale);
+    // `width` fits the page to the stage and lets zoom scale that fitted size; `shrink` only
+    // ever shrinks the zoomed page to fit, so zoom is divided out before the cap.
+    if (options.fit === "width") return Math.max(0.01, availableWidth / geometry.width);
+    return Math.min(1, Math.max(0.01, availableWidth / (geometry.width * mutableState.zoom)));
   }
 
   function presentationScale(): number {
