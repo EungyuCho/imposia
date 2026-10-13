@@ -13,6 +13,12 @@ export interface PageViewerOptions {
   spread?: Readonly<{ cover?: boolean }>;
   zoom?: number;
   controls?: boolean;
+  /** `shrink` (default) only scales pages down to fit, `width` fits both ways, `none` keeps CSS size. */
+  fit?: "shrink" | "width" | "none";
+  /** `false` disables the zoom controls, `setZoom`, and the zoom keys. */
+  zoomable?: boolean;
+  /** `false` disables the viewer's keyboard shortcuts. */
+  keyboard?: boolean;
   theme?: ViewerTheme;
   inspector?: boolean;
   reader?: PublicationReaderOptions;

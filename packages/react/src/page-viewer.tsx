@@ -29,6 +29,7 @@ export type ImposiaPageViewerProps = ImposiaDocumentCallbacks & {
   readonly sourceRevision?: string | number;
   readonly documentOptions?: PageDocumentOptions;
   readonly documentOptionsRevision?: string | number;
+  readonly preparation?: "immediate" | "idle" | "manual";
   readonly viewerOptions?: PageViewerOptions;
   readonly onViewerStateChange?: ((state: PageViewerState) => void) | undefined;
   readonly className?: string;
@@ -48,6 +49,10 @@ export type ImposiaPageViewerHandle = Readonly<{
   closeInspector(): void;
   toggleInspector(): void;
   selectWarning(warning: PageWarning): void;
+  /** Starts preparing the document when `preparation` is `idle` or `manual`. */
+  prepare(): void;
+  /** Rebuilds the document, mounting again first if the initial mount failed. */
+  retry(): void;
   print(): Promise<void>;
   exportEpub(options: EpubExportOptions): Promise<Blob>;
 }>;
@@ -71,6 +76,7 @@ export const ImposiaPageViewer = forwardRef<ImposiaPageViewerHandle, ImposiaPage
       sourceRevision,
       documentOptions,
       documentOptionsRevision,
+      preparation,
       viewerOptions,
       onViewerStateChange,
       className,
@@ -103,6 +109,7 @@ export const ImposiaPageViewer = forwardRef<ImposiaPageViewerHandle, ImposiaPage
       sourceRevision,
       documentOptions,
       documentOptionsRevision,
+      ...(preparation === undefined ? {} : { preparation }),
       onReady: handleDocumentReady,
       onError,
       onStateChange: handleDocumentStateChange,
@@ -201,6 +208,8 @@ export const ImposiaPageViewer = forwardRef<ImposiaPageViewerHandle, ImposiaPage
           if (inspector === undefined) throw inspectorUnavailableError();
           inspector.select(warning);
         },
+        prepare: lifecycle.prepare,
+        retry: lifecycle.retry,
         print(): Promise<void> {
           if (!mountedRef.current) return Promise.reject(handleUnavailableError());
           const controller = controllerRef.current;
@@ -214,7 +223,7 @@ export const ImposiaPageViewer = forwardRef<ImposiaPageViewerHandle, ImposiaPage
           return pageDocument.exportEpub(options);
         },
       };
-    }, [viewerBinding]);
+    }, [viewerBinding, lifecycle.prepare, lifecycle.retry]);
 
     useEffect(() => {
       mountedRef.current = true;

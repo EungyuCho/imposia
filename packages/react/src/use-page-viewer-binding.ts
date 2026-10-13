@@ -5,7 +5,7 @@ import {
   type PageViewerState,
   validatePageViewerOptions,
 } from "@imposia/client";
-import { type RefObject, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export interface PageViewerBinding {
   readonly error: unknown;
@@ -36,7 +36,7 @@ function sameReaderOptions(
 }
 
 export function usePageViewerBinding(
-  hostRef: RefObject<HTMLDivElement | null>,
+  hostRef: { current: HTMLDivElement | null },
   pageDocument: PageDocument | undefined,
   viewerOptions: PageViewerOptions | undefined,
   onError: ((error: unknown) => void) | undefined,
@@ -47,6 +47,7 @@ export function usePageViewerBinding(
   const viewerReaderRef = useRef<PageViewerOptions["reader"] | undefined>(undefined);
   const viewerInspectorRef = useRef(false);
   const viewerControlsRef = useRef(true);
+  const policyRef = useRef<string | undefined>(undefined);
   const viewerLayoutRef = useRef<ViewerLayoutOptions>(viewerLayoutOptions(undefined));
   const unsubscribeRef = useRef<(() => void) | undefined>(undefined);
   const onErrorRef = useRef(onError);
@@ -67,6 +68,7 @@ export function usePageViewerBinding(
       viewerReaderRef.current = undefined;
       viewerInspectorRef.current = false;
       viewerControlsRef.current = true;
+      policyRef.current = undefined;
       return;
     }
     try {
@@ -76,7 +78,9 @@ export function usePageViewerBinding(
         viewerIframeRef.current !== pageDocument.iframe ||
         !sameReaderOptions(viewerReaderRef.current, viewerOptions?.reader) ||
         viewerInspectorRef.current !== (viewerOptions?.inspector ?? false) ||
-        viewerControlsRef.current !== (viewerOptions?.controls ?? true);
+        viewerControlsRef.current !== (viewerOptions?.controls ?? true) ||
+        policyRef.current !==
+          JSON.stringify([viewerOptions?.fit, viewerOptions?.zoomable, viewerOptions?.keyboard]);
       if (requiresRemount) {
         validatePageViewerOptions(pageDocument, viewerOptions);
         const preservedPage =
@@ -91,6 +95,11 @@ export function usePageViewerBinding(
         viewerReaderRef.current = undefined;
         viewerInspectorRef.current = false;
         viewerControlsRef.current = true;
+        policyRef.current = JSON.stringify([
+          viewerOptions?.fit,
+          viewerOptions?.zoomable,
+          viewerOptions?.keyboard,
+        ]);
         viewer = mountPageViewer(host, pageDocument, viewerOptions);
         viewerRef.current = viewer;
         viewerIframeRef.current = pageDocument.iframe;
@@ -134,6 +143,7 @@ export function usePageViewerBinding(
       viewerReaderRef.current = undefined;
       viewerInspectorRef.current = false;
       viewerControlsRef.current = true;
+      policyRef.current = undefined;
     },
     [],
   );

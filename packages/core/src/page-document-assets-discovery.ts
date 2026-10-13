@@ -7,6 +7,7 @@ import {
   srcsetCandidates,
 } from "./page-document-assets-html.js";
 import type { AssetOutcome, AssetRequest } from "./page-document-assets-resolver.js";
+import { unusedFontRange } from "./page-document-font-usage.js";
 
 export type CssOwner =
   | { readonly element: HTMLElement; readonly inline: boolean }
@@ -16,6 +17,7 @@ export type CssContext = {
   readonly owner: CssOwner;
   readonly baseUrl: string | undefined;
   readonly depth: number;
+  readonly unusedFont?: (range: string) => boolean;
 };
 export type AssetDiscovery = {
   readonly queue: readonly AssetRequest[];
@@ -75,6 +77,7 @@ export function discoverPageAssets(
   sourceBaseUrl: string | undefined,
   css: readonly string[],
   makeRequest: MakeRequest,
+  fontText?: string,
 ): AssetDiscovery {
   removeUnsupportedContexts(parsed);
   let queue: AssetRequest[] = [];
@@ -82,14 +85,29 @@ export function discoverPageAssets(
   const contexts: CssContext[] = [];
   const outputCss = [...css];
   let blocked = false;
-  const addContext = (context: CssContext): void => {
+  // Evaluated lazily: stylesheets imported later contribute generated text and counters.
+  const withFontFilter = (context: CssContext): CssContext =>
+    fontText === undefined
+      ? context
+      : {
+          ...context,
+          unusedFont: (range) =>
+            unusedFontRange(
+              range,
+              fontText,
+              contexts.map((item) => item.root),
+            ),
+        };
+  const addContext = (input: CssContext): void => {
+    const context = withFontFilter(input);
     contexts.push(context);
     deferredCss = [
       ...deferredCss,
       ...cssRequests(context, cssReferences(context.root), makeRequest),
     ];
   };
-  const contextRequests = (context: CssContext): readonly AssetRequest[] => {
+  const contextRequests = (input: CssContext): readonly AssetRequest[] => {
+    const context = withFontFilter(input);
     contexts.push(context);
     return cssRequests(context, cssReferences(context.root), makeRequest);
   };

@@ -116,6 +116,7 @@ export function cssRequests(
       | { readonly index: number; readonly inline: false };
     readonly baseUrl: string | undefined;
     readonly depth: number;
+    readonly unusedFont?: (range: string) => boolean;
   },
   references: readonly CssReference[],
   makeRequest: (
@@ -126,8 +127,8 @@ export function cssRequests(
     apply: (outcome: AssetOutcome) => readonly AssetRequest[],
   ) => AssetRequest,
 ): readonly AssetRequest[] {
-  return references.map((reference) =>
-    makeRequest(
+  return references.map((reference) => ({
+    ...makeRequest(
       reference.kind,
       reference.token.url,
       context.baseUrl,
@@ -157,6 +158,7 @@ export function cssRequests(
               baseUrl:
                 outcome.resolvedUrl ?? stylesheetBaseUrl(reference.token.url, context.baseUrl),
               depth: context.depth + 2,
+              ...(context.unusedFont === undefined ? {} : { unusedFont: context.unusedFont }),
             },
             importedReferences,
             makeRequest,
@@ -170,5 +172,18 @@ export function cssRequests(
         return [];
       },
     ),
-  );
+    omit: (): boolean => {
+      if (reference.kind !== "font" || context.unusedFont === undefined) return false;
+      const face = reference.node.parent;
+      if (face?.type !== "atrule" || face.name.toLowerCase() !== "font-face") return false;
+      const ranges: string[] = [];
+      face.walkDecls("unicode-range", (decl) => {
+        ranges.push(decl.value);
+      });
+      const range = ranges.at(-1);
+      if (range === undefined || !context.unusedFont(range)) return false;
+      face.remove();
+      return true;
+    },
+  }));
 }

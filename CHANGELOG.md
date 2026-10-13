@@ -7,6 +7,32 @@ versioning for its published package interfaces. What that means before `1.0`
 
 ## Unreleased
 
+### Added
+
+- `PageDocumentOptions.blockedResourcePolicy` (`"warn"` default, `"error"`):
+  strict mode fails the generation with `RESOURCE_BLOCKED` before commit and
+  keeps the previous document.
+- `PageDocumentOptions.elements`: CSS-selector element resolvers that replace
+  an element's text, HTML, or image (bytes or base64 data URL) before
+  pagination, plus `assetFromDataUrl()`. Failures surface as
+  `ELEMENT_RESOLUTION_FAILED`.
+- `exportPageDocumentHtml()`: standalone HTML of the committed pages with
+  resolved assets inlined as data URLs.
+- `PageDocumentOptions.fontLoading` (`mode: "unicode-range"`): skips font
+  faces whose `unicode-range` the document cannot use.
+- `PageDocumentOptions.iframeTitle`: accessible name of the canonical iframe,
+  kept after a Viewer is mounted (the Viewer no longer overwrites it).
+- `PageViewerOptions.fit`, `zoomable`, and `keyboard`.
+- React: `preparation` (`immediate`, `idle`, `manual`), `prepare()` and
+  `retry()` on `useImposiaDocument` and the `ImposiaPageViewer` handle, and
+  `source` on the ready state.
+
+### Fixed
+
+- Table rows taller than a page split when an empty cell carries a blank
+  spacer pseudo, honor `break-inside: avoid` by trying the next fragment
+  first, and keep their column widths in the continuation.
+
 ## 0.6.0 — 2026-09-27
 
 Minor release for document layout, long documents, and the print pipeline.

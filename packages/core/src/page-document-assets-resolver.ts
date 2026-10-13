@@ -50,6 +50,8 @@ export type AssetRequest = {
   readonly sourceIdentity: string;
   readonly depth: number;
   readonly apply: (outcome: AssetOutcome) => readonly AssetRequest[];
+  /** Returns true after removing a request that is provably unnecessary; it is then skipped. */
+  readonly omit?: () => boolean;
 };
 
 const IMAGE_MIME_TYPES = new Set([

@@ -6,11 +6,14 @@ export {
   type PageWarningTargetBounds,
   pageWarningTargetBounds,
 } from "./page-document.js";
+export { assetFromDataUrl } from "./page-document-elements.js";
 export {
   committedFrameGeneration,
   hasPageDocumentFrameSandbox,
   PAGE_DOCUMENT_FRAME_SANDBOX,
 } from "./page-document-frame.js";
+export type { HtmlExportOptions } from "./page-document-html.js";
+export { exportPageDocumentHtml } from "./page-document-html.js";
 export {
   PRINT_ROOT_ATTRIBUTE,
   PRINT_STYLE_ATTRIBUTE,
@@ -21,6 +24,8 @@ export type {
   AssetResolver,
   CorePageWarning,
   CorePageWarningCode,
+  ElementResolution,
+  ElementResolver,
   EpubExportLimits,
   EpubExportOptions,
   EpubMetadata,
@@ -46,6 +51,7 @@ export type {
   PageExtensionTransformOutput,
   PageExtensionWarning,
   PageExtensionWarningCode,
+  PageFontLoadingOptions,
   PageGeometry,
   PageLimits,
   PageMargin,

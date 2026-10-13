@@ -12,6 +12,9 @@ type RowObservation = Readonly<{
     cells: Readonly<Record<string, readonly string[]>>;
   }>[];
   overflowingPages: readonly number[];
+  tableWidths: readonly number[];
+  pinnedCellWidths: readonly string[];
+  noteCellWidths: readonly number[];
 }>;
 
 async function observe(page: Page, body: string): Promise<RowObservation> {
@@ -60,6 +63,15 @@ async function observe(page: Page, body: string): Promise<RowObservation> {
           }
           return { cells };
         }),
+        tableWidths: pages.flatMap((item) =>
+          [...item.querySelectorAll("table")].map((table) => table.getBoundingClientRect().width),
+        ),
+        pinnedCellWidths: [...frame.querySelectorAll<HTMLElement>("td")].map(
+          (cell) => cell.style.width,
+        ),
+        noteCellWidths: [...frame.querySelectorAll<HTMLElement>('td[data-cell="notes"]')].map(
+          (cell) => cell.getBoundingClientRect().width,
+        ),
         overflowingPages: pages.flatMap((item, index) => {
           const flow = item.querySelector<HTMLElement>("[data-imposia-page-flow]");
           const content = item.querySelector<HTMLElement>("[data-imposia-page-content]");
@@ -236,6 +248,112 @@ test("moves a row that fits on a fresh fragment whole instead of splitting it", 
       .filter((index) => index >= 0);
     expect(blockPages).toEqual([1]);
     expect(flatten(observation, "block")).toEqual(block);
+  } finally {
+    expect(errors).toEqual([]);
+    expect(pageErrors).toEqual([]);
+  }
+});
+
+const startPage = (observation: RowObservation, cell: string) =>
+  observation.pages.findIndex((item) => (item.cells[cell] ?? []).length > 0);
+
+test("splits around a blank-spacer pseudo and honors avoid by trying the next fragment first", async ({
+  page,
+  browserName,
+}) => {
+  const { errors, pageErrors } = captureBrowserErrors(page, browserName);
+  await page.goto("/examples/book.html");
+  const notes = tokens("NOTE", 90);
+  const table = (avoid: boolean) => `
+    <style>p.empty { margin: 0; } p.empty::before { content: " "; }</style>
+    <table>
+      <tbody>
+        <tr><td data-cell="before">BEFORE-1</td><td><p class="empty"></p></td></tr>
+        <tr${avoid ? ' style="break-inside: avoid"' : ""}>
+          <td>X</td>
+          <td data-cell="notes">${notes.map((token) => `<p>${token} continued remark text</p>`).join("")}</td>
+        </tr>
+      </tbody>
+    </table>`;
+  try {
+    const auto = await observe(page, table(false));
+    const avoid = await observe(page, table(true));
+    for (const observation of [auto, avoid]) {
+      expect(observation.warningCodes).not.toContain("UNSUPPORTED_LAYOUT");
+      expect(observation.warningCodes).not.toContain("PAGE_OVERFLOW");
+      expect(observation.overflowingPages).toEqual([]);
+      expect(flatten(observation, "notes")).toEqual(notes);
+      expect(flatten(observation, "before")).toEqual(["BEFORE-1"]);
+    }
+    expect(startPage(auto, "notes")).toBe(0);
+    expect(startPage(avoid, "notes")).toBe(1);
+    expect(avoid.warningCodes).toContain("AVOID_RELAXED");
+  } finally {
+    expect(errors).toEqual([]);
+    expect(pageErrors).toEqual([]);
+  }
+});
+
+test("keeps authored column widths when a row is split", async ({ page, browserName }) => {
+  const { errors, pageErrors } = captureBrowserErrors(page, browserName);
+  await page.goto("/examples/book.html");
+  const notes = tokens("NOTE", 90);
+  const table = (avoid: boolean, width: string, colgroup: string) => `
+    <table style="width: ${width}">
+      ${colgroup}
+      <tbody>
+        <tr><td>Name</td><td>${"Opening remark ".repeat(40)}</td></tr>
+        <tr${avoid ? ' style="break-inside: avoid"' : ""}>
+          <td>X</td>
+          <td data-cell="notes">${notes.map((token) => `<p>${token} continued remark text</p>`).join("")}</td>
+        </tr>
+      </tbody>
+    </table>`;
+  try {
+    for (const avoid of [false, true]) {
+      for (const width of ["400px", "auto"]) {
+        for (const colgroup of ["", '<colgroup><col style="width: 80px"></colgroup>']) {
+          const observation = await observe(page, table(avoid, width, colgroup));
+          const label = `${avoid} ${width} ${colgroup === "" ? "none" : "partial"}`;
+          expect(flatten(observation, "notes"), label).toEqual(notes);
+          expect(observation.overflowingPages, label).toEqual([]);
+          const widths = observation.noteCellWidths;
+          for (const value of widths)
+            expect(Math.abs(value - (widths[0] ?? 0)), label).toBeLessThan(0.1);
+          const tables = observation.tableWidths;
+          for (const value of tables)
+            expect(Math.abs(value - (tables[0] ?? 0)), label).toBeLessThan(0.1);
+        }
+      }
+    }
+  } finally {
+    expect(errors).toEqual([]);
+    expect(pageErrors).toEqual([]);
+  }
+});
+
+test("does not pin cell widths when a fixed layout keeps its columns", async ({
+  page,
+  browserName,
+}) => {
+  const { errors, pageErrors } = captureBrowserErrors(page, browserName);
+  await page.goto("/examples/book.html");
+  const notes = tokens("NOTE", 90);
+  try {
+    const observation = await observe(
+      page,
+      `<table style="table-layout: fixed; width: 100%">
+        <colgroup><col style="width: 20%"><col style="width: 80%"></colgroup>
+        <tbody>
+          <tr><td>A</td><td>B</td></tr>
+          <tr><td>X</td><td data-cell="notes">${notes.map((token) => `<p>${token} continued remark text</p>`).join("")}</td></tr>
+        </tbody>
+      </table>`,
+    );
+    expect(flatten(observation, "notes")).toEqual(notes);
+    expect(observation.pinnedCellWidths.every((value) => value === "")).toBe(true);
+    const tables = observation.tableWidths;
+    for (const value of tables) expect(Math.abs(value - (tables[0] ?? 0))).toBeLessThan(0.1);
   } finally {
     expect(errors).toEqual([]);
     expect(pageErrors).toEqual([]);
