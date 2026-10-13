@@ -7,6 +7,15 @@ versioning for its published package interfaces. What that means before `1.0`
 
 ## Unreleased
 
+### Fixed
+
+- `exportPageDocumentHtml()` renders every page before it measures anchored
+  elements, so positions no longer depend on the preview's scroll position, and
+  it freezes every anchored element (inline or stylesheet `position-anchor`) at
+  its page coordinate. The exported copy forces `content-visibility: visible` on
+  each page, so long tables are fully painted under `screen` and `print`
+  media. The preview's own styles are restored afterwards.
+
 ## 0.8.0 — 2026-10-13
 
 Minor release that lets rowspan tables cross pages and makes the HTML export

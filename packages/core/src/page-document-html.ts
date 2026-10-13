@@ -210,6 +210,80 @@ function adjustCellBorders(source: Document, clone: Element, targetDevicePixelRa
   }
 }
 
+/**
+ * Runs `read` with every page of the live document rendered, then puts each page's inline
+ * `content-visibility` back exactly as it was. Pages skipped by the preview have no layout, so
+ * anything measured inside them would depend on the current scroll position. The read is
+ * synchronous, so no update can interleave with the temporary styles.
+ */
+function withPagesRendered<T>(source: Document, read: () => T): T {
+  const pages = [...source.querySelectorAll<HTMLElement>("[data-imposia-page]")];
+  const previous = pages.map(
+    (page) =>
+      [
+        page.style.getPropertyValue("content-visibility"),
+        page.style.getPropertyPriority("content-visibility"),
+      ] as const,
+  );
+  try {
+    for (const page of pages) page.style.setProperty("content-visibility", "visible", "important");
+    return read();
+  } finally {
+    for (const [index, page] of pages.entries()) {
+      const [value, priority] = previous[index] ?? ["", ""];
+      if (value === "") page.style.removeProperty("content-visibility");
+      else page.style.setProperty("content-visibility", value, priority);
+    }
+  }
+}
+
+/**
+ * Anchor positioning is resolved by the browser and does not survive serialization, so each
+ * anchored element is frozen at the page coordinate measured on the fully rendered original.
+ * Elements anchored through inline styles or stylesheets are both covered.
+ */
+function freezeAnchoredElements(source: Document, clone: HTMLElement): void {
+  const view = source.defaultView;
+  const measured = withPagesRendered(source, () => {
+    const result: { index: number; left: number; top: number }[] = [];
+    const elements = [...source.querySelectorAll<HTMLElement>("[data-imposia-page] *")];
+    for (const [index, element] of elements.entries()) {
+      const style = view?.getComputedStyle(element);
+      const anchored =
+        element.style.getPropertyValue("position-anchor") !== "" ||
+        style?.getPropertyValue("position-anchor").trim().startsWith("--") === true;
+      if (!anchored) continue;
+      const page = element.closest<HTMLElement>("[data-imposia-page]");
+      if (page === null) continue;
+      const rect = element.getBoundingClientRect();
+      const pageRect = page.getBoundingClientRect();
+      const scaleX = pageRect.width / page.offsetWidth || 1;
+      const scaleY = pageRect.height / page.offsetHeight || 1;
+      result.push({
+        index,
+        left:
+          (rect.left - pageRect.left) / scaleX - (Number.parseFloat(style?.marginLeft ?? "") || 0),
+        top: (rect.top - pageRect.top) / scaleY - (Number.parseFloat(style?.marginTop ?? "") || 0),
+      });
+    }
+    return result;
+  });
+  const copies = [...clone.querySelectorAll<HTMLElement>("[data-imposia-page] *")];
+  for (const { index, left, top } of measured) {
+    const copy = copies[index];
+    if (copy === undefined) continue;
+    copy.style.setProperty("left", `${left}px`);
+    copy.style.setProperty("top", `${top}px`);
+    copy.style.setProperty("right", "auto");
+    copy.style.setProperty("bottom", "auto");
+    // Inline declarations are removed; ones from a stylesheet are cancelled by an override.
+    for (const name of ["position-anchor", "position-area"]) {
+      if (copy.style.getPropertyValue(name) !== "") copy.style.removeProperty(name);
+      else copy.style.setProperty(name, "none");
+    }
+  }
+}
+
 const URL_ATTRIBUTES = new Set(["src", "href", "xlink:href", "srcset", "poster", "style"]);
 
 async function blobDataUrl(blob: Blob): Promise<string> {
@@ -271,19 +345,11 @@ export async function exportPageDocumentHtml(
     clone.querySelector("head")?.append(title);
   }
 
-  // Anchor positioning is resolved by the browser and does not survive serialization,
-  // so freeze each anchored element at its measured page coordinate.
-  const originals = [...source.querySelectorAll<HTMLElement>('[style*="position-anchor"]')];
-  const copies = [...clone.querySelectorAll<HTMLElement>('[style*="position-anchor"]')];
-  for (const [index, original] of originals.entries()) {
-    const copy = copies[index];
-    const page = original.closest<HTMLElement>("[data-imposia-page]");
-    if (copy === undefined || page === null) continue;
-    const rect = original.getBoundingClientRect();
-    const pageRect = page.getBoundingClientRect();
-    copy.style.left = `${(rect.left - pageRect.left) / (pageRect.width / page.offsetWidth || 1)}px`;
-    copy.style.top = `${(rect.top - pageRect.top) / (pageRect.height / page.offsetHeight || 1)}px`;
-    copy.style.removeProperty("position-anchor");
+  freezeAnchoredElements(source, clone);
+  // The preview skips rendering of off-screen pages; a consumer that renders the copy under
+  // either media type must paint every page.
+  for (const page of clone.querySelectorAll<HTMLElement>("[data-imposia-page]")) {
+    page.style.setProperty("content-visibility", "visible", "important");
   }
 
   if (targetRatio !== undefined) adjustCellBorders(source, clone, targetRatio);
