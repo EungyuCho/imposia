@@ -4269,7 +4269,11 @@ class RecursiveFragmenter {
       ];
       for (const [index, edges] of sliceEdges.entries()) {
         const cell = cells[index];
-        if (edges !== undefined && cell !== undefined) setEdges(cell, edges, "bottom", true);
+        if (edges === undefined || cell === undefined) continue;
+        // The first piece keeps its top decoration even where it is empty for now, so that
+        // an author rule such as `td:empty` cannot take it away.
+        setEdges(cell, edges, "top", false);
+        setEdges(cell, edges, "bottom", true);
       }
       const fragmentCursor = (depth: number, index: number): FragmentCursor => {
         const fragment = fragments[depth];
@@ -4308,39 +4312,62 @@ class RecursiveFragmenter {
           fragments.push({ page: cursor.page, cells: cellShells });
         }
       };
-      // Puts the bottom decoration back on the piece where a cell's content ends. If that no
-      // longer fits, the last block moves on through the same fragmenter, so the split is
-      // decided with the decoration that remains in the final layout.
-      const finishPiece = async (index: number, depth: number): Promise<void> => {
-        const edges = sliceEdges[index];
-        if (edges === undefined) return;
-        let last = depth;
+      // The bottom decoration belongs to the last piece of the row, for every cell: a short
+      // cell's empty continuation included. It is put back only once every cell has been
+      // placed. If the last piece then no longer fits, the overflowing cell's last block moves
+      // on through the same fragmenter and the decoration is settled again on the new last
+      // piece, so the row is never left overflowing just to draw a border.
+      const finishRow = async (): Promise<void> => {
         for (let attempt = 0; attempt < 64; attempt += 1) {
           this.check();
-          const piece = fragments[last]?.cells[index];
-          if (piece === undefined) return;
-          setEdges(piece, edges, "bottom", false);
-          if (!this.#cursorOverflows(fragmentCursor(last, index))) return;
+          const lastDepth = fragments.length - 1;
+          for (const [index, edges] of sliceEdges.entries()) {
+            const piece = fragments[lastDepth]?.cells[index];
+            if (edges !== undefined && piece !== undefined) setEdges(piece, edges, "bottom", false);
+          }
+          if (!this.#cursorOverflows(fragmentCursor(lastDepth, 0))) return;
+          // The overflow is a property of the page; the cell reaching lowest is the one to cut.
+          let overflowing = 0;
+          let lowest = Number.NEGATIVE_INFINITY;
+          for (const [index, piece] of (fragments[lastDepth]?.cells ?? []).entries()) {
+            const bottom = piece.getBoundingClientRect().bottom;
+            if (bottom > lowest) {
+              lowest = bottom;
+              overflowing = index;
+            }
+          }
+          const edges = sliceEdges[overflowing];
+          const piece = fragments[lastDepth]?.cells[overflowing];
+          if (edges === undefined || piece === undefined) return;
           const tail = piece.lastChild;
           if (tail === null) return;
           piece.removeChild(tail);
-          let reached = last;
+          let reached = lastDepth;
           const continuePiece: ContinueFragment = () => {
-            const continuing = fragments[reached]?.cells[index];
+            const continuing = fragments[reached]?.cells[overflowing];
             if (continuing !== undefined) setEdges(continuing, edges, "bottom", true);
             reached += 1;
             ensureFragment(reached);
-            // The new piece is the last one until more content has to follow it.
-            const candidate = fragments[reached]?.cells[index];
+            // The new piece is the last one until more of the tail has to follow it.
+            const candidate = fragments[reached]?.cells[overflowing];
             if (candidate !== undefined) setEdges(candidate, edges, "bottom", false);
-            return fragmentCursor(reached, index);
+            return fragmentCursor(reached, overflowing);
           };
-          // Placed with the decoration back in place, so the tail splits where it still fits.
-          await this.placeFlowChildren([tail], fragmentCursor(last, index), continuePiece, "shell");
-          if (reached === last) return;
-          last = reached;
-          const final = fragments[last]?.cells[index];
-          if (final !== undefined && !this.#cursorOverflows(fragmentCursor(last, index))) return;
+          // Placed with the decoration in place, so the tail splits where it still fits.
+          await this.placeFlowChildren(
+            [tail],
+            fragmentCursor(lastDepth, overflowing),
+            continuePiece,
+            "shell",
+          );
+          if (reached === lastDepth) return;
+          // The former last piece continues now, for every cell.
+          for (const [index, cellEdges] of sliceEdges.entries()) {
+            const former = fragments[lastDepth]?.cells[index];
+            if (cellEdges !== undefined && former !== undefined) {
+              setEdges(former, cellEdges, "bottom", true);
+            }
+          }
         }
       };
       for (const index of cells.keys()) {
@@ -4356,8 +4383,8 @@ class RecursiveFragmenter {
           continueCell,
           "shell",
         );
-        await finishPiece(index, depth);
       }
+      await finishRow();
       for (const fragment of fragments.slice(0, -1)) this.#markPageContent(fragment.page);
       return true;
     };

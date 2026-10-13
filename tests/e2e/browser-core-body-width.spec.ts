@@ -39,48 +39,83 @@ test("a wide table does not change the body width or the width of other tables",
 const WORDS = Array.from({ length: 700 }, (_, index) => `w${index}`).join(" ");
 
 for (const mode of ["slice", "clone"] as const) {
-  test(`a cell broken over pages follows box-decoration-break: ${mode}`, async ({ page }) => {
-    await page.goto("/examples/book.html");
-    const result = await page.evaluate(
-      async ({ mode: breakMode, words }) => {
-        const core = (await import(
-          "/packages/core/dist/index.js"
-        )) as typeof import("@imposia/core");
-        const html = `<style>@page { size: 148mm 210mm; margin: 12mm; }
-          table { border-collapse: separate; border-spacing: 0; width: 100%; table-layout: fixed; }
-          td:empty { padding: 0; border-width: 0; }
-          td { padding: 20px 6px; border: 4px solid #333; box-decoration-break: ${breakMode}; font: 14px/20px monospace; vertical-align: top; }</style>
-          <table><tr><td data-long>${words}</td><td>side</td></tr></table>`;
-        const host = document.body.appendChild(document.createElement("div"));
-        const doc = await core.mountPageDocument(host, { html }).ready;
-        const frame = doc.iframe.contentDocument as Document;
-        const cells = [...frame.querySelectorAll<HTMLElement>("td")].filter(
-          (cell) => cell.textContent !== "side" && cell.textContent !== "",
-        );
-        const edges = cells.map((cell) => {
-          const style = frame.defaultView?.getComputedStyle(cell) as CSSStyleDeclaration;
-          return {
-            top: [style.paddingTop, style.borderTopWidth],
-            bottom: [style.paddingBottom, style.borderBottomWidth],
-            height: cell.getBoundingClientRect().height,
-          };
-        });
-        const text = cells.map((cell) => cell.textContent ?? "").join(" ");
-        return { edges, text: text.replace(/\s+/g, " ").trim(), expected: words };
-      },
-      { mode, words: WORDS },
-    );
-    expect(result.edges.length).toBeGreaterThan(2);
-    // No text is lost or repeated at a cut.
-    expect(result.text).toBe(result.expected);
-    const last = result.edges.length - 1;
-    for (const [index, edge] of result.edges.entries()) {
-      const keepsTop = mode === "clone" || index === 0;
-      const keepsBottom = mode === "clone" || index === last;
-      expect(edge.top).toEqual(keepsTop ? ["20px", "4px"] : ["0px", "0px"]);
-      expect(edge.bottom).toEqual(keepsBottom ? ["20px", "4px"] : ["0px", "0px"]);
-    }
-  });
+  for (const order of ["long-short", "short-long"] as const) {
+    test(`row pieces follow box-decoration-break: ${mode}, ${order}`, async ({ page }) => {
+      await page.goto("/examples/book.html");
+      const result = await page.evaluate(
+        async ({ mode: breakMode, order: cellOrder, words }) => {
+          const core = (await import(
+            "/packages/core/dist/index.js"
+          )) as typeof import("@imposia/core");
+          const long = `<td data-long><p style="margin: 0">${words}</p></td>`;
+          const short = "<td data-short>short</td>";
+          // An author rule for empty cells must not decide what a continuation piece draws.
+          const emptyRule =
+            breakMode === "slice" ? "td:empty { padding: 0; border-width: 0; }" : "";
+          const html = `<style>@page { size: 148mm 210mm; margin: 12mm; }
+            table { border-collapse: separate; border-spacing: 0; width: 100%; table-layout: fixed; }
+            ${emptyRule}
+            td { padding: 20px 6px; border: 4px solid #333; box-decoration-break: ${breakMode}; font: 14px/20px monospace; vertical-align: top; }</style>
+            <table><tr>${cellOrder === "long-short" ? long + short : short + long}</tr></table>`;
+          const host = document.body.appendChild(document.createElement("div"));
+          const doc = await core.mountPageDocument(host, { html }).ready;
+          const frame = doc.iframe.contentDocument as Document;
+          const pageRows = [...frame.querySelectorAll("[data-imposia-page] tr")];
+          const pieces = pageRows.map((row) =>
+            [...row.children].map((cell) => {
+              const style = frame.defaultView?.getComputedStyle(cell) as CSSStyleDeclaration;
+              return {
+                kind: cell.hasAttribute("data-long")
+                  ? "long"
+                  : cell.hasAttribute("data-short")
+                    ? "short"
+                    : "continuation",
+                text: (cell.textContent ?? "").replace(/\s+/g, " ").trim(),
+                top: [style.paddingTop, style.borderTopWidth],
+                bottom: [style.paddingBottom, style.borderBottomWidth],
+                bottomEdge: cell.getBoundingClientRect().bottom,
+              };
+            }),
+          );
+          const bottoms = pageRows.map(
+            (row) =>
+              (
+                (row.closest("[data-imposia-page]") as Element).querySelector(
+                  "[data-imposia-page-content]",
+                ) as Element
+              ).getBoundingClientRect().bottom,
+          );
+          return { pieces, pageBottom: bottoms.at(-1) ?? 0, words };
+        },
+        { mode, order, words: WORDS },
+      );
+      const { pieces } = result;
+      expect(pieces.length).toBeGreaterThan(2);
+      // Text is neither lost nor repeated at a cut.
+      const joined = pieces.flatMap((piece) => piece.map((cell) => cell.text)).filter(Boolean);
+      expect(joined.join(" ").replace("short", "").replace(/\s+/g, " ").trim()).toBe(result.words);
+      expect(joined.filter((text) => text === "short")).toHaveLength(1);
+      const last = pieces.length - 1;
+      for (const [index, piece] of pieces.entries()) {
+        expect(piece).toHaveLength(2);
+        for (const cell of piece) {
+          // slice: top decoration on the first piece, bottom decoration on the last one,
+          // for every cell of the row, the emptied continuation of a short cell included.
+          const keepsTop = mode === "clone" || index === 0;
+          const keepsBottom = mode === "clone" || index === last;
+          expect(cell.top, `top of piece ${index} (${cell.kind})`).toEqual(
+            keepsTop ? ["20px", "4px"] : ["0px", "0px"],
+          );
+          expect(cell.bottom, `bottom of piece ${index} (${cell.kind})`).toEqual(
+            keepsBottom ? ["20px", "4px"] : ["0px", "0px"],
+          );
+        }
+      }
+      // Putting the bottom decoration back must not push the last piece past the body.
+      for (const cell of pieces[last] ?? [])
+        expect(cell.bottomEdge).toBeLessThanOrEqual(result.pageBottom + 1);
+    });
+  }
 }
 
 test("measured column widths are taken at the body width when a wide table is nearby", async ({
