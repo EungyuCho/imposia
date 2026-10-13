@@ -5,6 +5,10 @@ description: Implement assetResolver, the only path external resources can take 
 
 Add an `<img>` to your HTML and it will not load. This is not a bug — it is the boundary Imposia is built around, and `assetResolver` is how you open it deliberately.
 
+## Resource policy and element preparation (0.7.0)
+
+The default `blockedResourcePolicy: "warn"` allows a document to commit with blocked-resource diagnostics. Choose `"error"` when missing resources must reject preparation and retain the previous commit. `elements` can supply text, sanitized HTML, or image bytes before pagination, and `fontLoading` can conservatively filter font requests by character range. See the [Core API](/en/docs/api/core) for return types, cancellation, limits, and HTML export.
+
 ## Why nothing loads by default
 
 The iframe holding your pages is sandboxed with a strict Content Security Policy. `connect-src` is `'none'`, and images, fonts, and media may only come from `blob:` URLs that Core itself created. Authored URLs never become network requests.

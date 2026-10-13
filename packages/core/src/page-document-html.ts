@@ -1,4 +1,5 @@
 import { ImposiaError } from "./errors.js";
+import { committedFrameGeneration } from "./page-document-frame.js";
 import { pageSemanticSnapshot } from "./page-document-semantic.js";
 import type { PageDocument } from "./page-document-types.js";
 
@@ -29,7 +30,11 @@ export async function exportPageDocumentHtml(
 ): Promise<string> {
   const snapshot = pageSemanticSnapshot(document);
   const source = document.iframe.contentDocument;
-  if (snapshot === undefined || source === null) {
+  if (
+    snapshot === undefined ||
+    source === null ||
+    committedFrameGeneration(source) !== document.generation
+  ) {
     throw new ImposiaError("DOCUMENT_UNAVAILABLE", "The document is no longer committed.");
   }
   // The copy lives in an inert document: attributes rewritten to data URLs on a copy owned

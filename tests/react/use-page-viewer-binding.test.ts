@@ -18,10 +18,19 @@ const mocked = vi.hoisted(() => {
   }> = [];
   return {
     viewers,
-    mountPageViewer: () => {
+    mountPageViewer: (_host: unknown, _document: unknown, options: PageViewerOptions = {}) => {
       let subscriber: ((state: unknown) => void) | undefined;
       const viewer = {
-        state: { generation: 1, page: 1, mode: "continuous", zoom: 1, spreadCover: false },
+        state: {
+          generation: 1,
+          page: 1,
+          mode: options.mode ?? "continuous",
+          zoom: options.zoom ?? 1,
+          spreadCover: options.spread?.cover ?? false,
+        },
+        goToPage(page: number) {
+          this.state.page = page;
+        },
         setZoom(zoom: number) {
           this.state.zoom = zoom;
           subscriber?.(this.state);
@@ -131,4 +140,32 @@ it("applies changed layout options and restores defaults when an option is dropp
   await act(async () => root.render(createElement(OptionsHarness, { options: {} })));
   expect(mocked.viewers).toHaveLength(1);
   expect(viewer?.state).toMatchObject({ zoom: 1, mode: "continuous", spreadCover: false });
+});
+
+it("preserves reader page, mode, and zoom when a policy remounts uncontrolled presentation", async () => {
+  await act(async () => root.render(createElement(OptionsHarness, { options: {} })));
+  const viewer = mocked.viewers[0];
+  if (viewer === undefined) throw new Error("Missing viewer");
+  viewer.state.page = 3;
+  viewer.setMode("spread");
+  viewer.setZoom(1.5);
+  await act(async () =>
+    root.render(
+      createElement(OptionsHarness, {
+        options: { keyboard: false, zoomable: false, fit: "width" },
+      }),
+    ),
+  );
+  expect(mocked.viewers).toHaveLength(2);
+  expect(mocked.viewers[1]?.state).toMatchObject({ page: 3, mode: "spread", zoom: 1.5 });
+  await act(async () =>
+    root.render(
+      createElement(OptionsHarness, { options: { keyboard: true, mode: "single", zoom: 2 } }),
+    ),
+  );
+  expect(mocked.viewers[2]?.state).toMatchObject({ page: 3, mode: "single", zoom: 2 });
+  await act(async () =>
+    root.render(createElement(OptionsHarness, { options: { keyboard: false } })),
+  );
+  expect(mocked.viewers[3]?.state).toMatchObject({ page: 3, mode: "continuous", zoom: 1 });
 });

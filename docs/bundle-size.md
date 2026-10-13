@@ -26,7 +26,25 @@ ends with:
 All 5 consumer routes are within their gzip budgets.
 ```
 
-## Current measurement: 2026-09-27
+## Current measurement: 2026-10-13
+
+Measured from the 0.7.0 candidate after the font-filter and Viewer-policy repairs.
+React peers remain external; budgets are upper limits, not measured sizes.
+
+| Consumer route | Minified | Gzip | Gzip budget |
+| --- | ---: | ---: | ---: |
+| Core · PageDocument | 215.5 KiB | 65.2 KiB | 68.5 KiB |
+| Core · Publication | 231.0 KiB | 69.5 KiB | 73.0 KiB |
+| Viewer · PageDocument | 40.4 KiB | 11.9 KiB | 13.0 KiB |
+| Client · PageDocument | 248.0 KiB | 74.0 KiB | 78.0 KiB |
+| React · PageViewer | 255.6 KiB | 76.2 KiB | 80.0 KiB |
+
+The full built Core browser artifact is **71.1 KiB gzip**.
+The landing page labels this bundle snapshot as Imposia 0.7.0; historical timing
+comparisons keep their own original dates and versions. The byte counts and
+browser artifact hash are in [bundle-size.json](../benchmarks/bundle-size.json).
+
+## Historical baseline: 2026-09-27
 
 Measured from the 0.6.0 release candidate. Sizes are consumer routes with React
 peers external; budgets are upper limits, not the measured sizes.
@@ -114,19 +132,19 @@ against 0.6.0 on the same machine:
 
 | Consumer route | 0.6.0 (gzip) | After (gzip) | Old budget | New budget | Headroom |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| Core · PageDocument | 63.2 KiB | 65.1 KiB | 63.5 KiB | 68.5 KiB | 3.4 KiB |
+| Core · PageDocument | 63.2 KiB | 65.2 KiB | 63.5 KiB | 68.5 KiB | 3.3 KiB |
 | Core · Publication | 67.5 KiB | 69.3 KiB | 68.0 KiB | 73.0 KiB | 3.7 KiB |
 | Viewer · PageDocument | 11.8 KiB | within 13 KiB | 13.0 KiB | 13.0 KiB | unchanged |
-| Client · PageDocument | 71.8 KiB | 73.9 KiB | 72.0 KiB | 78.0 KiB | 4.1 KiB |
-| React · PageViewer | 73.6 KiB | 76.0 KiB | 74.0 KiB | 80.0 KiB | 4.0 KiB |
+| Client · PageDocument | 71.8 KiB | 74.0 KiB | 72.0 KiB | 78.0 KiB | 4.0 KiB |
+| React · PageViewer | 73.5 KiB | 76.2 KiB | 74.0 KiB | 80.0 KiB | 3.8 KiB |
 
 Decision: raise the four Core-bearing budgets to restore roughly 5% headroom.
-About 1.9 KiB of growth comes from `page-document-elements.ts`,
-`page-document-html.ts`, `page-document-font-usage.ts`, and the table
-fragmentation changes. Each replaces host-side DOM patching, iframe cloning, or
-font over-fetching with a Core step that keeps the sanitizer, byte limits, and
-cancellation. They are public Core behavior, so code splitting would not remove
-them from the consumer routes that mount a document.
+About 2.0 KiB of Core mount growth comes from ordered element preparation,
+conservative font selection, and table fragmentation repairs. These run inside
+Core's sanitizer, byte-limit, and cancellation boundaries. Moving them to host
+DOM patches would lose those guarantees; no new runtime dependency was added.
+Standalone HTML export is a separate named helper and can be tree-shaken when
+unused. The additional correctness checks remain within the candidate budgets.
 
 ### 0.5.0 baseline (2026-08-20)
 

@@ -32,7 +32,7 @@ const viewer = useRef<ImposiaPageViewerHandle>(null);
 | `className`、`style` | `string`、`CSSProperties` | 否 | 宿主 `div` 的展示属性。 |
 | `onReady` | `(document: PageDocument) => void` | 否 | 在文档与 Viewer 绑定就绪后运行。 |
 | `onError` | `(error: unknown) => void` | 否 | 接收 Core 或 Viewer 绑定失败。 |
-| `onStateChange` | `(state: ImposiaDocumentState) => void` | 否 | 接收 `idle`、`loading`、`ready` 和 `error`。 |
+| `onStateChange` | `(state: ImposiaDocumentState) => void` | 否 | 接收 `idle`、`loading`、`ready`, `aborted` 和 `error`。 |
 
 <Callout type="warn" title="选项 props 只在 revision 变化时读取">
 `documentOptions` 在控制器挂载时被捕获。仅传入变化后的选项对象——新的解析器、扩展集合或页面几何——本身不会有任何效果：请递增 `documentOptionsRevision`，以新选项重建控制器。下方的 `publicationOptions` 与 `publicationOptionsRevision` 遵循同一规则。只有 `source`（和 `snapshot`）的变化会被自动检测。
@@ -54,6 +54,27 @@ const viewer = useRef<ImposiaPageViewerHandle>(null);
 | `selectWarning(warning)` | `void` | 需要 Inspector，且警告须来自其当前世代。 |
 | `print()` | `Promise<void>` | 为最新完成的页面打开原生打印。读者可以选择另存为 PDF；该方法不返回 PDF 字节。未就绪或卸载后拒绝。 |
 | `exportEpub(options)` | `Promise<Blob>` | 把当前提交导出为可重排 EPUB；未就绪或卸载后拒绝。 |
+
+## 延后准备与重试 (0.7.0)
+
+`ImposiaPageViewer`、兼容包装器 `ImposiaDocument` 和 `useImposiaDocument` 都支持 `preparation`。默认的 `"immediate"` 在挂载时开始；`"idle"` 使用超时 1500 ms 的 `requestIdleCallback`，不支持时用 200 ms 定时器；`"manual"` 等待 `prepare()` 或 `retry()`。改变策略不会暂停已经开始的控制器。开始后，源内容和修订变化照常更新。
+
+Hook 结果与组件句柄都提供 `prepare(): void` 和 `retry(): void`。`prepare()` 只开始一次，重复调用不执行操作。`retry()` 在尚未开始时开始，在同步挂载失败后重新挂载，已有控制器时则用最新源调用 `update`。选项在挂载时固定，改变选项后须递增 `documentOptionsRevision`。重试不会替换已中止的 `documentOptions.signal`；此时须提供新 signal 和选项修订。
+
+`ready` 中的 `state.source` 标识生成已提交文档的源。`loading`、`error`、`aborted` 可能保留之前的 `state.document`，但没有 `state.source`。全部状态为 `idle`、`loading`、`ready`、`aborted`、`error`。中止是终止状态，不调用 `onError`。
+
+```tsx
+const { hostRef, state, prepare, retry } = useImposiaDocument({
+  source: { html }, preparation: "manual",
+});
+return <>
+  <button onClick={prepare}>准备预览</button>
+  {state.status === "error" && <button onClick={retry}>重试</button>}
+  <div ref={hostRef} aria-busy={state.status === "loading"} />
+</>;
+```
+
+改变 Viewer 的 `fit`、`zoomable`、`keyboard` 会重新挂载展示绑定，并保留当前页、未显式指定的模式与缩放，以及 Core iframe。准备 API 用于单个文档；`useImposiaPublication` 不提供这些方法。
 
 ## `ImposiaPublicationViewer`
 

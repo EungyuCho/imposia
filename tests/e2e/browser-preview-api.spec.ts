@@ -280,6 +280,103 @@ test.describe("preview API", () => {
     expect(result.dynamic).toEqual(["ga.woff2", "na.woff2", "da.woff2"]);
   });
 
+  test("unicode-range keeps faces used by CSS text transforms", async ({ page }) => {
+    const requested = await page.evaluate(async () => {
+      const core = (await import("/packages/core/dist/index.js")) as typeof import("@imposia/core");
+      const host = document.body.appendChild(document.createElement("div"));
+      const requested: string[] = [];
+      const controller = core.mountPageDocument(
+        host,
+        { html: "<p>α</p>" },
+        {
+          css: [
+            "p{text-transform:uppercase}@font-face{font-family:G;src:url(upper.woff2);unicode-range:U+0391}",
+          ],
+          fontLoading: { mode: "unicode-range" },
+          assetResolver: async ({ url }) => {
+            requested.push(url);
+            return { status: "blocked" };
+          },
+        },
+      );
+      await controller.ready;
+      await controller.destroy();
+      return requested;
+    });
+    expect(requested).toEqual(["upper.woff2"]);
+  });
+
+  test("element resolution honors cancellation and its deadline", async ({ page }) => {
+    const result = await page.evaluate(async () => {
+      const core = (await import("/packages/core/dist/index.js")) as typeof import("@imposia/core");
+      const run = async (cancel: boolean) => {
+        const host = document.body.appendChild(document.createElement("div"));
+        const abort = new AbortController();
+        let started!: () => void;
+        const entered = new Promise<void>((resolve) => {
+          started = resolve;
+        });
+        let callbackAborted = false;
+        const controller = core.mountPageDocument(
+          host,
+          { html: "<p>wait</p>" },
+          {
+            signal: abort.signal,
+            limits: { resourceDeadlineMs: 100 },
+            elements: [
+              {
+                selector: "p",
+                resolve: ({ signal }) => {
+                  signal.addEventListener("abort", () => {
+                    callbackAborted = true;
+                  });
+                  started();
+                  return new Promise<never>(() => {});
+                },
+              },
+            ],
+          },
+        );
+        const failure = controller.ready.catch((error: Error & { code?: string }) =>
+          error.name === "AbortError" ? error.name : (error.code ?? error.name),
+        );
+        await entered;
+        if (cancel) abort.abort();
+        const error = await failure;
+        await controller.destroy();
+        return { error, callbackAborted, frames: host.querySelectorAll("iframe").length };
+      };
+      return { cancelled: await run(true), timedOut: await run(false) };
+    });
+    expect(result.cancelled).toEqual({ error: "AbortError", callbackAborted: true, frames: 0 });
+    expect(result.timedOut).toEqual({
+      error: "RESOURCE_TIMEOUT",
+      callbackAborted: true,
+      frames: 0,
+    });
+  });
+
+  test("invalid font loading options fail before creating a frame", async ({ page }) => {
+    const result = await page.evaluate(async () => {
+      const core = (await import("/packages/core/dist/index.js")) as typeof import("@imposia/core");
+      const host = document.body.appendChild(document.createElement("div"));
+      const errors: string[] = [];
+      for (const fontLoading of [{ mode: "fast" }, { mode: "all", additionalText: 7 }]) {
+        try {
+          core.mountPageDocument(host, { html: "<p>x</p>" }, { fontLoading: fontLoading as never });
+        } catch (error) {
+          errors.push((error as Error).message);
+        }
+      }
+      return { errors, frames: host.querySelectorAll("iframe").length };
+    });
+    expect(result.errors).toEqual([
+      'fontLoading.mode must be "all" or "unicode-range".',
+      "fontLoading.additionalText must be a string.",
+    ]);
+    expect(result.frames).toBe(0);
+  });
+
   test("fit width scales the page and zoom scales it further", async ({ page }) => {
     const result = await page.evaluate(async () => {
       const importMap = document.createElement("script");
@@ -355,13 +452,25 @@ test.describe("preview API", () => {
       } catch (error) {
         out.invalid = (error as Error).message;
       }
+      const disabled = viewerModule.mountPageViewer(host, doc, {
+        keyboard: false,
+        zoomable: false,
+        zoom: 1.5,
+      });
+      const disabledRoot = doc.iframe.closest("[role=region]") ?? host;
+      disabledRoot.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }),
+      );
+      const disabledState = { page: disabled.state.page, zoom: disabled.state.zoom };
+      disabled.destroy();
       await controller.destroy();
-      return out;
+      return { ...out, disabledState };
     });
     expect(result.title).toBe("Custom title");
     expect(result.zoom).toBe(1);
     expect(result.page).toBe(2);
     expect(result.transform).not.toMatch(/scale\(0\./);
     expect(result.invalid).toBe("Invalid viewer fit policy.");
+    expect(result.disabledState).toEqual({ page: 1, zoom: 1.5 });
   });
 });

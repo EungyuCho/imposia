@@ -215,3 +215,12 @@ registered with `context.onCleanup()` runs after success, failure, abort,
 supersession, and destroy-driven cancellation.
 
 See `LICENSE` and `THIRD_PARTY_NOTICES.md` in this package for distribution terms.
+
+## Preview APIs in 0.7.0
+
+Client re-exports Core's `ElementResolver`, `ElementResolution`,
+`PageFontLoadingOptions`, `assetFromDataUrl`, `HtmlExportOptions`, and
+`exportPageDocumentHtml`, as well as Viewer options `fit`, `zoomable`, and
+`keyboard`. Use them from `@imposia/client` with the same Core and Viewer
+contracts documented in the bundled package READMEs. `@imposia/react` also
+re-exports this surface.

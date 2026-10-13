@@ -28,6 +28,7 @@ const pageDocument = await controller.ready;
 
 | `PageDocumentOptions` 字段 | 类型 / 用途 |
 | --- | --- |
+| `iframeTitle`, `blockedResourcePolicy`, `elements`, `fontLoading` | [0.7.0](#预览准备与-html-导出-070) |
 | `css` | `readonly string[]`；附加的作者 CSS。 |
 | `assetResolver` | 处理字体、图片、媒体和样式表请求的异步解析器。 |
 | `page` | `{ size?, orientation?, margin? }`；size 接受 `A3`、`A4`、`A5`、`B4`、`B5`、`Letter`、`Legal`、`Ledger` 或自定义宽高。 |
@@ -75,7 +76,7 @@ const pageDocument = await controller.ready;
 `finalizePage` 返回任何非 `undefined` 的值都会让整个世代被拒绝。该钩子通过修改活动页面元素来传达结果，绝不通过返回替代值。
 </Callout>
 
-拆分表格需要在续排片段中冻结实测像素列宽时，将 `createTableColgroupExtension()` 作为可选扩展启用。Core 始终携带作者的 `<colgroup>` 元素，但默认从不合成列宽。
+拆分表格需要在续排片段中冻结实测像素列宽时，将 `createTableColgroupExtension()` 作为可选扩展启用。Core 始终保留作者的 `<colgroup>` 元素。拆分高行时，还会按需固定实测单元格宽度；其他表格续排仍可选择启用此扩展。
 
 ### `PageDocumentController`
 
@@ -146,6 +147,31 @@ selectBlankMarkers(markers: PageSideConstraint[], pages: Map<number, number>): n
 - `hasPageDocumentFrameSandbox` 仅在 sandbox 令牌恰好是公开集合（`allow-same-origin` 与 `allow-modals`）时为 true。
 - `committedFrameGeneration` 返回 Core 在提交时刻印在 canonical frame 上的世代；若该帧尚未提交带标记的世代，则为 `undefined`。用于区分尚未送达的较新提交与真正的损坏。它不读取也不校验页面 marker。
 - `selectBlankMarkers` 返回为满足左右页奇偶而需要空白页的 marker ID，并考虑之前的选择。marker 没有页面映射时抛出。
+
+## 预览准备与 HTML 导出 (0.7.0)
+
+`iframeTitle` 设置 canonical iframe 的无障碍名称，默认值为 `Document preview`，Viewer 会保留它。`blockedResourcePolicy` 默认为 `"warn"`。设为 `"error"` 时，解析器、验证、扩展或净化过程产生的任何 `RESOURCE_BLOCKED` 诊断都会在提交前拒绝该代。更新失败仍保留上一次已提交文档。拒绝的 `ImposiaError.code` 为 `RESOURCE_BLOCKED`，不暴露原始 URL 或解析器消息。
+
+`elements` 是按顺序执行的 `{ selector, resolve }` 数组，在扩展的源转换后、净化与分页前，选择工作副本中 body 的后代元素。`resolve({ attributes, text, index, signal })` 接收冻结的属性和文本快照以及从 0 开始的匹配索引，不接收实时 DOM。返回 `undefined` 保留元素，`{ type: "text", text }` 替换文本，`{ type: "html", html }` 替换内部 HTML。`{ type: "image", bytes, mimeType, alt }` 或 `{ type: "image", dataUrl, alt }` 将元素替换为图片。规则和匹配元素依次处理，后续规则能看到先前替换；已移除的后代会被跳过。返回的 HTML 仍会净化，图片仍须通过 MIME、解码、字节限制和扩展检查。图片仅复制原元素的 `class`、`style`、`width`、`height`、`id`，并使用返回的 `alt`。
+
+请把 `signal` 传给异步操作。取消会中止该代；无效选择器、回调失败、无效数据 URL 会以 `ELEMENT_RESOLUTION_FAILED` 拒绝。整代资源处理超时则以 `RESOURCE_TIMEOUT` 拒绝。两种情况都保留上次提交。`assetFromDataUrl(url)` 把具有明确 MIME 类型的 base64 数据 URL 解码为 `{ status: "resolved", bytes, mimeType }`；它不代替资源验证，也不接受非 base64 URL。
+
+`fontLoading: { mode: "all" }` 保持默认行为。`"unicode-range"` 会跳过源文本、装饰或生成内容用不到的字符范围字体。`additionalText` 可预留预计需要的字符。范围缺失或无效，或无法确定生成内容、引号、计数器、文本转换时，会保守地保留字体。这是字符范围过滤器，不是计算后的 font-family 或实际字形覆盖分析。
+
+```ts
+import { exportPageDocumentHtml, mountPageDocument } from "@imposia/core";
+
+const controller = mountPageDocument(host, { html: '<p class="name"></p>' }, {
+  iframeTitle: "发票预览",
+  blockedResourcePolicy: "error",
+  elements: [{ selector: ".name", resolve: () => ({ type: "text", text: "李明" }) }],
+  fontLoading: { mode: "unicode-range", additionalText: "¥" },
+});
+const committed = await controller.ready;
+const html = await exportPageDocumentHtml(committed, { title: "发票" });
+```
+
+`exportPageDocumentHtml(document, options?: HtmlExportOptions): Promise<string>` 序列化该已提交代，包含 doctype、UTF-8 声明和以数据 URL 内嵌的已解析二进制资源。`options.title` 可覆盖标题。它去除 Viewer 展示样式并保留已排版页面布局；EPUB 仍是独立的语义可重排导出。已替换、已销毁或不可用的代会以 `DOCUMENT_UNAVAILABLE` 拒绝。它不等待进行中的更新。导出开始后，即使发生更新或销毁，快照仍然有效。结果是独立 HTML 字符串，不是 PDF 字节，也不保证在其他浏览器中布局完全一致。
 
 ## Core Publication
 

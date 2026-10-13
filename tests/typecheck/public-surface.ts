@@ -303,3 +303,35 @@ if (publicationWarning !== undefined) publicationHandle.current?.selectWarning(p
 const publicationHook: typeof useImposiaPublication = useImposiaPublication;
 void publicationElement;
 void publicationHook;
+
+// 0.7.0 preview contracts must remain available through the consumer facade.
+const previewOptions: import("../../packages/client/src/index.js").PageDocumentOptions = {
+  iframeTitle: "Invoice preview",
+  blockedResourcePolicy: "error",
+  fontLoading: { mode: "unicode-range", additionalText: "₩" },
+  elements: [
+    {
+      selector: ".name",
+      resolve: ({ text, signal, index, attributes }) => {
+        void signal;
+        void index;
+        void attributes;
+        return { type: "text", text };
+      },
+    },
+  ],
+};
+const previewPolicy: PageViewerOptions = { fit: "width", zoomable: false, keyboard: false };
+const previewReactProps: import("../../packages/react/src/index.js").ImposiaPageViewerProps = {
+  source: { html: "<p>Hello</p>" },
+  preparation: "manual",
+  documentOptions: previewOptions,
+  viewerOptions: previewPolicy,
+};
+const previewExport: typeof import("../../packages/core/src/index.js").exportPageDocumentHtml =
+  undefined as unknown as typeof import("../../packages/react/src/index.js").exportPageDocumentHtml;
+const previewAsset: typeof import("../../packages/core/src/index.js").assetFromDataUrl =
+  undefined as unknown as typeof import("../../packages/client/src/index.js").assetFromDataUrl;
+void previewReactProps;
+void previewExport;
+void previewAsset;

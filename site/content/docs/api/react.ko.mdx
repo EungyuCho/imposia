@@ -32,7 +32,7 @@ const viewer = useRef<ImposiaPageViewerHandle>(null);
 | `className`, `style` | `string`, `CSSProperties` | 아니요 | 호스트 `div`의 표시 속성입니다. |
 | `onReady` | `(document: PageDocument) => void` | 아니요 | 문서와 Viewer 연결이 준비된 뒤 실행됩니다. |
 | `onError` | `(error: unknown) => void` | 아니요 | Core 또는 Viewer 연결 실패를 받습니다. |
-| `onStateChange` | `(state: ImposiaDocumentState) => void` | 아니요 | `idle`, `loading`, `ready`, `error`를 받습니다. |
+| `onStateChange` | `(state: ImposiaDocumentState) => void` | 아니요 | `idle`, `loading`, `ready`, `aborted`, `error`를 받습니다. |
 
 <Callout type="warn" title="옵션 prop은 revision이 바뀔 때만 읽힙니다">
 `documentOptions`는 컨트롤러가 마운트될 때 캡처됩니다. 새 리졸버, 확장 집합, 페이지 기하 정보를 담은 옵션 객체를 전달하는 것만으로는 아무 일도 일어나지 않습니다. `documentOptionsRevision`을 바꿔 새 옵션으로 컨트롤러를 다시 마운트하세요. 아래의 `publicationOptions`와 `publicationOptionsRevision`에도 같은 규칙이 적용됩니다. `source`(와 `snapshot`)의 변경만 자체적으로 감지됩니다.
@@ -54,6 +54,27 @@ const viewer = useRef<ImposiaPageViewerHandle>(null);
 | `selectWarning(warning)` | `void` | Inspector와 현재 세대의 경고가 필요합니다. |
 | `print()` | `Promise<void>` | 마지막으로 완성된 페이지로 브라우저의 기본 인쇄 창을 엽니다. 사용자는 PDF로 저장을 선택할 수 있으며, 이 메서드는 PDF 바이트를 반환하지 않습니다. |
 | `exportEpub(options)` | `Promise<Blob>` | 현재 확정된 문서를 리플로우형 EPUB으로 내보냅니다. |
+
+## 준비 시점과 재시도 (0.7.0)
+
+`ImposiaPageViewer`, 호환 래퍼 `ImposiaDocument`, `useImposiaDocument`에서 `preparation`을 사용할 수 있습니다. 기본값 `"immediate"`는 마운트 때 시작합니다. `"idle"`은 제한 시간 1500ms의 `requestIdleCallback`을 사용하고, 지원되지 않으면 200ms 타이머를 사용합니다. `"manual"`은 `prepare()`나 `retry()`를 기다립니다. 정책을 바꿔도 이미 시작한 컨트롤러를 일시 정지하지 않습니다. 시작 후에는 원본·리비전 변경에 따라 정상 갱신됩니다.
+
+훅 결과와 컴포넌트 핸들에 `prepare(): void`, `retry(): void`가 있습니다. `prepare()`는 한 번 시작하며 반복 호출은 아무 동작도 하지 않습니다. `retry()`는 아직 시작하지 않았다면 시작하고, 동기 마운트 실패 뒤에는 다시 마운트하며, 기존 컨트롤러가 있다면 최신 원본으로 `update`합니다. 옵션은 마운트 때 고정되므로 변경한 옵션을 적용하려면 `documentOptionsRevision`을 올리세요. 이미 중단된 `documentOptions.signal`은 재시도로 교체되지 않습니다. 이 경우 새 signal과 옵션 리비전을 전달해야 합니다.
+
+`ready`의 `state.source`는 확정 문서를 만든 원본입니다. `loading`, `error`, `aborted`에는 이전 확정 `state.document`가 남을 수 있지만 `state.source`는 없습니다. 전체 상태는 `idle`, `loading`, `ready`, `aborted`, `error`이며 중단은 종료 상태로 `onError`를 호출하지 않습니다.
+
+```tsx
+const { hostRef, state, prepare, retry } = useImposiaDocument({
+  source: { html }, preparation: "manual",
+});
+return <>
+  <button onClick={prepare}>미리보기 준비</button>
+  {state.status === "error" && <button onClick={retry}>재시도</button>}
+  <div ref={hostRef} aria-busy={state.status === "loading"} />
+</>;
+```
+
+Viewer의 `fit`, `zoomable`, `keyboard`를 바꾸면 현재 페이지·직접 지정하지 않은 보기 모드와 배율·Core iframe을 유지하면서 표시 연결을 다시 마운트합니다. 준비 시점 API는 단일 문서용이며 `useImposiaPublication`에는 이 메서드가 없습니다.
 
 ## `ImposiaPublicationViewer`
 

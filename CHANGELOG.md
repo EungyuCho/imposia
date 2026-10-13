@@ -31,9 +31,19 @@ versioning for its published package interfaces. What that means before `1.0`
 
 ### Fixed
 
+- Unicode-range font filtering retains faces when CSS text transforms can introduce characters absent from the source, including locale-dependent case mapping.
+- Invalid font-loading modes and non-string `additionalText` fail before a canonical iframe is created.
+- Viewer policy changes preserve reader-selected page, mode, and zoom when layout options are uncontrolled; explicit options and removed-option defaults remain authoritative.
+- Predefined list-style type/position combinations are recognized case-insensitively by font filtering, while custom styles stay conservative.
+- HTML export verifies that the frame still contains the requested generation.
 - Table rows taller than a page split when an empty cell carries a blank
   spacer pseudo, honor `break-inside: avoid` by trying the next fragment
   first, and keep their column widths in the continuation.
+
+### Documentation
+
+- Documented the new preview contracts, strict failure and recovery, font-filter limits, and HTML export boundaries in all four localized API references and asset guides, plus npm package READMEs.
+- Updated localized changelogs and the supported security line to `0.7.x`.
 
 ## 0.6.0 — 2026-09-27
 

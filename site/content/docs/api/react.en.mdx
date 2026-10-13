@@ -32,7 +32,7 @@ const viewer = useRef<ImposiaPageViewerHandle>(null);
 | `className`, `style` | `string`, `CSSProperties` | No | Host `div` presentation. |
 | `onReady` | `(document: PageDocument) => void` | No | Runs after the document and Viewer binding are ready. |
 | `onError` | `(error: unknown) => void` | No | Receives Core or Viewer binding failures. |
-| `onStateChange` | `(state: ImposiaDocumentState) => void` | No | Receives `idle`, `loading`, `ready`, and `error`. |
+| `onStateChange` | `(state: ImposiaDocumentState) => void` | No | Receives `idle`, `loading`, `ready`, `aborted`, and `error`. |
 
 <Callout type="warn" title="Options props are read only when their revision changes">
 `documentOptions` is captured when the controller mounts. Passing a changed options object — a new resolver, extension set, or page geometry — does nothing by itself: bump `documentOptionsRevision` to remount the controller with the new options. The same rule applies to `publicationOptions` and `publicationOptionsRevision` below. Only `source` (and `snapshot`) changes are detected on their own.
@@ -54,6 +54,27 @@ Handle methods act on the latest committed generation. Methods that need the Vie
 | `selectWarning(warning)` | `void` | Requires the inspector and a warning from its current generation. |
 | `print()` | `Promise<void>` | Opens native print for the latest completed pages. Readers can choose Save as PDF; the method does not return PDF bytes. |
 | `exportEpub(options)` | `Promise<Blob>` | Exports the current commit as a reflowable EPUB. |
+
+## Deferred preparation and retry (0.7.0)
+
+`preparation` is available on `ImposiaPageViewer`, its `ImposiaDocument` wrapper, and `useImposiaDocument`. `"immediate"` (default) starts on mount; `"idle"` uses `requestIdleCallback` with a 1500 ms timeout, or a 200 ms timer when unavailable; `"manual"` waits for `prepare()` or `retry()`. Changing the policy does not pause an already started controller. Subsequent source/revision changes update normally after preparation has started.
+
+The hook result and component handle both expose `prepare(): void` and `retry(): void`. `prepare()` starts once; repeated calls do nothing. `retry()` starts if needed, remounts after a synchronous mount failure, or calls `update` with the latest source on the existing controller. Options are captured at mount; increment `documentOptionsRevision` to apply changed options. Retry does not replace an already-aborted `documentOptions.signal`; provide a fresh signal and option revision for that case.
+
+In `ready`, `state.source` identifies the source used for that committed document. In `loading`, `error`, or `aborted`, a previous committed `state.document` may remain, but `state.source` is absent. All five statuses are `idle`, `loading`, `ready`, `aborted`, and `error`. Abortion is terminal and does not call `onError`.
+
+```tsx
+const { hostRef, state, prepare, retry } = useImposiaDocument({
+  source: { html }, preparation: "manual",
+});
+return <>
+  <button onClick={prepare}>Prepare preview</button>
+  {state.status === "error" && <button onClick={retry}>Retry</button>}
+  <div ref={hostRef} aria-busy={state.status === "loading"} />
+</>;
+```
+
+Viewer `fit`, `zoomable`, and `keyboard` changes remount the presentation binding while preserving the current page, uncontrolled mode/zoom, and Core iframe. The deferred preparation API is for a single document; `useImposiaPublication` does not expose these methods.
 
 ## `ImposiaPublicationViewer`
 

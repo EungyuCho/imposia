@@ -7,8 +7,14 @@ This page summarizes each versioned Imposia release. `@imposia/core`, `@imposia/
 
 ## 0.7.0 — October 13, 2026
 
-- Added `blockedResourcePolicy`, CSS-selector `elements` resolvers, `exportPageDocumentHtml()`, `fontLoading: { mode: "unicode-range" }`, `iframeTitle`, Viewer `fit`/`zoomable`/`keyboard`, and React `preparation`/`prepare()`/`retry()`.
-- Table rows with a blank spacer pseudo split, avoid rows try the next fragment first, and split rows keep their column widths.
+- Added strict `blockedResourcePolicy: "error"`, ordered `elements` resolvers, and `assetFromDataUrl()`. Failed preparation preserves the previous commit.
+- Added standalone committed-page HTML export with inline assets and an accessible `iframeTitle` preserved by Viewer.
+- Added conservative `fontLoading: { mode: "unicode-range" }`; generated quotation marks and CSS text transforms retain fonts when needed.
+- Added Viewer `fit`, `zoomable`, and `keyboard`, and React `preparation`, `prepare()`, `retry()`, and `state.source` on ready states.
+- Fixed tall table rows with blank spacer pseudos, fresh-page retry for avoid rows, and continuation column widths.
+- Updated package guides, all four localized API references and asset guides, and security support to the 0.7.x line. Existing defaults remain compatible.
+
+[0.7.0 release notes](https://github.com/EungyuCho/imposia/releases/tag/v0.7.0)
 
 ## 0.6.0 — September 27, 2026
 

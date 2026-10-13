@@ -5,6 +5,10 @@ description: 实现 assetResolver——外部资源进入分页文档的唯一�
 
 在 HTML 里加一个 `<img>`，它不会加载。这不是缺陷——这正是 Imposia 围绕其构建的边界，而 `assetResolver` 是你有意打开这道边界的方式。
 
+## 资源策略与元素准备 (0.7.0)
+
+默认的 `blockedResourcePolicy: "warn"` 允许带资源阻止诊断的文档提交。若缺失资源必须拒绝准备并保留上次提交，请选择 `"error"`。`elements` 可在分页前提供文本、待净化 HTML 或图片字节，`fontLoading` 可按字符范围保守地过滤字体请求。返回类型、取消、限制和 HTML 导出见 [Core API](/zh-CN/docs/api/core)。
+
 ## 为什么默认什么都不加载
 
 承载页面的 iframe 处于沙箱中，并施加严格的内容安全策略。`connect-src` 为 `'none'`，图片、字体和媒体只能来自 Core 自己创建的 `blob:` URL。作者书写的 URL 永远不会变成网络请求。

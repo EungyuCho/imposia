@@ -32,7 +32,7 @@ const viewer = useRef<ImposiaPageViewerHandle>(null);
 | `className`、`style` | `string`、`CSSProperties` | いいえ | ホスト `div` の表示です。 |
 | `onReady` | `(document: PageDocument) => void` | いいえ | 文書と Viewer の結び付けが準備できた後に実行されます。 |
 | `onError` | `(error: unknown) => void` | いいえ | Core または Viewer の結び付けの失敗を受け取ります。 |
-| `onStateChange` | `(state: ImposiaDocumentState) => void` | いいえ | `idle`、`loading`、`ready`、`error` を受け取ります。 |
+| `onStateChange` | `(state: ImposiaDocumentState) => void` | いいえ | `idle`、`loading`、`ready`, `aborted`、`error` を受け取ります。 |
 
 <Callout type="warn" title="オプション props は revision が変わったときだけ読まれます">
 `documentOptions` はコントローラーのマウント時に取り込まれます。変更したオプションオブジェクト — 新しいリゾルバー、拡張機能の集合、ページジオメトリ — を渡すだけでは何も起きません。`documentOptionsRevision` を変えて、新しいオプションでコントローラーを再マウントしてください。下の `publicationOptions` と `publicationOptionsRevision` にも同じ規則が適用されます。単独で検出されるのは `source`（と `snapshot`）の変更だけです。
@@ -54,6 +54,27 @@ const viewer = useRef<ImposiaPageViewerHandle>(null);
 | `selectWarning(warning)` | `void` | Inspector と、現在の世代の警告が必要です。 |
 | `print()` | `Promise<void>` | 最後に完成したページのネイティブ印刷を開きます。読者はここで**PDF に保存**を選べます。PDF バイトは返しません。 |
 | `exportEpub(options)` | `Promise<Blob>` | 現在の確定をリフロー型 EPUB として書き出します。 |
+
+## 準備のタイミングと再試行 (0.7.0)
+
+`preparation` は `ImposiaPageViewer`、互換ラッパー `ImposiaDocument`、`useImposiaDocument` で使えます。既定の `"immediate"` はマウント時に開始します。`"idle"` はタイムアウト 1500 ms の `requestIdleCallback`、非対応なら 200 ms のタイマーを使います。`"manual"` は `prepare()` または `retry()` を待ちます。ポリシー変更で開始済みのコントローラーは停止しません。開始後のソース・リビジョン変更は通常どおり更新します。
+
+Hook の戻り値とコンポーネントのハンドルには `prepare(): void` と `retry(): void` があります。`prepare()` は一度だけ開始し、繰り返しても何もしません。`retry()` は未開始なら開始、同期マウント失敗後なら再マウント、既存コントローラーがあれば最新ソースで `update` します。オプションはマウント時に固定されるので、変更を適用するには `documentOptionsRevision` を進めてください。中止済みの `documentOptions.signal` は再試行でも交換されません。その場合は新しい signal とオプションリビジョンが必要です。
+
+`ready` の `state.source` は確定文書を作ったソースです。`loading`、`error`、`aborted` では前の確定 `state.document` が残る場合がありますが、`state.source` はありません。全状態は `idle`、`loading`、`ready`、`aborted`、`error` です。中止は終端状態で `onError` を呼びません。
+
+```tsx
+const { hostRef, state, prepare, retry } = useImposiaDocument({
+  source: { html }, preparation: "manual",
+});
+return <>
+  <button onClick={prepare}>プレビューを準備</button>
+  {state.status === "error" && <button onClick={retry}>再試行</button>}
+  <div ref={hostRef} aria-busy={state.status === "loading"} />
+</>;
+```
+
+Viewer の `fit`、`zoomable`、`keyboard` の変更は現在のページ・明示指定されていないモードとズーム・Core iframe を保持して表示バインディングを再マウントします。準備 API は単一文書用です。`useImposiaPublication` にはこれらのメソッドはありません。
 
 ## `ImposiaPublicationViewer`
 

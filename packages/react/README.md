@@ -263,7 +263,7 @@ export function CustomPreview({ html }: { html: string }) {
 }
 ```
 
-`useImposiaDocument()` returns the host ref, `idle`/`loading`/`ready`/`error`
+`useImposiaDocument()` returns the host ref, `idle`/`loading`/`ready`/`aborted`/`error`
 state, the current `PageDocument` when available, and the Core controller. Source
 updates reuse the same canonical iframe; failed updates retain the previous
 committed generation, and unmount destroys the controller and releases resources.
@@ -286,3 +286,24 @@ Chromium-reference pagination boundary are defined in the
 [compatibility matrix](../../docs/compatibility.md).
 
 See `LICENSE` and `THIRD_PARTY_NOTICES.md` in this package for distribution terms.
+
+## Deferred preparation and retry (0.7.0)
+
+`preparation` is available on `ImposiaPageViewer`, its `ImposiaDocument` wrapper, and `useImposiaDocument`. `"immediate"` (default) starts on mount; `"idle"` uses `requestIdleCallback` with a 1500 ms timeout, or a 200 ms timer when unavailable; `"manual"` waits for `prepare()` or `retry()`. Changing the policy does not pause an already started controller. Subsequent source/revision changes update normally after preparation has started.
+
+The hook result and component handle both expose `prepare(): void` and `retry(): void`. `prepare()` starts once; repeated calls do nothing. `retry()` starts if needed, remounts after a synchronous mount failure, or calls `update` with the latest source on the existing controller. Options are captured at mount; increment `documentOptionsRevision` to apply changed options. Retry does not replace an already-aborted `documentOptions.signal`; provide a fresh signal and option revision for that case.
+
+In `ready`, `state.source` identifies the source used for that committed document. In `loading`, `error`, or `aborted`, a previous committed `state.document` may remain, but `state.source` is absent. All five statuses are `idle`, `loading`, `ready`, `aborted`, and `error`. Abortion is terminal and does not call `onError`.
+
+```tsx
+const { hostRef, state, prepare, retry } = useImposiaDocument({
+  source: { html }, preparation: "manual",
+});
+return <>
+  <button onClick={prepare}>Prepare preview</button>
+  {state.status === "error" && <button onClick={retry}>Retry</button>}
+  <div ref={hostRef} aria-busy={state.status === "loading"} />
+</>;
+```
+
+Viewer `fit`, `zoomable`, and `keyboard` changes remount the presentation binding while preserving the current page, uncontrolled mode/zoom, and Core iframe. The deferred preparation API is for a single document; `useImposiaPublication` does not expose these methods.

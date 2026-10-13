@@ -83,10 +83,24 @@ export function usePageViewerBinding(
           JSON.stringify([viewerOptions?.fit, viewerOptions?.zoomable, viewerOptions?.keyboard]);
       if (requiresRemount) {
         validatePageViewerOptions(pageDocument, viewerOptions);
-        const preservedPage =
+        const preservedState =
           viewer !== undefined && viewerIframeRef.current === pageDocument.iframe
-            ? viewer.state.page
+            ? viewer.state
             : undefined;
+        const appliedLayout = viewerLayoutRef.current;
+        const mountOptions: PageViewerOptions = {
+          ...viewerOptions,
+          ...(preservedState === undefined
+            ? {}
+            : {
+                mode:
+                  viewerOptions?.mode ??
+                  (appliedLayout.mode === undefined ? preservedState.mode : "continuous"),
+                zoom:
+                  viewerOptions?.zoom ??
+                  (appliedLayout.zoom === undefined ? preservedState.zoom : 1),
+              }),
+        };
         unsubscribeRef.current?.();
         unsubscribeRef.current = undefined;
         viewer?.destroy();
@@ -100,14 +114,14 @@ export function usePageViewerBinding(
           viewerOptions?.zoomable,
           viewerOptions?.keyboard,
         ]);
-        viewer = mountPageViewer(host, pageDocument, viewerOptions);
+        viewer = mountPageViewer(host, pageDocument, mountOptions);
         viewerRef.current = viewer;
         viewerIframeRef.current = pageDocument.iframe;
         viewerReaderRef.current = viewerOptions?.reader;
         viewerInspectorRef.current = viewerOptions?.inspector ?? false;
         viewerControlsRef.current = viewerOptions?.controls ?? true;
         viewerLayoutRef.current = viewerLayoutOptions(viewerOptions);
-        if (preservedPage !== undefined) viewer.goToPage(preservedPage);
+        if (preservedState !== undefined) viewer.goToPage(preservedState.page);
         unsubscribeRef.current = viewer.subscribe((state) => onStateChangeRef.current?.(state));
       }
       const activeViewer = viewerRef.current;

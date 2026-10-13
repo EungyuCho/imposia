@@ -46,6 +46,16 @@ Viewer CSS 限定在 `.imposia-viewer` 内；body 样式、预览尺寸、背景
 
 </Accordions>
 
+## 适配、缩放与键盘策略 (0.7.0)
+
+| 选项 | 默认值 | 行为 |
+| --- | --- | --- |
+| `fit` | `"shrink"` | 把缩放后的页面缩小到可用宽度，但不放大。`"width"` 可双向适配宽度，再乘以 zoom。`"none"` 保留缩放前的 CSS 页面尺寸，较窄的宿主须处理溢出。 |
+| `zoomable` | `true` | `false` 禁用缩放按钮、缩放快捷键和 `setZoom`；初始 `zoom` 仍生效。 |
+| `keyboard` | `true` | `false` 禁用 Viewer 键盘快捷键，按钮和控制器方法仍可用。 |
+
+挂载 Viewer 后仍保留 Core 的 `iframeTitle`。在 React 中改变这三个策略会重新挂载展示绑定，并保留当前页。既有默认行为不变。
+
 ## Publication Reader 与深链接
 
 Reader 选项要求传入拥有当前所展示 `PublicationDocument` 的那个 `PublicationController`；还可以包含 `initialDeepLink` 和 `onDeepLinkChange`。

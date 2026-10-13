@@ -324,6 +324,17 @@ export function snapshotSettings(options: PageDocumentOptions): PageGenerationSe
   if (typeof iframeTitle !== "string" || iframeTitle.trim() === "") {
     throw new TypeError("iframeTitle must be a non-empty string.");
   }
+  if (options.fontLoading !== undefined) {
+    if (!["all", "unicode-range"].includes(options.fontLoading.mode)) {
+      throw new TypeError('fontLoading.mode must be "all" or "unicode-range".');
+    }
+    if (
+      options.fontLoading.additionalText !== undefined &&
+      typeof options.fontLoading.additionalText !== "string"
+    ) {
+      throw new TypeError("fontLoading.additionalText must be a string.");
+    }
+  }
   return {
     iframeTitle,
     blockedResourcePolicy,

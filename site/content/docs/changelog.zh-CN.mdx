@@ -5,6 +5,17 @@ description: 查看每个已发布的 Imposia 包版本的变化。
 
 本页汇总 Imposia 的每个已发布版本。`@imposia/core`、`@imposia/viewer`、`@imposia/client` 和 `@imposia/react` 使用相同的版本号；完整记录见仓库中的 [CHANGELOG.md](https://github.com/EungyuCho/imposia/blob/main/CHANGELOG.md)。
 
+## 0.7.0 — 2026年10月13日
+
+- 新增严格的 `blockedResourcePolicy: "error"`、有序 `elements` 解析器和 `assetFromDataUrl()`。准备失败仍保留上一次提交。
+- 新增内嵌资源的独立已排版页面 HTML 导出，以及 Viewer 保留的无障碍名称 `iframeTitle`。
+- 新增保守的 `fontLoading: { mode: "unicode-range" }`；生成引号和 CSS 文本转换所需字体仍会保留。
+- 新增 Viewer 的 `fit`、`zoomable`、`keyboard`，以及 React 的 `preparation`、`prepare()`、`retry()` 和 ready 状态的 `state.source`。
+- 修复带空白占位 pseudo 的高表格行分割、avoid 行在新页重试，以及续行列宽保留。
+- 补全包指南、四种语言的 API 和资源指南，将安全支持更新为 0.7.x。既有默认行为保持兼容。
+
+[0.7.0 发行说明](https://github.com/EungyuCho/imposia/releases/tag/v0.7.0)
+
 ## 0.6.0 — 2026年9月27日
 
 - 修复分页边界重复的边框和间距、脚注与页面浮动重叠、出版 CSS 优先级、列表续排、页面名称及避免分页的处理。定位产生的视觉溢出不再导致多余页面。
