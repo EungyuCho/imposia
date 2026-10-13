@@ -88,6 +88,7 @@ test.describe("preview API", () => {
         exportedHasData: exported.includes("data:image/png;base64,"),
         exportedHasBlob: exported.includes("blob:"),
         exportedHasVirtual: exported.includes("imposia.invalid"),
+        exportedCharset: /<head>\s*<meta charset="utf-8">/i.test(exported),
         exportedTitle: exported.includes("<title>&lt;title&gt;</title>"),
         doctype: exported.startsWith("<!DOCTYPE html>"),
         afterDestroyHasData: afterDestroy.includes("data:image/png;base64,"),
@@ -113,6 +114,7 @@ test.describe("preview API", () => {
     expect(result.exportedHasBlob).toBe(false);
     expect(result.exportedHasVirtual).toBe(false);
     expect(result.exportedTitle).toBe(true);
+    expect(result.exportedCharset).toBe(true);
     expect(result.doctype).toBe(true);
     expect(result.afterDestroyHasData).toBe(true);
     expect(result.stale).toBe("DOCUMENT_UNAVAILABLE");

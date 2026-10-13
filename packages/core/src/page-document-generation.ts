@@ -4105,7 +4105,9 @@ class RecursiveFragmenter {
         // siblings gave its columns.
         const overflowingRowWidths =
           pageTallRow !== undefined && this.#cursorOverflows(tableCursor)
-            ? [...pageTallRow.children].map((child) => child.getBoundingClientRect().width)
+            ? [...pageTallRow.children]
+                .filter((child) => /^(td|th)$/i.test(child.localName))
+                .map((child) => child.getBoundingClientRect().width)
             : undefined;
         if (
           overflowingRowWidths !== undefined &&

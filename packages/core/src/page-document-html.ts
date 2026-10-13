@@ -41,6 +41,13 @@ export async function exportPageDocumentHtml(
   )) {
     element.remove();
   }
+  // The frame has no charset declaration, and the CSP meta was removed above; without one a
+  // consumer saving the string as UTF-8 can have non-ASCII text decoded with another encoding.
+  if (clone.querySelector("meta[charset]") === null) {
+    const charset = inert.createElement("meta");
+    charset.setAttribute("charset", "utf-8");
+    clone.querySelector("head")?.prepend(charset);
+  }
   clone.removeAttribute("data-imposia-viewer-presentation");
   clone.removeAttribute("data-imposia-viewer-cover");
   if (options.title !== undefined) {
