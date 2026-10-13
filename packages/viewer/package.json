@@ -1,6 +1,6 @@
 {
   "name": "@imposia/viewer",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "description": "Browser-native viewer for canonical Imposia page documents.",
   "repository": {
     "type": "git",

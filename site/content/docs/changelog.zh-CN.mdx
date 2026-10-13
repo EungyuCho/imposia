@@ -5,6 +5,11 @@ description: 查看每个已发布的 Imposia 包版本的变化。
 
 本页汇总 Imposia 的每个已发布版本。`@imposia/core`、`@imposia/viewer`、`@imposia/client` 和 `@imposia/react` 使用相同的版本号；完整记录见仓库中的 [CHANGELOG.md](https://github.com/EungyuCho/imposia/blob/main/CHANGELOG.md)。
 
+## 0.8.1 — 2026年10月13日
+
+- 修复了页面正文宽度：比正文更宽的表格不再改变正文或其他表格的宽度。跨页单元格遵循 `box-decoration-break`，使用被切掉的装饰腾出的空间，下方装饰在行的最后一个片段上确定。
+- `exportPageDocumentHtml` 在测量锚点前渲染所有页面，按 containing block 固定锚点元素，并在 `screen` 与 `print` 下绘制所有页面。无 API 变更。
+
 ## 0.8.0 — 2026年10月13日
 
 - 新增 `tableRowspan: "split"`（默认值 `"preserve"`）。含 rowspan 的表格会在分页处按行拆分，合并单元格的内容只保留一次，延续部分是按逻辑列位置放置的空单元格；包裹可拆分表格的普通容器会就地分页，该模式下表格和列宽会传递到每一页。
