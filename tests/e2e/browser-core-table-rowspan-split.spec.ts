@@ -433,16 +433,19 @@ test.describe("tableRowspan", () => {
               extensions: [core.createTableColgroupExtension()],
             },
           );
-          const doc = await controller.ready;
-          const frame = doc.iframe.contentDocument as Document;
-          const result = [...frame.querySelectorAll("table")].map((table) => [
-            table.getBoundingClientRect().width,
-            ...[...(table.querySelector("tr")?.children ?? [])].map(
-              (cell) => cell.getBoundingClientRect().width,
-            ),
-          ]);
-          await controller.destroy();
-          return result;
+          try {
+            const doc = await controller.ready;
+            const frame = doc.iframe.contentDocument as Document;
+            return [...frame.querySelectorAll("table")].map((table) => [
+              table.getBoundingClientRect().width,
+              ...[...(table.querySelector("tr")?.children ?? [])].map(
+                (cell) => cell.getBoundingClientRect().width,
+              ),
+            ]);
+          } finally {
+            await controller.destroy();
+            host.remove();
+          }
         },
         { html: rows, style: "height: 24px;" },
       );
@@ -522,5 +525,38 @@ test.describe("tableRowspan", () => {
     expect(result.full.yields - result.baseline.yields).toBeGreaterThanOrEqual(8);
     // Cancelling in the middle of that one cluster rejects instead of finishing it first.
     expect(result.aborted.outcome).toBe("AbortError");
+  });
+
+  test("carries widths for a default separate-border table", async ({ page, browserName }) => {
+    const { errors, pageErrors } = captureBrowserErrors(page, browserName);
+    try {
+      const rows = rowTokens(60)
+        .map(
+          (token, index) =>
+            `<tr><td data-col="A" style="width: 120px">${index === 0 ? "Narrow" : ""}</td><td data-row data-col="B">${token}</td></tr>`,
+        )
+        .join("");
+      // No border-collapse: the browser default adds 2px of border spacing around the cells.
+      const html = `<table style="width: 90%; border-collapse: separate; border-spacing: 2px; padding: 3px; border: 1px solid #888"><tbody>${rows}</tbody></table>`;
+      const split = await observe(
+        page,
+        html,
+        { tableRowspan: "split" },
+        "table { border-collapse: separate; } td { height: 24px; }",
+      );
+      expect(allRows(split)).toEqual(rowTokens(60));
+      expect(split.pageCount).toBeGreaterThan(1);
+      expect(split.colgroups.length).toBe(split.pageCount);
+      const first = split.pages[0];
+      for (const piece of split.pages) {
+        expect(Math.abs((piece.tableWidth ?? 0) - (first?.tableWidth ?? 0))).toBeLessThan(1);
+        for (const [index, width] of piece.colWidths.entries()) {
+          expect(Math.abs(width - (first?.colWidths[index] ?? 0))).toBeLessThan(1);
+        }
+      }
+    } finally {
+      expect(errors).toEqual([]);
+      expect(pageErrors).toEqual([]);
+    }
   });
 });

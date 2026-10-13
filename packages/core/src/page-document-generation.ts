@@ -1085,7 +1085,20 @@ function measureTableColumns(table: Element): MeasuredColumns | undefined {
   if (best.length === 0) return undefined;
   const widths = best.map((cell) => cell.getBoundingClientRect().width);
   const tableWidth = table.getBoundingClientRect().width;
-  const total = widths.reduce((sum, width) => sum + width, 0);
+  // Separate borders (the default) put border spacing between and around the columns and
+  // add the table's own padding and borders; collapsed borders add nothing here.
+  const style = table.ownerDocument.defaultView?.getComputedStyle(table);
+  const px = (value: string | undefined): number => Number.parseFloat(value ?? "") || 0;
+  const separate = style !== undefined && style.borderCollapse === "separate";
+  const spacing = separate ? px(style.borderSpacing.split(/\s+/u)[0]) : 0;
+  const frame = separate
+    ? px(style.paddingLeft) +
+      px(style.paddingRight) +
+      px(style.borderLeftWidth) +
+      px(style.borderRightWidth)
+    : 0;
+  const total =
+    widths.reduce((sum, width) => sum + width, 0) + spacing * (widths.length + 1) + frame;
   if (
     !Number.isFinite(tableWidth) ||
     tableWidth <= 0 ||

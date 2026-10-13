@@ -179,4 +179,33 @@ test.describe("HTML export targetDevicePixelRatio", () => {
     // All four sides of that cell are corrected, which the style serializer writes as a shorthand.
     expect(styles.same).toContain("border-width: 2px !important");
   });
+
+  test("rounds wider borders down like the renderer and gives the padding back", async ({
+    page,
+  }) => {
+    await page.goto("/examples/book.html");
+    const style = await page.evaluate(async () => {
+      const core = (await import("/packages/core/dist/index.js")) as typeof import("@imposia/core");
+      const host = document.body.appendChild(document.createElement("div"));
+      const controller = core.mountPageDocument(host, {
+        html: `<table style="border-collapse: collapse"><tr>
+            <td id="wide" style="border: 3px solid #000; padding: 4px">a</td>
+            <td style="border: 3px solid #000; padding: 4px">b</td>
+          </tr></table>`,
+      });
+      const doc = await controller.ready;
+      const html = await core.exportPageDocumentHtml(doc, { targetDevicePixelRatio: 0.5 });
+      await controller.destroy();
+      return (
+        new DOMParser()
+          .parseFromString(html, "text/html")
+          .getElementById("wide")
+          ?.getAttribute("style") ?? ""
+      );
+    });
+    // A renderer at ratio 0.5 draws a 3px border as one device pixel (2 CSS px), so the border
+    // is written as 2px and the padding grows by half the difference to keep the content box.
+    expect(style).toContain("border-width: 2px !important");
+    expect(style).toContain("padding: 4.5px 4.48438px !important");
+  });
 });
