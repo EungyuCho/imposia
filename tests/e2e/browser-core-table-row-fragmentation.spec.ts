@@ -361,3 +361,69 @@ test("does not pin cell widths when a fixed layout keeps its columns", async ({
     expect(pageErrors).toEqual([]);
   }
 });
+
+test("restores widths a first row gave its columns on the continuation fragment", async ({
+  page,
+  browserName,
+}) => {
+  const { errors, pageErrors } = captureBrowserErrors(page, browserName);
+  await page.goto("/examples/book.html");
+  const notes = tokens("NOTE", 90);
+  try {
+    const observation = await observe(
+      page,
+      `<table style="width: 100%">
+        <tbody>
+          <tr><td style="width: 30%">Name</td><td style="width: 70%">Opening</td></tr>
+          <tr style="break-inside: avoid"><td>X</td><td data-cell="notes">${notes.map((token) => `<p>${token} continued remark text</p>`).join("")}</td></tr>
+        </tbody>
+      </table>`,
+    );
+    expect(flatten(observation, "notes")).toEqual(notes);
+    expect(observation.overflowingPages).toEqual([]);
+    const widths = observation.noteCellWidths;
+    expect(widths.length).toBeGreaterThan(1);
+    for (const value of widths) expect(Math.abs(value - (widths[0] ?? 0))).toBeLessThan(0.1);
+    const tables = observation.tableWidths;
+    for (const value of tables) expect(Math.abs(value - (tables[0] ?? 0))).toBeLessThan(0.1);
+  } finally {
+    expect(errors).toEqual([]);
+    expect(pageErrors).toEqual([]);
+  }
+});
+
+test("pins nothing on an eight-column fixed table with collapsed borders and a rowspan header", async ({
+  page,
+  browserName,
+}) => {
+  const { errors, pageErrors } = captureBrowserErrors(page, browserName);
+  await page.goto("/examples/book.html");
+  const notes = tokens("NOTE", 90);
+  const cols = Array.from({ length: 8 }, () => '<col style="width: 12.5%">').join("");
+  const head = Array.from({ length: 6 }, (_v, i) => `<th>H${i + 3}</th>`).join("");
+  const cells = Array.from({ length: 7 }, (_v, i) => `<td>C${i + 1}</td>`).join("");
+  try {
+    const observation = await observe(
+      page,
+      `<table style="table-layout: fixed; width: 100%; border-collapse: collapse">
+        <colgroup>${cols}</colgroup>
+        <thead>
+          <tr><th rowspan="2">H1</th><th rowspan="2">H2</th><th colspan="6">Group</th></tr>
+          <tr>${head}</tr>
+        </thead>
+        <tbody>
+          <tr>${cells}<td>last</td></tr>
+          <tr>${cells}<td data-cell="notes">${notes.map((token) => `<p>${token} continued remark text</p>`).join("")}</td></tr>
+        </tbody>
+      </table>`,
+    );
+    expect(flatten(observation, "notes")).toEqual(notes);
+    expect(observation.overflowingPages).toEqual([]);
+    expect(observation.pinnedCellWidths.every((value) => value === "")).toBe(true);
+    const tables = observation.tableWidths;
+    for (const value of tables) expect(Math.abs(value - (tables[0] ?? 0))).toBeLessThan(0.1);
+  } finally {
+    expect(errors).toEqual([]);
+    expect(pageErrors).toEqual([]);
+  }
+});

@@ -177,11 +177,17 @@ test.describe("preview API", () => {
       };
       return {
         declared: await run('.q{quotes:"\\00AB" "\\00BB"}.q::before{content:open-quote}'),
+        variable: await run(".q{quotes:var(--marks)}.q::before{content:open-quote}"),
+        elsewhere: await run('.other{quotes:"x" "y"}.q::before{content:close-quote}'),
         language: await run(".q::before{content:open-quote}"),
         plain: await run(".q{color:red}"),
       };
     });
-    expect(result.declared).toEqual(["quote.woff2"]);
+    // Selectors, inheritance, and variables are not resolved, so any generated quote keeps
+    // every face.
+    expect(result.declared).toEqual(["quote.woff2", "other.woff2"]);
+    expect(result.variable).toEqual(["quote.woff2", "other.woff2"]);
+    expect(result.elsewhere).toEqual(["quote.woff2", "other.woff2"]);
     expect(result.language).toEqual(["quote.woff2", "other.woff2"]);
     expect(result.plain).toEqual([]);
   });

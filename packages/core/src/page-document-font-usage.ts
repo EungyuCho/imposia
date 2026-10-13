@@ -6,16 +6,14 @@ export function unusedFontRange(range: string, text: string, roots: readonly Roo
   let generated = "•◦▪–—";
   let unknown = false;
   let quoteContent = false;
-  let quotesDeclared = false;
   for (const root of roots) {
     root.walkAtRules("counter-style", () => {
       unknown = true;
     });
     root.walkDecls((decl) => {
       if (/^quotes$/i.test(decl.prop)) {
-        // Quote marks come from `quotes`, or from the language when it is auto or inherited.
-        quotesDeclared = true;
-        if (/^(auto|initial|inherit|unset|revert)/i.test(decl.value.trim())) unknown = true;
+        // Kept for the characters it names; whether it applies to a given element is
+        // decided below, because selectors, inheritance, and variables are not resolved.
         generated += decl.value.replace(/\\([a-f\d]{1,6})\s?/gi, (_, hex: string) =>
           String.fromCodePoint(Math.min(Number.parseInt(hex, 16), 0x10ffff)),
         );
@@ -41,7 +39,7 @@ export function unusedFontRange(range: string, text: string, roots: readonly Roo
       }
     });
   }
-  if (unknown || (quoteContent && !quotesDeclared)) return false;
+  if (unknown || quoteContent) return false;
   const points = [...(text + generated)].map((char) => char.codePointAt(0) ?? 0);
   for (let code = 32; code <= 126; code++) points.push(code);
   for (const part of range.split(",")) {
