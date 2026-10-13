@@ -28,6 +28,7 @@ const pageDocument = await controller.ready;
 
 | `PageDocumentOptions` のフィールド | 型と役割 |
 | --- | --- |
+| `iframeTitle`, `blockedResourcePolicy`, `elements`, `fontLoading` | [0.7.0](#プレビューの準備と-html-エクスポート-070) |
 | `css` | `readonly string[]`。追加のソース CSS です。 |
 | `assetResolver` | フォント、画像、メディア、スタイルシート要求のための非同期リゾルバーです。 |
 | `page` | `{ size?, orientation?, margin? }`。size は `A3`、`A4`、`A5`、`B4`、`B5`、`Letter`、`Legal`、`Ledger`、または任意の幅・高さを受け取ります。 |
@@ -75,7 +76,7 @@ const pageDocument = await controller.ready;
 `finalizePage` が `undefined` 以外の値を返すと、その世代全体が reject されます。このフックは実体のあるページ要素を書き換えることで結果を伝えます。置き換えを返す仕組みではありません。
 </Callout>
 
-分割されたテーブルの継続片に、計測済みのピクセル列幅を固定したい場合は、明示的に有効化する拡張機能として `createTableColgroupExtension()` を使ってください。Core はソースの `<colgroup>` 要素を常に引き継ぎますが、既定で列幅を合成することはありません。
+分割されたテーブルの継続片に、計測済みのピクセル列幅を固定したい場合は、明示的に有効化する拡張機能として `createTableColgroupExtension()` を使ってください。Core はソースの `<colgroup>` 要素を常に引き継ぎます。高い行の分割では、必要に応じて計測済みのセル幅も固定します。それ以外の継続片にはこの拡張を選択して使えます。
 
 ### `PageDocumentController`
 
@@ -146,6 +147,31 @@ selectBlankMarkers(markers: PageSideConstraint[], pages: Map<number, number>): n
 - `hasPageDocumentFrameSandbox` は、sandbox トークンが公開されたトークンの集合（`allow-same-origin` と `allow-modals`）と正確に一致する場合だけ `true` です。
 - `committedFrameGeneration` は、Core がコミット時に canonical frame へ刻んだ世代を返します。スタンプされた世代をまだコミットしていないフレームでは `undefined` です。まだ配達されていない新しいコミットと、実際の破損とを区別するために使います。ページマーカーの読み取りや検証は行いません。
 - `selectBlankMarkers` は、左右のページの偶奇を満たすために空白ページが必要なマーカー ID を、先行する選択も踏まえて返します。ページ対応のないマーカーには例外をスローします。
+
+## プレビューの準備と HTML エクスポート (0.7.0)
+
+`iframeTitle` は canonical iframe のアクセシブルな名前です。既定値は `Document preview` で、Viewer も保持します。`blockedResourcePolicy` の既定値は `"warn"` です。`"error"` ではリゾルバー・検証・拡張・サニタイズによる `RESOURCE_BLOCKED` 診断が一つでもあれば、コミット前に世代を拒否します。更新に失敗しても前の確定文書を保持します。拒否された `ImposiaError.code` は `RESOURCE_BLOCKED` で、元の URL やリゾルバーのメッセージを公開しません。
+
+`elements` は順序付きの `{ selector, resolve }` 配列です。拡張のソース変換後、サニタイズとページ分割の前に、作業コピーの body の子孫を選択します。`resolve({ attributes, text, index, signal })` はライブ DOM ではなく、固定された属性とテキストのスナップショット、0 始まりの一致インデックスを受け取ります。`undefined` は保持、`{ type: "text", text }` はテキスト置換、`{ type: "html", html }` は内部 HTML 置換です。`{ type: "image", bytes, mimeType, alt }` または `{ type: "image", dataUrl, alt }` は要素を画像に置き換えます。規則と一致要素を順番に処理するため、後の規則は先の変更を参照します。削除済みの子孫は処理しません。返された HTML はサニタイズされ、画像は MIME・デコード・バイト上限・拡張の検査を通ります。画像には既存の `class`、`style`、`width`、`height`、`id` のみをコピーし、返された `alt` を使います。
+
+非同期処理には `signal` を渡してください。キャンセルは世代を中止します。不正なセレクター、コールバックの失敗、不正なデータ URL は `ELEMENT_RESOLUTION_FAILED` で拒否します。世代全体のリソース期限超過は `RESOURCE_TIMEOUT` です。どちらも前のコミットを保持します。`assetFromDataUrl(url)` は明示的な MIME 型を持つ base64 データ URL を `{ status: "resolved", bytes, mimeType }` にデコードします。これはアセット検証を代替せず、base64 以外の URL は受け付けません。
+
+`fontLoading: { mode: "all" }` が既定動作です。`"unicode-range"` はソーステキスト・装飾・生成内容で使わない範囲のフォントを省略します。`additionalText` は必要になる文字を予約できます。範囲がない・不正な場合や、生成内容・引用符・カウンター・文字変換を確定できない場合は保守的にフォントを保持します。文字範囲フィルターであり、計算済み font-family や実際のグリフ対応の解析ではありません。
+
+```ts
+import { exportPageDocumentHtml, mountPageDocument } from "@imposia/core";
+
+const controller = mountPageDocument(host, { html: '<p class="name"></p>' }, {
+  iframeTitle: "請求書プレビュー",
+  blockedResourcePolicy: "error",
+  elements: [{ selector: ".name", resolve: () => ({ type: "text", text: "田中" }) }],
+  fontLoading: { mode: "unicode-range", additionalText: "¥" },
+});
+const committed = await controller.ready;
+const html = await exportPageDocumentHtml(committed, { title: "請求書" });
+```
+
+`exportPageDocumentHtml(document, options?: HtmlExportOptions): Promise<string>` はその確定世代を doctype・UTF-8 宣言付きで直列化し、解決済みバイナリアセットをデータ URL として埋め込みます。`options.title` はタイトルを上書きします。Viewer の表示スタイルは除去し、確定ページのレイアウトは保持します。EPUB は別のリフロー可能な意味的エクスポートです。古い・破棄済み・利用できない世代は `DOCUMENT_UNAVAILABLE` で拒否します。進行中の更新は待ちません。開始後の更新や破棄でもスナップショットを保持します。結果は独立した HTML 文字列であり、PDF バイトや別のブラウザーで同一のレイアウトを保証するものではありません。
 
 ## Core の Publication
 

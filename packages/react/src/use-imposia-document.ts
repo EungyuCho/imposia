@@ -5,13 +5,15 @@ import {
   type PageDocumentOptions,
   type PageSource,
 } from "@imposia/client";
-import { type RefObject, useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 export type ImposiaDocumentStatus = "idle" | "loading" | "ready" | "aborted" | "error";
 
 export type ImposiaDocumentState = Readonly<{
   status: ImposiaDocumentStatus;
   document?: PageDocument;
+  /** The source the `document` was built from; set only while `status` is `ready`. */
+  source?: PageSource;
   error?: unknown;
 }>;
 
@@ -26,12 +28,21 @@ export type UseImposiaDocumentProps = ImposiaDocumentCallbacks & {
   readonly sourceRevision?: string | number | undefined;
   readonly documentOptions?: PageDocumentOptions | undefined;
   readonly documentOptionsRevision?: string | number | undefined;
+  /**
+   * When preparation starts. `immediate` (default) mounts at once, `idle` waits for an idle
+   * period, `manual` waits for `prepare()` or `retry()`.
+   */
+  readonly preparation?: "immediate" | "idle" | "manual" | undefined;
 };
 
 export type UseImposiaDocumentResult = Readonly<{
-  hostRef: RefObject<HTMLDivElement | null>;
+  hostRef: { current: HTMLDivElement | null };
   state: ImposiaDocumentState;
   controller: PageDocumentController | undefined;
+  /** Starts preparation; repeated calls are no-ops. */
+  prepare(): void;
+  /** Starts preparation if needed, or rebuilds the current source with the same controller. */
+  retry(): void;
 }>;
 
 function sameSource(left: PageSource, right: PageSource): boolean {
@@ -79,6 +90,7 @@ export function useImposiaDocument({
   sourceRevision,
   documentOptions,
   documentOptionsRevision,
+  preparation = "immediate",
   onReady,
   onError,
   onStateChange,
@@ -98,6 +110,11 @@ export function useImposiaDocument({
   const mountedDocumentOptionsRevisionRef = useRef(documentOptionsRevision);
   const operationRef = useRef(0);
   const disposedRef = useRef(false);
+  const previousRetryRef = useRef(0);
+  const retryRevisionRef = useRef(0);
+  const [started, setStarted] = useState(preparation === "immediate");
+  const [retryRevision, setRetryRevision] = useState(0);
+  const [mountRevision, setMountRevision] = useState(0);
   const [state, setState] = useState<ImposiaDocumentState>({ status: "idle" });
 
   sourceRef.current = source;
@@ -107,6 +124,29 @@ export function useImposiaDocument({
   onReadyRef.current = onReady;
   onErrorRef.current = onError;
   onStateChangeRef.current = onStateChange;
+  retryRevisionRef.current = retryRevision;
+
+  const prepare = useCallback((): void => setStarted(true), []);
+
+  const retry = useCallback((): void => {
+    setStarted(true);
+    if (controllerRef.current === undefined) setMountRevision((revision) => revision + 1);
+    setRetryRevision((revision) => revision + 1);
+  }, []);
+
+  useEffect(() => {
+    if (started || preparation === "manual") return;
+    if (preparation === "immediate") {
+      prepare();
+      return;
+    }
+    if (typeof requestIdleCallback === "function") {
+      const handle = requestIdleCallback(prepare, { timeout: 1500 });
+      return () => cancelIdleCallback(handle);
+    }
+    const handle = window.setTimeout(prepare, 200);
+    return () => window.clearTimeout(handle);
+  }, [preparation, prepare, started]);
 
   const transition = useCallback((next: ImposiaDocumentState): void => {
     setState(next);
@@ -121,14 +161,21 @@ export function useImposiaDocument({
     [transition],
   );
 
+  // `mountRevision` is not read in the body: bumping it re-runs this effect so that
+  // `retry()` can mount again after a synchronous mount failure left no controller.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: retry trigger, see above
   useEffect(() => {
     const host = hostRef.current;
-    if (host === null) return;
+    if (host === null || !started) return;
 
     disposedRef.current = false;
+    previousRetryRef.current = retryRevisionRef.current;
     previousSourceRef.current = sourceRef.current;
     previousSourceRevisionRef.current = sourceRevisionRef.current;
     const mountedOptionsRevision = documentOptionsRevision;
+    // The source this controller was mounted with; sourceRef may already hold a newer one
+    // (for example when a later render suspended), which must not label this document.
+    const mountedSource = sourceRef.current;
     mountedDocumentOptionsRevisionRef.current = mountedOptionsRevision;
     transition(stateForLoading(undefined));
 
@@ -140,7 +187,7 @@ export function useImposiaDocument({
       if (initialOptions?.onProgress !== undefined) {
         options.onProgress = (progress) => progressRef.current?.(progress);
       }
-      controller = mountPageDocument(host, sourceRef.current, options);
+      controller = mountPageDocument(host, mountedSource, options);
       controllerRef.current = controller;
     } catch (error: unknown) {
       reportError(error);
@@ -157,7 +204,7 @@ export function useImposiaDocument({
         )
           return;
         currentRef.current = pageDocument;
-        transition({ status: "ready", document: pageDocument });
+        transition({ status: "ready", document: pageDocument, source: mountedSource });
         onReadyRef.current?.(pageDocument);
       },
       (error: unknown) => {
@@ -186,15 +233,22 @@ export function useImposiaDocument({
       currentRef.current = undefined;
       if (controller !== undefined) void controller.destroy();
     };
-  }, [documentOptionsRevision, reportError, transition]);
+  }, [started, mountRevision, documentOptionsRevision, reportError, transition]);
 
   useEffect(() => {
     const previous = previousSourceRef.current;
     const previousRevision = previousSourceRevisionRef.current;
     const next = source;
+    const previousRetry = previousRetryRef.current;
     previousSourceRef.current = next;
     previousSourceRevisionRef.current = sourceRevision;
-    if (sameSource(previous, next) && Object.is(previousRevision, sourceRevision)) return;
+    previousRetryRef.current = retryRevision;
+    if (
+      sameSource(previous, next) &&
+      Object.is(previousRevision, sourceRevision) &&
+      previousRetry === retryRevision
+    )
+      return;
 
     const controller = controllerRef.current;
     if (controller === undefined || disposedRef.current) return;
@@ -206,7 +260,7 @@ export function useImposiaDocument({
       (pageDocument) => {
         if (disposedRef.current || operationRef.current !== operation) return;
         currentRef.current = pageDocument;
-        transition({ status: "ready", document: pageDocument });
+        transition({ status: "ready", document: pageDocument, source: next });
         onReadyRef.current?.(pageDocument);
       },
       (error: unknown) => {
@@ -218,7 +272,7 @@ export function useImposiaDocument({
         reportError(error);
       },
     );
-  }, [reportError, source, sourceRevision, transition]);
+  }, [reportError, retryRevision, source, sourceRevision, transition]);
 
-  return { hostRef, state, controller: controllerRef.current };
+  return { hostRef, state, controller: controllerRef.current, prepare, retry };
 }

@@ -12,6 +12,7 @@ import {
   resourceBlockedWarnings,
 } from "./page-document-assets.js";
 import { settlePaginationAssets } from "./page-document-assets-ready.js";
+import { resolveDocumentElements } from "./page-document-elements.js";
 import {
   allowExtensionAsset,
   applyExtensionEntryTransforms,
@@ -63,12 +64,14 @@ import { createPageSemanticSnapshot, type PageSemanticSnapshot } from "./page-do
 import type {
   AssetResolver,
   EffectivePageLimits,
+  ElementResolver,
   ExperimentalPageFeatures,
   PageComposeProgress,
   PageContext,
   PageDocumentOptions,
   PageExtensionFinalizePageInput,
   PageExtensionTableFragment,
+  PageFontLoadingOptions,
   PageGeometry,
   PageLimits,
   PageSource,
@@ -106,6 +109,10 @@ import { createWarningCollector, type DocumentWarning, type WarningCollector } f
 export const ENTRY_PAGE_NUMBERING: unique symbol = Symbol("imposia.entryPageNumbering");
 
 export interface PageGenerationSettings {
+  iframeTitle: string;
+  blockedResourcePolicy: "warn" | "error";
+  elements: readonly ElementResolver[];
+  fontLoading?: Readonly<PageFontLoadingOptions>;
   css: readonly string[];
   entryPageNumbering: boolean;
   assetResolver?: AssetResolver;
@@ -309,7 +316,32 @@ function snapshotExperimental(
 }
 
 export function snapshotSettings(options: PageDocumentOptions): PageGenerationSettings {
+  const blockedResourcePolicy = options.blockedResourcePolicy ?? "warn";
+  if (blockedResourcePolicy !== "warn" && blockedResourcePolicy !== "error") {
+    throw new TypeError('blockedResourcePolicy must be "warn" or "error".');
+  }
+  const iframeTitle = options.iframeTitle ?? "Document preview";
+  if (typeof iframeTitle !== "string" || iframeTitle.trim() === "") {
+    throw new TypeError("iframeTitle must be a non-empty string.");
+  }
+  if (options.fontLoading !== undefined) {
+    if (!["all", "unicode-range"].includes(options.fontLoading.mode)) {
+      throw new TypeError('fontLoading.mode must be "all" or "unicode-range".');
+    }
+    if (
+      options.fontLoading.additionalText !== undefined &&
+      typeof options.fontLoading.additionalText !== "string"
+    ) {
+      throw new TypeError("fontLoading.additionalText must be a string.");
+    }
+  }
   return {
+    iframeTitle,
+    blockedResourcePolicy,
+    elements: Object.freeze((options.elements ?? []).map((rule) => Object.freeze({ ...rule }))),
+    ...(options.fontLoading === undefined
+      ? {}
+      : { fontLoading: Object.freeze({ ...options.fontLoading }) }),
     css: Object.freeze([...(options.css ?? [])]),
     entryPageNumbering:
       (options as Readonly<Record<symbol, unknown>>)[ENTRY_PAGE_NUMBERING] === true,
@@ -1010,6 +1042,33 @@ function tableUsesIdSelector(element: Element): boolean {
   return false;
 }
 
+/**
+ * A blank placeholder pseudo (`content: " "`) inside an otherwise empty table cell keeps
+ * the cell's line height and carries no visible content, so splitting around it loses
+ * nothing. Anything else a pseudo generates still disqualifies the table.
+ */
+function emptyCellSpacerPseudo(
+  candidate: Element,
+  pseudo: "::before" | "::after",
+  expectedDisplay: string | undefined,
+  view: Window,
+): boolean {
+  if (
+    expectedDisplay !== undefined ||
+    candidate.closest("td, th") === null ||
+    candidate.childElementCount !== 0 ||
+    (candidate.textContent ?? "").trim() !== ""
+  ) {
+    return false;
+  }
+  const style = view.getComputedStyle(candidate, pseudo);
+  return (
+    style.display === "inline" &&
+    style.position === "static" &&
+    /^(["'])\s*\1$/u.test(style.content.trim())
+  );
+}
+
 function safeTableStructure(element: Element, style: CSSStyleDeclaration, view: Window): boolean {
   if (style.display !== "table" || tableUsesIdSelector(element)) return false;
   const expectedDisplays = new Map([
@@ -1027,12 +1086,14 @@ function safeTableStructure(element: Element, style: CSSStyleDeclaration, view: 
   for (const candidate of [element, ...element.querySelectorAll<Element>("*")]) {
     const candidateStyle = view.getComputedStyle(candidate);
     const expectedDisplay = expectedDisplays.get(candidate.localName.toLowerCase());
-    if (
-      (expectedDisplay !== undefined && candidateStyle.display !== expectedDisplay) ||
-      generatesPseudoItem(candidate, "::before", view) ||
-      generatesPseudoItem(candidate, "::after", view)
-    ) {
-      return false;
+    if (expectedDisplay !== undefined && candidateStyle.display !== expectedDisplay) return false;
+    for (const pseudo of ["::before", "::after"] as const) {
+      if (
+        generatesPseudoItem(candidate, pseudo, view) &&
+        !emptyCellSpacerPseudo(candidate, pseudo, expectedDisplay, view)
+      ) {
+        return false;
+      }
     }
     if (
       candidate !== element &&
@@ -3914,7 +3975,11 @@ class RecursiveFragmenter {
      * cell fits on its own against the same page, and a row is as tall as
      * its tallest cell, so every fragment of the row fits.
      */
-    const splitTallRow = async (row: Element, groupTemplate: Element): Promise<boolean> => {
+    const splitTallRow = async (
+      row: Element,
+      groupTemplate: Element,
+      originalWidths?: readonly number[],
+    ): Promise<boolean> => {
       const cells = [...row.children].filter((child) => {
         const name = child.localName.toLowerCase();
         return name === "td" || name === "th";
@@ -3926,15 +3991,32 @@ class RecursiveFragmenter {
       // every column's width, so a cell filled later would squeeze the cells
       // already placed. Freeze the widths the full row has on this fragment
       // before emptying it; continuation shells inherit them as clones.
-      const widths = cells.map((cell) => cell.getBoundingClientRect().width);
-      for (const [index, cell] of cells.entries()) {
-        const html = htmlElement(cell);
-        if (html === undefined) continue;
-        html.style.setProperty("box-sizing", "border-box");
-        html.style.setProperty("width", cssPx(widths[index] ?? 0));
-      }
+      const widths = originalWidths ?? cells.map((cell) => cell.getBoundingClientRect().width);
+      const fixedLayout =
+        tableShell.ownerDocument.defaultView?.getComputedStyle(tableShell).tableLayout === "fixed";
+      // A fixed layout whose columns already hold their widths needs no inline widths,
+      // and adding them would change collapsed-border geometry; otherwise pin every cell.
+      const preserveWidths = (fragmentCells: readonly Element[]): void => {
+        if (
+          fixedLayout &&
+          fragmentCells.every(
+            (cell, index) =>
+              Math.abs(cell.getBoundingClientRect().width - (widths[index] ?? 0)) < 0.1,
+          )
+        ) {
+          return;
+        }
+        for (const [index, cell] of fragmentCells.entries()) {
+          const html = htmlElement(cell);
+          if (html === undefined) continue;
+          html.style.setProperty("box-sizing", "border-box");
+          html.style.setProperty("width", cssPx(widths[index] ?? 0));
+        }
+      };
+      preserveWidths(cells);
       const contents = cells.map((cell) => [...cell.childNodes]);
       for (const cell of cells) cell.replaceChildren();
+      preserveWidths(cells);
       if (this.#cursorOverflows(tableCursor)) {
         for (const [index, cell] of cells.entries()) cell.append(...(contents[index] ?? []));
         return false;
@@ -3975,6 +4057,7 @@ class RecursiveFragmenter {
           const cellShells = cells.map((cell) => this.#cloneFragment(cell, false));
           rowShell.append(...cellShells);
           cursor.container.append(rowShell);
+          preserveWidths(cellShells);
           fragments.push({ page: cursor.page, cells: cellShells });
         }
       };
@@ -4029,9 +4112,20 @@ class RecursiveFragmenter {
         tableCursor.container.append(...cluster);
         let overflowed = false;
         const pageTallRow = cluster.length === 1 ? cluster[0] : undefined;
+        // Measured before any move: a fresh fragment may lose the widths this row's
+        // siblings gave its columns.
+        const overflowingRowWidths =
+          pageTallRow !== undefined && this.#cursorOverflows(tableCursor)
+            ? [...pageTallRow.children]
+                .filter((child) => /^(td|th)$/i.test(child.localName))
+                .map((child) => child.getBoundingClientRect().width)
+            : undefined;
         if (
-          this.#cursorOverflows(tableCursor) &&
+          overflowingRowWidths !== undefined &&
           pageTallRow !== undefined &&
+          ![pageTallRow, ...pageTallRow.children].some(
+            (item) => this.#constraints.get(item)?.insideAvoid,
+          ) &&
           pageTallRow.getBoundingClientRect().height >
             usableContentHeight(tableCursor.page) + OVERFLOW_TOLERANCE_CSS_PX &&
           (await splitTallRow(pageTallRow, template))
@@ -4075,7 +4169,7 @@ class RecursiveFragmenter {
             this.#cursorOverflows(tableCursor) &&
             !furnitureOverflowed &&
             tallRow !== undefined &&
-            (await splitTallRow(tallRow, template))
+            (await splitTallRow(tallRow, template, overflowingRowWidths))
           ) {
             // The row was split cell by cell across fragments (ADR 0014).
           } else if (this.#cursorOverflows(tableCursor)) {
@@ -4208,6 +4302,22 @@ export async function buildGeneration(
     extensionWarnings.cleanup();
     throw error;
   }
+  let elementResolver: AssetResolver | undefined = settings.assetResolver;
+  try {
+    const resolvedElements = await resolveDocumentElements(
+      transformed.html,
+      settings.elements,
+      settings.assetResolver,
+      signal,
+      settings.limits.resourceDeadlineMs,
+    );
+    ensureTransformedInputLimit(resolvedElements.html, transformed.css, settings.limits);
+    transformed = Object.freeze({ html: resolvedElements.html, css: transformed.css });
+    elementResolver = resolvedElements.resolver;
+  } catch (error: unknown) {
+    extensionWarnings.cleanup();
+    throw error;
+  }
   let prepared: PreparedDocument;
   try {
     prepared = await prepareDocumentCooperatively(
@@ -4236,17 +4346,21 @@ export async function buildGeneration(
   const resourceStartedAt = performance.now();
   try {
     await yieldBetweenStages();
-    if (settings.assetResolver !== undefined) {
+    if (elementResolver !== undefined) {
       assets = await resolvePageAssets(
         sanitizeAssetResolverInput(prepared.html),
         source.baseUrl,
         transformed.css,
-        settings.assetResolver,
+        elementResolver,
         settings.limits,
         signal,
         extensions.length === 0
           ? undefined
           : (request) => allowExtensionAsset(extensions, request, signal, extensionWarnings),
+        settings.fontLoading,
+        (settings.fontLoading?.additionalText ?? "") +
+          (pageSettings.headerTemplate ?? "") +
+          (pageSettings.footerTemplate ?? ""),
       );
     }
   } catch (error: unknown) {
@@ -4648,6 +4762,12 @@ export async function buildGeneration(
       );
     }
     warnings.push(...extensionWarnings.finish());
+    if (
+      settings.blockedResourcePolicy === "error" &&
+      warnings.some((warning) => warning.code === "RESOURCE_BLOCKED")
+    ) {
+      throw new ImposiaError("RESOURCE_BLOCKED", "A required document resource was blocked.");
+    }
 
     extensionWarnings.cleanup();
     return {

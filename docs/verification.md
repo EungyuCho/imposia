@@ -26,12 +26,34 @@ Chromium, Firefox, and WebKit. Structural pagination suites are Chromium-referen
 the cross-browser suites assert API shape, iframe/CSP isolation, resolver-only
 assets, lifecycle, cleanup, print invocation, and EPUB archive behavior.
 
-The final authoritative serial browser matrix for this release used
+A historical serial browser matrix recorded before the current suite expansion used
 `CI=true pnpm check`: 354 browser scenarios passed, 120 intentional platform or
 structural-reference scenarios were skipped, no scenario failed, and the E2E
 matrix exited `0` (474 total scenarios, 2.9 minutes). The same gate also passed
 8 site scenarios, 23 Vitest scenarios, the production audit, and the license
 allowlist.
+
+## 0.7.0 candidate verification — 2026-10-13
+
+The full local `CI=true pnpm check` exited `0` on macOS with Node 24.19.0
+and pnpm 11.10.0: 110 Vitest checks across 20 files, 15 site scenarios,
+and 661 browser scenarios passed. The 1,209-scenario browser matrix includes
+548 declared structural-reference/platform skips and no failures. Chromium,
+Firefox, and WebKit exercise the new resource/preview API; skips do not claim
+cross-engine pagination parity. Production audit reported no known vulnerabilities,
+and the license/package audit passed for 385 installed packages.
+
+Regression evidence covers CSS text-transform font retention; case-insensitive
+predefined list-style filtering; element callback abort and resource deadline;
+invalid font-loading options before frame creation; HTML export with inline
+images and SVG xlink assets; Viewer title, fit, zoom and keyboard policy; and
+React preparation/retry plus controlled/uncontrolled policy remounts.
+
+The updated site and bundle snapshot are rebuilt and checked separately after
+the measurement update. Korean Core documentation is reviewed at desktop and
+320 px width. The release workflow reruns the full gate on the immutable main
+commit before publishing. Published tarball integrity and a cold consumer smoke
+are post-publication checks, not established by this candidate record.
 
 ## Focused publishing checks
 

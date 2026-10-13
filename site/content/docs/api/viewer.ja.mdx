@@ -46,6 +46,16 @@ Viewer の CSS は `.imposia-viewer` にスコープされます。body のス�
 
 </Accordions>
 
+## フィット・ズーム・キーボードのポリシー (0.7.0)
+
+| オプション | 既定値 | 動作 |
+| --- | --- | --- |
+| `fit` | `"shrink"` | ズーム済みページを利用可能な幅まで縮小し、拡大はしません。`"width"` は両方向に幅を合わせ、そのサイズに zoom を掛けます。`"none"` はズーム前の CSS ページサイズを保持するため、狭いホストはオーバーフローに対応する必要があります。 |
+| `zoomable` | `true` | `false` はズームボタン・ズームキー・`setZoom` を無効にします。初期 `zoom` は適用されます。 |
+| `keyboard` | `true` | `false` は Viewer のキーボードショートカットを無効にします。ボタンとコントローラーメソッドは使えます。 |
+
+Viewer のマウント後も Core の `iframeTitle` を保持します。React でこの三つのポリシーを変えると、現在のページを保って表示バインディングを再マウントします。既定動作は変わりません。
+
 ## Publication Reader とディープリンク
 
 Reader オプションには、表示中の `PublicationDocument` そのものを所有する `PublicationController` が必要です。`initialDeepLink` と `onDeepLinkChange` を含められます。

@@ -19,6 +19,7 @@ import {
   type AssetResolver,
   type CorePageWarning,
   type PageExtensionAssetRequest,
+  type PageFontLoadingOptions,
   type PageLimits,
   UNLOCATED_PAGE_WARNING_LOCATION,
 } from "./page-document-types.js";
@@ -164,6 +165,8 @@ export async function resolvePageAssets(
   limits: PageLimits | undefined,
   signal: AbortSignal,
   allowAsset?: (request: PageExtensionAssetRequest) => boolean,
+  fontLoading?: Readonly<PageFontLoadingOptions>,
+  additionalText?: string,
 ): Promise<ResolvedPageAssets> {
   const parsed = new DOMParser().parseFromString(html, "text/html");
   const operation = new AbortController();
@@ -188,10 +191,20 @@ export async function resolvePageAssets(
     sourceIdentity: `resource-${identity++}`,
     apply,
   });
-  const discovery: AssetDiscovery = discoverPageAssets(parsed, sourceBaseUrl, css, makeRequest);
+  const unicodeRange = fontLoading?.mode === "unicode-range";
+  const discovery: AssetDiscovery = discoverPageAssets(
+    parsed,
+    sourceBaseUrl,
+    css,
+    makeRequest,
+    unicodeRange ? (parsed.body.textContent ?? "") + (additionalText ?? "") : undefined,
+  );
   let blocked = discovery.blocked;
   let blockedIdentity: string | undefined;
   let queue = [...discovery.queue];
+  // Fonts wait until every non-font level (CSS imports included) has been applied, so the
+  // unicode-range decision sees the complete stylesheet set.
+  const deferredFonts: AssetRequest[] = [];
   const contexts: readonly CssContext[] = discovery.contexts;
   const outputCss = discovery.outputCss;
   const blockedResources: BlockedResource[] = [];
@@ -224,8 +237,16 @@ export async function resolvePageAssets(
   try {
     while (queue.length > 0) {
       if (operation.signal.aborted) throw abortError();
-      const level = queue;
+      let level = queue;
       queue = [];
+      if (unicodeRange) {
+        if (level.some((request) => request.kind !== "font")) {
+          deferredFonts.push(...level.filter((request) => request.kind === "font"));
+          level = level.filter((request) => request.kind !== "font");
+        } else {
+          level = [...level, ...deferredFonts.splice(0)].filter((request) => !request.omit?.());
+        }
+      }
       const outcomes: AssetOutcome[] = [];
       for (let start = 0; start < level.length; start += 8) {
         const batch = level.slice(start, start + 8);
@@ -315,7 +336,7 @@ export async function resolvePageAssets(
         }
         next.push(...request.apply(outcome));
       }
-      queue = next;
+      queue = next.length === 0 ? deferredFonts.splice(0) : next;
     }
     for (const context of contexts) setOwner(context, outputCss);
     return {

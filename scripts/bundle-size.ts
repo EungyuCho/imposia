@@ -38,7 +38,9 @@ const SCENARIOS = Object.freeze([
     // fallbacks, so removing them reclaims almost nothing.
     // 2026-09-27: 63.2 KiB after pagination combination correctness fixes.
     // Add 1.5 KiB; measured before/after is in docs/bundle-size.md.
-    gzipBudgetBytes: 63.5 * KIBIBYTE,
+    // 2026-10-13: 65.1 KiB after the 0.7.0 preview API (element resolvers, HTML
+    // export, font filtering, strict resource policy); see docs/bundle-size.md.
+    gzipBudgetBytes: 68.5 * KIBIBYTE,
   }),
   Object.freeze({
     name: "Core · Publication",
@@ -46,7 +48,8 @@ const SCENARIOS = Object.freeze([
     // 63.7 KiB measured 2026-09-24 (60.9 KiB on 2026-09-23); publication adds
     // outline/search over PageDocument. Raised from 64 KiB with the route above.
     // 2026-09-27: 67.5 KiB; shared Core fixes add about 1 KiB.
-    gzipBudgetBytes: 68 * KIBIBYTE,
+    // 2026-10-13: 69.3 KiB; shared Core additions of 0.7.0.
+    gzipBudgetBytes: 73 * KIBIBYTE,
   }),
   Object.freeze({
     name: "Viewer · PageDocument",
@@ -61,7 +64,8 @@ const SCENARIOS = Object.freeze([
     // 68.0 KiB measured 2026-09-24 (65.3 KiB on 2026-09-23; Core pagination +
     // page viewer). Raised from 69 KiB with the Core routes.
     // 2026-09-27: 71.8 KiB; shared Core fixes add about 1 KiB.
-    gzipBudgetBytes: 72 * KIBIBYTE,
+    // 2026-10-13: 73.9 KiB; shared Core additions of 0.7.0.
+    gzipBudgetBytes: 78 * KIBIBYTE,
   }),
   Object.freeze({
     name: "React · PageViewer",
@@ -69,7 +73,8 @@ const SCENARIOS = Object.freeze([
     // 69.8 KiB measured 2026-09-24 (67.2 KiB on 2026-09-23); React/React DOM
     // stay external. Raised from 71 KiB with the Core routes.
     // 2026-09-27: 73.6 KiB; shared Core fixes add about 1 KiB.
-    gzipBudgetBytes: 74 * KIBIBYTE,
+    // 2026-10-13: 76.0 KiB; shared Core additions of 0.7.0.
+    gzipBudgetBytes: 80 * KIBIBYTE,
   }),
 ]) satisfies readonly BundleScenario[];
 

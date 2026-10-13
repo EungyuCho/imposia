@@ -122,7 +122,17 @@ it produces today.
 - Cost: one extra fragmentation pass per cell of a split row. Rows that fit
   pay nothing.
 - A split row's cells carry an inline `width` and `box-sizing` in the
-  committed document.
+  committed document, except under `table-layout: fixed` when every column
+  already keeps its measured width (within 0.1 px): pinning those would only
+  change collapsed-border geometry. Widths are measured when the row is first
+  appended, before any move, so a fresh fragment that loses the widths a
+  sibling row provided still restores them.
+- A row (or one of its cells) with `break-inside: avoid` first moves to the
+  next fragment; only when it still overflows there is it split, with an
+  `AVOID_RELAXED` warning. Without `avoid`, a row taller than a page splits on
+  the current page.
+- An empty cell whose inline pseudo generates only a quoted blank
+  (`content: " "`) no longer disqualifies the table from splitting.
 - Bundle: about 0.5 KiB gzip on the Core routes. The budgets were raised with
   a recorded decision in `docs/bundle-size.md`.
 
@@ -142,3 +152,7 @@ the earlier atomic long-cell test in
   whole.
 - The existing table, parity, and cooperative-pagination equivalence suites
   pass unchanged.
+- Fixtures for a blank-spacer pseudo with auto and avoid rows (start page
+  differs, `AVOID_RELAXED` for avoid), eight auto/avoid x width x colgroup
+  combinations whose table and notes widths stay within 0.1 px, and a stable
+  fixed layout that gets no inline widths.

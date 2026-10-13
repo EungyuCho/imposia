@@ -38,6 +38,9 @@ overrides:
   # browserslist <= 4.28.6 (high) and baseline-browser-mapping < 2.11.0.
   browserslist: 4.29.0
   baseline-browser-mapping: 2.11.25
+  # postcss (bundled into @imposia/core) pulls source-map-js < 1.2.2, which is
+  # affected by an event-loop DoS advisory (GHSA-68fv-2mgg-jv7q, high).
+  source-map-js: 1.2.2
 publicHoistPattern:
   - "*eslint*"
   - "*prettier*"

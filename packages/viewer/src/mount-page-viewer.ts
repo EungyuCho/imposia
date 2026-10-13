@@ -129,6 +129,15 @@ export function validatePageViewerOptions(
   pageDocument: PageDocument,
   options: PageViewerOptions = {},
 ): void {
+  if (options.fit !== undefined && !["shrink", "width", "none"].includes(options.fit)) {
+    throw new TypeError("Invalid viewer fit policy.");
+  }
+  if (options.zoomable !== undefined && typeof options.zoomable !== "boolean") {
+    throw new TypeError("zoomable must be boolean.");
+  }
+  if (options.keyboard !== undefined && typeof options.keyboard !== "boolean") {
+    throw new TypeError("keyboard must be boolean.");
+  }
   validateViewerTheme(options.theme);
   validatePageDocument(pageDocument);
   if (options.reader !== undefined) {
@@ -216,8 +225,12 @@ export function mountPageViewer(
   }
 
   function fitScale(): number {
+    if (options.fit === "none") return 1;
     const availableWidth = elements.stage.clientWidth;
     if (availableWidth <= 0) return 1;
+    // `width` fits the page to the stage and lets zoom scale that fitted size; `shrink` only
+    // ever shrinks the zoomed page to fit, so zoom is divided out before the cap.
+    if (options.fit === "width") return Math.max(0.01, availableWidth / geometry.width);
     return Math.min(1, Math.max(0.01, availableWidth / (geometry.width * mutableState.zoom)));
   }
 
@@ -283,8 +296,8 @@ export function mountPageViewer(
     elements.zoomIndicator.textContent = `${Math.round(mutableState.zoom * 100)}%`;
     elements.previous.disabled = previousTarget < 1 || range[0] <= 1;
     elements.next.disabled = nextTarget > mutableState.pageCount;
-    elements.zoomOut.disabled = mutableState.zoom <= MIN_ZOOM;
-    elements.zoomIn.disabled = mutableState.zoom >= MAX_ZOOM;
+    elements.zoomOut.disabled = options.zoomable === false || mutableState.zoom <= MIN_ZOOM;
+    elements.zoomIn.disabled = options.zoomable === false || mutableState.zoom >= MAX_ZOOM;
     elements.continuous.setAttribute("aria-pressed", String(mutableState.mode === "continuous"));
     elements.single.setAttribute("aria-pressed", String(mutableState.mode === "single"));
     elements.spread.setAttribute("aria-pressed", String(mutableState.mode === "spread"));
@@ -405,7 +418,7 @@ export function mountPageViewer(
   }
 
   function setZoom(zoom: number): void {
-    if (destroyed || !Number.isFinite(zoom)) return;
+    if (destroyed || options.zoomable === false || !Number.isFinite(zoom)) return;
     const next = Math.round(clamp(zoom, MIN_ZOOM, MAX_ZOOM) * 10) / 10;
     if (next === mutableState.zoom) return;
     mutableState.zoom = next;
@@ -425,6 +438,7 @@ export function mountPageViewer(
   }
 
   function onKeydown(event: KeyboardEvent): void {
+    if (options.keyboard === false) return;
     if (
       event.target instanceof Element &&
       event.target.closest(AUXILIARY_PANEL_SELECTOR) !== null
@@ -437,10 +451,10 @@ export function mountPageViewer(
     } else if (event.key === "ArrowLeft" || event.key === "PageUp") {
       event.preventDefault();
       goToPage(adjacentPage(-1));
-    } else if (event.key === "+" || event.key === "=") {
+    } else if (options.zoomable !== false && (event.key === "+" || event.key === "=")) {
       event.preventDefault();
       setZoom(mutableState.zoom + 0.1);
-    } else if (event.key === "-") {
+    } else if (options.zoomable !== false && event.key === "-") {
       event.preventDefault();
       setZoom(mutableState.zoom - 0.1);
     }

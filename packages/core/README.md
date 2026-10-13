@@ -401,3 +401,28 @@ can offer Save as PDF from the top-window print dialog; Core does not return PDF
 bytes. Call `controller.destroy()` when the host is no longer needed.
 
 See `LICENSE` and `THIRD_PARTY_NOTICES.md` in this package for distribution terms.
+
+## Preview preparation and HTML export (0.7.0)
+
+`iframeTitle` sets the canonical iframe's accessible name (default: `Document preview`); the Viewer preserves it. `blockedResourcePolicy: "warn"` is the default. With `"error"`, any `RESOURCE_BLOCKED` diagnostic rejects the generation before commit, including resources refused by the resolver, validation, extensions, or the sanitizer. A failed update keeps the previous committed document. Inspect the rejected `ImposiaError.code`; strict failure uses `RESOURCE_BLOCKED` without exposing source URLs or resolver messages.
+
+`elements` is an ordered array of `{ selector, resolve }` rules applied after extension source transforms and before sanitization and pagination. Each rule selects body descendants from the working copy. `resolve({ attributes, text, index, signal })` receives a frozen attribute/text snapshot and a zero-based match index, never the live DOM. Return `undefined` to keep an element, `{ type: "text", text }` to replace its text, `{ type: "html", html }` to replace its contents, or `{ type: "image", bytes, mimeType, alt }` / `{ type: "image", dataUrl, alt }` to replace it with an image. Rules and matches run sequentially; later rules see earlier replacements. Removed descendants are skipped. Returned HTML passes through the normal sanitizer; images pass through MIME, decode, byte-limit, and extension checks. Image replacement copies only `class`, `style`, `width`, `height`, and `id`, and uses the supplied `alt`.
+
+Callbacks must forward `signal` to their asynchronous work. Cancellation aborts the generation; invalid selectors, callback failures, and invalid data URLs reject with `ELEMENT_RESOLUTION_FAILED`. The generation-wide resource deadline rejects with `RESOURCE_TIMEOUT`. Both failures keep the previous commit. `assetFromDataUrl(url)` decodes a base64 data URL with an explicit MIME type to `{ status: "resolved", bytes, mimeType }`; it does not validate the resulting asset. Non-base64 URLs are not accepted.
+
+`fontLoading: { mode: "all" }` preserves the default behavior. Opt into `"unicode-range"` to skip font faces whose declared range cannot be used by source text, decorations, or generated content. `additionalText` can reserve characters the host expects to need. Missing/invalid ranges and uncertain generated content, quotation marks, counters, or text transforms keep faces conservatively. This is a character-range filter, not a computed font-family or glyph-coverage analysis.
+
+```ts
+import { exportPageDocumentHtml, mountPageDocument } from "@imposia/core";
+
+const controller = mountPageDocument(host, { html: '<p class="name"></p>' }, {
+  iframeTitle: "Invoice preview",
+  blockedResourcePolicy: "error",
+  elements: [{ selector: ".name", resolve: () => ({ type: "text", text: "Kim" }) }],
+  fontLoading: { mode: "unicode-range", additionalText: "₩" },
+});
+const committed = await controller.ready;
+const html = await exportPageDocumentHtml(committed, { title: "Invoice" });
+```
+
+`exportPageDocumentHtml(document, options?: HtmlExportOptions): Promise<string>` serializes that committed page generation with a doctype, UTF-8 declaration, and resolved binary assets inlined as data URLs. `options.title` overrides the title. It excludes Viewer presentation styles and preserves the composed page layout; EPUB remains the reflowable semantic export. A stale, destroyed, or unavailable generation rejects with `DOCUMENT_UNAVAILABLE`. It does not wait for pending updates. Once export starts, its snapshot survives a subsequent update or destruction. Output is a standalone HTML string, not PDF bytes or a guarantee of identical layout in another browser.

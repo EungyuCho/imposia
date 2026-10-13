@@ -5,6 +5,10 @@ description: 외부 리소스가 페이지 문서에 들어오는 유일한 경�
 
 HTML에 `<img>`를 추가해도 이미지는 로드되지 않습니다. 버그가 아니라 Imposia가 전제로 삼는 경계이며, `assetResolver`는 그 경계를 의도적으로 여는 방법입니다.
 
+## 리소스 정책과 요소 준비 (0.7.0)
+
+기본값 `blockedResourcePolicy: "warn"`은 리소스 차단 진단과 함께 문서를 커밋합니다. 누락된 리소스 때문에 준비를 거부하고 이전 커밋을 유지해야 한다면 `"error"`를 선택하세요. `elements`로 페이지네이션 전에 텍스트·정제 대상 HTML·이미지 바이트를 공급하고, `fontLoading`으로 문자 범위에 따라 폰트 요청을 보수적으로 줄일 수 있습니다. 반환 타입·취소·제한·HTML 내보내기는 [Core API](/ko/docs/api/core)를 참조하세요.
+
 ## 기본적으로 아무것도 로드되지 않는 이유
 
 페이지를 담는 iframe은 엄격한 Content Security Policy로 샌드박스됩니다. `connect-src`는 `'none'`이고, 이미지·글꼴·미디어는 Core가 직접 만든 `blob:` URL에서만 올 수 있습니다. 문서에 작성된 URL은 네트워크 요청이 되지 않습니다.

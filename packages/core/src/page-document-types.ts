@@ -274,7 +274,34 @@ export interface PageComposeProgress {
   readonly provisional: true;
 }
 
+export type ElementResolution =
+  | { type: "text"; text: string }
+  | { type: "html"; html: string }
+  | { type: "image"; bytes: Uint8Array; mimeType: string; alt: string }
+  | { type: "image"; dataUrl: string; alt: string };
+
+export interface ElementResolver {
+  readonly selector: string;
+  resolve(
+    input: Readonly<{
+      attributes: Readonly<Record<string, string>>;
+      text: string;
+      index: number;
+      signal: AbortSignal;
+    }>,
+  ): ElementResolution | undefined | Promise<ElementResolution | undefined>;
+}
+
+export interface PageFontLoadingOptions {
+  readonly mode: "all" | "unicode-range";
+  readonly additionalText?: string;
+}
+
 export interface PageDocumentOptions {
+  iframeTitle?: string;
+  blockedResourcePolicy?: "warn" | "error";
+  elements?: readonly ElementResolver[];
+  fontLoading?: PageFontLoadingOptions;
   css?: readonly string[];
   assetResolver?: AssetResolver;
   page?: PageOptions;

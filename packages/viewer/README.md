@@ -248,3 +248,13 @@ See the [compatibility matrix](../../docs/compatibility.md) for browser support,
 constrained fragmentation, and the explicit fixed-layout/complete-parity limits.
 
 See `LICENSE` and `THIRD_PARTY_NOTICES.md` in this package for distribution terms.
+
+## Fit, zoom, and keyboard policy (0.7.0)
+
+| Option | Default | Behavior |
+| --- | --- | --- |
+| `fit` | `"shrink"` | Shrinks zoomed pages to available width, without enlarging them. `"width"` fits in both directions and multiplies that fitted size by zoom. `"none"` preserves CSS page size before zoom, so narrow hosts must accommodate overflow. |
+| `zoomable` | `true` | `false` disables zoom buttons, zoom shortcuts, and `setZoom`; an initial `zoom` still applies. |
+| `keyboard` | `true` | `false` disables Viewer keyboard shortcuts, while buttons and controller methods remain available. |
+
+The Core iframe's `iframeTitle` remains unchanged when Viewer mounts. In React, changing these three policies remounts Viewer presentation and preserves the current page. Existing defaults are unchanged.

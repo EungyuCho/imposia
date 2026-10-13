@@ -5,6 +5,17 @@ description: 公開された各バージョンの Imposia パッケージの変�
 
 このページは、バージョン付きで公開された各 Imposia リリースを要約します。`@imposia/core`、`@imposia/viewer`、`@imposia/client`、`@imposia/react` は同じバージョン番号を使います。完全な記録はリポジトリの [CHANGELOG.md](https://github.com/EungyuCho/imposia/blob/main/CHANGELOG.md) です。
 
+## 0.7.0 — 2026年10月13日
+
+- 厳格な `blockedResourcePolicy: "error"`、順序付き `elements` リゾルバー、`assetFromDataUrl()` を追加しました。準備に失敗しても前のコミットを保持します。
+- アセットを埋め込む独立した確定ページ HTML エクスポートと、Viewer が保持するアクセシブルな名前 `iframeTitle` を追加しました。
+- 保守的な `fontLoading: { mode: "unicode-range" }` を追加しました。生成引用符や CSS の文字変換に必要なフォントは保持します。
+- Viewer の `fit`、`zoomable`、`keyboard` と、React の `preparation`、`prepare()`、`retry()`、ready 状態の `state.source` を追加しました。
+- 空白スペーサー pseudo を持つ高い表行の分割、avoid 行の新ページ再試行、継続行の列幅を修正しました。
+- パッケージガイド、4 言語の API とアセットガイドを補完し、セキュリティ対応を 0.7.x に更新しました。既定動作は互換性を維持します。
+
+[0.7.0 リリースノート](https://github.com/EungyuCho/imposia/releases/tag/v0.7.0)
+
 ## 0.6.0 — 2026年9月27日
 
 - 分割境界の余白・罫線の繰り返し、脚注とページフロートの重なり、出版 CSS の優先順位、リストの継続、ページ名、改ページ回避を修正しました。位置指定による描画のはみ出しで余分なページは生成されません。

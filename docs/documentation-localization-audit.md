@@ -119,3 +119,19 @@ Recorded on 2026-07-19:
   naturalness and fact-consistency review returned terminal `PASS` after checking
   the generated site bundle, localized README routes, lifecycle language,
   verification counts, compatibility limits, and missing-locale disclosure.
+
+## 0.7.0 contract addendum — 2026-10-13
+
+The English npm package guides and all four localized Core, React, Viewer,
+asset-guide, and changelog surfaces now document strict blocked-resource
+policy, ordered element resolution, HTML snapshot export, unicode-range font
+filtering, iframe naming, Viewer policies, and deferred single-document
+preparation. The React references include the terminal `aborted` status and
+the distinction between retained `document` and ready-only `source`.
+
+The new sections carry matching code identifiers and localized examples.
+HTML export is distinguished from reflowable EPUB and PDF bytes; font filtering
+is explicitly conservative for generated text and locale-dependent transforms.
+The shared contract/ADR and package references remain English-only. Earlier
+section counts and verification totals above describe their recorded release,
+not the current corpus. Fresh release verification is recorded separately.

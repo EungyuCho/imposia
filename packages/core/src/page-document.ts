@@ -205,6 +205,7 @@ function createPageDocumentController(
 ): PageDocumentController {
   const settings = snapshotSettings(options);
   const iframe = document.createElement("iframe");
+  iframe.title = settings.iframeTitle;
   iframe.setAttribute("data-imposia-frame", "page-document");
   iframe.setAttribute("sandbox", PAGE_DOCUMENT_FRAME_SANDBOX.join(" "));
   iframe.srcdoc = FRAME_DOCUMENT;

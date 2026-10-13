@@ -7,6 +7,44 @@ versioning for its published package interfaces. What that means before `1.0`
 
 ## Unreleased
 
+## 0.7.0 — 2026-10-13
+
+### Added
+
+- `PageDocumentOptions.blockedResourcePolicy` (`"warn"` default, `"error"`):
+  strict mode fails the generation with `RESOURCE_BLOCKED` before commit and
+  keeps the previous document.
+- `PageDocumentOptions.elements`: CSS-selector element resolvers that replace
+  an element's text, HTML, or image (bytes or base64 data URL) before
+  pagination, plus `assetFromDataUrl()`. Failures surface as
+  `ELEMENT_RESOLUTION_FAILED`.
+- `exportPageDocumentHtml()`: standalone HTML of the committed pages with
+  resolved assets inlined as data URLs.
+- `PageDocumentOptions.fontLoading` (`mode: "unicode-range"`): skips font
+  faces whose `unicode-range` the document cannot use.
+- `PageDocumentOptions.iframeTitle`: accessible name of the canonical iframe,
+  kept after a Viewer is mounted (the Viewer no longer overwrites it).
+- `PageViewerOptions.fit`, `zoomable`, and `keyboard`.
+- React: `preparation` (`immediate`, `idle`, `manual`), `prepare()` and
+  `retry()` on `useImposiaDocument` and the `ImposiaPageViewer` handle, and
+  `source` on the ready state.
+
+### Fixed
+
+- Unicode-range font filtering retains faces when CSS text transforms can introduce characters absent from the source, including locale-dependent case mapping.
+- Invalid font-loading modes and non-string `additionalText` fail before a canonical iframe is created.
+- Viewer policy changes preserve reader-selected page, mode, and zoom when layout options are uncontrolled; explicit options and removed-option defaults remain authoritative.
+- Predefined list-style type/position combinations are recognized case-insensitively by font filtering, while custom styles stay conservative.
+- HTML export verifies that the frame still contains the requested generation.
+- Table rows taller than a page split when an empty cell carries a blank
+  spacer pseudo, honor `break-inside: avoid` by trying the next fragment
+  first, and keep their column widths in the continuation.
+
+### Documentation
+
+- Documented the new preview contracts, strict failure and recovery, font-filter limits, and HTML export boundaries in all four localized API references and asset guides, plus npm package READMEs.
+- Updated localized changelogs and the supported security line to `0.7.x`.
+
 ## 0.6.0 — 2026-09-27
 
 Minor release for document layout, long documents, and the print pipeline.

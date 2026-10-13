@@ -46,6 +46,16 @@ Viewer CSS는 `.imposia-viewer`로 한정됩니다. body 스타일, 미리보기
 
 </Accordions>
 
+## 맞춤·확대·키보드 정책 (0.7.0)
+
+| 옵션 | 기본값 | 동작 |
+| --- | --- | --- |
+| `fit` | `"shrink"` | 확대된 페이지를 가용 너비에 맞춰 축소하되 키우지 않습니다. `"width"`는 양방향으로 너비에 맞춘 뒤 zoom을 곱합니다. `"none"`은 확대 전 CSS 페이지 크기를 유지하므로 좁은 호스트는 넘침을 처리해야 합니다. |
+| `zoomable` | `true` | `false`면 확대 버튼·확대 단축키·`setZoom`을 비활성화합니다. 초기 `zoom`은 적용됩니다. |
+| `keyboard` | `true` | `false`면 Viewer 키보드 단축키를 끕니다. 버튼과 컨트롤러 메서드는 사용할 수 있습니다. |
+
+Viewer를 연결해도 Core의 `iframeTitle`은 유지됩니다. React에서 세 정책을 바꾸면 현재 페이지를 유지하면서 Viewer 표시 연결을 다시 마운트합니다. 기존 기본값은 바뀌지 않습니다.
+
 ## Publication Reader와 딥 링크
 
 Reader 옵션에는 표시 중인 `PublicationDocument`를 소유한 바로 그 `PublicationController`가 필요하며, `initialDeepLink`와 `onDeepLinkChange`를 포함할 수 있습니다.

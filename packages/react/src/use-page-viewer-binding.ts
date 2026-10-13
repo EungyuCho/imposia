@@ -5,7 +5,7 @@ import {
   type PageViewerState,
   validatePageViewerOptions,
 } from "@imposia/client";
-import { type RefObject, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export interface PageViewerBinding {
   readonly error: unknown;
@@ -36,7 +36,7 @@ function sameReaderOptions(
 }
 
 export function usePageViewerBinding(
-  hostRef: RefObject<HTMLDivElement | null>,
+  hostRef: { current: HTMLDivElement | null },
   pageDocument: PageDocument | undefined,
   viewerOptions: PageViewerOptions | undefined,
   onError: ((error: unknown) => void) | undefined,
@@ -47,6 +47,7 @@ export function usePageViewerBinding(
   const viewerReaderRef = useRef<PageViewerOptions["reader"] | undefined>(undefined);
   const viewerInspectorRef = useRef(false);
   const viewerControlsRef = useRef(true);
+  const policyRef = useRef<string | undefined>(undefined);
   const viewerLayoutRef = useRef<ViewerLayoutOptions>(viewerLayoutOptions(undefined));
   const unsubscribeRef = useRef<(() => void) | undefined>(undefined);
   const onErrorRef = useRef(onError);
@@ -67,6 +68,7 @@ export function usePageViewerBinding(
       viewerReaderRef.current = undefined;
       viewerInspectorRef.current = false;
       viewerControlsRef.current = true;
+      policyRef.current = undefined;
       return;
     }
     try {
@@ -76,13 +78,29 @@ export function usePageViewerBinding(
         viewerIframeRef.current !== pageDocument.iframe ||
         !sameReaderOptions(viewerReaderRef.current, viewerOptions?.reader) ||
         viewerInspectorRef.current !== (viewerOptions?.inspector ?? false) ||
-        viewerControlsRef.current !== (viewerOptions?.controls ?? true);
+        viewerControlsRef.current !== (viewerOptions?.controls ?? true) ||
+        policyRef.current !==
+          JSON.stringify([viewerOptions?.fit, viewerOptions?.zoomable, viewerOptions?.keyboard]);
       if (requiresRemount) {
         validatePageViewerOptions(pageDocument, viewerOptions);
-        const preservedPage =
+        const preservedState =
           viewer !== undefined && viewerIframeRef.current === pageDocument.iframe
-            ? viewer.state.page
+            ? viewer.state
             : undefined;
+        const appliedLayout = viewerLayoutRef.current;
+        const mountOptions: PageViewerOptions = {
+          ...viewerOptions,
+          ...(preservedState === undefined
+            ? {}
+            : {
+                mode:
+                  viewerOptions?.mode ??
+                  (appliedLayout.mode === undefined ? preservedState.mode : "continuous"),
+                zoom:
+                  viewerOptions?.zoom ??
+                  (appliedLayout.zoom === undefined ? preservedState.zoom : 1),
+              }),
+        };
         unsubscribeRef.current?.();
         unsubscribeRef.current = undefined;
         viewer?.destroy();
@@ -91,14 +109,19 @@ export function usePageViewerBinding(
         viewerReaderRef.current = undefined;
         viewerInspectorRef.current = false;
         viewerControlsRef.current = true;
-        viewer = mountPageViewer(host, pageDocument, viewerOptions);
+        policyRef.current = JSON.stringify([
+          viewerOptions?.fit,
+          viewerOptions?.zoomable,
+          viewerOptions?.keyboard,
+        ]);
+        viewer = mountPageViewer(host, pageDocument, mountOptions);
         viewerRef.current = viewer;
         viewerIframeRef.current = pageDocument.iframe;
         viewerReaderRef.current = viewerOptions?.reader;
         viewerInspectorRef.current = viewerOptions?.inspector ?? false;
         viewerControlsRef.current = viewerOptions?.controls ?? true;
         viewerLayoutRef.current = viewerLayoutOptions(viewerOptions);
-        if (preservedPage !== undefined) viewer.goToPage(preservedPage);
+        if (preservedState !== undefined) viewer.goToPage(preservedState.page);
         unsubscribeRef.current = viewer.subscribe((state) => onStateChangeRef.current?.(state));
       }
       const activeViewer = viewerRef.current;
@@ -134,6 +157,7 @@ export function usePageViewerBinding(
       viewerReaderRef.current = undefined;
       viewerInspectorRef.current = false;
       viewerControlsRef.current = true;
+      policyRef.current = undefined;
     },
     [],
   );

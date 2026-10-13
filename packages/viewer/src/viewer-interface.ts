@@ -125,7 +125,6 @@ export function createPageViewerInterface(
   modeStatus.setAttribute("aria-atomic", "true");
   shared.toolbar.append(spread, modeStatus);
   iframe.classList.add("imposia-canonical-frame");
-  iframe.title = "Imposia document";
   if (controls) container.insertBefore(shared.rail, iframe);
   return {
     ...shared,
