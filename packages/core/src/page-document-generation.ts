@@ -2707,6 +2707,9 @@ class RecursiveFragmenter {
   readonly #sliceEnds = new Map<Element, readonly (readonly [string, string])[]>();
   readonly #fragmentedLists = new Set<Element>();
   readonly #constraints: ReadonlyMap<Element, BreakConstraint>;
+  // Fragments cloned from an element share its break constraint, so that one that is placed
+  // again (the last block of a cell piece moved on) is cut like the element it came from.
+  readonly #clonedConstraints = new WeakMap<Element, BreakConstraint>();
   readonly #hyphenationFallbackTargets: ReadonlySet<Element>;
   readonly #checkpoint: PaginationCheckpoint;
   readonly #signal: AbortSignal;
@@ -2813,10 +2816,16 @@ class RecursiveFragmenter {
     }
   }
 
+  #constraintOf(element: Element): BreakConstraint | undefined {
+    return this.#constraints.get(element) ?? this.#clonedConstraints.get(element);
+  }
+
   #cloneFragment<ElementType extends Element>(element: ElementType, deep: boolean): ElementType {
     this.#generatedFragment();
     const clone = element.cloneNode(deep) as ElementType;
     stripContinuationIds(clone);
+    const constraint = this.#constraintOf(element);
+    if (constraint !== undefined) this.#clonedConstraints.set(clone, constraint);
     if (this.#fragmentedLists.has(element)) this.#fragmentedLists.add(clone);
     if (clone.localName === "li") (clone as unknown as HTMLElement).style.listStyleType = "none";
     return clone;
@@ -3530,7 +3539,7 @@ class RecursiveFragmenter {
     }
 
     const element = node as Element;
-    const constraint = this.#constraints.get(element);
+    const constraint = this.#constraintOf(element);
     if (constraint === undefined) {
       initialCursor.container.append(element);
       this.#markPageContent(initialCursor.page);
@@ -4312,6 +4321,19 @@ class RecursiveFragmenter {
           fragments.push({ page: cursor.page, cells: cellShells });
         }
       };
+      // Where the content of a cell piece ends on the page, ignoring its own padding and
+      // border; undefined for a piece without content.
+      const contentEnd = (piece: Element): number | undefined => {
+        const last = piece.lastChild;
+        if (last === null) return undefined;
+        if (last.nodeType === Node.TEXT_NODE) {
+          const range = piece.ownerDocument.createRange();
+          range.selectNodeContents(last);
+          const rects = range.getClientRects();
+          return rects.length === 0 ? undefined : rects[rects.length - 1]?.bottom;
+        }
+        return (last as Element).getBoundingClientRect().bottom;
+      };
       // The bottom decoration belongs to the last piece of the row, for every cell: a short
       // cell's empty continuation included. It is put back only once every cell has been
       // placed. If the last piece then no longer fits, the overflowing cell's last block moves
@@ -4326,16 +4348,28 @@ class RecursiveFragmenter {
             if (edges !== undefined && piece !== undefined) setEdges(piece, edges, "bottom", false);
           }
           if (!this.#cursorOverflows(fragmentCursor(lastDepth, 0))) return;
-          // The overflow is a property of the page; the cell reaching lowest is the one to cut.
-          let overflowing = 0;
+          // The overflow is a property of the page, and cells share the height of their row,
+          // so box heights cannot tell which cell caused it. The cell whose content ends
+          // lowest, together with the decoration it gets back, is the one to cut; a cell
+          // without content has nothing to cut and is skipped.
+          let overflowing = -1;
           let lowest = Number.NEGATIVE_INFINITY;
           for (const [index, piece] of (fragments[lastDepth]?.cells ?? []).entries()) {
-            const bottom = piece.getBoundingClientRect().bottom;
-            if (bottom > lowest) {
-              lowest = bottom;
+            const end = contentEnd(piece);
+            if (end === undefined) continue;
+            const edges = sliceEdges[index];
+            let required = end;
+            if (edges !== undefined) {
+              for (const [property, value] of edges) {
+                if (property.includes("bottom")) required += Number.parseFloat(value) || 0;
+              }
+            }
+            if (required > lowest) {
+              lowest = required;
               overflowing = index;
             }
           }
+          if (overflowing < 0) return;
           const edges = sliceEdges[overflowing];
           const piece = fragments[lastDepth]?.cells[overflowing];
           if (edges === undefined || piece === undefined) return;

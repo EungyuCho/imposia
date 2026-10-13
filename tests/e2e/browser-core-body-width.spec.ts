@@ -189,3 +189,47 @@ test("a sliced cell fills the space its removed bottom decoration frees", async 
   // Less than one line (20px) is left: the 70px of padding no longer costs any room.
   for (const gap of gaps) expect(gap).toBeLessThan(20);
 });
+
+test("restoring the bottom decoration never leaves the last piece past the body", async ({
+  page,
+}) => {
+  test.setTimeout(120_000);
+  await page.goto("/examples/book.html");
+  // Sweeps the length of the long second column so that, for some lengths, the content of the
+  // last piece fits and only the bottom padding put back on it makes the page overflow. The
+  // first column is short, so its last piece is empty and cannot be the one that is cut.
+  const result = await page.evaluate(async () => {
+    const core = (await import("/packages/core/dist/index.js")) as typeof import("@imposia/core");
+    const outcomes: { words: number; over: number; kept: boolean; lost: boolean }[] = [];
+    for (let words = 700; words < 1000; words += 6) {
+      const text = Array.from({ length: words }, (_, index) => `w${index}`).join(" ");
+      const html = `<style>@page { size: 148mm 210mm; margin: 12mm; }
+        table { border-collapse: separate; border-spacing: 0; width: 100%; table-layout: fixed; }
+        td { padding: 10px 6px 70px; border: 0; font: 14px/20px monospace; vertical-align: top; }</style>
+        <table><tr><td>short</td><td><p style="margin: 0">${text}</p></td></tr></table>`;
+      const host = document.body.appendChild(document.createElement("div"));
+      const doc = await core.mountPageDocument(host, { html }).ready;
+      const frame = doc.iframe.contentDocument as Document;
+      const rows = [...frame.querySelectorAll("[data-imposia-page] tr")];
+      const lastRow = rows.at(-1) as Element;
+      const body = (lastRow.closest("[data-imposia-page]") as Element)
+        .querySelector("[data-imposia-page-content]")
+        ?.getBoundingClientRect().bottom as number;
+      const bottoms = [...lastRow.children].map((cell) => cell.getBoundingClientRect().bottom);
+      const joined = rows.map((row) => row.children[1]?.textContent ?? "").join(" ");
+      outcomes.push({
+        words,
+        over: Math.max(...bottoms) - body,
+        kept: getComputedStyle(lastRow.children[1] as Element).paddingBottom === "70px",
+        lost: joined.replace(/\s+/g, " ").trim() !== text,
+      });
+      host.remove();
+    }
+    return outcomes;
+  });
+  for (const outcome of result) {
+    expect(outcome.lost, `${outcome.words} words lose or repeat text`).toBe(false);
+    expect(outcome.kept, `${outcome.words} words lose the bottom padding`).toBe(true);
+    expect(outcome.over, `${outcome.words} words overflow the body`).toBeLessThanOrEqual(1);
+  }
+});
