@@ -9,6 +9,12 @@ versioning for its published package interfaces. What that means before `1.0`
 
 ### Fixed
 
+- The page body keeps the sheet width minus the side margins: a table wider than
+  the body no longer widens the body or changes the width of other tables, and
+  column widths are measured under that constraint.
+- A table cell broken over pages follows `box-decoration-break`: `slice` keeps
+  the top decoration on the first piece and the bottom one on the last, `clone`
+  keeps it on every piece. Authored styles are left as written.
 - `exportPageDocumentHtml()` renders every page before it measures anchored
   elements, so positions no longer depend on the preview's scroll position, and
   it freezes every anchored element (inline or stylesheet `position-anchor`) at
