@@ -185,4 +185,10 @@ candidate.
   plain one has its widths updated, any other is left alone, and the table width
   is carried on the table so continuations keep it. `"preserve"` keeps the
   opt-in freezing described above.
+- The authored cell grid stores column occupancy as intervals with the row they
+  end on, with spans bounded the way browsers bound them (`colspan` 1000) and a
+  work budget, so a huge `colspan` or `rowspan` costs time in proportion to the
+  number of cells, and an oversized grid keeps the cluster whole. Every bisection
+  candidate and page transition goes through the pagination checkpoint, so a long
+  cluster yields to the scheduler and can be cancelled part-way through.
 

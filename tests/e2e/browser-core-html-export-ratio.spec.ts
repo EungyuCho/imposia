@@ -148,4 +148,35 @@ test.describe("HTML export targetDevicePixelRatio", () => {
     expect(result.roomy).toContain("padding: 3px 2.98438px !important");
     expect(result.same).toBe(true);
   });
+
+  test("leaves collapsed edges shared by cells of different widths as authored", async ({
+    page,
+  }) => {
+    await page.goto("/examples/book.html");
+    const styles = await page.evaluate(async () => {
+      const core = (await import("/packages/core/dist/index.js")) as typeof import("@imposia/core");
+      const host = document.body.appendChild(document.createElement("div"));
+      const controller = core.mountPageDocument(host, {
+        html: `<table style="border-collapse: collapse"><tr>
+            <td id="thin" style="border: 1px solid #000; padding: 4px">a</td>
+            <td id="thick" style="border: 3px solid #000; padding: 4px">b</td>
+            <td id="same" style="border: 3px solid #000; padding: 4px">c</td>
+          </tr></table>`,
+      });
+      const doc = await controller.ready;
+      const html = await core.exportPageDocumentHtml(doc, { targetDevicePixelRatio: 0.5 });
+      await controller.destroy();
+      const parsed = new DOMParser().parseFromString(html, "text/html");
+      const read = (id: string) => parsed.getElementById(id)?.getAttribute("style") ?? "";
+      return { thin: read("thin"), thick: read("thick"), same: read("same") };
+    });
+    // thin | thick share an edge declared 1px and 3px, so neither of those sides moves.
+    expect(styles.thin).not.toContain("border-right-width");
+    expect(styles.thick).not.toContain("border-left-width");
+    expect(styles.thin).toContain("border-left-width");
+    // thick | same share a uniform 3px edge and stay corrected.
+    expect(styles.thick).toContain("border-right-width");
+    // All four sides of that cell are corrected, which the style serializer writes as a shorthand.
+    expect(styles.same).toContain("border-width: 2px !important");
+  });
 });

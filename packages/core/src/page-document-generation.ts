@@ -61,6 +61,7 @@ import {
   type PageComposeSettings,
 } from "./page-document-scheduler.js";
 import { createPageSemanticSnapshot, type PageSemanticSnapshot } from "./page-document-semantic.js";
+import { buildTableGrid, tableRowCells } from "./page-document-table-grid.js";
 import type {
   AssetResolver,
   EffectivePageLimits,
@@ -1028,40 +1029,15 @@ interface RowspanCell {
   readonly continuation: boolean;
 }
 
-function tableRowCells(row: Element): Element[] {
-  return [...row.children].filter((child) => {
-    const name = child.localName.toLowerCase();
-    return name === "td" || name === "th";
-  });
-}
-
 /** Authored cell grid of a row cluster; undefined when a span is not a positive integer. */
 function rowspanCells(rows: readonly Element[]): readonly RowspanCell[] | undefined {
-  const occupied = new Set<string>();
-  const cells: RowspanCell[] = [];
-  for (const [rowIndex, row] of rows.entries()) {
-    let column = 0;
-    for (const cell of tableRowCells(row)) {
-      while (occupied.has(`${rowIndex}:${column}`)) column += 1;
-      const rowspan = tableCellSpan(cell, "rowspan");
-      const colspan = tableCellSpan(cell, "colspan");
-      if (rowspan === undefined || colspan === undefined) return undefined;
-      for (let r = rowIndex; r < rowIndex + rowspan; r += 1) {
-        for (let c = column; c < column + colspan; c += 1) occupied.add(`${r}:${c}`);
-      }
-      cells.push({
-        element: cell,
-        origin: cell,
-        column,
-        colspan,
-        start: rowIndex,
-        rowspan,
-        continuation: false,
-      });
-      column += colspan;
-    }
-  }
-  return cells;
+  const grid = buildTableGrid(rows);
+  if (grid === undefined) return undefined;
+  return grid.map((cell) => ({
+    ...cell,
+    origin: cell.element,
+    continuation: false,
+  }));
 }
 
 function writeRowspan(cell: Element, rowspan: number): void {
@@ -4306,10 +4282,17 @@ class RecursiveFragmenter {
         writeClusterSpans(cells, rows.length);
       };
       while (true) {
+        const turn = this.#checkpoint();
+        if (turn !== undefined) await turn;
+        this.check();
         const count = rows.length;
         // Largest number of leading rows that fits; measured on the live rows, since
         // candidates are discarded. Only final fragments are cloned (and so counted).
-        const fits = (rowCount: number): boolean => {
+        const fits = async (rowCount: number): Promise<boolean> => {
+          // Each candidate hands control back through the pagination scheduler, so a long
+          // cluster neither blocks the page nor outlives a cancellation.
+          const scheduled = this.#checkpoint();
+          if (scheduled !== undefined) await scheduled;
           this.check();
           for (const row of rows.slice(rowCount)) row.remove();
           tableCursor.container.append(...rows.slice(0, rowCount));
@@ -4321,7 +4304,7 @@ class RecursiveFragmenter {
         let kept = 0;
         while (low <= high) {
           const middle = Math.floor((low + high) / 2);
-          if (fits(middle)) {
+          if (await fits(middle)) {
             kept = middle;
             low = middle + 1;
           } else {
@@ -4345,7 +4328,7 @@ class RecursiveFragmenter {
           this.#reportOverflow();
           return { placed: true, overflowed: true, lastRows: count };
         }
-        fits(kept);
+        await fits(kept);
         this.#markPageContent(tableCursor.page, kept);
         const tailRows = rows.slice(kept);
         for (const row of tailRows) row.remove();

@@ -195,7 +195,7 @@ const controller = mountPageDocument(host, { html }, { tableRowspan: "split" });
 const html = await exportPageDocumentHtml(committed, { targetDevicePixelRatio: 0.5 });
 ```
 
-取值必须是正的有限数，否则以 `TypeError` 拒绝。省略则与原有导出一致。像素比取决于渲染器，因此由调用方指定。适用范围仅限单元格边框，不包括表格、块级元素或 SVG 的边框；没有边框，或没有足够 padding 可让出的边保持原样。不会更改字号或页面缩放。
+取值必须是正的有限数，否则以 `TypeError` 拒绝。省略则与原有导出一致。像素比取决于渲染器，因此由调用方指定。适用范围仅限单元格边框，不包括表格、块级元素或 SVG 的边框；没有边框，或没有足够 padding 可让出的边保持原样。不会更改字号或页面缩放。在 `border-collapse: collapse` 的表格中，相邻边框实际排版的粗细是该边上声明的最大值，因此只有当面对该边的所有单元格（外侧边还包括表格自身的边框）声明了相同粗细时才会校正；粗细混合的边、设在行、行组或列上的边框，以及无法构建单元格网格的表格，都按原样导出。
 
 ## Core Publication
 

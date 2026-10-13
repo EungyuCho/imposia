@@ -195,7 +195,7 @@ const controller = mountPageDocument(host, { html }, { tableRowspan: "split" });
 const html = await exportPageDocumentHtml(committed, { targetDevicePixelRatio: 0.5 });
 ```
 
-The value must be a positive, finite number; anything else rejects with a `TypeError`. Omit it for the unchanged export. The caller supplies the ratio, since it depends on the renderer. Scope: cell borders only, not table, block, or SVG borders; a side with no border, or without enough padding to give up, is left as authored. Font sizes and page scale are never changed.
+The value must be a positive, finite number; anything else rejects with a `TypeError`. Omit it for the unchanged export. The caller supplies the ratio, since it depends on the renderer. Scope: cell borders only, not table, block, or SVG borders; a side with no border, or without enough padding to give up, is left as authored. Font sizes and page scale are never changed. In a `border-collapse: collapse` table the laid-out width of a shared edge is the widest one declared on it, so an edge is corrected only when every cell facing it (and the table's own border, at the outer edge) declares the same width; mixed edges, borders on rows, row groups, or columns, and tables whose cell grid cannot be built are exported as authored.
 
 ## Core publication
 

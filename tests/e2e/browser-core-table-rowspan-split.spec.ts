@@ -457,4 +457,70 @@ test.describe("tableRowspan", () => {
       expect(pageErrors).toEqual([]);
     }
   });
+
+  test("is not slowed down by enormous span values", async ({ page, browserName }) => {
+    const { errors, pageErrors } = captureBrowserErrors(page, browserName);
+    try {
+      const html = `<table><tbody>
+        <tr><td data-merged="A" data-col="A" rowspan="2" colspan="1000000000">MERGED</td><td data-row data-col="B" style="height: 400px">R-1</td></tr>
+        <tr><td data-row data-col="B" style="height: 400px">R-2</td></tr>
+      </tbody></table>`;
+      const started = Date.now();
+      const split = await observe(page, html, { tableRowspan: "split" });
+      expect(Date.now() - started).toBeLessThan(10_000);
+      expect(allRows(split)).toEqual(rowTokens(2));
+      expect(mergedTotals(split).get("A")?.withText).toBe(1);
+    } finally {
+      expect(errors).toEqual([]);
+      expect(pageErrors).toEqual([]);
+    }
+  });
+
+  test("yields to the scheduler and honors cancellation inside one rowspan cluster", async ({
+    page,
+  }) => {
+    const result = await page.evaluate(async (html) => {
+      const core = (await import("/packages/core/dist/index.js")) as typeof import("@imposia/core");
+      const style = `<style>@page { size: 148mm 210mm; margin: 12mm; } table { width: 100%; border-collapse: collapse; } td { height: 24px; }</style>`;
+      const run = async (abortAt: number | undefined, mode: "split" | "preserve" = "split") => {
+        let yields = 0;
+        const abort = new AbortController();
+        const host = document.body.appendChild(document.createElement("div"));
+        const controller = core.mountPageDocument(
+          host,
+          { html: style + html },
+          {
+            tableRowspan: mode,
+            signal: abort.signal,
+            // A zero budget makes every checkpoint hand control to the scheduler.
+            compose: {
+              yieldBudgetMs: 0,
+              scheduler: async () => {
+                yields += 1;
+                if (yields === abortAt) abort.abort();
+              },
+            },
+          },
+        );
+        const outcome = await controller.ready.then(
+          () => "ready",
+          (error: Error) => error.name,
+        );
+        const frames = host.querySelectorAll("iframe").length;
+        await controller.destroy().catch(() => undefined);
+        host.remove();
+        return { yields, outcome, frames };
+      };
+      const baseline = await run(undefined, "preserve");
+      const full = await run(undefined);
+      const aborted = await run(baseline.yields + Math.floor((full.yields - baseline.yields) / 2));
+      return { baseline, full, aborted };
+    }, mergedTable(60));
+    expect(result.full.outcome).toBe("ready");
+    // Bisecting a 60-row cluster and moving between pages hands control back many times; kept
+    // whole (the default) the same table does not.
+    expect(result.full.yields - result.baseline.yields).toBeGreaterThanOrEqual(8);
+    // Cancelling in the middle of that one cluster rejects instead of finishing it first.
+    expect(result.aborted.outcome).toBe("AbortError");
+  });
 });
