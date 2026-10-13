@@ -48,6 +48,7 @@ for (const mode of ["slice", "clone"] as const) {
         )) as typeof import("@imposia/core");
         const html = `<style>@page { size: 148mm 210mm; margin: 12mm; }
           table { border-collapse: separate; border-spacing: 0; width: 100%; table-layout: fixed; }
+          td:empty { padding: 0; border-width: 0; }
           td { padding: 20px 6px; border: 4px solid #333; box-decoration-break: ${breakMode}; font: 14px/20px monospace; vertical-align: top; }</style>
           <table><tr><td data-long>${words}</td><td>side</td></tr></table>`;
         const host = document.body.appendChild(document.createElement("div"));
@@ -124,4 +125,32 @@ test("measured column widths are taken at the body width when a wide table is ne
   for (const label of ["a0", "a29", "c0", "c29"]) {
     expect([label, result.text.split(`cell ${label}`).length - 1]).toEqual([label, 1]);
   }
+});
+
+test("a sliced cell fills the space its removed bottom decoration frees", async ({ page }) => {
+  await page.goto("/examples/book.html");
+  const gaps = await page.evaluate(async (words) => {
+    const core = (await import("/packages/core/dist/index.js")) as typeof import("@imposia/core");
+    const html = `<style>@page { size: 148mm 210mm; margin: 12mm; }
+      table { border-collapse: separate; border-spacing: 0; width: 100%; table-layout: fixed; }
+      td { padding: 10px 6px 70px; border: 0; font: 14px/20px monospace; vertical-align: top; }</style>
+      <table><tr><td>${words}</td><td>side</td></tr></table>`;
+    const host = document.body.appendChild(document.createElement("div"));
+    const doc = await core.mountPageDocument(host, { html }).ready;
+    const frame = doc.iframe.contentDocument as Document;
+    const cells = [...frame.querySelectorAll<HTMLElement>("td")].filter(
+      (cell) => (cell.textContent ?? "").length > 100,
+    );
+    // Free room between a piece that continues and the bottom of the page body.
+    return cells.slice(0, -1).map((cell) => {
+      const pageElement = cell.closest("[data-imposia-page]") as HTMLElement;
+      const content = (
+        pageElement.querySelector("[data-imposia-page-content]") as Element
+      ).getBoundingClientRect();
+      return content.bottom - cell.getBoundingClientRect().bottom;
+    });
+  }, WORDS);
+  expect(gaps.length).toBeGreaterThan(0);
+  // Less than one line (20px) is left: the 70px of padding no longer costs any room.
+  for (const gap of gaps) expect(gap).toBeLessThan(20);
 });
