@@ -255,15 +255,25 @@ function freezeAnchoredElements(source: Document, clone: HTMLElement): void {
       if (!anchored) continue;
       const page = element.closest<HTMLElement>("[data-imposia-page]");
       if (page === null) continue;
+      // Left and top are offsets from the containing block, which is the nearest positioned
+      // ancestor and not necessarily the page.
+      const offsetParent = element.offsetParent;
+      const container =
+        offsetParent !== null && page.contains(offsetParent) ? (offsetParent as HTMLElement) : page;
       const rect = element.getBoundingClientRect();
-      const pageRect = page.getBoundingClientRect();
-      const scaleX = pageRect.width / page.offsetWidth || 1;
-      const scaleY = pageRect.height / page.offsetHeight || 1;
+      const containerRect = container.getBoundingClientRect();
+      const scaleX = containerRect.width / container.offsetWidth || 1;
+      const scaleY = containerRect.height / container.offsetHeight || 1;
       result.push({
         index,
         left:
-          (rect.left - pageRect.left) / scaleX - (Number.parseFloat(style?.marginLeft ?? "") || 0),
-        top: (rect.top - pageRect.top) / scaleY - (Number.parseFloat(style?.marginTop ?? "") || 0),
+          (rect.left - containerRect.left) / scaleX -
+          container.clientLeft -
+          (Number.parseFloat(style?.marginLeft ?? "") || 0),
+        top:
+          (rect.top - containerRect.top) / scaleY -
+          container.clientTop -
+          (Number.parseFloat(style?.marginTop ?? "") || 0),
       });
     }
     return result;
@@ -272,15 +282,16 @@ function freezeAnchoredElements(source: Document, clone: HTMLElement): void {
   for (const { index, left, top } of measured) {
     const copy = copies[index];
     if (copy === undefined) continue;
-    copy.style.setProperty("left", `${left}px`);
-    copy.style.setProperty("top", `${top}px`);
-    copy.style.setProperty("right", "auto");
-    copy.style.setProperty("bottom", "auto");
-    // Inline declarations are removed; ones from a stylesheet are cancelled by an override.
-    for (const name of ["position-anchor", "position-area"]) {
-      if (copy.style.getPropertyValue(name) !== "") copy.style.removeProperty(name);
-      else copy.style.setProperty(name, "none");
-    }
+    // `!important` also beats stylesheet declarations, including ones marked `!important`.
+    const frozen: [string, string][] = [
+      ["left", `${left}px`],
+      ["top", `${top}px`],
+      ["right", "auto"],
+      ["bottom", "auto"],
+      ["position-anchor", "auto"],
+      ["position-area", "none"],
+    ];
+    for (const [name, value] of frozen) copy.style.setProperty(name, value, "important");
   }
 }
 
