@@ -55,7 +55,7 @@ for (const mode of ["slice", "clone"] as const) {
           const html = `<style>@page { size: 148mm 210mm; margin: 12mm; }
             table { border-collapse: separate; border-spacing: 0; width: 100%; table-layout: fixed; }
             ${emptyRule}
-            td { padding: 20px 6px; border: 4px solid #333; box-decoration-break: ${breakMode}; font: 14px/20px monospace; vertical-align: top; }</style>
+            td { padding: 20px 6px; border: 4px solid #333; -webkit-box-decoration-break: ${breakMode}; box-decoration-break: ${breakMode}; font: 14px/20px monospace; vertical-align: top; }</style>
             <table><tr>${cellOrder === "long-short" ? long + short : short + long}</tr></table>`;
           const host = document.body.appendChild(document.createElement("div"));
           const doc = await core.mountPageDocument(host, { html }).ready;
@@ -71,6 +71,9 @@ for (const mode of ["slice", "clone"] as const) {
                     ? "short"
                     : "continuation",
                 text: (cell.textContent ?? "").replace(/\s+/g, " ").trim(),
+                decorationMode:
+                  style.getPropertyValue("box-decoration-break") ||
+                  style.getPropertyValue("-webkit-box-decoration-break"),
                 top: [style.paddingTop, style.borderTopWidth],
                 bottom: [style.paddingBottom, style.borderBottomWidth],
                 bottomEdge: cell.getBoundingClientRect().bottom,
@@ -99,6 +102,7 @@ for (const mode of ["slice", "clone"] as const) {
       for (const [index, piece] of pieces.entries()) {
         expect(piece).toHaveLength(2);
         for (const cell of piece) {
+          expect(cell.decorationMode).toBe(mode);
           // slice: top decoration on the first piece, bottom decoration on the last one,
           // for every cell of the row, the emptied continuation of a short cell included.
           const keepsTop = mode === "clone" || index === 0;
