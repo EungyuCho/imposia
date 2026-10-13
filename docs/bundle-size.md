@@ -105,6 +105,29 @@ content loss (row splitting, content-sized footers) or unsupported layouts
 (spanning grid items), and a pagination path that stays linear to 10,000
 pages. The Viewer route did not grow past its budget, so it keeps 13 KiB.
 
+### 0.7.0 preview API and budget decision (2026-10-13)
+
+The element resolvers, standalone HTML export, `unicode-range` font filtering,
+the strict resource policy, `iframeTitle`, Viewer `fit`/`zoomable`/`keyboard`,
+the React preparation controls, and the table-splitting fixes were measured
+against 0.6.0 on the same machine:
+
+| Consumer route | 0.6.0 (gzip) | After (gzip) | Old budget | New budget | Headroom |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Core · PageDocument | 63.2 KiB | 65.1 KiB | 63.5 KiB | 68.5 KiB | 3.4 KiB |
+| Core · Publication | 67.5 KiB | 69.3 KiB | 68.0 KiB | 73.0 KiB | 3.7 KiB |
+| Viewer · PageDocument | 11.8 KiB | within 13 KiB | 13.0 KiB | 13.0 KiB | unchanged |
+| Client · PageDocument | 71.8 KiB | 73.9 KiB | 72.0 KiB | 78.0 KiB | 4.1 KiB |
+| React · PageViewer | 73.6 KiB | 76.0 KiB | 74.0 KiB | 80.0 KiB | 4.0 KiB |
+
+Decision: raise the four Core-bearing budgets to restore roughly 5% headroom.
+About 1.9 KiB of growth comes from `page-document-elements.ts`,
+`page-document-html.ts`, `page-document-font-usage.ts`, and the table
+fragmentation changes. Each replaces host-side DOM patching, iframe cloning, or
+font over-fetching with a Core step that keeps the sanitizer, byte limits, and
+cancellation. They are public Core behavior, so code splitting would not remove
+them from the consumer routes that mount a document.
+
 ### 0.5.0 baseline (2026-08-20)
 
 Recorded at the 0.5.0 release commit, after the browser-native parsing change

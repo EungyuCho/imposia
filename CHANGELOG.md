@@ -7,6 +7,8 @@ versioning for its published package interfaces. What that means before `1.0`
 
 ## Unreleased
 
+## 0.7.0 — 2026-10-13
+
 ### Added
 
 - `PageDocumentOptions.blockedResourcePolicy` (`"warn"` default, `"error"`):
