@@ -173,6 +173,9 @@ export function useImposiaDocument({
     previousSourceRef.current = sourceRef.current;
     previousSourceRevisionRef.current = sourceRevisionRef.current;
     const mountedOptionsRevision = documentOptionsRevision;
+    // The source this controller was mounted with; sourceRef may already hold a newer one
+    // (for example when a later render suspended), which must not label this document.
+    const mountedSource = sourceRef.current;
     mountedDocumentOptionsRevisionRef.current = mountedOptionsRevision;
     transition(stateForLoading(undefined));
 
@@ -184,7 +187,7 @@ export function useImposiaDocument({
       if (initialOptions?.onProgress !== undefined) {
         options.onProgress = (progress) => progressRef.current?.(progress);
       }
-      controller = mountPageDocument(host, sourceRef.current, options);
+      controller = mountPageDocument(host, mountedSource, options);
       controllerRef.current = controller;
     } catch (error: unknown) {
       reportError(error);
@@ -201,7 +204,7 @@ export function useImposiaDocument({
         )
           return;
         currentRef.current = pageDocument;
-        transition({ status: "ready", document: pageDocument, source: sourceRef.current });
+        transition({ status: "ready", document: pageDocument, source: mountedSource });
         onReadyRef.current?.(pageDocument);
       },
       (error: unknown) => {

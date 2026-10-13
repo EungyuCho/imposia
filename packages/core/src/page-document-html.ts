@@ -7,7 +7,7 @@ export interface HtmlExportOptions {
   title?: string;
 }
 
-const URL_ATTRIBUTES = new Set(["src", "href", "srcset", "poster", "style"]);
+const URL_ATTRIBUTES = new Set(["src", "href", "xlink:href", "srcset", "poster", "style"]);
 
 async function blobDataUrl(blob: Blob): Promise<string> {
   const bytes = new Uint8Array(await blob.arrayBuffer());

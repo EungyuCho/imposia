@@ -298,8 +298,8 @@ test("keeps authored column widths when a row is split", async ({ page, browserN
   const { errors, pageErrors } = captureBrowserErrors(page, browserName);
   await page.goto("/examples/book.html");
   const notes = tokens("NOTE", 90);
-  const table = (avoid: boolean, width: string, colgroup: string) => `
-    <table style="width: ${width}">
+  const table = (avoid: boolean, width: string, colgroup: string, layout: string) => `
+    <table style="width: ${width}; table-layout: ${layout}">
       ${colgroup}
       <tbody>
         <tr><td>Name</td><td>${"Opening remark ".repeat(40)}</td></tr>
@@ -313,16 +313,18 @@ test("keeps authored column widths when a row is split", async ({ page, browserN
     for (const avoid of [false, true]) {
       for (const width of ["400px", "auto"]) {
         for (const colgroup of ["", '<colgroup><col style="width: 80px"></colgroup>']) {
-          const observation = await observe(page, table(avoid, width, colgroup));
-          const label = `${avoid} ${width} ${colgroup === "" ? "none" : "partial"}`;
-          expect(flatten(observation, "notes"), label).toEqual(notes);
-          expect(observation.overflowingPages, label).toEqual([]);
-          const widths = observation.noteCellWidths;
-          for (const value of widths)
-            expect(Math.abs(value - (widths[0] ?? 0)), label).toBeLessThan(0.1);
-          const tables = observation.tableWidths;
-          for (const value of tables)
-            expect(Math.abs(value - (tables[0] ?? 0)), label).toBeLessThan(0.1);
+          for (const layout of ["auto", "fixed"]) {
+            const observation = await observe(page, table(avoid, width, colgroup, layout));
+            const label = `${avoid} ${width} ${colgroup === "" ? "none" : "partial"} ${layout}`;
+            expect(flatten(observation, "notes"), label).toEqual(notes);
+            expect(observation.overflowingPages, label).toEqual([]);
+            const widths = observation.noteCellWidths;
+            for (const value of widths)
+              expect(Math.abs(value - (widths[0] ?? 0)), label).toBeLessThan(0.1);
+            const tables = observation.tableWidths;
+            for (const value of tables)
+              expect(Math.abs(value - (tables[0] ?? 0)), label).toBeLessThan(0.1);
+          }
         }
       }
     }

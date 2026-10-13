@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import type { PageDocument } from "@imposia/client";
-import { act, createElement } from "react";
+import { act, createElement, Suspense } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -15,6 +15,7 @@ const mocked = vi.hoisted(() => {
     updates: 0,
     destroys: 0,
     failNextMount: false,
+    deferReady: undefined as ((value: PageDocument) => void) | undefined,
   };
   const pageDocument = (generation: number) => ({ generation }) as unknown as PageDocument;
   return {
@@ -26,7 +27,11 @@ const mocked = vi.hoisted(() => {
         throw new Error("mount failed");
       }
       return {
-        ready: Promise.resolve(pageDocument(1)),
+        ready: state.deferReady
+          ? new Promise<PageDocument>((resolve) => {
+              state.deferReady = resolve;
+            })
+          : Promise.resolve(pageDocument(1)),
         update: () => {
           state.updates += 1;
           return Promise.resolve(pageDocument(2));
@@ -67,6 +72,30 @@ afterEach(() => {
 });
 
 describe("useImposiaDocument preparation", () => {
+  it("labels a ready document with the source it was mounted with, not a suspended render's", async () => {
+    mocked.state.deferReady = () => {};
+    const sourceA = { html: "<p>A</p>" };
+    const sourceB = { html: "<p>B</p>" };
+    const never = new Promise<never>(() => {});
+    function Host(props: { readonly source: { html: string }; readonly suspend: boolean }) {
+      latest = useImposiaDocument({ source: props.source });
+      // Suspending after the hook ran: the render wrote sourceRef but never commits.
+      if (props.suspend) throw never;
+      return createElement("div", { ref: latest.hostRef });
+    }
+    const tree = (source: { html: string }, suspend: boolean) =>
+      createElement(Suspense, { fallback: null }, createElement(Host, { source, suspend }));
+    await act(async () => root.render(tree(sourceA, false)));
+    await act(async () => root.render(tree(sourceB, true)));
+    await act(async () => {
+      (mocked.state.deferReady as (value: PageDocument) => void)({ generation: 1 } as PageDocument);
+    });
+    expect(latest.state.status).toBe("ready");
+    expect(latest.state.source).toBe(sourceA);
+    mocked.state.deferReady = undefined;
+    await act(async () => root.unmount());
+  });
+
   it("waits for prepare(), recovers from a synchronous mount failure with retry()", async () => {
     await act(async () => root.render(createElement(Harness, { preparation: "manual" })));
     expect(mocked.state.mounts).toBe(0);

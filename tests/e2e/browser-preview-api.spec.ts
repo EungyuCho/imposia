@@ -121,6 +121,71 @@ test.describe("preview API", () => {
     expect(pageErrors).toEqual([]);
   });
 
+  test("HTML export inlines SVG image xlink:href assets", async ({ page }) => {
+    const result = await page.evaluate(async (png) => {
+      const core = (await import("/packages/core/dist/index.js")) as typeof import("@imposia/core");
+      const host = document.body.appendChild(document.createElement("div"));
+      const controller = core.mountPageDocument(
+        host,
+        {
+          html: '<svg width="4" height="4" xmlns:xlink="http://www.w3.org/1999/xlink"><image xlink:href="https://imposia.test/a.png" width="4" height="4"/></svg>',
+        },
+        {
+          assetResolver: async () => ({
+            status: "resolved",
+            bytes: Uint8Array.from(atob(png), (c) => c.charCodeAt(0)),
+            mimeType: "image/png",
+          }),
+        },
+      );
+      const doc = await controller.ready;
+      const live = doc.iframe.contentDocument?.documentElement.outerHTML ?? "";
+      const exported = await core.exportPageDocumentHtml(doc);
+      await controller.destroy();
+      return { liveHasBlob: live.includes("blob:"), exported };
+    }, PNG);
+    expect(result.liveHasBlob).toBe(true);
+    expect(result.exported).not.toContain("blob:");
+    expect(result.exported).toContain("data:image/png;base64,");
+  });
+
+  test("unicode-range keeps faces needed by generated quotation marks", async ({ page }) => {
+    const result = await page.evaluate(async () => {
+      const core = (await import("/packages/core/dist/index.js")) as typeof import("@imposia/core");
+      const run = async (css: string) => {
+        const requested: string[] = [];
+        const host = document.body.appendChild(document.createElement("div"));
+        const controller = core.mountPageDocument(
+          host,
+          { html: "<p class='q'>x</p>" },
+          {
+            css: [
+              `${css}
+               @font-face{font-family:Q;src:url(quote.woff2);unicode-range:U+00AB,U+00BB}
+               @font-face{font-family:Q;src:url(other.woff2);unicode-range:U+0E00-0E7F}`,
+            ],
+            fontLoading: { mode: "unicode-range" },
+            assetResolver: async ({ url }) => {
+              requested.push(url.split("/").pop() ?? url);
+              return { status: "blocked" };
+            },
+          },
+        );
+        await controller.ready;
+        await controller.destroy();
+        return requested;
+      };
+      return {
+        declared: await run('.q{quotes:"\\00AB" "\\00BB"}.q::before{content:open-quote}'),
+        language: await run(".q::before{content:open-quote}"),
+        plain: await run(".q{color:red}"),
+      };
+    });
+    expect(result.declared).toEqual(["quote.woff2"]);
+    expect(result.language).toEqual(["quote.woff2", "other.woff2"]);
+    expect(result.plain).toEqual([]);
+  });
+
   test("failed element resolution keeps the previous document", async ({ page }) => {
     const result = await page.evaluate(async () => {
       const core = (await import("/packages/core/dist/index.js")) as typeof import("@imposia/core");
