@@ -7,6 +7,12 @@ versioning for its published package interfaces. What that means before `1.0`
 
 ## Unreleased
 
+## 0.8.0 — 2026-10-13
+
+Minor release that lets rowspan tables cross pages and makes the HTML export
+match a lower-resolution renderer. Both additions are opt-in and every default
+is unchanged, so there are no breaking changes and no migration note.
+
 ### Added
 
 - `PageDocumentOptions.tableRowspan` (`"preserve"` default, `"split"`): cuts a
