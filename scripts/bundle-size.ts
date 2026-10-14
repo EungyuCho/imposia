@@ -40,7 +40,8 @@ const SCENARIOS = Object.freeze([
     // Add 1.5 KiB; measured before/after is in docs/bundle-size.md.
     // 2026-10-13: 65.1 KiB after the 0.7.0 preview API (element resolvers, HTML
     // export, font filtering, strict resource policy); see docs/bundle-size.md.
-    gzipBudgetBytes: 68.5 * KIBIBYTE,
+    // 2026-10-14: 68.6 KiB after SVG image validation (parsed CSS policy); budget +1 KiB.
+    gzipBudgetBytes: 69.5 * KIBIBYTE,
   }),
   Object.freeze({
     name: "Core · Publication",
@@ -49,7 +50,8 @@ const SCENARIOS = Object.freeze([
     // outline/search over PageDocument. Raised from 64 KiB with the route above.
     // 2026-09-27: 67.5 KiB; shared Core fixes add about 1 KiB.
     // 2026-10-13: 69.3 KiB; shared Core additions of 0.7.0.
-    gzipBudgetBytes: 73 * KIBIBYTE,
+    // 2026-10-14: 72.9 KiB with the SVG image policy; budget +1 KiB.
+    gzipBudgetBytes: 74 * KIBIBYTE,
   }),
   Object.freeze({
     name: "Viewer · PageDocument",
@@ -65,7 +67,8 @@ const SCENARIOS = Object.freeze([
     // page viewer). Raised from 69 KiB with the Core routes.
     // 2026-09-27: 71.8 KiB; shared Core fixes add about 1 KiB.
     // 2026-10-13: 73.9 KiB; shared Core additions of 0.7.0.
-    gzipBudgetBytes: 78 * KIBIBYTE,
+    // 2026-10-14: 77.4 KiB with the SVG image policy; budget +1 KiB.
+    gzipBudgetBytes: 79 * KIBIBYTE,
   }),
   Object.freeze({
     name: "React · PageViewer",
@@ -74,7 +77,8 @@ const SCENARIOS = Object.freeze([
     // stay external. Raised from 71 KiB with the Core routes.
     // 2026-09-27: 73.6 KiB; shared Core fixes add about 1 KiB.
     // 2026-10-13: 76.0 KiB; shared Core additions of 0.7.0.
-    gzipBudgetBytes: 80 * KIBIBYTE,
+    // 2026-10-14: 79.6 KiB with the SVG image policy; budget +1 KiB.
+    gzipBudgetBytes: 81 * KIBIBYTE,
   }),
 ]) satisfies readonly BundleScenario[];
 

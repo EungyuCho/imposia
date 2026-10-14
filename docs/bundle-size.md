@@ -33,13 +33,13 @@ React peers remain external; budgets are upper limits, not measured sizes.
 
 | Consumer route | Minified | Gzip | Gzip budget |
 | --- | ---: | ---: | ---: |
-| Core · PageDocument | 226.2 KiB | 68.4 KiB | 68.5 KiB |
-| Core · Publication | 241.7 KiB | 72.7 KiB | 73.0 KiB |
+| Core · PageDocument | 226.7 KiB | 68.6 KiB | 69.5 KiB |
+| Core · Publication | 242.2 KiB | 72.9 KiB | 74.0 KiB |
 | Viewer · PageDocument | 40.5 KiB | 11.9 KiB | 13.0 KiB |
-| Client · PageDocument | 258.6 KiB | 77.2 KiB | 78.0 KiB |
-| React · PageViewer | 266.3 KiB | 79.4 KiB | 80.0 KiB |
+| Client · PageDocument | 259.1 KiB | 77.4 KiB | 79.0 KiB |
+| React · PageViewer | 266.8 KiB | 79.6 KiB | 81.0 KiB |
 
-The full built Core browser artifact is **75.5 KiB gzip**.
+The full built Core browser artifact is **75.7 KiB gzip**.
 The landing page labels this bundle snapshot as Imposia 0.9.0; historical timing
 comparisons keep their own original dates and versions. The byte counts and
 browser artifact hash are in [bundle-size.json](../benchmarks/bundle-size.json).

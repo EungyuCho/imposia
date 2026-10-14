@@ -32,8 +32,8 @@ const CSS_ATTRIBUTES = new Set([
   "marker-end",
   "cursor",
 ]);
-const CSS_ESCAPE = /\\([0-9a-fA-F]{1,6})[ \t\n\r\f]?|\\([\s\S])/g;
-const CSS_URL = /(?:url|src)\(\s*(["']?)(.*?)\1\s*\)/gi;
+const CSS_ESCAPE = /\\([0-9a-fA-F]{1,6})(?:\r\n|[ \t\n\r\f])?|\\(\r\n|[\s\S])/g;
+const CSS_URL = /(?:url|src)\(\s*(["']?)(.*?)\1\s*\)/gis;
 // Functions that take a bare string as a resource.
 const CSS_STRING_RESOURCE = /(?:image-set|image|cross-fade)\(/i;
 
@@ -46,9 +46,13 @@ function unescapeCss(text: string): string {
   return text.replace(
     CSS_ESCAPE,
     (_match, hex: string | undefined, character: string | undefined) => {
-      if (hex === undefined) return character ?? "";
-      const code = Number.parseInt(hex, 16);
-      return code === 0 || code > 0x10ffff ? "\ufffd" : String.fromCodePoint(code);
+      if (hex !== undefined) {
+        const code = Number.parseInt(hex, 16);
+        return code === 0 || code > 0x10ffff ? "\ufffd" : String.fromCodePoint(code);
+      }
+      // A backslash before a line break continues the string and adds no character.
+      if (character === undefined || /^(?:\r\n|[\n\r\f])$/.test(character)) return "";
+      return character;
     },
   );
 }
@@ -113,6 +117,16 @@ export function svgRejection(bytes: Uint8Array): BlockedReason | undefined {
   if (root.localName !== "svg" || root.namespaceURI !== SVG_NAMESPACE) {
     return svgRejectedReason("does not have an svg root element");
   }
+  // A stylesheet attached through a processing instruction is a reference too.
+  for (const node of parsed.childNodes) {
+    if (node.nodeType !== Node.PROCESSING_INSTRUCTION_NODE) continue;
+    const instruction = node as ProcessingInstruction;
+    if (instruction.target.toLowerCase() !== "xml-stylesheet") continue;
+    const href = /(?:^|\s)href\s*=\s*(["'])(.*?)\1/i.exec(instruction.data)?.[2];
+    if (href !== undefined && externalReference(href)) {
+      return svgRejectedReason("contains an external resource reference");
+    }
+  }
   for (const element of [root, ...root.querySelectorAll("*")]) {
     const forbidden = FORBIDDEN_ELEMENTS.get(element.localName.toLowerCase());
     if (forbidden !== undefined) return svgRejectedReason(`contains ${forbidden}`);
@@ -121,11 +135,16 @@ export function svgRejection(bytes: Uint8Array): BlockedReason | undefined {
       if (reason !== undefined) return svgRejectedReason(`contains ${reason}`);
     }
     const target = (element.getAttribute("attributeName") ?? "").toLowerCase().split(":").pop();
-    if (
-      (element.localName === "set" || element.localName.startsWith("animate")) &&
-      target === "href"
-    ) {
-      return svgRejectedReason("animates a reference");
+    const animates = element.localName === "set" || element.localName.startsWith("animate");
+    if (animates && target === "href") return svgRejectedReason("animates a reference");
+    if (animates && target !== undefined && CSS_ATTRIBUTES.has(target)) {
+      // The values an animation assigns are read as the CSS of the attribute it drives.
+      for (const key of ["to", "from", "by", "values"]) {
+        const value = element.getAttribute(key);
+        if (value === null) continue;
+        const reason = target === "style" ? cssReason(value, true) : valueReason(value);
+        if (reason !== undefined) return svgRejectedReason(`contains ${reason}`);
+      }
     }
     for (const attribute of element.attributes) {
       const name = attribute.localName.toLowerCase();

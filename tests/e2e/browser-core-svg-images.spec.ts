@@ -62,6 +62,22 @@ const REFUSED: Record<string, { svg: string; reason: RegExp }> = {
     svg: `<svg ${NS} xmlns:q="http://www.w3.org/1999/xlink"><image width="20" height="20" q:href="https://blocked.invalid/a.png"/></svg>`,
     reason: /external resource reference/,
   },
+  escapedLineBreak: {
+    svg: `<svg ${NS}><style>rect{fill:url("https://blocked.invalid/ex\\\nample.svg#g")}</style></svg>`,
+    reason: /external resource reference/,
+  },
+  stylesheetInstruction: {
+    svg: `<?xml-stylesheet href="https://blocked.invalid/a.css" type="text/css"?><svg ${NS}><rect width="20" height="20"/></svg>`,
+    reason: /external resource reference/,
+  },
+  animatedPaint: {
+    svg: `<svg ${NS}><rect width="20" height="20"><set attributeName="fill" to="url(https://blocked.invalid/p.svg#g)"/></rect></svg>`,
+    reason: /external resource reference/,
+  },
+  animatedStyle: {
+    svg: `<svg ${NS}><rect width="20" height="20"><animate attributeName="style" values="fill:red;fill:url(https://blocked.invalid/p#x)"/></rect></svg>`,
+    reason: /external resource reference/,
+  },
   malformed: { svg: `<svg ${NS}><rect></svg>`, reason: /not well-formed/ },
   notSvg: {
     svg: '<html xmlns="http://www.w3.org/1999/xhtml"><body/></html>',
@@ -98,6 +114,8 @@ test("shows a valid SVG, keeps its authored size in the preview and the export",
       );
       const doc = await controller.ready;
       const frame = doc.iframe.contentDocument as Document;
+      for (const image of frame.querySelectorAll("img"))
+        await image.decode().catch(() => undefined);
       const read = (id: string) => {
         const image = frame.getElementById(id) as HTMLImageElement | null;
         return image === null
@@ -216,5 +234,10 @@ test("refuses unsafe or broken SVG with the element and the reason, without a re
     expect(warnings[0]?.reason, name).not.toMatch(/blocked\.invalid|alert/);
   }
   expect(authoredHostRequests).toEqual([]);
-  assertNoBrowserErrors(errors, pageErrors);
+  // Firefox reports a parse failure of malformed XML on its own console; that is the browser
+  // describing the rejected file, not a fault of the page.
+  assertNoBrowserErrors(
+    errors.filter((error) => !/XML Parsing Error/.test(error.text)),
+    pageErrors,
+  );
 });
