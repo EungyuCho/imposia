@@ -78,7 +78,8 @@ export const assetResolver: AssetResolver = async ({ url, kind, baseUrl, signal 
 
 | 검사 | 규칙 |
 | --- | --- |
-| MIME 허용 목록 | 이미지는 PNG·JPEG·GIF·WebP·AVIF, 글꼴은 WOFF·WOFF2·TTF·OTF, 스타일시트는 `text/css`여야 합니다. |
+| MIME 허용 목록 | 이미지는 PNG·JPEG·GIF·WebP·AVIF·SVG, 글꼴은 WOFF·WOFF2·TTF·OTF, 스타일시트는 `text/css`여야 합니다. |
+| SVG 정책 | SVG는 올바른 XML이고 루트가 `svg`이며 이미지로 디코딩되어야 합니다. 스크립트, `foreignObject`, 내장 프레임·미디어 요소, 이벤트 핸들러 속성, 엔티티 선언, `@import`, 파일 밖을 가리키는 `href`/`url()`(`#조각`과 `data:` PNG/JPEG/GIF/WebP만 허용)이 있으면 고치지 않고 거부하며, 요소와 사유를 담은 `RESOURCE_BLOCKED` 경고를 반환합니다 |
 | 매직 바이트 | 글꼴 컨테이너는 선언된 타입이 아니라 실제 시그니처(`wOFF`, `wOF2`, `OTTO` 등)로 확인합니다. |
 | 제한 | 참조 수, 총 바이트, 중첩 깊이에 모두 상한이 있습니다. |
 

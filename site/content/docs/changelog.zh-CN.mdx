@@ -5,6 +5,10 @@ description: 查看每个已发布的 Imposia 包版本的变化。
 
 本页汇总 Imposia 的每个已发布版本。`@imposia/core`、`@imposia/viewer`、`@imposia/client` 和 `@imposia/react` 使用相同的版本号；完整记录见仓库中的 [CHANGELOG.md](https://github.com/EungyuCho/imposia/blob/main/CHANGELOG.md)。
 
+## 0.9.0 — 2026年10月14日
+
+- 现在可以通过解析器返回 SVG 图片,用于 `<img>` 和 CSS `url()`。含有脚本、`foreignObject`、内嵌框架、事件处理属性、实体声明、`@import` 或指向文件之外的引用时会被拒绝而不是修复,并返回指明元素和原因的 `RESOURCE_BLOCKED` 警告。CSS 通过解析来检查,XLink 按命名空间检查。其他默认行为不变。
+
 ## 0.8.1 — 2026年10月13日
 
 - 修复了页面正文宽度：比正文更宽的表格不再改变正文或其他表格的宽度。跨页单元格遵循 `box-decoration-break`，使用被切掉的装饰腾出的空间，下方装饰在行的最后一个片段上确定。

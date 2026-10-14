@@ -78,7 +78,8 @@ Approving bytes is not the last word. Core validates them, and a mismatch is tre
 
 | Check | Rule |
 | --- | --- |
-| MIME allowlist | Images must be PNG, JPEG, GIF, WebP, or AVIF; fonts WOFF, WOFF2, TTF, or OTF; stylesheets `text/css` |
+| MIME allowlist | Images must be PNG, JPEG, GIF, WebP, AVIF, or SVG; fonts WOFF, WOFF2, TTF, or OTF; stylesheets `text/css` |
+| SVG policy | An SVG must be well-formed, have an `svg` root, and decode as an image. It is refused, never repaired, if it contains a script, `foreignObject`, an embedded frame or media element, an event-handler attribute, an entity declaration, an `@import`, or any `href` / `url()` that points outside the file (only `#fragment` and `data:` PNG/JPEG/GIF/WebP are kept). The refusal is a `RESOURCE_BLOCKED` warning naming the element and the reason |
 | Magic bytes | Font containers are verified against their real signature (`wOFF`, `wOF2`, `OTTO`, …), not the declared type |
 | Limits | Reference count, total bytes, and nesting depth all have ceilings |
 

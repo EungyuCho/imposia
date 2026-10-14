@@ -78,7 +78,8 @@ export const assetResolver: AssetResolver = async ({ url, kind, baseUrl, signal 
 
 | 検証 | 規則 |
 | --- | --- |
-| MIME 許可リスト | 画像は PNG、JPEG、GIF、WebP、AVIF。フォントは WOFF、WOFF2、TTF、OTF。スタイルシートは `text/css` |
+| MIME 許可リスト | 画像は PNG、JPEG、GIF、WebP、AVIF、SVG。フォントは WOFF、WOFF2、TTF、OTF。スタイルシートは `text/css` |
+| SVG ポリシー | SVG は整形式で、ルートが `svg` であり、画像としてデコードできる必要があります。スクリプト、`foreignObject`、埋め込みフレーム・メディア要素、イベントハンドラ属性、エンティティ宣言、`@import`、ファイル外を指す `href` / `url()`（`#フラグメント` と `data:` の PNG/JPEG/GIF/WebP のみ可）を含む場合は修復せず拒否し、要素と理由を示す `RESOURCE_BLOCKED` 警告を返します |
 | マジックバイト | フォントコンテナーは宣言された型ではなく、実際のシグネチャ（`wOFF`、`wOF2`、`OTTO` など）で検証されます |
 | 上限 | 参照数、合計バイト数、ネストの深さのそれぞれに上限があります |
 

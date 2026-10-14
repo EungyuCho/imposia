@@ -78,7 +78,8 @@ export const assetResolver: AssetResolver = async ({ url, kind, baseUrl, signal 
 
 | 检查 | 规则 |
 | --- | --- |
-| MIME 白名单 | 图片必须是 PNG、JPEG、GIF、WebP 或 AVIF；字体为 WOFF、WOFF2、TTF 或 OTF；样式表为 `text/css` |
+| MIME 白名单 | 图片必须是 PNG、JPEG、GIF、WebP、AVIF 或 SVG;字体为 WOFF、WOFF2、TTF 或 OTF；样式表为 `text/css` |
+| SVG 策略 | SVG 必须格式正确、根元素为 `svg` 并能作为图片解码。含有脚本、`foreignObject`、内嵌框架或媒体元素、事件处理属性、实体声明、`@import`,或指向文件之外的 `href` / `url()`(仅允许 `#片段` 和 `data:` PNG/JPEG/GIF/WebP)时会被拒绝而不是修复,并返回指明元素和原因的 `RESOURCE_BLOCKED` 警告 |
 | 魔数 | 字体容器按真实签名（`wOFF`、`wOF2`、`OTTO` 等）校验，而不是按声明的类型 |
 | 上限 | 引用数量、总字节数和嵌套深度都有上限 |
 
