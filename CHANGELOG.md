@@ -7,6 +7,16 @@ versioning for its published package interfaces. What that means before `1.0`
 
 ## Unreleased
 
+### Added
+
+- `image/svg+xml` is accepted as an image from a resolver, for `<img>` and CSS
+  `url()`. The file must be well-formed, have an `svg` root, decode the way it is
+  drawn, and pass the SVG policy: scripts, `foreignObject`, embedded frames or
+  media, event-handler attributes, entity declarations, `@import`, and any
+  `href` / `url()` leaving the file are refused (never repaired) with a
+  `RESOURCE_BLOCKED` warning that names the element and the reason. Authored
+  display sizes and the aspect ratio are kept in the preview and the export.
+
 ## 0.8.1 — 2026-10-13
 
 Patch release with typesetting and export fixes. There are no API changes, no

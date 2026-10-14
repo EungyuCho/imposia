@@ -66,3 +66,12 @@ export function undecodableReason(canonicalMime: string): BlockedReason {
     `bytes decoded as ${quotableMime(canonicalMime)} could not be loaded by the browser`,
   );
 }
+
+/**
+ * Why an SVG was refused. `problem` is always one of the fixed phrases of the SVG policy in
+ * `page-document-svg.ts`, never text taken from the file, so the file's own content cannot
+ * reach a diagnostic.
+ */
+export function svgRejectedReason(problem: string): BlockedReason {
+  return authored(`SVG ${problem} and was not loaded`);
+}

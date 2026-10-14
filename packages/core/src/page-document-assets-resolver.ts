@@ -9,6 +9,7 @@ import {
   unsupportedMimeReason,
 } from "./page-document-blocked-reasons.js";
 import { abortError } from "./page-document-frame.js";
+import { svgRejection } from "./page-document-svg.js";
 import type { AssetResolution, AssetResolver } from "./page-document-types.js";
 
 export type AssetOutcome =
@@ -60,6 +61,7 @@ const IMAGE_MIME_TYPES = new Set([
   "image/gif",
   "image/webp",
   "image/avif",
+  "image/svg+xml",
 ]);
 const FONT_MIME_TYPES = new Set(["font/woff", "font/woff2", "font/ttf", "font/otf"]);
 const MEDIA_MIME_TYPES = new Set([
@@ -166,7 +168,23 @@ function revokeBlob(scope: BlobScope, url: string): void {
   URL.revokeObjectURL(url);
 }
 
+// createImageBitmap cannot decode SVG, so a vector image is decoded the way it will be drawn.
+async function decodeVectorImage(bytes: Uint8Array, mime: string): Promise<boolean> {
+  const url = URL.createObjectURL(resourceBlob(bytes, mime));
+  try {
+    const image = new Image();
+    image.src = url;
+    await image.decode();
+    return true;
+  } catch (_error: unknown) {
+    return false;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
 async function decodeImage(bytes: Uint8Array, mime: string): Promise<boolean> {
+  if (mimeType(mime) === "image/svg+xml") return await decodeVectorImage(bytes, mime);
   try {
     const bitmap = await createImageBitmap(resourceBlob(bytes, mime));
     const decoded = bitmap.width > 0 && bitmap.height > 0;
@@ -275,6 +293,10 @@ async function resolveOneWork(
   const canonicalMime = canonicalMimeType(resolution.mimeType);
   if (!hasContainerSignature(request.kind, copied)) {
     return { status: "blocked", reason: containerMismatchReason(canonicalMime) };
+  }
+  if (request.kind === "image" && canonicalMime === "image/svg+xml") {
+    const rejection = svgRejection(copied);
+    if (rejection !== undefined) return { status: "blocked", reason: rejection };
   }
   if (request.kind === "stylesheet") {
     try {
