@@ -5,6 +5,10 @@ description: See what changed in each published Imposia package version.
 
 This page summarizes each versioned Imposia release. `@imposia/core`, `@imposia/viewer`, `@imposia/client`, and `@imposia/react` use the same version number; the complete record is the repository's [CHANGELOG.md](https://github.com/EungyuCho/imposia/blob/main/CHANGELOG.md).
 
+## 0.9.0 — October 14, 2026
+
+- SVG images are accepted from a resolver, for `<img>` and CSS `url()`. A file with a script, `foreignObject`, an embedded frame, an event-handler attribute, an entity declaration, `@import`, or a reference that leaves the file is refused, never repaired, with a `RESOURCE_BLOCKED` warning naming the element and the reason. CSS is parsed and XLink is checked by namespace. No other default changes.
+
 ## 0.8.1 — October 13, 2026
 
 - Fixed the page body width: a table wider than the body no longer widens the body or changes the width of other tables. Cells broken over pages follow `box-decoration-break`, using the space a cut decoration frees, and the bottom decoration is settled on the last piece of the row.

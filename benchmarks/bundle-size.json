@@ -1,18 +1,18 @@
 {
-  "capturedAt": "2026-10-13T16:12:59.371Z",
-  "version": "0.8.1",
+  "capturedAt": "2026-10-14T04:29:57.684Z",
+  "version": "0.9.0",
   "method": "esbuild + oxc-minify; gzip level 9; React peers external",
   "routes": [
     {
       "name": "Core · PageDocument",
-      "minifiedBytes": 228673,
-      "gzipBytes": 69135,
+      "minifiedBytes": 231592,
+      "gzipBytes": 70048,
       "gzipBudgetBytes": 70144
     },
     {
       "name": "Core · Publication",
-      "minifiedBytes": 244571,
-      "gzipBytes": 73528,
+      "minifiedBytes": 247491,
+      "gzipBytes": 74445,
       "gzipBudgetBytes": 74752
     },
     {
@@ -23,20 +23,20 @@
     },
     {
       "name": "Client · PageDocument",
-      "minifiedBytes": 261918,
-      "gzipBytes": 78139,
+      "minifiedBytes": 264839,
+      "gzipBytes": 79073,
       "gzipBudgetBytes": 79872
     },
     {
       "name": "React · PageViewer",
-      "minifiedBytes": 269775,
-      "gzipBytes": 80381,
+      "minifiedBytes": 272696,
+      "gzipBytes": 81294,
       "gzipBudgetBytes": 81920
     }
   ],
   "browser": {
     "path": "packages/core/dist/index.js",
-    "sha256": "70b1521a8364df9d0cbbd32589dd18a99917af075c7fbab9b7da5c16df49907e",
-    "gzipBytes": 76488
+    "sha256": "93c1885852c7fcdae890b104ea1c4b58b27f0a16243a08524bf69e20357f7764",
+    "gzipBytes": 77356
   }
 }

@@ -5,6 +5,10 @@ description: 공개된 Imposia 패키지 버전별 변경 사항을 확인합니
 
 이 페이지는 버전이 매겨진 Imposia 릴리스를 요약합니다. `@imposia/core`, `@imposia/viewer`, `@imposia/client`, `@imposia/react`는 같은 버전 번호를 사용하며, 전체 기록은 저장소의 [CHANGELOG.md](https://github.com/EungyuCho/imposia/blob/main/CHANGELOG.md)에 있습니다.
 
+## 0.9.0 — 2026년 10월 14일
+
+- 리졸버가 반환한 SVG 이미지를 `<img>`와 CSS `url()`에서 사용할 수 있습니다. 스크립트, `foreignObject`, 내장 프레임, 이벤트 핸들러 속성, 엔티티 선언, `@import`, 파일 밖을 가리키는 참조가 있으면 고치지 않고 거부하며, 요소와 사유를 담은 `RESOURCE_BLOCKED` 경고를 반환합니다. CSS는 파싱해서 검사하고 XLink는 네임스페이스로 검사합니다. 다른 기본 동작은 바뀌지 않습니다.
+
 ## 0.8.1 — 2026년 10월 13일
 
 - 페이지 본문 너비를 고쳤습니다. 본문보다 넓은 표가 본문이나 다른 표의 너비를 바꾸지 않습니다. 페이지를 넘기는 셀은 `box-decoration-break`를 따르고, 잘린 장식이 비우는 공간을 사용하며, 아래 장식은 행의 마지막 조각에서 확정됩니다.

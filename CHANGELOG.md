@@ -7,6 +7,12 @@ versioning for its published package interfaces. What that means before `1.0`
 
 ## Unreleased
 
+## 0.9.0 — 2026-10-14
+
+Minor release that accepts SVG images. SVG was refused as an image type before, so a
+document that used it now shows it; every other default is unchanged and there is no
+migration note.
+
 ### Added
 
 - `image/svg+xml` is accepted as an image from a resolver, for `<img>` and CSS
@@ -15,7 +21,10 @@ versioning for its published package interfaces. What that means before `1.0`
   media, event-handler attributes, entity declarations, `@import`, and any
   `href` / `url()` leaving the file are refused (never repaired) with a
   `RESOURCE_BLOCKED` warning that names the element and the reason. Authored
-  display sizes and the aspect ratio are kept in the preview and the export.
+  display sizes and the aspect ratio are kept in the preview and the export. The
+  policy reads CSS by parsing it (escapes such as `u\72l(` are resolved, plain
+  descriptive text is never read as CSS) and checks XLink references by namespace,
+  whatever prefix the file binds.
 
 ## 0.8.1 — 2026-10-13
 

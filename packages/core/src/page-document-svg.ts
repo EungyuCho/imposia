@@ -1,3 +1,4 @@
+import { parseCss } from "./css-parse.js";
 import { type BlockedReason, svgRejectedReason } from "./page-document-blocked-reasons.js";
 
 const SVG_NAMESPACE = "http://www.w3.org/2000/svg";
@@ -12,21 +13,77 @@ const FORBIDDEN_ELEMENTS = new Map<string, string>([
   ["video", "an embedded media element"],
   ["canvas", "an embedded canvas"],
 ]);
-const URL_REFERENCE = /url\(\s*(["']?)(.*?)\1\s*\)/gi;
+const XLINK_NAMESPACE = "http://www.w3.org/1999/xlink";
 // A reference stays inside the image: a fragment of the document or a raster that travels in
 // the markup. Anything else is a request for another resource.
 const INTERNAL_REFERENCE = /^(?:#|data:image\/(?:png|jpeg|gif|webp)[;,])/i;
+// Presentation attributes whose value is CSS and can name a resource. Other attributes
+// (descriptions, labels, path data) are plain text and are never read as CSS.
+const CSS_ATTRIBUTES = new Set([
+  "style",
+  "fill",
+  "stroke",
+  "filter",
+  "mask",
+  "clip-path",
+  "clip",
+  "marker-start",
+  "marker-mid",
+  "marker-end",
+  "cursor",
+]);
+const CSS_ESCAPE = /\\([0-9a-fA-F]{1,6})[ \t\n\r\f]?|\\([\s\S])/g;
+const CSS_URL = /(?:url|src)\(\s*(["']?)(.*?)\1\s*\)/gi;
+// Functions that take a bare string as a resource.
+const CSS_STRING_RESOURCE = /(?:image-set|image|cross-fade)\(/i;
 
 function externalReference(value: string): boolean {
   return !INTERNAL_REFERENCE.test(value.trim());
 }
 
-function cssReason(css: string): string | undefined {
-  if (/@import/i.test(css)) return "an @import rule";
-  for (const match of css.matchAll(URL_REFERENCE)) {
+/** The text a CSS parser would see: escapes such as `u\72l(` are resolved first. */
+function unescapeCss(text: string): string {
+  return text.replace(
+    CSS_ESCAPE,
+    (_match, hex: string | undefined, character: string | undefined) => {
+      if (hex === undefined) return character ?? "";
+      const code = Number.parseInt(hex, 16);
+      return code === 0 || code > 0x10ffff ? "\ufffd" : String.fromCodePoint(code);
+    },
+  );
+}
+
+function valueReason(value: string): string | undefined {
+  const text = unescapeCss(value);
+  for (const match of text.matchAll(CSS_URL)) {
     if (externalReference(match[2] ?? "")) return "an external resource reference";
   }
+  if (CSS_STRING_RESOURCE.test(text)) return "an external resource reference";
   return undefined;
+}
+
+/**
+ * The reason a CSS text is refused, found by parsing it: rules and declarations are visited,
+ * so a resource named through an escape, a comment, or an unusual layout is seen, and a mere
+ * mention of "@import" in text is not mistaken for a rule.
+ */
+function cssReason(css: string, declarationsOnly: boolean): string | undefined {
+  let root: ReturnType<typeof parseCss>;
+  try {
+    root = parseCss(declarationsOnly ? `x{${css}}` : css);
+  } catch (_error: unknown) {
+    return "CSS that could not be parsed";
+  }
+  let reason: string | undefined;
+  root.walk((node) => {
+    if (reason !== undefined) return;
+    if (node.type === "atrule" && unescapeCss(node.name).toLowerCase() === "import") {
+      reason = "an @import rule";
+    } else if (node.type === "decl") {
+      reason = valueReason(node.value);
+    }
+  });
+  return reason;
 }
 
 /**
@@ -60,27 +117,36 @@ export function svgRejection(bytes: Uint8Array): BlockedReason | undefined {
     const forbidden = FORBIDDEN_ELEMENTS.get(element.localName.toLowerCase());
     if (forbidden !== undefined) return svgRejectedReason(`contains ${forbidden}`);
     if (element.localName === "style") {
-      const reason = cssReason(element.textContent ?? "");
+      const reason = cssReason(element.textContent ?? "", false);
       if (reason !== undefined) return svgRejectedReason(`contains ${reason}`);
     }
-    const target = (element.getAttribute("attributeName") ?? "").toLowerCase();
+    const target = (element.getAttribute("attributeName") ?? "").toLowerCase().split(":").pop();
     if (
       (element.localName === "set" || element.localName.startsWith("animate")) &&
-      (target === "href" || target === "xlink:href")
+      target === "href"
     ) {
       return svgRejectedReason("animates a reference");
     }
     for (const attribute of element.attributes) {
-      const name = attribute.name.toLowerCase();
-      if (name.startsWith("on")) return svgRejectedReason("contains an event-handler attribute");
-      if (name === "href" || name === "xlink:href") {
+      const name = attribute.localName.toLowerCase();
+      if (attribute.name.toLowerCase().startsWith("on")) {
+        return svgRejectedReason("contains an event-handler attribute");
+      }
+      // `href` in no namespace, or in the XLink namespace under whatever prefix it was bound.
+      if (
+        name === "href" &&
+        (attribute.namespaceURI === null || attribute.namespaceURI === XLINK_NAMESPACE)
+      ) {
         if (externalReference(attribute.value)) {
           return svgRejectedReason("contains an external resource reference");
         }
         continue;
       }
-      const reason = cssReason(attribute.value);
-      if (reason !== undefined) return svgRejectedReason(`contains ${reason}`);
+      if (attribute.namespaceURI === null && CSS_ATTRIBUTES.has(name)) {
+        const reason =
+          name === "style" ? cssReason(attribute.value, true) : valueReason(attribute.value);
+        if (reason !== undefined) return svgRejectedReason(`contains ${reason}`);
+      }
     }
   }
   return undefined;

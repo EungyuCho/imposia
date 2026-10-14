@@ -5,6 +5,10 @@ description: 公開された各バージョンの Imposia パッケージの変�
 
 このページは、バージョン付きで公開された各 Imposia リリースを要約します。`@imposia/core`、`@imposia/viewer`、`@imposia/client`、`@imposia/react` は同じバージョン番号を使います。完全な記録はリポジトリの [CHANGELOG.md](https://github.com/EungyuCho/imposia/blob/main/CHANGELOG.md) です。
 
+## 0.9.0 — 2026年10月14日
+
+- リゾルバーが返す SVG 画像を `<img>` と CSS `url()` で使えるようになりました。スクリプト、`foreignObject`、埋め込みフレーム、イベントハンドラ属性、エンティティ宣言、`@import`、ファイル外を指す参照を含む場合は修復せず拒否し、要素と理由を示す `RESOURCE_BLOCKED` 警告を返します。CSS は構文解析して検査し、XLink は名前空間で検査します。ほかの既定動作は変わりません。
+
 ## 0.8.1 — 2026年10月13日
 
 - ページ本文の幅を修正しました。本文より広い表が本文や他の表の幅を変えません。ページをまたぐセルは `box-decoration-break` に従い、切り取られた装飾が空ける領域を使い、下側の装飾は行の最後の断片で確定します。

@@ -46,6 +46,22 @@ const REFUSED: Record<string, { svg: string; reason: RegExp }> = {
     svg: `<?xml version="1.0"?><!DOCTYPE svg [<!ENTITY a "x">]><svg ${NS}><text>&a;</text></svg>`,
     reason: /declares entities/,
   },
+  escapedUrl: {
+    svg: `<svg ${NS}><rect width="20" height="20" style="fill:u\\72l(https://blocked.invalid/p#x)"/></svg>`,
+    reason: /external resource reference/,
+  },
+  escapedUrlInStyleElement: {
+    svg: `<svg ${NS}><style>rect{fill:\\75rl("https://blocked.invalid/p")}</style></svg>`,
+    reason: /external resource reference/,
+  },
+  escapedImport: {
+    svg: `<svg ${NS}><style>@\\69mport "https://blocked.invalid/a.css";</style></svg>`,
+    reason: /@import|could not be parsed/,
+  },
+  otherXlinkPrefix: {
+    svg: `<svg ${NS} xmlns:q="http://www.w3.org/1999/xlink"><image width="20" height="20" q:href="https://blocked.invalid/a.png"/></svg>`,
+    reason: /external resource reference/,
+  },
   malformed: { svg: `<svg ${NS}><rect></svg>`, reason: /not well-formed/ },
   notSvg: {
     svg: '<html xmlns="http://www.w3.org/1999/xhtml"><body/></html>',
@@ -121,6 +137,34 @@ test("shows a valid SVG, keeps its authored size in the preview and the export",
   } finally {
     await page.close();
   }
+});
+
+test("does not mistake descriptive text for CSS", async ({ page, browserName }) => {
+  const { errors, pageErrors } = await openAssetPage(page, browserName);
+  const svg = `<svg ${NS} aria-label="CSS @import example, url(https://example.test/x)"><title>@import url(https://example.test/y)</title><rect width="20" height="20" fill="url(#g)" data-note="u\\72l(https://example.test/z)"/><defs><linearGradient id="g"/></defs></svg>`;
+  const warnings = await page.evaluate(async (markup) => {
+    const core = (await import("/packages/core/dist/index.js")) as typeof import("@imposia/core");
+    const host = document.body.appendChild(document.createElement("div"));
+    const doc = await core.mountPageDocument(
+      host,
+      { html: '<img id="d" src="d.svg" alt="d">', baseUrl: "https://assets.example.test/" },
+      {
+        assetResolver: async () => ({
+          status: "resolved",
+          bytes: new TextEncoder().encode(markup),
+          mimeType: "image/svg+xml",
+        }),
+      },
+    ).ready;
+    const image = (doc.iframe.contentDocument as Document).getElementById("d");
+    return {
+      codes: doc.warnings.map((warning) => warning.code),
+      src: image?.getAttribute("src")?.slice(0, 5),
+    };
+  }, svg);
+  expect(warnings.codes).not.toContain("RESOURCE_BLOCKED");
+  expect(warnings.src).toBe("blob:");
+  assertNoBrowserErrors(errors, pageErrors);
 });
 
 test("refuses unsafe or broken SVG with the element and the reason, without a request", async ({
